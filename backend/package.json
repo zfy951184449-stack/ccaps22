@@ -1,0 +1,31 @@
+{
+  "name": "aps-backend",
+  "version": "1.0.0",
+  "description": "APS System Backend API",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest",
+    "migrate:metrics": "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE < ../database/create_personnel_scheduling_tables.sql",
+    "migrate:personnel": "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE < ../database/update_personnel_scheduling_schema.sql"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.18",
+    "dotenv": "^16.3.0",
+    "express": "^4.18.0",
+    "mysql2": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.0",
+    "@types/express": "^4.17.0",
+    "@types/node": "^20.0.0",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.6.0"
+  }
+}

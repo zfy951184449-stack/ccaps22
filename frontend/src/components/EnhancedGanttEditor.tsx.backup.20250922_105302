@@ -1,0 +1,1664 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { 
+  Tree, 
+  Typography, 
+  Space, 
+  Tag, 
+  Button,
+  Tooltip,
+  Empty,
+  message,
+  Slider,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Row,
+  Col
+} from 'antd';
+import { 
+  CaretRightOutlined,
+  CaretDownOutlined,
+  UserOutlined, 
+  ClockCircleOutlined, 
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  SaveOutlined,
+  ZoomInOutlined,
+  ZoomOutOutlined,
+  CompressOutlined,
+  ArrowLeftOutlined,
+  DragOutlined
+} from '@ant-design/icons';
+import type { DataNode } from 'antd/es/tree';
+import axios from 'axios';
+
+const { Title, Text } = Typography;
+const { Option } = Select;
+
+// 接口定义 - 匹配我们的数据库结构
+interface ProcessTemplate {
+  id: number;
+  template_code: string;
+  template_name: string;
+  description: string;
+  total_days: number;
+}
+
+interface ProcessStage {
+  id: number;
+  template_id: number;
+  stage_code: string;
+  stage_name: string;
+  stage_order: number;
+  start_day: number;
+  description?: string;
+}
+
+interface StageOperation {
+  id: number;
+  stage_id: number;
+  operation_id: number;
+  operation_code: string;
+  operation_name: string;
+  operation_day: number;
+  recommended_time: number;
+  window_start_time: number;
+  window_end_time: number;
+  operation_order: number;
+  standard_time?: number;
+  required_people?: number;
+}
+
+interface Operation {
+  id: number;
+  operation_code: string;
+  operation_name: string;
+  standard_time: number;
+  required_people: number;
+}
+
+interface EnhancedGanttEditorProps {
+  template: ProcessTemplate;
+  onBack: () => void;
+}
+
+interface GanttNode {
+  id: string;
+  title: string;
+  type: 'template' | 'stage' | 'operation';
+  parent_id?: string;
+  stage_code?: string;
+  standard_time?: number;
+  required_people?: number;
+  start_day?: number;
+  start_hour?: number;
+  children?: GanttNode[];
+  expanded?: boolean;
+  editable?: boolean;
+  level?: number;
+  data?: ProcessStage | StageOperation;
+}
+
+interface TimeBlock {
+  id: string;
+  node_id: string;
+  title: string;
+  start_hour: number;
+  duration_hours: number;
+  color: string;
+  isTimeWindow?: boolean;
+  isRecommended?: boolean;
+  isStage?: boolean;
+}
+
+// 阶段颜色映射
+const STAGE_COLORS: Record<string, string> = {
+  'STAGE1': '#1890ff',
+  'STAGE2': '#52c41a',
+  'STAGE3': '#faad14',
+  'STAGE4': '#f5222d',
+  'STAGE5': '#722ed1',
+  'DEFAULT': '#8c8c8c'
+};
+
+// 时间轴配置
+const BASE_HOUR_WIDTH = 8; // 基础每小时像素宽度
+const ROW_HEIGHT = 32; // 每行高度
+const DAYS_TO_SHOW = 35; // 显示35天
+
+const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({ 
+  template,
+  onBack 
+}) => {
+  const [stages, setStages] = useState<ProcessStage[]>([]);
+  const [stageOperations, setStageOperations] = useState<{ [key: number]: StageOperation[] }>({});
+  const [availableOperations, setAvailableOperations] = useState<Operation[]>([]);
+  const [ganttNodes, setGanttNodes] = useState<GanttNode[]>([]);
+  const [timeBlocks, setTimeBlocks] = useState<TimeBlock[]>([]);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
+  const [selectedNode, setSelectedNode] = useState<GanttNode | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingNode, setEditingNode] = useState<GanttNode | null>(null);
+  const [zoomScale, setZoomScale] = useState(1.0);
+  const [loading, setLoading] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const [visibleRows, setVisibleRows] = useState<string[]>([]);
+  const [horizontalScrollLeft, setHorizontalScrollLeft] = useState(0);
+  const [verticalScrollTop, setVerticalScrollTop] = useState(0);
+
+  const [form] = Form.useForm();
+  const API_BASE_URL = 'http://localhost:3001/api';
+
+  const timeAxisRef = useRef<HTMLDivElement>(null);
+  const treeContainerRef = useRef<HTMLDivElement>(null);
+  const ganttContentRef = useRef<HTMLDivElement>(null);
+
+  // 加载模板数据
+  useEffect(() => {
+    loadTemplateData();
+  }, [template]);
+
+  const loadTemplateData = async () => {
+    setLoading(true);
+    try {
+      // 获取阶段数据
+      const stagesResponse = await axios.get(`${API_BASE_URL}/process-stages/template/${template.id}`);
+      setStages(stagesResponse.data);
+      
+      // 获取可用操作
+      const operationsResponse = await axios.get(`${API_BASE_URL}/stage-operations/available`);
+      setAvailableOperations(operationsResponse.data);
+      
+      // 获取每个阶段的操作
+      const stageOpsMap: { [key: number]: StageOperation[] } = {};
+      for (const stage of stagesResponse.data) {
+        const opsResponse = await axios.get(`${API_BASE_URL}/stage-operations/stage/${stage.id}`);
+        stageOpsMap[stage.id] = opsResponse.data;
+      }
+      setStageOperations(stageOpsMap);
+      
+      // 构建甘特图节点
+      const nodes = buildGanttNodes(stagesResponse.data, stageOpsMap);
+      setGanttNodes(nodes);
+      
+      // 生成时间块
+      const blocks = generateTimeBlocks(nodes);
+      console.log('Generated time blocks:', blocks);
+      setTimeBlocks(blocks);
+      
+      // 默认展开所有节点
+      const defaultExpandedKeys = [template.id.toString()];
+      nodes[0].children?.forEach(stageNode => {
+        defaultExpandedKeys.push(stageNode.id);
+      });
+      setExpandedKeys(defaultExpandedKeys);
+      
+    } catch (error) {
+      message.error('加载模板数据失败');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buildGanttNodes = (stages: ProcessStage[], stageOpsMap: { [key: number]: StageOperation[] }): GanttNode[] => {
+    const nodes: GanttNode[] = [];
+    
+    // 根节点
+    const templateNode: GanttNode = {
+      id: template.id.toString(),
+      title: template.template_name,
+      type: 'template',
+      expanded: true,
+      children: [],
+      level: 0
+    };
+
+    // 阶段节点
+    stages.forEach((stage) => {
+      const stageNode: GanttNode = {
+        id: `stage_${stage.id}`,
+        title: `${stage.stage_code} - ${stage.stage_name}`,
+        type: 'stage',
+        parent_id: template.id.toString(),
+        stage_code: stage.stage_code,
+        start_day: stage.start_day,
+        start_hour: 0,
+        expanded: true,
+        children: [],
+        editable: true,
+        level: 1,
+        data: stage
+      };
+
+      // 操作节点
+      const operations = stageOpsMap[stage.id] || [];
+      console.log(`Building operations for stage ${stage.stage_code} (start_day: ${stage.start_day}):`, operations);
+      operations.forEach((operation) => {
+        const absoluteStartDay = stage.start_day + operation.operation_day;
+        const operationNode: GanttNode = {
+          id: `operation_${operation.id}`,
+          title: operation.operation_name,
+          type: 'operation',
+          parent_id: `stage_${stage.id}`,
+          required_people: operation.required_people || 1,
+          standard_time: typeof operation.standard_time === 'string' 
+            ? parseFloat(operation.standard_time) || 4 
+            : operation.standard_time || 4, // 默认4小时
+          start_day: absoluteStartDay,
+          start_hour: Math.floor(operation.recommended_time),
+          editable: true,
+          level: 2,
+          data: operation
+        };
+
+        console.log(`Created operation node: ${operation.operation_name} at absolute day ${absoluteStartDay} (stage: ${stage.start_day}, operation: ${operation.operation_day})`);
+        stageNode.children?.push(operationNode);
+      });
+
+      templateNode.children?.push(stageNode);
+    });
+
+    nodes.push(templateNode);
+    return nodes;
+  };
+
+  const generateTimeBlocks = (nodes: GanttNode[]): TimeBlock[] => {
+    const blocks: TimeBlock[] = [];
+    const processedNodeIds = new Set<string>();
+    
+    const processNode = (node: GanttNode) => {
+      if (processedNodeIds.has(node.id)) {
+        return;
+      }
+      processedNodeIds.add(node.id);
+      
+      if (node.type === 'stage') {
+        // 生成阶段时间块
+        const stageData = node.data as ProcessStage;
+        const stageCode = node.stage_code || 'DEFAULT';
+        
+        // 计算阶段持续时间（基于其包含的所有操作）
+        let stageDurationDays = 3; // 默认3天
+        if (node.children && node.children.length > 0) {
+          // 找到最晚结束的操作
+          const lastOperation = node.children.reduce((latest, child) => {
+            const opEndDay = (child.start_day || 0) + Math.ceil((child.standard_time || 0) / 24);
+            const latestEndDay = (latest.start_day || 0) + Math.ceil((latest.standard_time || 0) / 24);
+            return opEndDay > latestEndDay ? child : latest;
+          }, node.children[0]);
+          
+          const stageStartDay = node.start_day || 0;
+          const lastOpEndDay = (lastOperation.start_day || 0) + Math.ceil((lastOperation.standard_time || 0) / 24);
+          stageDurationDays = Math.max(lastOpEndDay - stageStartDay, 1);
+        }
+        
+        const startHour = (node.start_day || 0) * 24;
+        const durationHours = stageDurationDays * 24;
+        
+        // 数据验证
+        if (isNaN(startHour) || isNaN(durationHours)) {
+          console.error('Invalid stage block data:', { 
+            nodeId: node.id, 
+            startDay: node.start_day, 
+            stageDurationDays, 
+            startHour, 
+            durationHours 
+          });
+          return;
+        }
+        
+        const stageBlock: TimeBlock = {
+          id: `stage_block_${node.id}`,
+          node_id: node.id,
+          title: `${stageCode} - ${node.title}`,
+          start_hour: startHour,
+          duration_hours: durationHours,
+          color: getOperationColor(stageCode, 0.2), // 更淡的颜色显示阶段
+          isStage: true
+        };
+        blocks.push(stageBlock);
+      }
+      
+      if (node.type === 'operation') {
+        console.log('Processing operation node:', {
+          id: node.id,
+          title: node.title,
+          standard_time: node.standard_time,
+          start_day: node.start_day,
+          data: node.data
+        });
+        
+        if (!node.standard_time || node.standard_time <= 0) {
+          console.warn('Operation has invalid standard_time, using default:', node);
+          node.standard_time = 4; // 使用默认4小时
+        }
+        // 获取阶段信息来确定颜色
+        let stageCode = 'DEFAULT';
+        if (node.parent_id?.includes('stage_')) {
+          const stageId = node.parent_id.replace('stage_', '');
+          const stage = stages.find(s => s.id.toString() === stageId);
+          stageCode = stage?.stage_code || 'DEFAULT';
+        }
+
+        const operationData = node.data as StageOperation;
+        
+        // 解析推荐时间（确保是数字格式）
+        const recommendedTime = typeof operationData?.recommended_time === 'string' 
+          ? parseFloat(operationData.recommended_time) 
+          : (operationData?.recommended_time || 9); // 默认9:00
+        
+        // 计算操作的绝对开始时间（小时）
+        // 绝对天数 * 24 + 当天的推荐开始时间
+        let operationAbsoluteStartHour = (node.start_day || 0) * 24 + recommendedTime;
+        
+        // 数据验证 - 使用默认值而不是跳过
+        if (isNaN(operationAbsoluteStartHour)) {
+          console.warn('Invalid operationAbsoluteStartHour, using default:', node);
+          operationAbsoluteStartHour = (node.start_day || 0) * 24 + 9; // 默认9:00
+        }
+        
+        console.log(`Time calculation for operation: ${node.title}`, {
+          absoluteDay: node.start_day,
+          recommendedTime: recommendedTime,
+          absoluteStartHour: operationAbsoluteStartHour,
+          stageCode: stageCode
+        });
+        
+        // 处理 standard_time 可能是字符串的情况
+        let actualStandardTime = typeof node.standard_time === 'string' 
+          ? parseFloat(node.standard_time) 
+          : node.standard_time;
+        
+        if (!actualStandardTime || isNaN(actualStandardTime) || actualStandardTime <= 0) {
+          console.warn('Invalid standard_time, using default:', node);
+          actualStandardTime = 4; // 默认4小时
+        }
+        
+        console.log('Final actualStandardTime:', actualStandardTime, 'for node:', node.id);
+        
+        // 时间窗口块 - 显示在操作块下方
+        // 解析时间窗口参数
+        const windowStartTime = typeof operationData?.window_start_time === 'string' 
+          ? parseFloat(operationData.window_start_time) 
+          : (operationData?.window_start_time || 7); // 默认7:00
+        const windowEndTime = typeof operationData?.window_end_time === 'string' 
+          ? parseFloat(operationData.window_end_time) 
+          : (operationData?.window_end_time || 18); // 默认18:00
+          
+        const windowStartHour = (node.start_day || 0) * 24 + windowStartTime;
+        const windowEndHour = (node.start_day || 0) * 24 + windowEndTime;
+        
+        if (!isNaN(windowStartHour) && !isNaN(windowEndHour) && windowEndHour > windowStartHour) {
+          const windowBlock: TimeBlock = {
+            id: `window_${node.id}`,
+            node_id: node.id,
+            title: `${node.title} - 时间窗口 (Day${node.start_day} ${windowStartTime}:00-${windowEndTime}:00)`,
+            start_hour: windowStartHour,
+            duration_hours: windowEndHour - windowStartHour,
+            color: getOperationColor(stageCode, 0.4), // 更透明
+            isTimeWindow: true
+          };
+          blocks.push(windowBlock);
+        }
+        
+        // 操作时间块 - 显示在时间窗口上方
+        const operationBlock: TimeBlock = {
+          id: `block_${node.id}`,
+          node_id: node.id,
+          title: `${node.title} (Day${node.start_day} ${recommendedTime}:00-${recommendedTime + actualStandardTime}:00)`,
+          start_hour: operationAbsoluteStartHour,
+          duration_hours: actualStandardTime,
+          color: getOperationColor(stageCode),
+          isRecommended: true
+        };
+        blocks.push(operationBlock);
+      }
+      
+      if (node.children) {
+        node.children.forEach(processNode);
+      }
+    };
+
+    nodes.forEach(processNode);
+    return blocks;
+  };
+
+  const getOperationColor = (stageCode: string, alpha: number = 1): string => {
+    const baseColor = STAGE_COLORS[stageCode] || STAGE_COLORS.DEFAULT;
+    
+    // 转换为RGBA格式
+    const hex = baseColor.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  // 计算实际时间范围 - 基于操作的实际范围
+  const calculateTimeRange = useCallback(() => {
+    console.log('calculateTimeRange called with timeBlocks.length:', timeBlocks.length);
+    if (timeBlocks.length === 0) {
+      console.log('No time blocks, returning default range');
+      return { startDay: -2, endDay: 10 }; // 默认范围
+    }
+    
+    let minDay = Infinity;
+    let maxDay = -Infinity;
+    let hasValidBlocks = false;
+    
+    // 只计算操作时间块（排除阶段块和时间窗口）
+    timeBlocks.forEach(block => {
+      if (block.isStage || block.isTimeWindow) {
+        return; // 跳过阶段块和时间窗口
+      }
+      
+      // 验证时间块数据的有效性
+      if (isNaN(block.start_hour) || isNaN(block.duration_hours)) {
+        console.error('Invalid time block data in calculateTimeRange:', block);
+        return;
+      }
+      
+      const blockStartDay = Math.floor(block.start_hour / 24);
+      // 计算操作结束所在的天数（操作可能跨天）
+      const blockEndDay = Math.floor((block.start_hour + block.duration_hours) / 24);
+      
+      console.log(`Processing operation block: ${block.title}`, {
+        blockId: block.id,
+        startHour: block.start_hour,
+        durationHours: block.duration_hours,
+        blockStartDay,
+        blockEndDay
+      });
+      
+      if (!isNaN(blockStartDay) && !isNaN(blockEndDay)) {
+        minDay = Math.min(minDay, blockStartDay);
+        maxDay = Math.max(maxDay, blockEndDay);
+        hasValidBlocks = true;
+      }
+    });
+    
+    // 如果没有有效的操作块，使用默认范围
+    if (!hasValidBlocks) {
+      console.log('No valid operation blocks found, using default range');
+      return { startDay: -2, endDay: 10 };
+    }
+    
+    // 在实际范围基础上添加缓冲区
+    const startDay = minDay - 1; // 在最早操作前留1天
+    const endDay = maxDay + 2;   // 在最晚操作后留2天
+    
+    // 最终验证结果
+    if (isNaN(startDay) || isNaN(endDay)) {
+      console.error('Invalid time range calculated:', { startDay, endDay, minDay, maxDay });
+      return { startDay: -2, endDay: 10 }; // 返回默认值
+    }
+    
+    const operationBlocks = timeBlocks.filter(b => !b.isStage && !b.isTimeWindow);
+    console.log(`Final calculated time range: startDay=${startDay}, endDay=${endDay}, minDay=${minDay}, maxDay=${maxDay}`);
+    console.log(`Total operation blocks: ${operationBlocks.length}`);
+    console.log('Operation block titles:', operationBlocks.map(b => b.title));
+    return { startDay, endDay };
+  }, [timeBlocks]);
+
+  // 收集可见行
+  const collectVisibleRows = useCallback((nodes: GanttNode[]): string[] => {
+    const rows: string[] = [];
+    
+    const traverse = (nodeList: GanttNode[]) => {
+      nodeList.forEach(node => {
+        rows.push(node.id);
+        if (expandedKeys.includes(node.id) && node.children) {
+          traverse(node.children);
+        }
+      });
+    };
+    
+    traverse(nodes);
+    return rows;
+  }, [expandedKeys]);
+
+  useEffect(() => {
+    const visible = collectVisibleRows(ganttNodes);
+    setVisibleRows(visible);
+  }, [ganttNodes, expandedKeys, collectVisibleRows]);
+
+  // 当缩放比例改变时，重置甘特图内容区域的滚动位置
+  useEffect(() => {
+    if (ganttContentRef.current) {
+      ganttContentRef.current.scrollLeft = 0;
+    }
+    setHorizontalScrollLeft(0);
+  }, [zoomScale]);
+
+  // 使用requestAnimationFrame优化滚动性能
+  const rafIdRef = useRef<number | null>(null);
+  
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+
+  const handleNodeSelect = (selectedKeys: React.Key[]) => {
+    if (selectedKeys.length > 0) {
+      const nodeId = selectedKeys[0].toString();
+      const node = findNodeById(ganttNodes, nodeId);
+      setSelectedNode(node);
+    } else {
+      setSelectedNode(null);
+    }
+  };
+
+  const findNodeById = (nodes: GanttNode[], id: string): GanttNode | null => {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = findNodeById(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const handleEditNode = (node: GanttNode) => {
+    setEditingNode(node);
+    
+    // 设置表单初始值
+    if (node.type === 'stage' && node.data) {
+      const stageData = node.data as ProcessStage;
+      form.setFieldsValue({
+        stage_name: stageData.stage_name,
+        stage_code: stageData.stage_code,
+        start_day: stageData.start_day,
+        description: stageData.description
+      });
+    } else if (node.type === 'operation') {
+      if (node.data) {
+        // 编辑现有操作
+        const operationData = node.data as StageOperation;
+        form.setFieldsValue({
+          operation_id: operationData.operation_id,
+          operation_day: operationData.operation_day,
+          recommended_time: operationData.recommended_time,
+          window_start_time: operationData.window_start_time,
+          window_end_time: operationData.window_end_time
+        });
+      } else {
+        // 新建操作 - 设置默认值
+        form.setFieldsValue({
+          operation_day: 0,
+          recommended_time: 9.0,
+          window_start_time: 7.0,
+          window_end_time: 18.0
+        });
+      }
+    }
+    
+    setEditModalVisible(true);
+  };
+
+  const handleSaveNode = async (values: any) => {
+    try {
+      if (editingNode) {
+        if (editingNode.type === 'stage') {
+          if (editingNode.id.includes('new')) {
+            await axios.post(`${API_BASE_URL}/process-stages/template/${template.id}`, values);
+          } else {
+            const stageData = editingNode.data as ProcessStage;
+            await axios.put(`${API_BASE_URL}/process-stages/${stageData.id}`, values);
+          }
+        } else if (editingNode.type === 'operation') {
+          const parentStageId = editingNode.parent_id?.replace('stage_', '');
+          console.log('Sending operation data:', values);
+          console.log('Parent stage ID:', parentStageId);
+          if (editingNode.id.includes('new')) {
+            await axios.post(`${API_BASE_URL}/stage-operations/stage/${parentStageId}`, values);
+          } else {
+            const operationData = editingNode.data as StageOperation;
+            await axios.put(`${API_BASE_URL}/stage-operations/${operationData.id}`, values);
+          }
+        }
+        
+        await loadTemplateData();
+        message.success('保存成功');
+        setIsDirty(true);
+      }
+    } catch (error) {
+      message.error('保存失败');
+      console.error(error);
+    }
+
+    setEditModalVisible(false);
+    setEditingNode(null);
+    form.resetFields();
+  };
+
+  const handleSaveTemplate = async () => {
+    try {
+      // 调用后端API重新计算模板总天数
+      await axios.put(`${API_BASE_URL}/process-templates/${template.id}/recalculate`);
+      
+      // 清除dirty状态
+      setIsDirty(false);
+      message.success('模板保存成功');
+    } catch (error) {
+      console.error('保存模板失败:', error);
+      message.error('保存模板失败');
+    }
+  };
+
+  const handleDeleteNode = (nodeId: string) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: '确定要删除该节点吗？删除后不可恢复。',
+      onOk: async () => {
+        try {
+          const node = findNodeById(ganttNodes, nodeId);
+          if (node) {
+            if (node.type === 'stage' && node.data) {
+              await axios.delete(`${API_BASE_URL}/process-stages/${(node.data as ProcessStage).id}`);
+            } else if (node.type === 'operation' && node.data) {
+              await axios.delete(`${API_BASE_URL}/stage-operations/${(node.data as StageOperation).id}`);
+            }
+            
+            await loadTemplateData();
+            message.success('删除成功');
+            setIsDirty(true);
+          }
+        } catch (error) {
+          message.error('删除失败');
+          console.error(error);
+        }
+      }
+    });
+  };
+
+  const handleAddNode = (parentNode: GanttNode, type: 'stage' | 'operation') => {
+    const newNode: GanttNode = {
+      id: `${type}_new_${Date.now()}`,
+      title: type === 'stage' ? '新阶段' : '新操作',
+      type: type,
+      parent_id: parentNode.id,
+      standard_time: type === 'operation' ? 4 : undefined,
+      required_people: type === 'operation' ? 2 : undefined,
+      start_day: 0,
+      start_hour: 0,
+      editable: true,
+      children: type === 'stage' ? [] : undefined
+    };
+
+    setEditingNode(newNode);
+    setEditModalVisible(true);
+  };
+
+  // 缩放控制
+  const handleZoomIn = useCallback(() => {
+    setZoomScale(prev => Math.min(prev * 1.2, 5.0));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setZoomScale(prev => Math.max(prev / 1.2, 0.1));
+  }, []);
+
+  const handleZoomReset = useCallback(() => {
+    setZoomScale(1.0);
+  }, []);
+
+  // 滚动同步 - 使用节流和防抖优化性能
+  const handleGanttScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const element = e.target as HTMLDivElement;
+    const newScrollLeft = element.scrollLeft;
+    const newScrollTop = element.scrollTop;
+    
+    // 取消之前的动画帧
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+    
+    // 使用requestAnimationFrame优化性能
+    rafIdRef.current = requestAnimationFrame(() => {
+      // 使用防抖机制，减少频繁的状态更新
+      const shouldUpdateHorizontal = Math.abs(newScrollLeft - horizontalScrollLeft) > 0.5;
+      const shouldUpdateVertical = Math.abs(newScrollTop - verticalScrollTop) > 0.5;
+      
+      if (shouldUpdateHorizontal) {
+        setHorizontalScrollLeft(newScrollLeft);
+      }
+      if (shouldUpdateVertical) {
+        setVerticalScrollTop(newScrollTop);
+        
+        // 同步树形结构的垂直滚动（避免循环调用）
+        if (treeContainerRef.current && Math.abs(treeContainerRef.current.scrollTop - newScrollTop) > 1) {
+          treeContainerRef.current.scrollTop = newScrollTop;
+        }
+      }
+    });
+  }, [horizontalScrollLeft, verticalScrollTop]);
+
+  const handleTreeScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const element = e.target as HTMLDivElement;
+    const newScrollTop = element.scrollTop;
+    
+    // 使用防抖机制，避免频繁更新
+    const shouldUpdate = Math.abs(newScrollTop - verticalScrollTop) > 1;
+    
+    if (shouldUpdate) {
+      // 使用requestAnimationFrame优化性能
+      requestAnimationFrame(() => {
+        setVerticalScrollTop(newScrollTop);
+        
+        // 同步甘特图内容的垂直滚动（避免循环调用）
+        if (ganttContentRef.current) {
+          ganttContentRef.current.scrollTop = newScrollTop;
+        }
+      });
+    }
+  }, [verticalScrollTop]);
+
+  const renderTreeNodeTitle = (node: GanttNode) => {
+    const isSelected = selectedNode?.id === node.id;
+
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        width: '100%',
+        padding: '4px 8px 4px 0',
+        height: 28,
+        overflow: 'visible' // 改为visible以显示按钮
+      }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          flex: 1, 
+          minWidth: 0,
+          gap: '6px'
+        }}>
+          {node.type === 'stage' && (
+            <Tag color="blue" style={{ margin: 0, flexShrink: 0 }}>
+              {node.stage_code}
+            </Tag>
+          )}
+          <Text 
+            strong={node.type === 'template'} 
+            style={{ 
+              fontSize: node.type === 'template' ? '14px' : '13px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              lineHeight: '20px',
+              flex: 1,
+              minWidth: 0
+            }}
+            title={node.title}
+          >
+            {node.title}
+          </Text>
+          {node.type === 'operation' && (
+            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+              <Tag icon={<UserOutlined />} color="cyan" style={{ margin: 0, fontSize: '11px' }}>
+                {node.required_people}人
+              </Tag>
+              <Tag icon={<ClockCircleOutlined />} color="orange" style={{ margin: 0, fontSize: '11px' }}>
+                {node.standard_time}h
+              </Tag>
+            </div>
+          )}
+        </div>
+
+        <div style={{ 
+          flexShrink: 0, 
+          marginLeft: '8px', 
+          display: 'flex', 
+          gap: '4px',
+          alignItems: 'center'
+        }}>
+          {/* 添加按钮 - 显示在对应节点类型的行表头 */}
+          {node.type === 'template' && (
+            <Button 
+              type="primary" 
+              size="small" 
+              icon={<PlusOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddNode(node, 'stage');
+              }}
+              style={{ fontSize: '12px', height: '24px' }}
+            >
+              添加阶段
+            </Button>
+          )}
+          
+          {node.type === 'stage' && (
+            <Button 
+              size="small" 
+              icon={<PlusOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAddNode(node, 'operation');
+              }}
+              style={{ fontSize: '12px', height: '24px' }}
+            >
+              添加操作
+            </Button>
+          )}
+
+          {/* 编辑和删除按钮 - 选中时显示 */}
+          {isSelected && node.editable && (
+            <>
+              <Button 
+                type="text" 
+                size="small" 
+                icon={<EditOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEditNode(node);
+                }}
+                style={{ height: '24px' }}
+                title="编辑"
+              />
+              
+              {node.type !== 'template' && (
+                <Button 
+                  type="text" 
+                  size="small" 
+                  icon={<DeleteOutlined />}
+                  danger
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteNode(node.id);
+                  }}
+                  style={{ height: '24px' }}
+                  title="删除"
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const buildTreeData = (nodes: GanttNode[]): DataNode[] => {
+    return nodes.map(node => ({
+      title: renderTreeNodeTitle(node),
+      key: node.id,
+      children: node.children ? buildTreeData(node.children) : undefined,
+    }));
+  };
+
+  const renderTimeAxis = () => {
+    const hourWidth = BASE_HOUR_WIDTH * zoomScale;
+    const { startDay, endDay } = calculateTimeRange();
+    const totalDays = endDay - startDay + 1;
+    
+    // 防护性检查
+    if (isNaN(hourWidth) || isNaN(totalDays) || isNaN(startDay) || isNaN(endDay) || totalDays <= 0) {
+      console.error('Invalid values in renderTimeAxis:', { 
+        hourWidth, 
+        totalDays, 
+        startDay, 
+        endDay, 
+        zoomScale, 
+        BASE_HOUR_WIDTH 
+      });
+      return <div>时间轴加载错误</div>;
+    }
+    
+    const totalAxisWidth = totalDays * 24 * hourWidth;
+    
+    return (
+      <div style={{ 
+        display: 'flex', 
+        backgroundColor: '#fafafa',
+        height: '100%',
+        width: totalAxisWidth,
+        minWidth: totalAxisWidth // 确保时间轴有正确的最小宽度以支持滚动
+      }}>
+        {Array.from({ length: totalDays }, (_, index) => {
+          const dayNumber = startDay + index;
+          const dayWidth = 24 * hourWidth;
+          
+          return (
+            <div key={`day-${dayNumber}`} style={{ 
+              display: 'flex',
+              flexDirection: 'column',
+              flexShrink: 0 // 防止收缩
+            }}>
+              {/* 天数标题行 */}
+              <div style={{
+                width: dayWidth,
+                height: 20,
+                border: '1px solid #f0f0f0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: dayNumber === 0 ? '#e6f7ff' : '#f5f5f5',
+                fontWeight: dayNumber === 0 ? 'bold' : 600,
+                fontSize: 11,
+                borderBottom: 'none',
+                color: dayNumber === 0 ? '#1890ff' : (dayNumber < 0 ? '#ff4d4f' : '#666'),
+                flexShrink: 0
+              }}>
+                Day {dayNumber}
+              </div>
+              
+              {/* 小时标题行 */}
+              <div style={{ 
+                display: 'flex', 
+                height: 20,
+                flexShrink: 0
+              }}>
+                {Array.from({ length: 24 }, (_, hourIndex) => {
+                  const isWorkingHour = hourIndex >= 9 && hourIndex < 17;
+                  const shouldShowHour = hourWidth > 15 && (hourIndex % 2 === 0 || hourWidth > 25);
+                  
+                  return (
+                    <div
+                      key={`hour-${dayNumber}-${hourIndex}`}
+                      style={{
+                        width: hourWidth,
+                        height: 20,
+                        border: '1px solid #f0f0f0',
+                        borderTop: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: isWorkingHour 
+                          ? 'rgba(24, 144, 255, 0.15)'
+                          : hourIndex % 12 === 0 ? '#fafafa' : 'transparent',
+                        fontSize: Math.max(8, Math.min(10, hourWidth / 4)),
+                        color: isWorkingHour ? '#1890ff' : '#999',
+                        flexShrink: 0
+                      }}
+                    >
+                      {shouldShowHour ? hourIndex : ''}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderTimeBlocks = () => {
+    if (timeBlocks.length === 0) {
+      return (
+        <div style={{ padding: 40, textAlign: 'center' }}>
+          <Empty description="暂无时间块数据" />
+        </div>
+      );
+    }
+
+    const hourWidth = BASE_HOUR_WIDTH * zoomScale;
+    const { startDay, endDay } = calculateTimeRange();
+    const totalDays = endDay - startDay + 1;
+    const totalWidth = totalDays * 24 * hourWidth;
+    const containerHeight = visibleRows.length * ROW_HEIGHT;
+
+    return (
+      <div style={{ 
+        position: 'relative', 
+        width: totalWidth,
+        minWidth: totalWidth, // 确保最小宽度支持水平滚动
+        height: containerHeight,
+        minHeight: containerHeight
+      }}>
+        {/* 行背景（奇偶行交替） */}
+        {visibleRows.map((rowId, index) => (
+          <div
+            key={`row-bg-${rowId}`}
+            style={{
+              position: 'absolute',
+              top: index * ROW_HEIGHT,
+              left: 0,
+              width: totalWidth,
+              height: ROW_HEIGHT,
+              backgroundColor: index % 2 === 0 ? '#fafafa' : '#ffffff',
+              zIndex: 0
+            }}
+          />
+        ))}
+        
+        {/* 垂直网格线（天分隔线） */}
+        {Array.from({ length: totalDays + 1 }, (_, index) => {
+          const dayNumber = startDay + index;
+          const lineLeft = index * 24 * hourWidth;
+          
+          return (
+            <div
+              key={`grid-day-${dayNumber}`}
+              style={{
+                position: 'absolute',
+                left: lineLeft,
+                top: 0,
+                width: 1,
+                height: containerHeight,
+                background: dayNumber === 0 ? '#1890ff' : (dayNumber % 7 === 0 ? '#d9d9d9' : '#f0f0f0'),
+                zIndex: 2,
+                pointerEvents: 'none'
+              }}
+            />
+          );
+        })}
+        
+        {/* 小时网格线（更细的分隔） */}
+        {Array.from({ length: totalDays * 24 + 1 }, (_, index) => {
+          if (index % 24 === 0) return null; // 跳过天分隔线
+          
+          const lineLeft = index * hourWidth;
+          const hour = index % 24;
+          
+          return (
+            <div
+              key={`grid-hour-${index}`}
+              style={{
+                position: 'absolute',
+                left: lineLeft,
+                top: 0,
+                width: 1,
+                height: containerHeight,
+                background: hour % 6 === 0 ? '#e8e8e8' : '#f5f5f5',
+                zIndex: 1,
+                pointerEvents: 'none'
+              }}
+            />
+          );
+        })}
+        
+        {/* 工作时间背景（9am-5pm） */}
+        {Array.from({ length: totalDays }, (_, dayIndex) => {
+          const workHoursLeft = (dayIndex * 24 + 9) * hourWidth;
+          const workHoursWidth = 8 * hourWidth; // 8小时工作时间
+          
+          return (
+            <div
+              key={`work-hours-${dayIndex}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: workHoursLeft,
+                width: workHoursWidth,
+                height: containerHeight,
+                backgroundColor: 'rgba(24, 144, 255, 0.04)',
+                zIndex: 1,
+                pointerEvents: 'none'
+              }}
+            />
+          );
+        })}
+        
+        {/* 时间块 */}
+        {timeBlocks.map((block) => {
+          const rowIndex = visibleRows.indexOf(block.node_id);
+          if (rowIndex === -1) return null;
+          
+          // 计算时间块的位置：相对于startDay的绝对小时偏移
+          const absoluteStartHour = block.start_hour;
+          const relativeStartHour = absoluteStartHour - (startDay * 24);
+          const left = relativeStartHour * hourWidth;
+          const width = Math.max(block.duration_hours * hourWidth, hourWidth * 0.25); // 最小0.25小时宽度
+          
+          // 确保时间块在可见范围内
+          if (left + width < 0 || left > totalWidth) {
+            return null;
+          }
+          
+          return (
+            <div
+              key={block.id}
+              style={{
+                position: 'absolute',
+                left: Math.max(0, left),
+                top: block.isTimeWindow 
+                  ? rowIndex * ROW_HEIGHT + ROW_HEIGHT - 10  // 时间窗口在底部
+                  : rowIndex * ROW_HEIGHT + 2,               // 操作块在正常位置
+                width: Math.min(width, totalWidth - Math.max(0, left)),
+                height: block.isTimeWindow ? 6 : ROW_HEIGHT - 4,  // 时间窗口更矮
+                background: block.color,
+                borderRadius: block.isTimeWindow ? 2 : 4,
+                display: 'flex',
+                alignItems: 'center',
+                color: block.isStage ? '#333' : 'white',
+                fontSize: block.isTimeWindow ? 7 : 9,
+                cursor: 'move',
+                boxShadow: block.isStage 
+                  ? '0 1px 3px rgba(0,0,0,0.1)' 
+                  : block.isTimeWindow 
+                    ? '0 1px 2px rgba(0,0,0,0.1)'
+                    : '0 1px 3px rgba(0,0,0,0.2)',
+                border: block.isStage 
+                  ? '2px dashed rgba(0,0,0,0.3)' 
+                  : block.isTimeWindow
+                    ? '1px solid rgba(0,0,0,0.2)'
+                    : '1px solid rgba(255,255,255,0.3)',
+                paddingLeft: 4,
+                paddingRight: 4,
+                zIndex: block.isStage ? 5 : (block.isTimeWindow ? 6 : 10),
+                opacity: block.isTimeWindow ? 0.7 : (block.isStage ? 0.4 : 1),
+                overflow: 'hidden'
+              }}
+              title={`${block.title}\n开始: Day${Math.floor(absoluteStartHour / 24)} ${absoluteStartHour % 24}:00\n时长: ${block.duration_hours}小时\n结束: Day${Math.floor((absoluteStartHour + block.duration_hours) / 24)} ${(absoluteStartHour + block.duration_hours) % 24}:00`}
+              onDoubleClick={() => {
+                const node = findNodeById(ganttNodes, block.node_id);
+                if (node) {
+                  handleEditNode(node);
+                }
+              }}
+            >
+              <span style={{ 
+                overflow: 'hidden', 
+                textOverflow: 'ellipsis', 
+                whiteSpace: 'nowrap',
+                fontSize: width > 80 ? 9 : width > 40 ? 8 : 7,
+                fontWeight: block.isTimeWindow ? 'normal' : '500'
+              }}>
+                {width > 30 ? (
+                  block.title.length > Math.floor(width / 8) 
+                    ? `${block.title.substring(0, Math.floor(width / 8))}...` 
+                    : block.title
+                ) : ''}
+              </span>
+              {!block.isTimeWindow && !block.isStage && width > 60 && (
+                <DragOutlined style={{ marginLeft: 4, fontSize: 7, opacity: 0.8 }} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {/* 优化滚动条样式 */}
+      <style>{`
+        .gantt-scroll-container::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        .gantt-scroll-container::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
+        }
+        .gantt-scroll-container::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 4px;
+          transition: background 0.2s ease;
+        }
+        .gantt-scroll-container::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+        .gantt-scroll-container::-webkit-scrollbar-corner {
+          background: #f1f1f1;
+        }
+        
+        /* 时间轴固定样式 */
+        .time-axis-fixed {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          background: #f5f5f5;
+        }
+        
+        /* 优化性能的GPU加速 */
+        .gantt-content-area {
+          transform: translateZ(0);
+          backface-visibility: hidden;
+          perspective: 1000px;
+        }
+      `}</style>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* 工具栏 */}
+      <div style={{ 
+        padding: '12px 16px', 
+        background: '#fff', 
+        borderBottom: '1px solid #f0f0f0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <Space>
+          <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+            返回
+          </Button>
+          <Title level={4} style={{ margin: 0 }}>
+            增强甘特图编辑器 - {template.template_name}
+            {isDirty && <Tag color="orange" style={{ marginLeft: 8 }}>未保存</Tag>}
+          </Title>
+        </Space>
+
+        <Space>
+          {/* 缩放控制 */}
+          <Space.Compact>
+            <Tooltip title="缩小">
+              <Button 
+                size="small" 
+                icon={<ZoomOutOutlined />} 
+                onClick={handleZoomOut}
+                disabled={zoomScale <= 0.1}
+              />
+            </Tooltip>
+            <Tooltip title="重置缩放">
+              <Button 
+                size="small" 
+                icon={<CompressOutlined />} 
+                onClick={handleZoomReset}
+                disabled={zoomScale === 1.0}
+              />
+            </Tooltip>
+            <Tooltip title="放大">
+              <Button 
+                size="small" 
+                icon={<ZoomInOutlined />} 
+                onClick={handleZoomIn}
+                disabled={zoomScale >= 5.0}
+              />
+            </Tooltip>
+          </Space.Compact>
+          
+          <div style={{ width: 120, display: 'flex', alignItems: 'center' }}>
+            <Slider
+              min={0.1}
+              max={5.0}
+              step={0.1}
+              value={zoomScale}
+              onChange={setZoomScale}
+              style={{ flex: 1, margin: '0 8px' }}
+              tooltip={{
+                formatter: (value) => `${Math.round((value || 1) * 100)}%`
+              }}
+            />
+            <Text style={{ fontSize: 11, minWidth: 40 }}>
+              {Math.round(zoomScale * 100)}%
+            </Text>
+          </div>
+
+          <Button 
+            type="primary" 
+            size="small" 
+            icon={<SaveOutlined />}
+            onClick={handleSaveTemplate}
+            disabled={!isDirty}
+          >
+            保存模板
+          </Button>
+        </Space>
+      </div>
+
+      {/* 主体内容 */}
+      <div style={{ 
+        flex: 1, 
+        display: 'flex', 
+        overflow: 'hidden',
+        background: '#fafafa' 
+      }}>
+        {/* 左侧树形结构 */}
+        <div style={{ 
+          width: 400, 
+          background: '#fff',
+          borderRight: '1px solid #f0f0f0',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          <div style={{ 
+            height: 35, 
+            background: '#f5f5f5', 
+            borderBottom: '1px solid #f0f0f0',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 12px',
+            fontSize: 14,
+            fontWeight: 500,
+            flexShrink: 0
+          }}>
+            工艺结构
+          </div>
+          <div 
+            ref={treeContainerRef}
+            style={{ 
+              flex: 1,
+              overflow: 'auto',
+              position: 'relative'
+            }}
+            onScroll={handleTreeScroll}
+          >
+            <Tree
+              showLine={{ showLeafIcon: false }}
+              switcherIcon={(props) => {
+                const nodeKey = props.data?.key?.toString();
+                if (nodeKey && !nodeKey.startsWith('stage_')) {
+                  return null;
+                }
+                if (props.data?.children && props.data.children.length > 0) {
+                  return props.expanded ? <CaretDownOutlined /> : <CaretRightOutlined />;
+                }
+                return null;
+              }}
+              expandedKeys={expandedKeys}
+              onExpand={(keys) => {
+                const stringKeys = keys.map(k => k.toString());
+                const templateKey = ganttNodes[0]?.id;
+                
+                if (templateKey && !stringKeys.includes(templateKey)) {
+                  stringKeys.unshift(templateKey);
+                }
+                
+                setExpandedKeys(stringKeys);
+              }}
+              onSelect={handleNodeSelect}
+              treeData={buildTreeData(ganttNodes)}
+              blockNode
+              selectable={true}
+              style={{
+                background: 'transparent'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* 右侧甘特图 */}
+        <div style={{ 
+          flex: 1, 
+          display: 'flex',
+          flexDirection: 'column',
+          background: '#fff',
+          overflow: 'hidden' // 防止外层滚动
+        }}>
+          {/* 时间轴表头 - 固定位置，与内容同步滚动 */}
+          <div style={{ 
+            height: 40,
+            background: '#f5f5f5', 
+            borderBottom: '1px solid #f0f0f0',
+            flexShrink: 0,
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
+            <div 
+              style={{
+                transform: `translate3d(-${horizontalScrollLeft}px, 0, 0)`,
+                transition: 'none',
+                willChange: 'transform',
+                backfaceVisibility: 'hidden'
+              }}
+            >
+              {renderTimeAxis()}
+            </div>
+          </div>
+          
+          {/* 甘特图内容区域 - 可滚动 */}
+          <div 
+            ref={ganttContentRef}
+            className="gantt-scroll-container gantt-content-area"
+            style={{ 
+              flex: 1,
+              overflow: 'auto',
+              position: 'relative',
+              scrollbarWidth: 'thin', // Firefox 样式
+              scrollBehavior: 'auto', // 确保滚动流畅
+              WebkitOverflowScrolling: 'touch' // iOS 滚动优化
+            }}
+            onScroll={handleGanttScroll}
+            onWheel={(e) => {
+              // 禁用 Ctrl+滚轮缩放，避免与缩放功能冲突
+              if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+              }
+            }}
+          >
+            {renderTimeBlocks()}
+          </div>
+        </div>
+      </div>
+
+      {/* 编辑模态框 */}
+      <Modal
+        title={editingNode?.type === 'stage' ? '编辑阶段' : '编辑操作'}
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false);
+          setEditingNode(null);
+          form.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSaveNode}
+        >
+          {editingNode?.type === 'stage' && (
+            <>
+              <Form.Item
+                name="stage_name"
+                label="阶段名称"
+                rules={[{ required: true, message: '请输入阶段名称' }]}
+              >
+                <Input placeholder="请输入阶段名称" />
+              </Form.Item>
+
+              <Form.Item
+                name="stage_code"
+                label="阶段代码"
+                rules={[{ required: true, message: '请输入阶段代码' }]}
+              >
+                <Input placeholder="如：STAGE1, STAGE2" />
+              </Form.Item>
+
+              <Form.Item
+                name="start_day"
+                label="阶段原点位置（Day0在总轴上的位置）"
+                tooltip="定义此阶段的Day0在模板总轴上的位置，支持负值。例如：设为-1表示阶段Day0位于总轴Day-1位置"
+                rules={[
+                  { required: true, message: '请输入阶段原点位置' },
+                  { type: 'number', min: -50, max: 200, message: '必须在-50到200之间' }
+                ]}
+              >
+                <InputNumber 
+                  min={-50}
+                  max={200}
+                  style={{ width: '100%' }}
+                  placeholder="阶段Day0在总轴的位置"
+                  addonBefore="Day"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="description"
+                label="阶段描述"
+              >
+                <Input.TextArea 
+                  rows={3} 
+                  placeholder="请输入阶段描述（可选）" 
+                />
+              </Form.Item>
+
+              <div style={{ 
+                background: '#f0f7ff', 
+                padding: '12px', 
+                borderRadius: '6px',
+                border: '1px solid #d6e4ff',
+                marginBottom: '16px'
+              }}>
+                <Text strong style={{ color: '#1890ff' }}>💡 时间锚定说明：</Text>
+                <div style={{ marginTop: '8px', color: '#1f1f1f', fontSize: '12px' }}>
+                  • 阶段原点：定义该阶段Day0在模板总轴上的位置<br />
+                  • 操作定位：阶段内操作相对于阶段Day0进行定位<br />
+                  • 绝对位置：操作绝对位置 = 阶段原点 + 操作相对位置
+                </div>
+              </div>
+            </>
+          )}
+
+          {editingNode?.type === 'operation' && (
+            <>
+              <Form.Item
+                name="operation_id"
+                label="选择操作"
+                rules={[{ required: true, message: '请选择操作' }]}
+              >
+                <Select 
+                  placeholder="请选择操作" 
+                  disabled={!!editingNode.data}
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {availableOperations.map(op => (
+                    <Option key={op.id} value={op.id}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{op.operation_code} - {op.operation_name}</span>
+                        <span style={{ color: '#8c8c8c' }}>({op.standard_time}h)</span>
+                      </div>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                name="operation_day"
+                label="操作位置（相对于阶段原点）"
+                tooltip="操作在阶段时间轴上的天数位置，相对于阶段Day0。例如：0表示阶段Day0，-1表示阶段Day-1，1表示阶段Day1"
+                rules={[
+                  { required: true, message: '请输入操作位置' },
+                  { type: 'number', min: -30, max: 30, message: '必须在-30到30之间' }
+                ]}
+              >
+                <InputNumber 
+                  min={-30}
+                  max={30}
+                  style={{ width: '100%' }}
+                  placeholder="相对于阶段Day0的位置"
+                  addonBefore="阶段Day"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="recommended_time"
+                label="推荐开始时间（当天内）"
+                tooltip="推荐的操作开始时间，指定在操作当天的几点开始。使用24小时制，例如：9.5表示9:30"
+                rules={[
+                  { required: true, message: '请输入推荐时间' },
+                  { type: 'number', min: 0, max: 23.9, message: '推荐时间必须在0-23.9之间（当天的小时数）' }
+                ]}
+              >
+                <InputNumber 
+                  min={0}
+                  max={23.9}
+                  step={0.5}
+                  style={{ width: '100%' }}
+                  placeholder="例如: 9.5 表示 9:30"
+                  addonAfter="时"
+                />
+              </Form.Item>
+
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="window_start_time"
+                    label="时间窗口开始（当天内）"
+                    tooltip="操作可执行的最早时间，在操作当天的几点可以开始"
+                    rules={[
+                      { required: true, message: '请输入开始时间' },
+                      { type: 'number', min: 0, max: 23.9, message: '开始时间必须在0-23.9之间（当天的小时数）' }
+                    ]}
+                  >
+                    <InputNumber 
+                      min={0}
+                      max={23.9}
+                      step={0.5}
+                      style={{ width: '100%' }}
+                      placeholder="7.0"
+                      addonAfter="时"
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="window_end_time"
+                    label="时间窗口结束（当天内）"
+                    tooltip="操作可执行的最晚时间，在操作当天的几点必须结束"
+                    rules={[
+                      { required: true, message: '请输入结束时间' },
+                      { type: 'number', min: 0, max: 23.9, message: '结束时间必须在0-23.9之间（当天的小时数）' }
+                    ]}
+                  >
+                    <InputNumber 
+                      min={0}
+                      max={23.9}
+                      step={0.5}
+                      style={{ width: '100%' }}
+                      placeholder="11.0"
+                      addonAfter="时"
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              {/* 时间锚定计算显示 */}
+              {editingNode.parent_id && (
+                <div style={{ 
+                  background: '#f6f6f6', 
+                  padding: '16px', 
+                  borderRadius: '6px',
+                  marginTop: '16px',
+                  border: '1px solid #d9d9d9'
+                }}>
+                  <Text strong style={{ color: '#1f1f1f' }}>📍 时间锚定计算：</Text>
+                  {(() => {
+                    const stageId = editingNode.parent_id?.replace('stage_', '');
+                    const stage = stages.find(s => s.id.toString() === stageId);
+                    const operationDay = form.getFieldValue('operation_day') || 0;
+                    
+                    if (stage) {
+                      return (
+                        <div>
+                          <div style={{ marginTop: '8px', color: '#1f1f1f', fontSize: '12px' }}>
+                            阶段 <Text code>"{stage.stage_name}"</Text> 原点位置：Day{stage.start_day}
+                          </div>
+                          <div style={{ color: '#1f1f1f', fontSize: '12px', marginTop: '4px' }}>
+                            操作绝对位置：Day{stage.start_day} + Day{operationDay} = <Text strong style={{ color: '#1890ff' }}>Day{stage.start_day + operationDay}</Text>
+                          </div>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
+            </>
+          )}
+
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                保存
+              </Button>
+              <Button onClick={() => {
+                setEditModalVisible(false);
+                setEditingNode(null);
+                form.resetFields();
+              }}>
+                取消
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+      </div>
+    </>
+  );
+};
+
+export default EnhancedGanttEditor;

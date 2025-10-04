@@ -1,0 +1,35 @@
+.App {
+  text-align: center;
+}
+
+/* 确保布局正常 */
+.ant-layout {
+  min-height: 100vh;
+}
+
+/* 侧边栏样式 */
+.ant-layout-sider {
+  overflow: auto;
+  height: 100vh;
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 1000;
+  transition: all 0.2s;
+}
+
+/* 主内容区域动态适应侧边栏 */
+.main-layout {
+  margin-left: 250px;
+  transition: all 0.2s;
+}
+
+.main-layout.collapsed {
+  margin-left: 80px;
+}
+
+/* 内容区域 */
+.ant-layout-content {
+  overflow: auto;
+}

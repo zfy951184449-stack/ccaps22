@@ -1,0 +1,987 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Card,
+  Button,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  message,
+  Space,
+  Typography,
+  Row,
+  Col,
+  Tooltip,
+  Popconfirm,
+  Table,
+  Dropdown
+} from 'antd';
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ArrowLeftOutlined,
+  SettingOutlined,
+  DownOutlined,
+  RightOutlined,
+  MoreOutlined,
+  CalendarOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons';
+import axios from 'axios';
+import './ProcessTemplateEditor.css';
+
+const { Title, Text } = Typography;
+const { Option } = Select;
+
+interface ProcessTemplate {
+  id: number;
+  template_code: string;
+  template_name: string;
+  description: string;
+  total_days: number;
+}
+
+interface ProcessStage {
+  id: number;
+  template_id: number;
+  stage_code: string;
+  stage_name: string;
+  stage_order: number;
+  start_day: number;
+  description?: string;
+}
+
+interface StageOperation {
+  id: number;
+  stage_id: number;
+  operation_id: number;
+  operation_code: string;
+  operation_name: string;
+  operation_day: number;
+  recommended_time: number;
+  window_start_time: number;
+  window_end_time: number;
+  operation_order: number;
+  standard_time?: number;
+  required_people?: number;
+}
+
+interface Operation {
+  id: number;
+  operation_code: string;
+  operation_name: string;
+  standard_time: number;
+  required_people: number;
+}
+
+interface ProcessTemplateEditorProps {
+  template: ProcessTemplate;
+  onBack: () => void;
+}
+
+interface GanttRow {
+  key: string;
+  type: 'stage' | 'operation';
+  id: number;
+  name: string;
+  code: string;
+  stage?: ProcessStage;
+  operation?: StageOperation;
+  stageId?: number;
+  children?: GanttRow[];
+}
+
+const ProcessTemplateEditor: React.FC<ProcessTemplateEditorProps> = ({ template, onBack }) => {
+  const [stages, setStages] = useState<ProcessStage[]>([]);
+  const [stageOperations, setStageOperations] = useState<{ [key: number]: StageOperation[] }>({});
+  const [availableOperations, setAvailableOperations] = useState<Operation[]>([]);
+  const [selectedStage, setSelectedStage] = useState<ProcessStage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [stageModalVisible, setStageModalVisible] = useState(false);
+  const [operationModalVisible, setOperationModalVisible] = useState(false);
+  const [editingStage, setEditingStage] = useState<ProcessStage | null>(null);
+  const [editingOperation, setEditingOperation] = useState<StageOperation | null>(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([]);
+
+  const [stageForm] = Form.useForm();
+  const [operationForm] = Form.useForm();
+
+  const API_BASE_URL = 'http://localhost:3001/api';
+
+  // 计算时间轴显示范围
+  const getTimeRange = () => {
+    let minDay = 0;
+    let maxDay = 10; // 默认显示范围
+
+    stages.forEach(stage => {
+      const operations = stageOperations[stage.id] || [];
+      operations.forEach(op => {
+        const absoluteDay = stage.start_day + op.operation_day;
+        minDay = Math.min(minDay, absoluteDay - 1);
+        maxDay = Math.max(maxDay, absoluteDay + 1);
+      });
+      
+      // 考虑阶段原点位置
+      minDay = Math.min(minDay, stage.start_day - 2);
+      maxDay = Math.max(maxDay, stage.start_day + 2);
+    });
+
+    return { startDay: minDay, endDay: maxDay };
+  };
+
+  useEffect(() => {
+    fetchStages();
+    fetchAvailableOperations();
+  }, [template]);
+
+  useEffect(() => {
+    // 默认展开所有阶段
+    const stageKeys = stages.map(stage => `stage-${stage.id}`);
+    setExpandedRowKeys(stageKeys);
+  }, [stages]);
+
+  const fetchStages = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE_URL}/process-stages/template/${template.id}`);
+      setStages(response.data);
+      
+      // Fetch operations for each stage
+      for (const stage of response.data) {
+        await fetchStageOperations(stage.id);
+      }
+    } catch (error) {
+      message.error('获取阶段失败');
+      console.error('Error fetching stages:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchStageOperations = async (stageId: number) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/stage-operations/stage/${stageId}`);
+      setStageOperations(prev => ({
+        ...prev,
+        [stageId]: response.data
+      }));
+    } catch (error) {
+      console.error('Error fetching stage operations:', error);
+    }
+  };
+
+  const fetchAvailableOperations = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/stage-operations/available`);
+      setAvailableOperations(response.data);
+    } catch (error) {
+      console.error('Error fetching available operations:', error);
+    }
+  };
+
+  const formatTime = (time: number): string => {
+    const hours = Math.floor(time);
+    const minutes = Math.round((time - hours) * 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  // 构建表格数据（树状结构）
+  const buildTableData = (): GanttRow[] => {
+    return stages.map(stage => {
+      const operations = stageOperations[stage.id] || [];
+      return {
+        key: `stage-${stage.id}`,
+        type: 'stage',
+        id: stage.id,
+        name: stage.stage_name,
+        code: stage.stage_code,
+        stage: stage,
+        children: operations.map(op => ({
+          key: `operation-${op.id}`,
+          type: 'operation',
+          id: op.id,
+          name: op.operation_name,
+          code: op.operation_code,
+          operation: op,
+          stageId: stage.id
+        }))
+      };
+    });
+  };
+
+  // 生成时间轴列（以小时为粒度）
+  const generateTimeColumns = () => {
+    const { startDay, endDay } = getTimeRange();
+    const timeColumns = [];
+    
+    for (let day = startDay; day <= endDay; day++) {
+      for (let hour = 0; hour < 24; hour++) {
+        const columnKey = `day_${day}_hour_${hour}`;
+        const isDay0 = day === 0;
+        
+        timeColumns.push({
+          title: (
+            <div className="gantt-hour-header">
+              <div style={{ 
+                fontSize: '8px',
+                fontWeight: isDay0 ? 'bold' : 'normal',
+                color: isDay0 ? '#1890ff' : 'inherit',
+                textAlign: 'center',
+                lineHeight: '1.2'
+              }}>
+                {hour === 0 && (
+                  <div style={{ 
+                    fontSize: '9px', 
+                    fontWeight: 'bold',
+                    marginBottom: '2px',
+                    color: isDay0 ? '#1890ff' : '#666'
+                  }}>
+                    D{day}
+                  </div>
+                )}
+                <div style={{ fontSize: '8px' }}>{hour.toString().padStart(2, '0')}</div>
+              </div>
+            </div>
+          ),
+          dataIndex: columnKey,
+          key: columnKey,
+          width: 30,
+          className: isDay0 ? 'gantt-hour-column gantt-day-zero' : 'gantt-hour-column',
+          render: (_: any, record: GanttRow) => {
+            return renderTimeCell(record, day, hour);
+          }
+        });
+      }
+    }
+    
+    return timeColumns;
+  };
+
+  // 渲染时间单元格
+  const renderTimeCell = (record: GanttRow, day: number, hour: number) => {
+    if (record.type === 'stage') {
+      // 阶段行：显示阶段原点标记和阶段范围
+      const stage = record.stage!;
+      const operations = stageOperations[stage.id] || [];
+      
+      // 阶段原点标记（只在该天的第一个小时显示）
+      if (day === stage.start_day && hour === 0) {
+        return (
+          <div className="gantt-stage-origin">
+            <Tooltip title={`阶段原点: ${stage.stage_name} Day0`}>
+              <div className="stage-origin-marker">
+                Day0
+              </div>
+            </Tooltip>
+          </div>
+        );
+      }
+
+      // 阶段范围条（只在范围内第一天的第一个小时显示）
+      if (operations.length > 0) {
+        const absoluteDays = operations.map(op => stage.start_day + op.operation_day);
+        const minAbsoluteDay = Math.min(...absoluteDays);
+        const maxAbsoluteDay = Math.max(...absoluteDays);
+        
+        if (day === minAbsoluteDay && hour === 0) {
+          const duration = maxAbsoluteDay - minAbsoluteDay + 1;
+          return (
+            <div 
+              className="gantt-stage-bar"
+              style={{ 
+                width: `${duration * 24 * 30 - 10}px`, // 调整为小时粒度宽度
+                marginLeft: '5px'
+              }}
+            >
+              <span className="gantt-stage-duration">
+                {stage.stage_name}
+              </span>
+            </div>
+          );
+        }
+      }
+      
+    } else if (record.type === 'operation') {
+      // 操作行：显示操作时间块
+      const operation = record.operation!;
+      const stage = stages.find(s => s.id === record.stageId);
+      
+      if (stage) {
+        const absoluteDay = stage.start_day + operation.operation_day;
+        
+        if (day === absoluteDay) {
+          const currentHour = hour;
+          const recommendedHour = Math.floor(operation.recommended_time);
+          const standardTimeHours = operation.standard_time || 0;
+          const windowStartHour = Math.floor(operation.window_start_time);
+          const windowEndHour = Math.ceil(operation.window_end_time);
+          
+          // 检查当前小时是否在推荐时间范围内（操作块显示区域）
+          const isInOperationBlock = currentHour >= recommendedHour && 
+                                   currentHour < recommendedHour + standardTimeHours;
+          
+          // 检查当前小时是否在时间窗口内（窗口区域）
+          const isInWindow = currentHour >= windowStartHour && currentHour <= windowEndHour;
+          
+          // 渲染操作时间块（从推荐时间开始，持续标准时长）
+          if (isInOperationBlock) {
+            const isFirstHour = currentHour === recommendedHour;
+            const blockWidthHours = Math.min(standardTimeHours, 24 - recommendedHour); // 确保不超过当天
+            
+            return (
+              <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                {isFirstHour && (
+                  <Tooltip
+                    title={
+                      <div>
+                        <div><strong>{operation.operation_name}</strong></div>
+                        <div>推荐时间: {formatTime(operation.recommended_time)}</div>
+                        <div>时间窗口: {formatTime(operation.window_start_time)} - {formatTime(operation.window_end_time)}</div>
+                        <div>标准时长: {operation.standard_time}小时</div>
+                        <div>所需人数: {operation.required_people}人</div>
+                        <div>绝对位置: Day{absoluteDay}</div>
+                        <div>相对位置: 阶段Day{operation.operation_day}</div>
+                      </div>
+                    }
+                  >
+                    <div 
+                      className="gantt-operation-block"
+                      style={{
+                        position: 'absolute',
+                        left: '2px',
+                        top: '8px',
+                        width: `${blockWidthHours * 30 - 4}px`,
+                        height: '24px',
+                        zIndex: 3
+                      }}
+                    >
+                      <ClockCircleOutlined style={{ marginRight: 4, fontSize: '10px' }} />
+                      <span style={{ fontSize: '10px' }}>{formatTime(operation.recommended_time)}</span>
+                    </div>
+                  </Tooltip>
+                )}
+                
+                {/* 渲染窗口区域（半透明） */}
+                {isInWindow && (
+                  <div 
+                    className="gantt-operation-window"
+                    style={{
+                      position: 'absolute',
+                      left: '1px',
+                      bottom: '1px',
+                      width: '28px',
+                      height: '8px',
+                      background: 'rgba(255, 193, 7, 0.3)',
+                      borderRadius: '2px',
+                      border: '1px solid rgba(255, 193, 7, 0.5)',
+                      zIndex: 1
+                    }}
+                  />
+                )}
+              </div>
+            );
+          }
+          
+          // 如果只在窗口区域内但不在操作块内，只显示窗口区域
+          if (isInWindow) {
+            return (
+              <div style={{ position: 'relative', height: '100%', width: '100%' }}>
+                <div 
+                  className="gantt-operation-window"
+                  style={{
+                    position: 'absolute',
+                    left: '1px',
+                    bottom: '1px',
+                    width: '28px',
+                    height: '8px',
+                    background: 'rgba(255, 193, 7, 0.3)',
+                    borderRadius: '2px',
+                    border: '1px solid rgba(255, 193, 7, 0.5)',
+                    zIndex: 1
+                  }}
+                />
+              </div>
+            );
+          }
+        }
+      }
+    }
+    
+    return <div className="gantt-cell" />;
+  };
+
+  // 处理阶段相关操作
+  const handleCreateStage = () => {
+    setEditingStage(null);
+    stageForm.resetFields();
+    stageForm.setFieldsValue({
+      start_day: stages.length > 0 ? Math.max(...stages.map(s => s.start_day)) + 1 : 0
+    });
+    setStageModalVisible(true);
+  };
+
+  const handleEditStage = (stage: ProcessStage) => {
+    setEditingStage(stage);
+    stageForm.setFieldsValue({
+      stage_name: stage.stage_name,
+      start_day: stage.start_day,
+      description: stage.description
+    });
+    setStageModalVisible(true);
+  };
+
+  const handleStageModalOk = async () => {
+    try {
+      const values = await stageForm.validateFields();
+      
+      if (editingStage) {
+        await axios.put(`${API_BASE_URL}/process-stages/${editingStage.id}`, values);
+        message.success('阶段更新成功');
+      } else {
+        await axios.post(`${API_BASE_URL}/process-stages/template/${template.id}`, values);
+        message.success('阶段创建成功');
+      }
+      
+      setStageModalVisible(false);
+      stageForm.resetFields();
+      fetchStages();
+    } catch (error) {
+      message.error('操作失败');
+      console.error('Error saving stage:', error);
+    }
+  };
+
+  const handleDeleteStage = async (stageId: number) => {
+    try {
+      await axios.delete(`${API_BASE_URL}/process-stages/${stageId}`);
+      message.success('阶段删除成功');
+      fetchStages();
+    } catch (error) {
+      message.error('删除失败');
+      console.error('Error deleting stage:', error);
+    }
+  };
+
+  // 处理操作相关操作
+  const handleAddOperation = (stage: ProcessStage) => {
+    setSelectedStage(stage);
+    setEditingOperation(null);
+    operationForm.resetFields();
+    operationForm.setFieldsValue({
+      operation_day: 0, // 默认在阶段原点Day0
+      recommended_time: 9.0,
+      window_start_time: 7.0,
+      window_end_time: 11.0
+    });
+    setOperationModalVisible(true);
+  };
+
+  const handleEditOperation = (operation: StageOperation, stage: ProcessStage) => {
+    setSelectedStage(stage);
+    setEditingOperation(operation);
+    operationForm.setFieldsValue({
+      operation_id: operation.operation_id,
+      operation_day: operation.operation_day,
+      recommended_time: operation.recommended_time,
+      window_start_time: operation.window_start_time,
+      window_end_time: operation.window_end_time
+    });
+    setOperationModalVisible(true);
+  };
+
+  const handleOperationModalOk = async () => {
+    try {
+      const values = await operationForm.validateFields();
+      
+      if (editingOperation) {
+        await axios.put(`${API_BASE_URL}/stage-operations/${editingOperation.id}`, values);
+        message.success('操作更新成功');
+      } else {
+        await axios.post(`${API_BASE_URL}/stage-operations/stage/${selectedStage!.id}`, values);
+        message.success('操作添加成功');
+      }
+      
+      setOperationModalVisible(false);
+      operationForm.resetFields();
+      if (selectedStage) {
+        fetchStageOperations(selectedStage.id);
+      }
+    } catch (error) {
+      message.error('操作失败');
+      console.error('Error saving operation:', error);
+    }
+  };
+
+  const handleDeleteOperation = async (operationId: number, stageId: number) => {
+    try {
+      await axios.delete(`${API_BASE_URL}/stage-operations/${operationId}`);
+      message.success('操作删除成功');
+      fetchStageOperations(stageId);
+    } catch (error) {
+      message.error('删除失败');
+      console.error('Error deleting operation:', error);
+    }
+  };
+
+  // 表格列配置
+  const tableColumns = [
+    {
+      title: (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <CalendarOutlined style={{ color: '#1890ff' }} />
+          <span style={{ fontSize: '12px', fontWeight: 'bold' }}>项目结构</span>
+        </div>
+      ),
+      dataIndex: 'name',
+      key: 'name',
+      width: 220,
+      fixed: 'left' as const,
+      render: (text: string, record: GanttRow) => {
+        if (record.type === 'stage') {
+          return (
+            <div 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 4px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                transition: 'background-color 0.2s'
+              }}
+              className="stage-row"
+              onDoubleClick={() => handleEditStage(record.stage!)}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flex: 1
+              }}>
+                <CalendarOutlined style={{ color: '#1890ff', fontSize: '14px' }} />
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f1f1f' }}>
+                    {text}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#8c8c8c' }}>
+                    原点: Day{record.stage?.start_day} | {record.code}
+                  </div>
+                </div>
+              </div>
+              <Dropdown 
+                menu={{
+                  items: [
+                    {
+                      key: 'add',
+                      icon: <PlusOutlined />,
+                      label: '添加操作',
+                      onClick: () => handleAddOperation(record.stage!)
+                    },
+                    {
+                      key: 'edit',
+                      icon: <EditOutlined />,
+                      label: '编辑阶段',
+                      onClick: () => handleEditStage(record.stage!)
+                    },
+                    {
+                      type: 'divider'
+                    },
+                    {
+                      key: 'delete',
+                      icon: <DeleteOutlined />,
+                      label: '删除阶段',
+                      danger: true,
+                      onClick: () => {
+                        Modal.confirm({
+                          title: '确认删除',
+                          content: '确定要删除这个阶段吗？',
+                          onOk: () => handleDeleteStage(record.stage!.id)
+                        });
+                      }
+                    }
+                  ]
+                }}
+                trigger={['click']}
+                placement="bottomRight"
+              >
+                <MoreOutlined style={{ 
+                  fontSize: '14px', 
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '2px',
+                  color: '#8c8c8c'
+                }} />
+              </Dropdown>
+            </div>
+          );
+        }
+        
+        const stage = stages.find(s => s.id === record.stageId);
+        const absoluteDay = stage ? stage.start_day + (record.operation?.operation_day || 0) : 0;
+        
+        return (
+          <div 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 4px 6px 24px',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              transition: 'background-color 0.2s'
+            }}
+            className="operation-row"
+            onDoubleClick={() => stage && handleEditOperation(record.operation!, stage)}
+          >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              flex: 1
+            }}>
+              <SettingOutlined style={{ color: '#52c41a', fontSize: '12px' }} />
+              <div>
+                <div style={{ fontSize: '12px', color: '#1f1f1f' }}>
+                  {text}
+                </div>
+                <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                  绝对: Day{absoluteDay} | 相对: Day{record.operation?.operation_day}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <EditOutlined 
+                style={{ 
+                  fontSize: '12px', 
+                  cursor: 'pointer',
+                  color: '#1890ff',
+                  padding: '2px'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stage && handleEditOperation(record.operation!, stage);
+                }}
+              />
+              <Popconfirm
+                title="确认删除"
+                description="确定要删除这个操作吗？"
+                onConfirm={() => stage && handleDeleteOperation(record.operation!.id, stage.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <DeleteOutlined 
+                  style={{ 
+                    fontSize: '12px', 
+                    cursor: 'pointer',
+                    color: '#ff4d4f',
+                    padding: '2px'
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </Popconfirm>
+            </div>
+          </div>
+        );
+      }
+    },
+    ...generateTimeColumns()
+  ];
+
+  const dataSource = buildTableData();
+
+  return (
+    <div className="process-template-editor">
+      <Card>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
+          <Col>
+            <Space size="large">
+              <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+                返回
+              </Button>
+              <div>
+                <Title level={4} style={{ margin: 0, color: '#1f1f1f' }}>
+                  {template.template_name}
+                </Title>
+                <Text type="secondary" style={{ fontSize: '12px' }}>
+                  时间锚定原则: 阶段原点定位，操作相对定位
+                </Text>
+              </div>
+            </Space>
+          </Col>
+          <Col>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreateStage}
+              size="large"
+            >
+              新增阶段
+            </Button>
+          </Col>
+        </Row>
+
+        <div className="gantt-table-container">
+          <Table
+            columns={tableColumns}
+            dataSource={dataSource}
+            loading={loading}
+            pagination={false}
+            scroll={{ x: 'max-content', y: 600 }}
+            expandable={{
+              expandedRowKeys,
+              onExpandedRowsChange: (keys) => setExpandedRowKeys(keys as string[]),
+              expandIcon: ({ expanded, onExpand, record }) =>
+                record.children && record.children.length > 0 ? (
+                  <div 
+                    onClick={(e) => onExpand(record, e)}
+                    style={{ 
+                      cursor: 'pointer', 
+                      padding: '2px',
+                      borderRadius: '2px',
+                      color: '#1890ff'
+                    }}
+                  >
+                    {expanded ? <DownOutlined /> : <RightOutlined />}
+                  </div>
+                ) : null
+            }}
+            rowClassName={(record) => {
+              return record.type === 'stage' ? 'gantt-stage-row' : 'gantt-operation-row';
+            }}
+            size="small"
+          />
+        </div>
+      </Card>
+
+      {/* 阶段编辑模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CalendarOutlined style={{ color: '#1890ff' }} />
+            <span>{editingStage ? '编辑阶段' : '新增阶段'}</span>
+          </div>
+        }
+        open={stageModalVisible}
+        onOk={handleStageModalOk}
+        onCancel={() => {
+          setStageModalVisible(false);
+          stageForm.resetFields();
+        }}
+        width={600}
+        okText="确定"
+        cancelText="取消"
+      >
+        <Form
+          form={stageForm}
+          layout="vertical"
+          autoComplete="off"
+          style={{ marginTop: 20 }}
+        >
+          <Form.Item
+            name="stage_name"
+            label="阶段名称"
+            rules={[{ required: true, message: '请输入阶段名称' }]}
+          >
+            <Input placeholder="请输入阶段名称" size="large" />
+          </Form.Item>
+
+          <Form.Item
+            name="start_day"
+            label="阶段原点位置 (Day0在总轴上的位置)"
+            tooltip="定义此阶段的Day0在模板总轴上的位置，支持负值。例如：设为-1表示阶段Day0位于总轴Day-1位置"
+            rules={[
+              { required: true, message: '请输入阶段原点位置' },
+              { type: 'number', min: -50, max: 200, message: '必须在-50到200之间' }
+            ]}
+          >
+            <InputNumber
+              min={-50}
+              max={200}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="阶段Day0在总轴的位置"
+              addonBefore="Day"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="阶段描述"
+          >
+            <Input.TextArea 
+              rows={3} 
+              placeholder="请输入阶段描述（可选）" 
+            />
+          </Form.Item>
+
+          <div style={{ 
+            background: '#f0f7ff', 
+            padding: '12px', 
+            borderRadius: '6px',
+            border: '1px solid #d6e4ff'
+          }}>
+            <Text strong style={{ color: '#1890ff' }}>💡 时间锚定说明：</Text>
+            <div style={{ marginTop: '8px', color: '#1f1f1f', fontSize: '12px' }}>
+              • 阶段原点：定义该阶段Day0在模板总轴上的位置<br />
+              • 操作定位：阶段内操作相对于阶段Day0进行定位<br />
+              • 绝对位置：操作绝对位置 = 阶段原点 + 操作相对位置
+            </div>
+          </div>
+        </Form>
+      </Modal>
+
+      {/* 操作编辑模态框 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <SettingOutlined style={{ color: '#52c41a' }} />
+            <span>{editingOperation ? '编辑操作' : '添加操作'}</span>
+          </div>
+        }
+        open={operationModalVisible}
+        onOk={handleOperationModalOk}
+        onCancel={() => {
+          setOperationModalVisible(false);
+          operationForm.resetFields();
+        }}
+        width={700}
+        okText="确定"
+        cancelText="取消"
+      >
+        <Form
+          form={operationForm}
+          layout="vertical"
+          autoComplete="off"
+          style={{ marginTop: 20 }}
+        >
+          <Form.Item
+            name="operation_id"
+            label="选择操作"
+            rules={[{ required: true, message: '请选择操作' }]}
+          >
+            <Select
+              placeholder="请选择操作"
+              showSearch
+              optionFilterProp="children"
+              disabled={!!editingOperation}
+              size="large"
+            >
+              {availableOperations.map(op => (
+                <Option key={op.id} value={op.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{op.operation_code} - {op.operation_name}</span>
+                    <span style={{ color: '#8c8c8c' }}>({op.standard_time}h)</span>
+                  </div>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="operation_day"
+            label="操作位置（相对于阶段原点）"
+            tooltip="操作在阶段时间轴上的天数位置，相对于阶段Day0。例如：0表示阶段Day0，-1表示阶段Day-1，1表示阶段Day1"
+            rules={[
+              { required: true, message: '请输入操作位置' },
+              { type: 'number', min: -30, max: 30, message: '必须在-30到30之间' }
+            ]}
+          >
+            <InputNumber
+              min={-30}
+              max={30}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="相对于阶段Day0的位置"
+              addonBefore="阶段Day"
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="recommended_time"
+            label="推荐开始时间"
+            tooltip="推荐的操作开始时间，使用24小时制。例如：9.5表示9:30"
+            rules={[
+              { required: true, message: '请输入推荐时间' },
+              { type: 'number', min: 0, max: 23.9, message: '必须在0-23.9之间' }
+            ]}
+          >
+            <InputNumber
+              min={0}
+              max={23.9}
+              step={0.5}
+              style={{ width: '100%' }}
+              size="large"
+              placeholder="例如: 9.5 表示 9:30"
+              addonAfter="时"
+            />
+          </Form.Item>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="window_start_time"
+                label="时间窗口开始"
+                rules={[
+                  { required: true, message: '请输入开始时间' },
+                  { type: 'number', min: 0, max: 23.9, message: '必须在0-23.9之间' }
+                ]}
+              >
+                <InputNumber
+                  min={0}
+                  max={23.9}
+                  step={0.5}
+                  style={{ width: '100%' }}
+                  size="large"
+                  placeholder="7.0"
+                  addonAfter="时"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="window_end_time"
+                label="时间窗口结束"
+                rules={[
+                  { required: true, message: '请输入结束时间' },
+                  { type: 'number', min: 0, max: 23.9, message: '必须在0-23.9之间' }
+                ]}
+              >
+                <InputNumber
+                  min={0}
+                  max={23.9}
+                  step={0.5}
+                  style={{ width: '100%' }}
+                  size="large"
+                  placeholder="11.0"
+                  addonAfter="时"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          {selectedStage && (
+            <div style={{ 
+              background: '#f6f6f6', 
+              padding: '16px', 
+              borderRadius: '6px',
+              marginTop: '16px',
+              border: '1px solid #d9d9d9'
+            }}>
+              <Text strong style={{ color: '#1f1f1f' }}>📍 时间锚定计算：</Text>
+              <div style={{ marginTop: '8px', color: '#1f1f1f', fontSize: '12px' }}>
+                阶段 <Text code>"{selectedStage.stage_name}"</Text> 原点位置：Day{selectedStage.start_day}
+              </div>
+              <div style={{ color: '#1f1f1f', fontSize: '12px', marginTop: '4px' }}>
+                操作绝对位置：Day{selectedStage.start_day} + Day{operationForm.getFieldValue('operation_day') || 0} = <Text strong style={{ color: '#1890ff' }}>Day{selectedStage.start_day + (operationForm.getFieldValue('operation_day') || 0)}</Text>
+              </div>
+            </div>
+          )}
+        </Form>
+      </Modal>
+    </div>
+  );
+};
+
+export default ProcessTemplateEditor;

@@ -1,0 +1,165 @@
+.personnel-calendar {
+  padding: 24px;
+}
+
+.schedule-view.grid {
+  overflow-x: auto;
+}
+
+.schedule-grid .ant-table-thead > tr > th {
+  text-align: center;
+  background-color: #fafafa;
+}
+
+.schedule-grid .ant-table-cell {
+  padding: 8px;
+}
+
+.employee-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.employee-name {
+  font-weight: 600;
+}
+
+.employee-code {
+  font-size: 12px;
+  color: #888;
+}
+
+.day-header {
+  text-align: center;
+  font-weight: 500;
+}
+
+.day-header > div:last-child {
+  font-size: 12px;
+  color: #888;
+}
+
+.shift-cell {
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.shift-cell.cell-empty {
+  justify-content: center;
+  align-items: center;
+  color: #bbb;
+}
+
+.shift-cell.cell-overtime {
+  background: rgba(255, 120, 0, 0.08);
+}
+
+.shift-cell.cell-production {
+  background: rgba(24, 144, 255, 0.08);
+}
+
+.shift-cell.cell-rest {
+  background: rgba(140, 140, 140, 0.08);
+}
+
+.shift-cell.cell-cancelled {
+  background: rgba(255, 77, 79, 0.1);
+}
+
+.shift-chip {
+  background-color: #f0f5ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shift-chip:hover {
+  border-color: #91caff;
+}
+
+.shift-chip.category-base {
+  background-color: #f0f5ff;
+  border-color: #d6e4ff;
+}
+
+.shift-chip.category-base.has-tasks {
+  background-color: #fff7e6;
+  border-color: #ffa940;
+  box-shadow: 0 2px 6px rgba(255, 169, 64, 0.25);
+}
+
+.shift-chip.category-production {
+  background-color: #fff7e6;
+  border-color: #ffd591;
+}
+
+.shift-chip.category-overtime {
+  background-color: #fff2e8;
+  border-color: #ffbb96;
+}
+
+.shift-chip.category-rest {
+  background-color: #fafafa;
+  border-color: #d9d9d9;
+  color: #595959;
+}
+
+.shift-chip.is-locked {
+  border-style: dashed;
+  border-color: #faad14;
+  background-color: #fffbe6;
+}
+
+.shift-chip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.shift-chip-time {
+  font-size: 11px;
+  color: #555;
+}
+
+.shift-chip-operation {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #722ed1;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.shift-chip-task-list {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shift-chip-task {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #444;
+}
+
+.shift-empty {
+  text-align: center;
+  color: #ccc;
+  padding: 16px 0;
+}
+
+.schedule-empty {
+  padding: 64px 0;
+}
