@@ -19,7 +19,8 @@ import {
   EmployeeUnavailability,
   ShiftType,
   OrgHierarchyResponse,
-  EmployeeOrgContext
+  EmployeeOrgContext,
+  ShiftDefinition
 } from '../types';
 
 const api = axios.create({
@@ -137,8 +138,48 @@ export const schedulingMetricsApi = {
       .then((res) => res.data)
 };
 
+export const schedulingRunApi = {
+  list: (limit = 20) =>
+    api.get(`/scheduling/runs`, { params: { limit } }).then((res) => res.data),
+  get: (runId: number) =>
+    api.get(`/scheduling/runs/${runId}`).then((res) => res.data),
+  events: (runId: number, sinceId?: number, limit?: number) =>
+    api.get(`/scheduling/runs/${runId}/events`, {
+      params: {
+        sinceId,
+        limit,
+      },
+    }).then((res) => res.data),
+  publish: (runId: number) =>
+    api.post(`/scheduling/runs/${runId}/publish`).then((res) => res.data),
+  rollback: (runId: number) =>
+    api.post(`/scheduling/runs/${runId}/rollback`).then((res) => res.data),
+  retryOperation: (operationPlanId: number) =>
+    api.post(`/scheduling/auto-plan/retry/${operationPlanId}`).then((res) => res.data),
+  exportGaps: (runId: number) =>
+    api.get(`/scheduling/gaps/export`, {
+      params: { runId },
+      responseType: 'blob'
+    })
+      .then((res) => res.data)
+};
+
 export const shiftTypeApi = {
   getAll: () => api.get<ShiftType[]>('/shift-types').then((res) => res.data)
+};
+
+export const shiftDefinitionApi = {
+  getAll: (options?: { includeInactive?: boolean }) =>
+    api
+      .get<ShiftDefinition[]>('/shift-definitions', {
+        params: options?.includeInactive ? { includeInactive: true } : undefined,
+      })
+      .then((res) => res.data),
+  create: (data: Omit<ShiftDefinition, 'id' | 'created_at' | 'updated_at'>) =>
+    api.post<ShiftDefinition>('/shift-definitions', data).then((res) => res.data),
+  update: (id: number, data: Partial<ShiftDefinition>) =>
+    api.put(`/shift-definitions/${id}`, data).then((res) => res.data),
+  remove: (id: number) => api.delete(`/shift-definitions/${id}`).then((res) => res.data),
 };
 
 export const organizationApi = {
@@ -194,4 +235,72 @@ export const organizationStructureApi = {
 export const organizationEmployeeApi = {
   getContext: (employeeId: number) =>
     api.get<EmployeeOrgContext>(`/employees/${employeeId}/organization-context`).then((res) => res.data)
+};
+
+// ML智能排班v3 API
+export const mlSchedulingApi = {
+  // 智能排班v3
+  autoPlanV3: (payload: {
+    batchIds: number[];
+    startDate?: string;
+    endDate?: string;
+    options?: {
+      dryRun?: boolean;
+      allowedOrgRoles?: string[];
+    };
+  }) =>
+    api.post('/scheduling/auto-plan/v3', payload).then((res) => res.data),
+
+  // 智能排班v4
+  autoPlanV4: (payload: {
+    batchIds: number[];
+    startDate?: string;
+    endDate?: string;
+    options?: {
+      dryRun?: boolean;
+      allowedOrgRoles?: string[];
+      adaptiveParams?: boolean;
+      earlyStop?: boolean;
+      monthHourTolerance?: number;
+    };
+  }) =>
+    api.post('/scheduling/auto-plan/v4', payload).then((res) => res.data),
+
+  // 预测工作负载
+  predictWorkload: (payload: {
+    startDate: string;
+    endDate: string;
+  }) =>
+    api.post('/scheduling/ml/predict-workload', payload).then((res) => res.data),
+
+  // 评估排班质量
+  evaluateSchedule: (payload: {
+    schedules: Array<{
+      employeeId: number;
+      date: string;
+      shiftCode?: string;
+      planHours: number;
+      overtimeHours: number;
+      operationPlanId?: number;
+      operationId?: number;
+    }>;
+    period: {
+      startDate: string;
+      endDate: string;
+      quarter?: string;
+    };
+  }) =>
+    api.post('/scheduling/ml/evaluate', payload).then((res) => res.data),
+
+  // 检查综合工时制约束
+  checkComprehensiveConstraints: (payload: {
+    employeeId: number;
+    schedules: Array<{
+      date: string;
+      planHours: number;
+      overtimeHours: number;
+    }>;
+    period: 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
+  }) =>
+    api.post('/scheduling/comprehensive-work-time/check', payload).then((res) => res.data),
 };

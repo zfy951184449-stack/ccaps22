@@ -1,6 +1,6 @@
 import apiClient from './apiClient'
 import type {
-  AutoPlanResult,
+  AutoPlanV4Result,
   BatchPlanSummary,
   WorkloadSnapshot,
   SchedulingMetricsSnapshot,
@@ -12,9 +12,17 @@ export interface WorkloadQuery {
   endDate: string
 }
 
-export interface AutoPlanOptions {
+export interface AutoPlanV4Options {
   batchIds: number[]
-  dryRun?: boolean
+  startDate?: string
+  endDate?: string
+  options?: {
+    dryRun?: boolean
+    includeBaseRoster?: boolean
+    adaptiveParams?: boolean
+    earlyStop?: boolean
+    monthHourTolerance?: number
+  }
 }
 
 export const fetchWorkloadSnapshot = async ({ startDate, endDate }: WorkloadQuery) => {
@@ -29,8 +37,8 @@ export const fetchBatchPlans = async (): Promise<BatchPlanSummary[]> => {
   return response.data
 }
 
-export const runAutoPlan = async (options: AutoPlanOptions): Promise<AutoPlanResult> => {
-  const response = await apiClient.post<AutoPlanResult>('/scheduling/auto-plan', options)
+export const runAutoPlanV4 = async (options: AutoPlanV4Options): Promise<AutoPlanV4Result> => {
+  const response = await apiClient.post<AutoPlanV4Result>('/scheduling/auto-plan/v4', options)
   return response.data
 }
 

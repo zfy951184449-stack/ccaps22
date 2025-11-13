@@ -66,45 +66,78 @@ export interface ComputeMetricsPayload {
   saveSnapshot?: boolean
 }
 
-export interface HeuristicHotspot {
-  id: string
-  operationPlanId: number
-  operationName: string
-  planDate: string
-  deficit: number
-  attempts: number
-  reason: string
-  notes: string[]
-  relatedOperations: number[]
-  createdAt: string
+export type SchedulingRunStatus =
+  | 'RUNNING'
+  | 'DRAFT'
+  | 'PENDING_PUBLISH'
+  | 'PUBLISHED'
+  | 'ROLLED_BACK'
+  | 'FAILED'
+
+export interface OptimizationMetrics {
+  populationSize: number
+  generations: number
+  actualGenerations?: number
+  computationTime?: number
+  paretoFrontSize: number
 }
 
-export interface CoverageDetailGap {
-  operationPlanId: number
-  operationName: string
-  planDate: string
-  required: number
-  assigned: number
-  deficit: number
-  shortageReason?: string
+export interface ComprehensiveWorkTimeMonthlyStatus {
+  month: string
+  hours: number
+  status: 'COMPLIANT' | 'WARNING' | 'VIOLATION'
 }
 
-export interface OperationCoverageDetail extends CoverageDetailGap {
+export interface ComprehensiveWorkTimeEmployeeStatus {
+  employeeId: number
+  employeeName: string
+  quarterHours: number
+  quarterStatus: 'COMPLIANT' | 'WARNING' | 'VIOLATION'
+  monthlyStatus: ComprehensiveWorkTimeMonthlyStatus[]
+  restDays: number
+  restDaysStatus: 'COMPLIANT' | 'WARNING' | 'VIOLATION'
+}
+
+export interface ComprehensiveWorkTimeStatus {
+  employees: ComprehensiveWorkTimeEmployeeStatus[]
+  quarterTargetHours?: number
+  quarterMinHours?: number
+  quarterMaxHours?: number
+  monthToleranceHours?: number
+}
+
+export interface AutoPlanV4CoverageGap {
+  operationPlanId: number
+  operationId?: number
+  operationName: string
   batchPlanId: number
   batchCode: string
-  stageName: string
+  stageName?: string
+  planDate: string
+  requiredPeople: number
+  assignedPeople: number
+  availableHeadcount?: number
+  availableQualified?: number
+  qualifiedPoolSize?: number
+  category: 'HEADCOUNT' | 'QUALIFICATION' | 'OTHER'
+  status?: 'UNASSIGNED' | 'PARTIAL'
+  notes: string[]
+  suggestions: string[]
 }
 
-export interface CoverageSummary {
-  operations: OperationCoverageDetail[]
-  totals: {
-    requiredPeople: number
-    assignedPeople: number
-    deficitPeople: number
+export interface AutoPlanV4CoverageSummary {
+  totalOperations: number
+  fullyCovered: number
+  coverageRate: number
+  gaps: AutoPlanV4CoverageGap[]
+  gapTotals: {
+    headcount: number
+    qualification: number
+    other: number
   }
 }
 
-export interface AutoPlanResult {
+export interface AutoPlanV4Result {
   message: string
   period: WorkloadPeriod
   batches: Array<{
@@ -115,6 +148,12 @@ export interface AutoPlanResult {
     totalOperations: number
   }>
   warnings: string[]
+  run?: {
+    id: number
+    key: string
+    status: SchedulingRunStatus
+    resultId: number
+  }
   summary: {
     employeesTouched: number
     operationsCovered: number
@@ -122,12 +161,11 @@ export interface AutoPlanResult {
     baseRosterRows: number
     operationsAssigned: number
   }
-  diagnostics: {
-    missingCalendar?: boolean
-  }
   logs: string[]
-  coverage: CoverageSummary
-  heuristicHotspots?: HeuristicHotspot[]
+  coverage: AutoPlanV4CoverageSummary
+  optimizationMetrics?: OptimizationMetrics
+  comprehensiveWorkTimeStatus?: ComprehensiveWorkTimeStatus
+  metricsSummary?: Record<string, unknown>
 }
 
 export interface BatchPlanSummary {
