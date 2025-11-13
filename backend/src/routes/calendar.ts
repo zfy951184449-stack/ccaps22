@@ -11,7 +11,8 @@ import {
   bulkAutoAssign,
   activateBatch,
   deactivateBatch,
-  importHolidays
+  importHolidays,
+  getWorkdayRange
 } from '../controllers/calendarController';
 import {
   lockOperationPlan,
@@ -25,6 +26,7 @@ router.get('/operations/day', getDayOperations);
 router.get('/operations/week', getWeekOperations);
 router.get('/operations/month', getMonthOperations);
 router.get('/operations/active', getActiveBatchOperations);
+router.get('/workdays', getWorkdayRange);
 
 // 操作详情和人员
 router.get('/operations/:operationId', getOperationDetail);

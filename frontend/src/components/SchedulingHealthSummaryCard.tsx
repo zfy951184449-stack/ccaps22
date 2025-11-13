@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Card, Flex, Space, Spin, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
 import { schedulingMetricsApi } from '../services/api';
@@ -21,6 +21,24 @@ interface SchedulingHealthSummaryCardProps {
 const SchedulingHealthSummaryCard: React.FC<SchedulingHealthSummaryCardProps> = ({ onViewDetails }) => {
   const [loading, setLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<SchedulingMetricsSnapshot | null>(null);
+  const [initializing, setInitializing] = useState(true);
+
+  useEffect(() => {
+    const loadLatestSnapshot = async () => {
+      try {
+        const history = await schedulingMetricsApi.listHistory(1);
+        if (history.length) {
+          setSnapshot(history[0]);
+        }
+      } catch (err) {
+        console.warn('Failed to preload scheduling health snapshot', err);
+      } finally {
+        setInitializing(false);
+      }
+    };
+
+    loadLatestSnapshot();
+  }, []);
 
   const handleCompute = async (saveSnapshot = false) => {
     setLoading(true);
@@ -48,17 +66,17 @@ const SchedulingHealthSummaryCard: React.FC<SchedulingHealthSummaryCardProps> = 
       title="排班健康概要"
       extra={
         <Space>
-          <Button onClick={() => handleCompute(false)} loading={loading}>
+          <Button onClick={() => handleCompute(false)} loading={loading} disabled={initializing}>
             重新计算
           </Button>
-          <Button type="primary" onClick={() => handleCompute(true)} loading={loading}>
+          <Button type="primary" onClick={() => handleCompute(true)} loading={loading} disabled={initializing}>
             保存快照
           </Button>
         </Space>
       }
       style={{ marginBottom: 16 }}
     >
-      {loading ? (
+      {loading || initializing ? (
         <Flex justify="center">
           <Spin />
         </Flex>
@@ -73,9 +91,15 @@ const SchedulingHealthSummaryCard: React.FC<SchedulingHealthSummaryCardProps> = 
           <Text type="secondary">
             统计区间：{snapshot.periodStart} ~ {snapshot.periodEnd}
           </Text>
+          <Text type="secondary">周期类型：{snapshot.periodType}</Text>
           <Text type="secondary">数据来源：{snapshot.source ?? 'MANUAL'}</Text>
+          {snapshot.createdAt ? (
+            <Text type="secondary">
+              最近更新：{dayjs(snapshot.createdAt).format('YYYY-MM-DD HH:mm')}
+            </Text>
+          ) : null}
           <Space>
-            <Button type="link" onClick={onViewDetails}>
+            <Button type="link" onClick={onViewDetails} disabled={!onViewDetails}>
               查看健康看板
             </Button>
           </Space>
@@ -95,4 +119,3 @@ const SchedulingHealthSummaryCard: React.FC<SchedulingHealthSummaryCardProps> = 
 };
 
 export default SchedulingHealthSummaryCard;
-

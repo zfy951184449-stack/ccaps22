@@ -32,13 +32,16 @@ export const getStageOperations = async (req: Request, res: Response) => {
 export const addOperationToStage = async (req: Request, res: Response) => {
   try {
     const { stageId } = req.params;
-    const { 
-      operation_id, 
-      operation_day, 
-      recommended_time, 
-      window_start_time, 
-      window_end_time, 
-      operation_order 
+    const {
+      operation_id,
+      operation_day,
+      recommended_time,
+      recommended_day_offset,
+      window_start_time,
+      window_start_day_offset,
+      window_end_time,
+      window_end_day_offset,
+      operation_order,
     } = req.body;
     
     console.log('Received request body:', req.body);
@@ -50,16 +53,35 @@ export const addOperationToStage = async (req: Request, res: Response) => {
         received: { operation_id, operation_day, recommended_time }
       });
     }
-    
+
+    const parsedOperationDay = Number(operation_day);
+    const parsedRecommendedTime = Number(recommended_time);
+    const parsedRecommendedOffset = Number(recommended_day_offset ?? 0);
+    const parsedWindowStartTime =
+      window_start_time !== undefined ? Number(window_start_time) : undefined;
+    const parsedWindowStartOffset = Number(window_start_day_offset ?? 0);
+    const parsedWindowEndTime =
+      window_end_time !== undefined ? Number(window_end_time) : undefined;
+    const parsedWindowEndOffset = Number(window_end_day_offset ?? 0);
+
+    if (Number.isNaN(parsedOperationDay) || Number.isNaN(parsedRecommendedTime)) {
+      return res.status(400).json({ error: 'operation_day 和 recommended_time 必须是数字' });
+    }
+
     // 验证时间范围
-    if (recommended_time < 0 || recommended_time > 23.9) {
+    if (parsedRecommendedTime < 0 || parsedRecommendedTime > 23.9) {
       return res.status(400).json({ error: 'Recommended time must be between 0.0 and 23.9' });
     }
-    
-    if (window_start_time !== undefined && window_end_time !== undefined) {
-      if (window_start_time >= window_end_time) {
+
+    if (parsedWindowStartTime !== undefined && parsedWindowEndTime !== undefined) {
+      if (parsedWindowStartTime >= parsedWindowEndTime && parsedWindowStartOffset === parsedWindowEndOffset) {
         return res.status(400).json({ error: 'Window start time must be before end time' });
       }
+    }
+
+    const offsetsToValidate = [parsedRecommendedOffset, parsedWindowStartOffset, parsedWindowEndOffset];
+    if (offsetsToValidate.some((val) => Number.isNaN(val) || val < -7 || val > 7)) {
+      return res.status(400).json({ error: 'Day offsets must be between -7 and 7' });
     }
     
     // 如果没有提供operation_order，获取最大值+1
@@ -71,19 +93,27 @@ export const addOperationToStage = async (req: Request, res: Response) => {
       ) as any;
       finalOrder = (maxOrder[0].max_order || 0) + 1;
     }
-    
+
+    const finalWindowStartTime =
+      parsedWindowStartTime !== undefined ? parsedWindowStartTime : parsedRecommendedTime - 2;
+    const finalWindowEndTime =
+      parsedWindowEndTime !== undefined ? parsedWindowEndTime : parsedRecommendedTime + 2;
+
     const [result] = await pool.execute(
       `INSERT INTO stage_operation_schedules 
-       (stage_id, operation_id, operation_day, recommended_time, window_start_time, window_end_time, operation_order) 
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (stage_id, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         stageId, 
         operation_id, 
-        operation_day, 
-        recommended_time, 
-        window_start_time || recommended_time - 2, 
-        window_end_time || recommended_time + 2, 
-        finalOrder
+        parsedOperationDay,
+        parsedRecommendedTime,
+        parsedRecommendedOffset,
+        finalWindowStartTime,
+        parsedWindowStartOffset,
+        finalWindowEndTime,
+        parsedWindowEndOffset,
+        finalOrder,
       ]
     ) as any;
     
@@ -111,12 +141,15 @@ export const addOperationToStage = async (req: Request, res: Response) => {
 export const updateStageOperation = async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
-    const { 
-      operation_day, 
-      recommended_time, 
-      window_start_time, 
-      window_end_time, 
-      operation_order 
+    const {
+      operation_day,
+      recommended_time,
+      recommended_day_offset,
+      window_start_time,
+      window_start_day_offset,
+      window_end_time,
+      window_end_day_offset,
+      operation_order,
     } = req.body;
     
     console.log('updateStageOperation called with:');
@@ -124,14 +157,33 @@ export const updateStageOperation = async (req: Request, res: Response) => {
     console.log('- req.body:', req.body);
     
     // 验证时间范围
-    if (recommended_time !== undefined) {
-      if (recommended_time < 0 || recommended_time > 23.9) {
+    const parsedRecommendedTime = recommended_time !== undefined ? Number(recommended_time) : undefined;
+    if (parsedRecommendedTime !== undefined) {
+      if (Number.isNaN(parsedRecommendedTime) || parsedRecommendedTime < 0 || parsedRecommendedTime > 23.9) {
         return res.status(400).json({ error: 'Recommended time must be between 0.0 and 23.9' });
       }
     }
-    
-    if (window_start_time !== undefined && window_end_time !== undefined) {
-      if (window_start_time >= window_end_time) {
+
+    const parsedWindowStartTime = window_start_time !== undefined ? Number(window_start_time) : undefined;
+    const parsedWindowEndTime = window_end_time !== undefined ? Number(window_end_time) : undefined;
+    const parsedWindowStartOffset = window_start_day_offset !== undefined ? Number(window_start_day_offset) : undefined;
+    const parsedWindowEndOffset = window_end_day_offset !== undefined ? Number(window_end_day_offset) : undefined;
+    const parsedRecommendedOffset = recommended_day_offset !== undefined ? Number(recommended_day_offset) : undefined;
+
+    const offsetValues = [parsedRecommendedOffset, parsedWindowStartOffset, parsedWindowEndOffset].filter(
+      (value) => value !== undefined,
+    ) as number[];
+    if (offsetValues.some((value) => Number.isNaN(value) || value < -7 || value > 7)) {
+      return res.status(400).json({ error: 'Day offsets must be between -7 and 7' });
+    }
+
+    if (parsedWindowStartTime !== undefined && parsedWindowEndTime !== undefined) {
+      const startOffset = parsedWindowStartOffset ?? 0;
+      const endOffset = parsedWindowEndOffset ?? 0;
+      if (
+        (Number.isNaN(parsedWindowStartTime) || Number.isNaN(parsedWindowEndTime)) ||
+        (startOffset === endOffset && parsedWindowStartTime >= parsedWindowEndTime)
+      ) {
         return res.status(400).json({ error: 'Window start time must be before end time' });
       }
     }
@@ -142,19 +194,31 @@ export const updateStageOperation = async (req: Request, res: Response) => {
     
     if (operation_day !== undefined) {
       updates.push('operation_day = ?');
-      params.push(operation_day);
+      params.push(Number(operation_day));
     }
-    if (recommended_time !== undefined) {
+    if (parsedRecommendedTime !== undefined) {
       updates.push('recommended_time = ?');
-      params.push(recommended_time);
+      params.push(parsedRecommendedTime);
     }
-    if (window_start_time !== undefined) {
+    if (parsedRecommendedOffset !== undefined) {
+      updates.push('recommended_day_offset = ?');
+      params.push(parsedRecommendedOffset);
+    }
+    if (parsedWindowStartTime !== undefined) {
       updates.push('window_start_time = ?');
-      params.push(window_start_time);
+      params.push(parsedWindowStartTime);
     }
-    if (window_end_time !== undefined) {
+    if (parsedWindowStartOffset !== undefined) {
+      updates.push('window_start_day_offset = ?');
+      params.push(parsedWindowStartOffset);
+    }
+    if (parsedWindowEndTime !== undefined) {
       updates.push('window_end_time = ?');
-      params.push(window_end_time);
+      params.push(parsedWindowEndTime);
+    }
+    if (parsedWindowEndOffset !== undefined) {
+      updates.push('window_end_day_offset = ?');
+      params.push(parsedWindowEndOffset);
     }
     if (operation_order !== undefined) {
       updates.push('operation_order = ?');
@@ -291,18 +355,32 @@ export const batchAddOperations = async (req: Request, res: Response) => {
         finalOrder = (maxOrder[0].max_order || 0) + 1;
       }
       
+      const recommendedOffset = Number(op.recommended_day_offset ?? 0);
+      const windowStartOffset = Number(op.window_start_day_offset ?? 0);
+      const windowEndOffset = Number(op.window_end_day_offset ?? 0);
+      const recommendedTime = Number(op.recommended_time);
+      const windowStartTime =
+        op.window_start_time !== undefined
+          ? Number(op.window_start_time)
+          : recommendedTime - 2;
+      const windowEndTime =
+        op.window_end_time !== undefined ? Number(op.window_end_time) : recommendedTime + 2;
+
       await connection.execute(
         `INSERT INTO stage_operation_schedules 
-         (stage_id, operation_id, operation_day, recommended_time, window_start_time, window_end_time, operation_order) 
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (stage_id, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           stageId,
           op.operation_id,
-          op.operation_day,
-          op.recommended_time,
-          op.window_start_time || op.recommended_time - 2,
-          op.window_end_time || op.recommended_time + 2,
-          finalOrder
+          Number(op.operation_day),
+          recommendedTime,
+          recommendedOffset,
+          windowStartTime,
+          windowStartOffset,
+          windowEndTime,
+          windowEndOffset,
+          finalOrder,
         ]
       );
     }

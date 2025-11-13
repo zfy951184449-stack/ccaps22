@@ -60,8 +60,11 @@ export interface StageOperationSchedule {
   operation_id: number;
   operation_day: number;
   recommended_time: number;
+  recommended_day_offset?: number;
   window_start_time: number;
+  window_start_day_offset?: number;
   window_end_time: number;
+  window_end_day_offset?: number;
   operation_order?: number;
 }
 
@@ -94,11 +97,29 @@ export interface ShiftType {
   updated_at?: string;
 }
 
+export interface ShiftDefinition {
+  id?: number;
+  shift_code: string;
+  shift_name: string;
+  category: 'STANDARD' | 'SPECIAL' | 'TEMPORARY';
+  start_time: string;
+  end_time: string;
+  is_cross_day: boolean;
+  nominal_hours: number;
+  max_extension_hours?: number;
+  description?: string | null;
+  is_active: boolean;
+  created_by?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PersonnelSchedule {
   id?: number;
   employee_id: number;
   schedule_date: string;
   shift_type_id: number;
+  scheduling_run_id?: number | null;
   planned_start_time?: string;
   planned_end_time?: string;
   actual_start_time?: string;
@@ -291,4 +312,79 @@ export interface EmployeeUnavailability {
   created_by?: number | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface SchedulingRun {
+  id?: number;
+  run_key: string;
+  trigger_type: 'AUTO_PLAN' | 'RETRY' | 'MANUAL';
+  status: 'DRAFT' | 'PENDING_PUBLISH' | 'PUBLISHED' | 'FAILED' | 'ROLLED_BACK' | 'CANCELLED';
+  period_start: string;
+  period_end: string;
+  options_json?: any;
+  summary_json?: any;
+  warnings_json?: any;
+  metrics_summary_json?: any;
+  heuristic_summary_json?: any;
+  created_by?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  completed_at?: string | null;
+}
+
+export interface SchedulingRunBatch {
+  id?: number;
+  run_id: number;
+  batch_plan_id: number;
+  batch_code: string;
+  window_start?: string | null;
+  window_end?: string | null;
+  total_operations: number;
+  created_at?: string;
+}
+
+export interface SchedulingResultRecord {
+  id?: number;
+  run_id: number;
+  result_state: 'DRAFT' | 'PUBLISHED';
+  version: number;
+  assignments_payload: any;
+  coverage_payload?: any;
+  metrics_payload?: any;
+  hotspots_payload?: any;
+  logs_payload?: any;
+  created_by?: number | null;
+  created_at?: string;
+  published_at?: string | null;
+}
+
+export interface SchedulingResultDiffRecord {
+  id?: number;
+  run_id: number;
+  from_state: 'DRAFT' | 'PUBLISHED' | 'ROLLED_BACK';
+  to_state: 'DRAFT' | 'PUBLISHED' | 'ROLLED_BACK';
+  diff_payload: any;
+  created_at?: string;
+}
+
+export type SchedulingRunStage =
+  | 'QUEUED'
+  | 'PREPARING'
+  | 'LOADING_DATA'
+  | 'PLANNING'
+  | 'PERSISTING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type SchedulingRunEventStatus = 'INFO' | 'WARN' | 'ERROR' | 'SUCCESS' | 'PROGRESS';
+
+export interface SchedulingRunEventRecord {
+  id?: number;
+  run_id: number;
+  event_key: string;
+  stage: SchedulingRunStage;
+  status: SchedulingRunEventStatus;
+  message?: string | null;
+  metadata?: any;
+  created_at?: string;
 }

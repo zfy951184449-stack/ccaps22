@@ -2,8 +2,59 @@
   padding: 24px;
 }
 
+.calendar-toolbar-container {
+  padding: 16px 24px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+}
+
+.calendar-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.calendar-toolbar .toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.calendar-toolbar .calendar-search {
+  width: 260px;
+}
+
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 24px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #595959;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d9d9d9;
+}
+
 .schedule-view.grid {
   overflow-x: auto;
+}
+
+.schedule-grid-wrapper {
+  padding: 0 16px 16px;
 }
 
 .schedule-grid .ant-table-thead > tr > th {
@@ -11,14 +62,28 @@
   background-color: #fafafa;
 }
 
+.schedule-grid .ant-table {
+  table-layout: fixed;
+}
+
 .schedule-grid .ant-table-cell {
-  padding: 8px;
+  padding: 6px 4px;
+  vertical-align: top;
+}
+
+.schedule-grid .row-highlight td {
+  background-color: #e6f7ff !important;
+  transition: background-color 0.3s ease;
 }
 
 .employee-cell {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #fafafa;
 }
 
 .employee-name {
@@ -30,39 +95,228 @@
   color: #888;
 }
 
+.employee-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: #595959;
+}
+
+.employee-metrics-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.employee-metrics-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #8c8c8c;
+}
+
+.employee-metrics-label {
+  font-weight: 500;
+  color: #434343;
+}
+
+.employee-metrics-value {
+  color: #1f1f1f;
+}
+
+.employee-metrics-divider {
+  color: #d9d9d9;
+}
+
+.employee-metrics-note {
+  color: #8c8c8c;
+}
+
+.employee-metrics-diff {
+  color: #595959;
+}
+
+.employee-metrics-diff.positive {
+  color: #d46b08;
+}
+
+.employee-metrics-diff.negative {
+  color: #389e0d;
+}
+
+.employee-metrics-diff.neutral {
+  color: #8c8c8c;
+}
+
+.employee-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.employee-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.employee-role-tag {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 12px;
+  color: #1f2937;
+  background-color: rgba(31, 41, 55, 0.08);
+  white-space: nowrap;
+}
+
+.employee-cell.role-frontline {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.employee-cell.role-frontline .employee-role-tag {
+  color: #0c4a6e;
+  background-color: rgba(14, 116, 144, 0.15);
+}
+
+.employee-cell.role-shift-leader {
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.employee-cell.role-shift-leader .employee-role-tag {
+  color: #5b21b6;
+  background-color: rgba(91, 33, 182, 0.12);
+}
+
+.employee-cell.role-group-leader {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.employee-cell.role-group-leader .employee-role-tag {
+  color: #166534;
+  background-color: rgba(22, 101, 52, 0.12);
+}
+
+.employee-cell.role-team-leader {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.employee-cell.role-team-leader .employee-role-tag {
+  color: #92400e;
+  background-color: rgba(146, 64, 14, 0.12);
+}
+
+.employee-cell.role-dept-manager {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.employee-cell.role-dept-manager .employee-role-tag {
+  color: #991b1b;
+  background-color: rgba(153, 27, 27, 0.12);
+}
+
+.employee-cell.role-default {
+  background: #f5f5f5;
+  border-color: #e0e0e0;
+}
+
 .day-header {
   text-align: center;
   font-weight: 500;
+  padding: 6px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: #fafafa;
+  border-radius: 4px;
+  min-height: 48px;
 }
 
-.day-header > div:last-child {
-  font-size: 12px;
+.day-header.holiday {
+  background: #fff1f0;
+}
+
+.day-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.day-header-date {
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.day-header-week {
+  font-size: 11px;
   color: #888;
+  font-weight: normal;
+}
+
+.day-header-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  color: #595959;
+  margin-top: 2px;
+}
+
+.stat-chip {
+  padding: 1px 4px;
+  background: rgba(24, 144, 255, 0.12);
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.day-header.holiday .stat-chip {
+  background: rgba(255, 77, 79, 0.16);
 }
 
 .shift-cell {
-  min-height: 64px;
+  min-height: 60px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  padding: 4px;
 }
 
 .shift-cell.cell-empty {
   justify-content: center;
   align-items: center;
   color: #bbb;
+  font-size: 12px;
+}
+
+
+.shift-cell.cell-production {
+  background: rgba(250, 140, 22, 0.12);
 }
 
 .shift-cell.cell-overtime {
-  background: rgba(255, 120, 0, 0.08);
-}
-
-.shift-cell.cell-production {
-  background: rgba(24, 144, 255, 0.08);
+  background: rgba(245, 34, 45, 0.12);
 }
 
 .shift-cell.cell-rest {
   background: rgba(140, 140, 140, 0.08);
+}
+
+.shift-cell.cell-scheduled {
+  background: rgba(24, 144, 255, 0.08);
 }
 
 .shift-cell.cell-cancelled {
@@ -72,13 +326,32 @@
 .shift-chip {
   background-color: #f0f5ff;
   border: 1px solid #d6e4ff;
-  border-radius: 6px;
-  padding: 4px 6px;
-  font-size: 12px;
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-size: 11px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  transition: all 0.2s ease;
+}
+
+.shift-chip.density-compact {
+  padding: 3px 4px;
+  gap: 1px;
+}
+
+.shift-chip.density-compact .shift-chip-operation,
+.shift-chip.density-compact .shift-chip-task-list {
+  display: none;
+}
+
+.shift-chip.density-compact .shift-chip-header {
+  font-size: 12px;
+}
+
+.shift-chip.density-compact .shift-chip-time {
+  font-size: 11px;
 }
 
 .shift-chip:hover {
@@ -121,13 +394,16 @@
 .shift-chip-header {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-weight: 600;
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .shift-chip-time {
-  font-size: 11px;
+  font-size: 10px;
   color: #555;
+  line-height: 1.2;
 }
 
 .shift-chip-operation {

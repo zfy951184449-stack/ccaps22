@@ -55,14 +55,6 @@ async function cleanupBatch(batchId: number) {
       const shiftPlaceholders = shiftIds.map(() => '?').join(',')
       await pool.execute(`DELETE FROM shift_change_logs WHERE shift_plan_id IN (${shiftPlaceholders})`, shiftIds)
       await pool.execute(`DELETE FROM overtime_records WHERE related_shift_plan_id IN (${shiftPlaceholders})`, shiftIds)
-      await pool.execute(
-        `DELETE ps FROM personnel_schedules ps
-              JOIN employee_shift_plans esp ON ps.employee_id = esp.employee_id
-                                         AND ps.schedule_date = esp.plan_date
-             WHERE ps.notes = 'AUTO_GENERATED'
-               AND esp.id IN (${shiftPlaceholders})`,
-        shiftIds
-      )
       await pool.execute(`DELETE FROM employee_shift_plans WHERE id IN (${shiftPlaceholders})`, shiftIds)
     }
 

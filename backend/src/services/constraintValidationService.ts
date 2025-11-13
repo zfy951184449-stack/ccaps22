@@ -8,8 +8,11 @@ interface OperationScheduleInfo {
   stageStartDay: number;
   operationDay: number;
   recommendedTime: number;
+  recommendedDayOffset: number;
   windowStartTime?: number | null;
+  windowStartDayOffset?: number | null;
   windowEndTime?: number | null;
+  windowEndDayOffset?: number | null;
   durationHours: number;
 }
 
@@ -81,8 +84,11 @@ const buildOperationMap = (rows: RowDataPacket[]): Map<number, OperationSchedule
       stageStartDay: Number(row.stage_start_day),
       operationDay: Number(row.operation_day),
       recommendedTime: toNumber(row.recommended_time, DEFAULT_RECOMMENDED_TIME),
+      recommendedDayOffset: toNumber(row.recommended_day_offset, 0),
       windowStartTime: row.window_start_time !== null ? Number(row.window_start_time) : null,
+      windowStartDayOffset: row.window_start_day_offset !== null ? Number(row.window_start_day_offset) : 0,
       windowEndTime: row.window_end_time !== null ? Number(row.window_end_time) : null,
+      windowEndDayOffset: row.window_end_day_offset !== null ? Number(row.window_end_day_offset) : 0,
       durationHours: duration > 0 ? duration : DEFAULT_DURATION,
     });
   });
@@ -103,19 +109,27 @@ const buildConstraintEdges = (rows: RowDataPacket[]): ConstraintEdge[] => {
   }));
 };
 
-const hoursForOperationStart = (op: OperationScheduleInfo, offset?: number | null) => {
-  const dayHour = (op.stageStartDay + op.operationDay) * HOURS_PER_DAY;
-  const local = offset !== undefined && offset !== null ? Number(offset) : op.recommendedTime;
-  return dayHour + local;
+const hoursForOperationStart = (
+  op: OperationScheduleInfo,
+  hourOffset?: number | null,
+  dayOffset?: number | null,
+) => {
+  const baseDayHour = (op.stageStartDay + op.operationDay) * HOURS_PER_DAY;
+  const resolvedDayOffset = dayOffset !== undefined && dayOffset !== null ? Number(dayOffset) : op.recommendedDayOffset;
+  const resolvedHourOffset = hourOffset !== undefined && hourOffset !== null ? Number(hourOffset) : op.recommendedTime;
+  return baseDayHour + resolvedDayOffset * HOURS_PER_DAY + resolvedHourOffset;
 };
 
 const hoursForWindowStart = (op: OperationScheduleInfo) => {
-  return hoursForOperationStart(op, op.windowStartTime ?? op.recommendedTime);
+  const hourValue = op.windowStartTime ?? op.recommendedTime;
+  const dayValue = op.windowStartDayOffset ?? op.recommendedDayOffset;
+  return hoursForOperationStart(op, hourValue, dayValue);
 };
 
 const hoursForWindowEnd = (op: OperationScheduleInfo) => {
   if (op.windowEndTime === undefined || op.windowEndTime === null) return Number.POSITIVE_INFINITY;
-  return hoursForOperationStart(op, op.windowEndTime);
+  const dayValue = op.windowEndDayOffset ?? op.recommendedDayOffset;
+  return hoursForOperationStart(op, op.windowEndTime, dayValue);
 };
 
 const ensureSet = <T>(map: Map<number, Set<T>>, key: number) => {
@@ -142,8 +156,11 @@ export const runConstraintValidation = async (templateId: number): Promise<Const
        sos.operation_id,
        sos.operation_day,
        sos.recommended_time,
+       sos.recommended_day_offset,
        sos.window_start_time,
+       sos.window_start_day_offset,
        sos.window_end_time,
+       sos.window_end_day_offset,
        ps.start_day AS stage_start_day,
        op.operation_name,
        op.standard_time

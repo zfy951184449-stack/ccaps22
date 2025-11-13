@@ -12,70 +12,404 @@ const respondWithError = (res: Response, error: unknown, message: string) => {
   res.status(500).json({ error: message });
 };
 
+const isTableMissingError = (error: any) => {
+  const code = error?.code;
+  return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_TABLE_ERROR';
+};
+
+const parseMetadata = (metadata: unknown): Record<string, unknown> | null => {
+  if (!metadata) {
+    return null;
+  }
+  if (typeof metadata === 'object') {
+    return metadata as Record<string, unknown>;
+  }
+  if (typeof metadata === 'string') {
+    try {
+      return JSON.parse(metadata);
+    } catch (err) {
+      console.warn('[OrganizationController] Failed to parse metadata JSON:', err);
+      return null;
+    }
+  }
+  return null;
+};
+
+const mapDepartmentUnitRow = (row: any) => {
+  const metadata = parseMetadata(row.metadata);
+  const description =
+    metadata && typeof metadata.description === 'string'
+      ? (metadata.description as string)
+      : null;
+  const normalizedIsActive = Boolean(row.is_active ?? row.isActive ?? 1);
+
+  return {
+    id: row.id,
+    parentId: row.parent_id ?? row.parentId ?? null,
+    parent_id: row.parent_id ?? row.parentId ?? null,
+    deptCode: row.unit_code ?? row.dept_code ?? row.deptCode ?? null,
+    dept_code: row.unit_code ?? row.dept_code ?? row.deptCode ?? null,
+    deptName: row.unit_name ?? row.dept_name ?? row.deptName ?? '',
+    dept_name: row.unit_name ?? row.dept_name ?? row.deptName ?? '',
+    unitCode: row.unit_code ?? row.dept_code ?? row.deptCode ?? null,
+    unit_code: row.unit_code ?? row.dept_code ?? row.deptCode ?? null,
+    unitName: row.unit_name ?? row.dept_name ?? row.deptName ?? '',
+    unit_name: row.unit_name ?? row.dept_name ?? row.deptName ?? '',
+    description,
+    sortOrder: row.sort_order ?? row.sortOrder ?? 0,
+    sort_order: row.sort_order ?? row.sortOrder ?? 0,
+    isActive: normalizedIsActive,
+    is_active: normalizedIsActive,
+    metadata,
+    createdAt: row.created_at ?? row.createdAt ?? null,
+    created_at: row.created_at ?? row.createdAt ?? null,
+    updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    updated_at: row.updated_at ?? row.updatedAt ?? null,
+    unitType: 'DEPARTMENT',
+  };
+};
+
+const mapTeamUnitRow = (row: any) => {
+  const metadata = parseMetadata(row.metadata);
+  const description =
+    metadata && typeof metadata.description === 'string'
+      ? (metadata.description as string)
+      : null;
+  const departmentIdFromMeta =
+    metadata && typeof metadata.departmentId === 'number'
+      ? (metadata.departmentId as number)
+      : null;
+  const parentDepartmentId =
+    typeof row.parent_id === 'number'
+      ? row.parent_id
+      : row.department_id ?? row.departmentId ?? null;
+  const departmentId = departmentIdFromMeta ?? parentDepartmentId ?? null;
+  const normalizedIsActive = Boolean(row.is_active ?? row.isActive ?? 1);
+
+  return {
+    id: row.id,
+    departmentId,
+    department_id: departmentId,
+    parentId: row.parent_id ?? row.parentId ?? null,
+    parent_id: row.parent_id ?? row.parentId ?? null,
+    teamCode: row.unit_code ?? row.team_code ?? row.teamCode ?? null,
+    team_code: row.unit_code ?? row.team_code ?? row.teamCode ?? null,
+    unitCode: row.unit_code ?? row.team_code ?? row.teamCode ?? null,
+    unit_code: row.unit_code ?? row.team_code ?? row.teamCode ?? null,
+    teamName: row.unit_name ?? row.team_name ?? row.teamName ?? '',
+    team_name: row.unit_name ?? row.team_name ?? row.teamName ?? '',
+    unitName: row.unit_name ?? row.team_name ?? row.teamName ?? '',
+    unit_name: row.unit_name ?? row.team_name ?? row.teamName ?? '',
+    description,
+    defaultShiftCode:
+      row.default_shift_code ?? row.defaultShiftCode ?? row.default_shiftCode ?? null,
+    default_shift_code:
+      row.default_shift_code ?? row.defaultShiftCode ?? row.default_shiftCode ?? null,
+    isActive: normalizedIsActive,
+    is_active: normalizedIsActive,
+    metadata,
+    createdAt: row.created_at ?? row.createdAt ?? null,
+    created_at: row.created_at ?? row.createdAt ?? null,
+    updatedAt: row.updated_at ?? row.updatedAt ?? null,
+    updated_at: row.updated_at ?? row.updatedAt ?? null,
+    departmentName: row.parent_unit_name ?? row.departmentName ?? null,
+    unitType: 'TEAM',
+  };
+};
+
 export const getDepartments = async (_req: Request, res: Response) => {
   try {
     const sql = `
       SELECT id,
-             parent_id AS parentId,
-             dept_code AS deptCode,
-             dept_name AS deptName,
+             parent_id,
+             unit_code,
+             unit_name,
+             sort_order,
+             is_active,
+             metadata,
+             created_at,
+             updated_at
+        FROM organization_units
+       WHERE unit_type = 'DEPARTMENT'
+       ORDER BY sort_order, unit_name`;
+
+    const [unitRows] = await pool.execute<RowDataPacket[]>(sql);
+    res.json(unitRows.map(mapDepartmentUnitRow));
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to fetch departments');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
+  }
+
+  try {
+    const legacySql = `
+      SELECT id,
+             parent_id,
+             dept_code,
+             dept_name,
              description,
-             sort_order AS sortOrder,
-             is_active AS isActive,
-             created_at AS createdAt,
-             updated_at AS updatedAt
+             sort_order,
+             is_active,
+             NULL AS metadata,
+             created_at,
+             updated_at
         FROM departments
        ORDER BY sort_order, dept_name`;
 
-    const [rows] = await pool.execute<RowDataPacket[]>(sql);
-    res.json(rows);
-  } catch (error) {
-    respondWithError(res, error, 'Failed to fetch departments');
+    const [legacyRows] = await pool.execute<RowDataPacket[]>(legacySql);
+    res.json(legacyRows.map(mapDepartmentUnitRow));
+  } catch (legacyError: any) {
+    if (isTableMissingError(legacyError)) {
+      res.json([]);
+      return;
+    }
+    respondWithError(res, legacyError, 'Failed to fetch departments');
   }
 };
 
 export const createDepartment = async (req: Request, res: Response) => {
-  try {
-    const { deptCode, deptName, parentId, description, sortOrder, isActive } = req.body || {};
+  const payload = req.body || {};
+  const deptCodeInput = payload.deptCode ?? payload.dept_code ?? payload.code ?? null;
+  const deptNameInput = payload.deptName ?? payload.dept_name ?? payload.name ?? null;
+  const parentIdInput = payload.parentId ?? payload.parent_id ?? null;
+  const descriptionInput = payload.description ?? payload.desc ?? null;
+  const sortOrderInput = payload.sortOrder ?? payload.sort_order ?? 0;
+  const isActiveInput = payload.isActive ?? payload.is_active ?? 1;
 
-    if (!deptCode || !deptName) {
-      res.status(400).json({ error: 'deptCode and deptName are required' });
-      return;
+  if (!deptCodeInput || !deptNameInput) {
+    res.status(400).json({ error: 'deptCode and deptName are required' });
+    return;
+  }
+
+  const normalizedCode = String(deptCodeInput).trim();
+  const normalizedName = String(deptNameInput).trim();
+
+  try {
+    let parentUnitId: number | null = null;
+    if (parentIdInput !== null && parentIdInput !== undefined) {
+      const parentIdNumber = Number(parentIdInput);
+      if (!Number.isFinite(parentIdNumber) || parentIdNumber <= 0) {
+        res.status(400).json({ error: 'Invalid parent department id' });
+        return;
+      }
+      const [parentRows] = await pool.execute<RowDataPacket[]>(
+        `SELECT id
+           FROM organization_units
+          WHERE id = ?
+            AND unit_type = 'DEPARTMENT'
+          LIMIT 1`,
+        [parentIdNumber],
+      );
+      if (!parentRows.length) {
+        res.status(400).json({ error: 'Parent department not found' });
+        return;
+      }
+      parentUnitId = parentIdNumber;
     }
 
-    const sql = `
-      INSERT INTO departments (dept_code, dept_name, parent_id, description, sort_order, is_active)
-      VALUES (?, ?, ?, ?, ?, ?)`;
+    const [exists] = await pool.execute<RowDataPacket[]>(
+      `SELECT id
+         FROM organization_units
+        WHERE unit_type = 'DEPARTMENT'
+          AND unit_code = ?
+        LIMIT 1`,
+      [normalizedCode],
+    );
 
-    const [result] = await pool.execute<ResultSetHeader>(sql, [
-      String(deptCode).trim(),
-      String(deptName).trim(),
-      parentId ?? null,
-      description ? String(description) : null,
-      Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
-      isActive === undefined ? 1 : Number(isActive) ? 1 : 0,
-    ]);
-
-    res.status(201).json({ id: result.insertId });
-  } catch (error: any) {
-    if (error?.code === 'ER_DUP_ENTRY') {
+    if (exists.length) {
       res.status(409).json({ error: 'Department code already exists' });
       return;
     }
-    respondWithError(res, error, 'Failed to create department');
+
+    const sortOrderValue = Number.isFinite(Number(sortOrderInput))
+      ? Number(sortOrderInput)
+      : 0;
+    const isActiveValue = Number(isActiveInput) ? 1 : 0;
+    const descriptionText =
+      typeof descriptionInput === 'string' ? descriptionInput.trim() : descriptionInput;
+    const metadataObject: Record<string, unknown> = {};
+    if (descriptionText) {
+      metadataObject.description = descriptionText;
+    }
+    const metadataJson =
+      Object.keys(metadataObject).length > 0 ? JSON.stringify(metadataObject) : null;
+
+    const [result] = await pool.execute<ResultSetHeader>(
+      `INSERT INTO organization_units
+        (parent_id, unit_type, unit_code, unit_name, default_shift_code, sort_order, is_active, metadata)
+       VALUES (?, 'DEPARTMENT', ?, ?, NULL, ?, ?, ?)`,
+      [parentUnitId ?? null, normalizedCode, normalizedName, sortOrderValue, isActiveValue, metadataJson],
+    );
+
+    res.status(201).json({ id: result.insertId, unitType: 'DEPARTMENT' });
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        res.status(409).json({ error: 'Department code already exists' });
+        return;
+      }
+      respondWithError(res, error, 'Failed to create department');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
+  }
+
+  try {
+    const [existsLegacy] = await pool.execute<RowDataPacket[]>(
+      'SELECT id FROM departments WHERE dept_code = ? LIMIT 1',
+      [normalizedCode],
+    );
+
+    if (existsLegacy.length) {
+      res.status(409).json({ error: 'Department code already exists' });
+      return;
+    }
+
+    const [resultLegacy] = await pool.execute<ResultSetHeader>(
+      `INSERT INTO departments (dept_code, dept_name, parent_id, description, sort_order, is_active)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        normalizedCode,
+        normalizedName,
+        parentIdInput ?? null,
+        descriptionInput ? String(descriptionInput) : null,
+        Number.isFinite(Number(sortOrderInput)) ? Number(sortOrderInput) : 0,
+        Number(isActiveInput) ? 1 : 0,
+      ],
+    );
+
+    res.status(201).json({ id: resultLegacy.insertId });
+  } catch (legacyError: any) {
+    if (legacyError?.code === 'ER_DUP_ENTRY') {
+      res.status(409).json({ error: 'Department code already exists' });
+      return;
+    }
+    respondWithError(res, legacyError, 'Failed to create department');
   }
 };
 
 export const updateDepartment = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid department id' });
+    return;
+  }
+
+  const payload = req.body || {};
+  const deptNameInput = payload.deptName ?? payload.dept_name ?? null;
+  const parentIdInput = payload.parentId ?? payload.parent_id;
+  const descriptionInput = payload.description ?? payload.desc;
+  const sortOrderInput = payload.sortOrder ?? payload.sort_order;
+  const isActiveInput = payload.isActive ?? payload.is_active;
+
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      res.status(400).json({ error: 'Invalid department id' });
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT unit_name,
+              parent_id,
+              sort_order,
+              is_active,
+              metadata
+         FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'DEPARTMENT'
+        LIMIT 1`,
+      [id],
+    );
+
+    if (!rows.length) {
+      res.status(404).json({ error: 'Department not found' });
       return;
     }
 
-    const { deptName, parentId, description, sortOrder, isActive } = req.body || {};
+    const existing = rows[0];
+    const nextName = deptNameInput ? String(deptNameInput).trim() : existing.unit_name;
 
+    let nextParentId: number | null | undefined = existing.parent_id ?? null;
+    if (parentIdInput !== undefined) {
+      if (parentIdInput === null) {
+        nextParentId = null;
+      } else {
+        const parentIdNumber = Number(parentIdInput);
+        if (!Number.isFinite(parentIdNumber) || parentIdNumber <= 0) {
+          res.status(400).json({ error: 'Invalid parent department id' });
+          return;
+        }
+        if (parentIdNumber === id) {
+          res.status(400).json({ error: 'Parent department cannot be itself' });
+          return;
+        }
+        const [parentRows] = await pool.execute<RowDataPacket[]>(
+          `SELECT id
+             FROM organization_units
+            WHERE id = ?
+              AND unit_type = 'DEPARTMENT'
+            LIMIT 1`,
+          [parentIdNumber],
+        );
+        if (!parentRows.length) {
+          res.status(400).json({ error: 'Parent department not found' });
+          return;
+        }
+        nextParentId = parentIdNumber;
+      }
+    }
+
+    const nextSortOrder =
+      sortOrderInput === null || sortOrderInput === undefined
+        ? existing.sort_order ?? 0
+        : Number.isFinite(Number(sortOrderInput))
+        ? Number(sortOrderInput)
+        : existing.sort_order ?? 0;
+    const nextIsActive =
+      isActiveInput === null || isActiveInput === undefined
+        ? Number(existing.is_active ?? 1) ? 1 : 0
+        : Number(isActiveInput) ? 1 : 0;
+
+    const existingMetadata = parseMetadata(existing.metadata);
+    const metadataObj: Record<string, unknown> = existingMetadata ? { ...existingMetadata } : {};
+    if (descriptionInput !== undefined) {
+      const descriptionValue =
+        descriptionInput === null
+          ? null
+          : typeof descriptionInput === 'string'
+          ? descriptionInput.trim()
+          : String(descriptionInput);
+      if (descriptionValue) {
+        metadataObj.description = descriptionValue;
+      } else {
+        delete metadataObj.description;
+      }
+    }
+    const metadataJson =
+      Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null;
+
+    await pool.execute<ResultSetHeader>(
+      `UPDATE organization_units
+          SET unit_name = ?,
+              parent_id = ?,
+              sort_order = ?,
+              is_active = ?,
+              metadata = ?
+        WHERE id = ?
+          AND unit_type = 'DEPARTMENT'`,
+      [nextName, nextParentId ?? null, nextSortOrder, nextIsActive, metadataJson, id],
+    );
+
+    res.json({ success: true });
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to update department');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
+  }
+
+  try {
     const sql = `
       UPDATE departments
          SET dept_name = COALESCE(?, dept_name),
@@ -86,11 +420,15 @@ export const updateDepartment = async (req: Request, res: Response) => {
        WHERE id = ?`;
 
     const [result] = await pool.execute<ResultSetHeader>(sql, [
-      deptName ? String(deptName).trim() : null,
-      parentId ?? null,
-      description ? String(description) : null,
-      Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : null,
-      isActive === undefined ? null : Number(isActive) ? 1 : 0,
+      deptNameInput ? String(deptNameInput).trim() : null,
+      parentIdInput ?? null,
+      descriptionInput ? String(descriptionInput) : null,
+      sortOrderInput === null || sortOrderInput === undefined
+        ? null
+        : Number.isFinite(Number(sortOrderInput))
+        ? Number(sortOrderInput)
+        : null,
+      isActiveInput === null || isActiveInput === undefined ? null : Number(isActiveInput) ? 1 : 0,
       id,
     ]);
 
@@ -100,29 +438,80 @@ export const updateDepartment = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
-    respondWithError(res, error, 'Failed to update department');
+  } catch (legacyError) {
+    respondWithError(res, legacyError, 'Failed to update department');
   }
 };
 
 export const deleteDepartment = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid department id' });
+    return;
+  }
+
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      res.status(400).json({ error: 'Invalid department id' });
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id
+         FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'DEPARTMENT'
+        LIMIT 1`,
+      [id],
+    );
+
+    if (!rows.length) {
+      res.status(404).json({ error: 'Department not found' });
       return;
     }
 
+    const [childRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT COUNT(*) AS childCount
+         FROM organization_units
+        WHERE parent_id = ?`,
+      [id],
+    );
+
+    if (childRows[0]?.childCount > 0) {
+      await pool.execute<ResultSetHeader>(
+        `UPDATE organization_units SET is_active = 0 WHERE id = ?`,
+        [id],
+      );
+      res.json({ success: true, softDeleted: true });
+      return;
+    }
+
+    const [result] = await pool.execute<ResultSetHeader>(
+      `DELETE FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'DEPARTMENT'
+        LIMIT 1`,
+      [id],
+    );
+
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: 'Department not found' });
+      return;
+    }
+
+    res.json({ success: true });
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to delete department');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
+  }
+
+  try {
     const [dependency] = await pool.execute<RowDataPacket[]>(
       'SELECT COUNT(*) AS teamCount FROM teams WHERE department_id = ?',
       [id],
     );
 
     if (dependency[0]?.teamCount > 0) {
-      await pool.execute<ResultSetHeader>(
-        'UPDATE departments SET is_active = 0 WHERE id = ?',
-        [id],
-      );
+      await pool.execute<ResultSetHeader>('UPDATE departments SET is_active = 0 WHERE id = ?', [id]);
       res.json({ success: true, softDeleted: true });
       return;
     }
@@ -138,8 +527,8 @@ export const deleteDepartment = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
-    respondWithError(res, error, 'Failed to delete department');
+  } catch (legacyError) {
+    respondWithError(res, legacyError, 'Failed to delete department');
   }
 };
 
@@ -147,33 +536,150 @@ export const getTeams = async (_req: Request, res: Response) => {
   try {
     const sql = `
       SELECT t.id,
-             t.department_id AS departmentId,
-             t.team_code AS teamCode,
-             t.team_name AS teamName,
+             t.parent_id,
+             t.unit_code,
+             t.unit_name,
+             t.default_shift_code,
+             t.sort_order,
+             t.is_active,
+             t.metadata,
+             t.created_at,
+             t.updated_at,
+             parent.unit_name AS parent_unit_name
+        FROM organization_units t
+        LEFT JOIN organization_units parent ON parent.id = t.parent_id
+       WHERE t.unit_type = 'TEAM'
+       ORDER BY COALESCE(parent.sort_order, 0),
+                parent.unit_name,
+                t.sort_order,
+                t.unit_name`;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(sql);
+    res.json(rows.map(mapTeamUnitRow));
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to fetch teams');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
+  }
+
+  try {
+    const legacySql = `
+      SELECT t.id,
+             t.department_id,
+             t.team_code,
+             t.team_name,
              t.description,
-             t.is_active AS isActive,
-             t.default_shift_code AS defaultShiftCode,
-             t.created_at AS createdAt,
-             t.updated_at AS updatedAt,
+             t.is_active,
+             t.default_shift_code,
+             t.created_at,
+             t.updated_at,
              d.dept_name AS departmentName
         FROM teams t
         JOIN departments d ON d.id = t.department_id
        ORDER BY d.sort_order, d.dept_name, t.team_name`;
 
-    const [rows] = await pool.execute<RowDataPacket[]>(sql);
-    res.json(rows);
-  } catch (error) {
-    respondWithError(res, error, 'Failed to fetch teams');
+    const [legacyRows] = await pool.execute<RowDataPacket[]>(legacySql);
+    res.json(legacyRows.map(mapTeamUnitRow));
+  } catch (legacyError) {
+    respondWithError(res, legacyError, 'Failed to fetch teams');
   }
 };
 
 export const createTeam = async (req: Request, res: Response) => {
-  try {
-    const { departmentId, teamCode, teamName, description, isActive, defaultShiftCode } =
-      req.body || {};
+  const payload = req.body || {};
+  const departmentIdInput =
+    payload.departmentId ?? payload.department_id ?? payload.deptId ?? null;
+  const teamCodeInput = payload.teamCode ?? payload.team_code ?? payload.code ?? null;
+  const teamNameInput = payload.teamName ?? payload.team_name ?? payload.name ?? null;
+  const descriptionInput = payload.description ?? payload.desc ?? null;
+  const isActiveInput = payload.isActive ?? payload.is_active ?? 1;
+  const defaultShiftCodeInput =
+    payload.defaultShiftCode ?? payload.default_shift_code ?? null;
 
-    if (!departmentId || !teamCode || !teamName) {
-      res.status(400).json({ error: 'departmentId, teamCode and teamName are required' });
+  if (!departmentIdInput || !teamCodeInput || !teamNameInput) {
+    res.status(400).json({ error: 'departmentId, teamCode and teamName are required' });
+    return;
+  }
+
+  const normalizedCode = String(teamCodeInput).trim();
+  const normalizedName = String(teamNameInput).trim();
+
+  try {
+    const departmentIdNumber = Number(departmentIdInput);
+    if (!Number.isFinite(departmentIdNumber) || departmentIdNumber <= 0) {
+      res.status(400).json({ error: 'departmentId must be a positive number' });
+      return;
+    }
+
+    const [parentRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id
+         FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'DEPARTMENT'
+        LIMIT 1`,
+      [departmentIdNumber],
+    );
+
+    if (!parentRows.length) {
+      res.status(400).json({ error: 'Parent department not found' });
+      return;
+    }
+
+    const [exists] = await pool.execute<RowDataPacket[]>(
+      `SELECT id
+         FROM organization_units
+        WHERE unit_type = 'TEAM'
+          AND unit_code = ?
+        LIMIT 1`,
+      [normalizedCode],
+    );
+
+    if (exists.length) {
+      res.status(409).json({ error: 'Team code already exists' });
+      return;
+    }
+
+    const descriptionText =
+      typeof descriptionInput === 'string' ? descriptionInput.trim() : descriptionInput;
+    const metadataObj: Record<string, unknown> = { departmentId: departmentIdNumber };
+    if (descriptionText) {
+      metadataObj.description = descriptionText;
+    }
+    const metadataJson = JSON.stringify(metadataObj);
+
+    const isActiveValue = Number(isActiveInput) ? 1 : 0;
+    const defaultShiftCodeValue = defaultShiftCodeInput
+      ? String(defaultShiftCodeInput).trim()
+      : null;
+
+    const [result] = await pool.execute<ResultSetHeader>(
+      `INSERT INTO organization_units
+        (parent_id, unit_type, unit_code, unit_name, default_shift_code, sort_order, is_active, metadata)
+       VALUES (?, 'TEAM', ?, ?, ?, 0, ?, ?)`,
+      [departmentIdNumber, normalizedCode, normalizedName, defaultShiftCodeValue, isActiveValue, metadataJson],
+    );
+
+    res.status(201).json({ id: result.insertId, unitType: 'TEAM' });
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to create team');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
+  }
+
+  try {
+    const [existsLegacy] = await pool.execute<RowDataPacket[]>(
+      'SELECT id FROM teams WHERE team_code = ? LIMIT 1',
+      [normalizedCode],
+    );
+
+    if (existsLegacy.length) {
+      res.status(409).json({ error: 'Team code already exists' });
       return;
     }
 
@@ -182,34 +688,146 @@ export const createTeam = async (req: Request, res: Response) => {
       VALUES (?, ?, ?, ?, ?, ?)`;
 
     const [result] = await pool.execute<ResultSetHeader>(sql, [
-      Number(departmentId),
-      String(teamCode).trim(),
-      String(teamName).trim(),
-      description ? String(description) : null,
-      isActive === undefined ? 1 : Number(isActive) ? 1 : 0,
-      defaultShiftCode ? String(defaultShiftCode).trim() : null,
+      Number(departmentIdInput),
+      normalizedCode,
+      normalizedName,
+      descriptionInput ? String(descriptionInput) : null,
+      Number(isActiveInput) ? 1 : 0,
+      defaultShiftCodeInput ? String(defaultShiftCodeInput).trim() : null,
     ]);
 
     res.status(201).json({ id: result.insertId });
-  } catch (error: any) {
-    if (error?.code === 'ER_DUP_ENTRY') {
-      res.status(409).json({ error: 'Team code already exists' });
-      return;
-    }
-    respondWithError(res, error, 'Failed to create team');
+  } catch (legacyError) {
+    respondWithError(res, legacyError, 'Failed to create team');
   }
 };
 
 export const updateTeam = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid team id' });
+    return;
+  }
+
+  const payload = req.body || {};
+  const departmentIdInput = payload.departmentId ?? payload.department_id;
+  const teamNameInput = payload.teamName ?? payload.team_name ?? null;
+  const descriptionInput = payload.description ?? payload.desc;
+  const isActiveInput = payload.isActive ?? payload.is_active;
+  const defaultShiftCodeInput =
+    payload.defaultShiftCode ?? payload.default_shift_code;
+
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      res.status(400).json({ error: 'Invalid team id' });
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT unit_name,
+              parent_id,
+              default_shift_code,
+              is_active,
+              metadata
+         FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'TEAM'
+        LIMIT 1`,
+      [id],
+    );
+
+    if (!rows.length) {
+      res.status(404).json({ error: 'Team not found' });
       return;
     }
 
-    const { departmentId, teamName, description, isActive, defaultShiftCode } = req.body || {};
+    const existing = rows[0];
+    const nextName = teamNameInput ? String(teamNameInput).trim() : existing.unit_name;
 
+    let nextDepartmentId: number | null | undefined = existing.parent_id ?? null;
+    if (departmentIdInput !== undefined) {
+      if (departmentIdInput === null) {
+        nextDepartmentId = null;
+      } else {
+        const departmentIdNumber = Number(departmentIdInput);
+        if (!Number.isFinite(departmentIdNumber) || departmentIdNumber <= 0) {
+          res.status(400).json({ error: 'Invalid department id' });
+          return;
+        }
+        const [parentRows] = await pool.execute<RowDataPacket[]>(
+          `SELECT id
+             FROM organization_units
+            WHERE id = ?
+              AND unit_type = 'DEPARTMENT'
+            LIMIT 1`,
+          [departmentIdNumber],
+        );
+        if (!parentRows.length) {
+          res.status(400).json({ error: 'Department not found' });
+          return;
+        }
+        nextDepartmentId = departmentIdNumber;
+      }
+    }
+
+    const nextIsActive =
+      isActiveInput === null || isActiveInput === undefined
+        ? Number(existing.is_active ?? 1) ? 1 : 0
+        : Number(isActiveInput) ? 1 : 0;
+
+    let nextDefaultShiftCode: string | null;
+    if (defaultShiftCodeInput === undefined) {
+      nextDefaultShiftCode = existing.default_shift_code ?? null;
+    } else if (defaultShiftCodeInput === null || defaultShiftCodeInput === '') {
+      nextDefaultShiftCode = null;
+    } else {
+      nextDefaultShiftCode = String(defaultShiftCodeInput).trim();
+    }
+
+    const existingMetadata = parseMetadata(existing.metadata);
+    const metadataObj: Record<string, unknown> = existingMetadata ? { ...existingMetadata } : {};
+    if (nextDepartmentId !== undefined) {
+      if (nextDepartmentId === null) {
+        delete metadataObj.departmentId;
+      } else {
+        metadataObj.departmentId = nextDepartmentId;
+      }
+    }
+    if (descriptionInput !== undefined) {
+      const descriptionValue =
+        descriptionInput === null
+          ? null
+          : typeof descriptionInput === 'string'
+          ? descriptionInput.trim()
+          : String(descriptionInput);
+      if (descriptionValue) {
+        metadataObj.description = descriptionValue;
+      } else {
+        delete metadataObj.description;
+      }
+    }
+
+    const metadataJson =
+      Object.keys(metadataObj).length > 0 ? JSON.stringify(metadataObj) : null;
+
+    await pool.execute<ResultSetHeader>(
+      `UPDATE organization_units
+          SET unit_name = ?,
+              parent_id = ?,
+              default_shift_code = ?,
+              is_active = ?,
+              metadata = ?
+        WHERE id = ?
+          AND unit_type = 'TEAM'`,
+      [nextName, nextDepartmentId ?? null, nextDefaultShiftCode, nextIsActive, metadataJson, id],
+    );
+
+    res.json({ success: true });
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to update team');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
+  }
+
+  try {
     const sql = `
       UPDATE teams
          SET department_id = COALESCE(?, department_id),
@@ -220,11 +838,11 @@ export const updateTeam = async (req: Request, res: Response) => {
        WHERE id = ?`;
 
     const [result] = await pool.execute<ResultSetHeader>(sql, [
-      departmentId ?? null,
-      teamName ? String(teamName).trim() : null,
-      description ? String(description) : null,
-      isActive === undefined ? null : Number(isActive) ? 1 : 0,
-      defaultShiftCode ? String(defaultShiftCode).trim() : null,
+      departmentIdInput ?? null,
+      teamNameInput ? String(teamNameInput).trim() : null,
+      descriptionInput ? String(descriptionInput) : null,
+      isActiveInput === null || isActiveInput === undefined ? null : Number(isActiveInput) ? 1 : 0,
+      defaultShiftCodeInput ? String(defaultShiftCodeInput).trim() : null,
       id,
     ]);
 
@@ -234,19 +852,92 @@ export const updateTeam = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
-    respondWithError(res, error, 'Failed to update team');
+  } catch (legacyError) {
+    respondWithError(res, legacyError, 'Failed to update team');
   }
 };
 
 export const deleteTeam = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid team id' });
+    return;
+  }
+
   try {
-    const id = Number(req.params.id);
-    if (!Number.isFinite(id) || id <= 0) {
-      res.status(400).json({ error: 'Invalid team id' });
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id
+         FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'TEAM'
+        LIMIT 1`,
+      [id],
+    );
+
+    if (!rows.length) {
+      res.status(404).json({ error: 'Team not found' });
       return;
     }
 
+    const [childRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT COUNT(*) AS childCount
+         FROM organization_units
+        WHERE parent_id = ?`,
+      [id],
+    );
+
+    if (childRows[0]?.childCount > 0) {
+      await pool.execute<ResultSetHeader>(
+        `UPDATE organization_units SET is_active = 0 WHERE id = ?`,
+        [id],
+      );
+      res.json({ success: true, softDeleted: true });
+      return;
+    }
+
+    try {
+      const [assignmentRows] = await pool.execute<RowDataPacket[]>(
+        'SELECT COUNT(*) AS cnt FROM employee_team_roles WHERE team_id = ?',
+        [id],
+      );
+      if (assignmentRows[0]?.cnt > 0) {
+        await pool.execute<ResultSetHeader>(
+          `UPDATE organization_units SET is_active = 0 WHERE id = ?`,
+          [id],
+        );
+        res.json({ success: true, softDeleted: true });
+        return;
+      }
+    } catch (assignmentError: any) {
+      if (!isTableMissingError(assignmentError)) {
+        console.warn('[OrganizationController] Failed to check team assignments during delete:', assignmentError);
+      }
+    }
+
+    const [result] = await pool.execute<ResultSetHeader>(
+      `DELETE FROM organization_units
+        WHERE id = ?
+          AND unit_type = 'TEAM'
+        LIMIT 1`,
+      [id],
+    );
+
+    if (result.affectedRows === 0) {
+      res.status(404).json({ error: 'Team not found' });
+      return;
+    }
+
+    res.json({ success: true });
+    return;
+  } catch (error: any) {
+    if (!isTableMissingError(error)) {
+      respondWithError(res, error, 'Failed to delete team');
+      return;
+    }
+    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
+  }
+
+  try {
     const [assignmentRows] = await pool.execute<RowDataPacket[]>(
       'SELECT COUNT(*) AS cnt FROM employee_team_roles WHERE team_id = ?',
       [id],
@@ -269,8 +960,8 @@ export const deleteTeam = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-  } catch (error) {
-    respondWithError(res, error, 'Failed to delete team');
+  } catch (legacyError) {
+    respondWithError(res, legacyError, 'Failed to delete team');
   }
 };
 

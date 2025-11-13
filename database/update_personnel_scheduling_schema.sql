@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS employee_shift_plans (
     updated_by INT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_employee_plan (employee_id, plan_date, plan_category),
+    UNIQUE KEY uk_employee_plan (employee_id, plan_date, plan_category, (COALESCE(batch_operation_plan_id, -1))),
     INDEX idx_plan_employee_date (employee_id, plan_date),
     INDEX idx_plan_category (plan_category),
     FOREIGN KEY (employee_id) REFERENCES employees(id),
@@ -147,20 +147,6 @@ ALTER TABLE batch_personnel_assignments
     ADD INDEX idx_bpa_plan_category (plan_category),
     ADD CONSTRAINT fk_bpa_shift_plan FOREIGN KEY (shift_plan_id) REFERENCES employee_shift_plans(id),
     ADD CONSTRAINT fk_bpa_shift_code FOREIGN KEY (shift_code) REFERENCES shift_definitions(shift_code);
-
-ALTER TABLE employee_shift_plans
-    ADD COLUMN IF NOT EXISTS is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否锁定',
-    ADD COLUMN IF NOT EXISTS locked_by INT DEFAULT NULL COMMENT '锁定人ID',
-    ADD COLUMN IF NOT EXISTS locked_at DATETIME DEFAULT NULL COMMENT '锁定时间',
-    ADD COLUMN IF NOT EXISTS lock_reason VARCHAR(255) DEFAULT NULL COMMENT '锁定原因',
-    ADD CONSTRAINT IF NOT EXISTS fk_esp_locked_by FOREIGN KEY (locked_by) REFERENCES employees(id);
-
-ALTER TABLE batch_operation_plans
-    ADD COLUMN IF NOT EXISTS is_locked TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否锁定',
-    ADD COLUMN IF NOT EXISTS locked_by INT DEFAULT NULL COMMENT '锁定人ID',
-    ADD COLUMN IF NOT EXISTS locked_at DATETIME DEFAULT NULL COMMENT '锁定时间',
-    ADD COLUMN IF NOT EXISTS lock_reason VARCHAR(255) DEFAULT NULL COMMENT '锁定原因',
-    ADD CONSTRAINT IF NOT EXISTS fk_bop_locked_by FOREIGN KEY (locked_by) REFERENCES employees(id);
 
 CREATE TABLE IF NOT EXISTS departments (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -252,22 +238,21 @@ CREATE TABLE IF NOT EXISTS employee_unavailability (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 ALTER TABLE employees
-    ADD COLUMN IF NOT EXISTS department_id INT DEFAULT NULL COMMENT '所属部门',
-    ADD COLUMN IF NOT EXISTS primary_team_id INT DEFAULT NULL COMMENT '主班组',
-    ADD COLUMN IF NOT EXISTS primary_role_id INT DEFAULT NULL COMMENT '主角色',
-    ADD COLUMN IF NOT EXISTS primary_shift_id INT DEFAULT NULL COMMENT '主班次',
-    ADD COLUMN IF NOT EXISTS org_role ENUM('FRONTLINE','SHIFT_LEADER','GROUP_LEADER','TEAM_LEADER','DEPT_MANAGER') NOT NULL DEFAULT 'FRONTLINE' COMMENT '组织层级角色',
-    ADD COLUMN IF NOT EXISTS employment_status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '在职状态',
-    ADD COLUMN IF NOT EXISTS skill_level TINYINT DEFAULT NULL COMMENT '技能等级',
-    ADD COLUMN IF NOT EXISTS hire_date DATE DEFAULT NULL COMMENT '入职日期',
+    ADD COLUMN department_id INT DEFAULT NULL COMMENT '所属部门',
+    ADD COLUMN primary_team_id INT DEFAULT NULL COMMENT '主班组',
+    ADD COLUMN primary_role_id INT DEFAULT NULL COMMENT '主角色',
+    ADD COLUMN primary_shift_id INT DEFAULT NULL COMMENT '主班次',
+    ADD COLUMN employment_status VARCHAR(20) DEFAULT 'ACTIVE' COMMENT '在职状态',
+    ADD COLUMN skill_level TINYINT DEFAULT NULL COMMENT '技能等级',
+    ADD COLUMN hire_date DATE DEFAULT NULL COMMENT '入职日期',
     ADD INDEX idx_employees_department (department_id),
     ADD INDEX idx_employees_primary_team (primary_team_id),
     ADD INDEX idx_employees_primary_role (primary_role_id),
     ADD INDEX idx_employees_primary_shift (primary_shift_id),
-    ADD CONSTRAINT IF NOT EXISTS fk_employees_department FOREIGN KEY (department_id) REFERENCES departments(id),
-    ADD CONSTRAINT IF NOT EXISTS fk_employees_primary_team FOREIGN KEY (primary_team_id) REFERENCES teams(id),
-    ADD CONSTRAINT IF NOT EXISTS fk_employees_primary_role FOREIGN KEY (primary_role_id) REFERENCES employee_roles(id),
-    ADD CONSTRAINT IF NOT EXISTS fk_employees_primary_shift FOREIGN KEY (primary_shift_id) REFERENCES shifts(id);
+    ADD CONSTRAINT fk_employees_department FOREIGN KEY (department_id) REFERENCES departments(id),
+    ADD CONSTRAINT fk_employees_primary_team FOREIGN KEY (primary_team_id) REFERENCES teams(id),
+    ADD CONSTRAINT fk_employees_primary_role FOREIGN KEY (primary_role_id) REFERENCES employee_roles(id),
+    ADD CONSTRAINT fk_employees_primary_shift FOREIGN KEY (primary_shift_id) REFERENCES shifts(id);
 
 ALTER TABLE employees
   ADD COLUMN shopfloor_baseline_pct DECIMAL(5,2) NULL COMMENT '车间工时基线百分比',
@@ -303,21 +288,3 @@ CREATE TABLE IF NOT EXISTS organization_units (
     UNIQUE KEY uk_org_type_code (unit_type, unit_code),
     CONSTRAINT fk_org_parent FOREIGN KEY (parent_id) REFERENCES organization_units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一组织单元表';
-
-CREATE TABLE IF NOT EXISTS employee_org_membership (
-    id INT PRIMARY KEY AUTO_INCREMENT COMMENT '组织归属ID',
-    employee_id INT NOT NULL COMMENT '员工ID',
-    unit_id INT NOT NULL COMMENT '组织单元ID',
-    assignment_type ENUM('PRIMARY','SECONDARY') NOT NULL DEFAULT 'PRIMARY' COMMENT '归属类型',
-    role_at_unit ENUM('LEADER','MEMBER','SUPPORT') NOT NULL DEFAULT 'MEMBER' COMMENT '单位内角色',
-    start_date DATE DEFAULT NULL COMMENT '生效日期',
-    end_date DATE DEFAULT NULL COMMENT '结束日期',
-    is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否有效',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_employee_unit_assignment (employee_id, unit_id, assignment_type),
-    INDEX idx_membership_employee (employee_id),
-    INDEX idx_membership_unit (unit_id),
-    CONSTRAINT fk_membership_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
-    CONSTRAINT fk_membership_unit FOREIGN KEY (unit_id) REFERENCES organization_units(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='员工组织归属表';

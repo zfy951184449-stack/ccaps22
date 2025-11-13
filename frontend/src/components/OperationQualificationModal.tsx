@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Modal,
   Tabs,
@@ -34,6 +34,56 @@ import axios from 'axios';
 const { Text } = Typography;
 const { Option } = Select;
 const { TabPane } = Tabs;
+
+const normalizeSearchInput = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[\u3000\s]+/g, ' ')
+    .trim();
+
+const normalizeForFuzzyMatch = (text: string) =>
+  normalizeSearchInput(text).replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '');
+
+const isSubsequence = (pattern: string, target: string) => {
+  if (!pattern) {
+    return true;
+  }
+  let patternIndex = 0;
+  for (let i = 0; i < target.length && patternIndex < pattern.length; i += 1) {
+    if (target[i] === pattern[patternIndex]) {
+      patternIndex += 1;
+    }
+  }
+  return patternIndex === pattern.length;
+};
+
+const fuzzyMatch = (query: string, target: string) => {
+  if (!query) {
+    return true;
+  }
+  if (!target) {
+    return false;
+  }
+
+  const normalizedTarget = normalizeSearchInput(target);
+  const compressedTarget = normalizeForFuzzyMatch(target);
+  const tokens = normalizeSearchInput(query).split(' ').filter(Boolean);
+
+  if (!tokens.length) {
+    return true;
+  }
+
+  return tokens.every((token) => {
+    const compressedToken = normalizeForFuzzyMatch(token);
+    if (!compressedToken) {
+      return true;
+    }
+    if (normalizedTarget.includes(token)) {
+      return true;
+    }
+    return isSubsequence(compressedToken, compressedTarget);
+  });
+};
 
 interface Qualification {
   id: number;
@@ -71,6 +121,14 @@ const OperationQualificationModal: React.FC<Props> = ({
   const [activePosition, setActivePosition] = useState<string>('1');
   const [form] = Form.useForm();
   const [addMode, setAddMode] = useState(false);
+
+  const qualificationSearchIndex = useMemo(() => {
+    const map = new Map<number, string>();
+    qualifications.forEach((item) => {
+      map.set(item.id, item.qualification_name);
+    });
+    return map;
+  }, [qualifications]);
 
   // 获取所有可用资质
   const fetchAvailableQualifications = async () => {
@@ -356,7 +414,25 @@ const OperationQualificationModal: React.FC<Props> = ({
               rules={[{ required: true, message: '请选择资质' }]}
               style={{ width: 200 }}
             >
-              <Select placeholder="选择资质">
+              <Select
+                placeholder="选择资质"
+                showSearch
+                filterOption={(input, option) => {
+                  if (!input) {
+                    return true;
+                  }
+                  const rawValue = option?.value;
+                  const optionValue = typeof rawValue === 'number' ? rawValue : Number(rawValue);
+                  if (Number.isNaN(optionValue)) {
+                    return false;
+                  }
+                  const target = qualificationSearchIndex.get(optionValue);
+                  if (!target) {
+                    return false;
+                  }
+                  return fuzzyMatch(input, target);
+                }}
+              >
                 {qualifications.map(q => (
                   <Option key={q.id} value={q.id}>
                     {q.qualification_name}

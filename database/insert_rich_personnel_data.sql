@@ -3,6 +3,9 @@
 
 USE aps_system;
 
+-- 确保客户端连接使用UTF8MB4，避免多语言字符被错误编码
+SET NAMES utf8mb4;
+
 -- 1. 添加更多资质类型
 INSERT INTO qualifications (qualification_name) VALUES
 ('细胞培养操作'),
@@ -24,7 +27,46 @@ INSERT INTO qualifications (qualification_name) VALUES
 ('层析操作技术'),
 ('过滤操作技术'),
 ('浓缩操作技术'),
-('配液操作技术')
+('配液操作技术'),
+('HBST-MFG8-WBP2486 DS Process MBR'),
+('HBST-MFG8-清洁清场'),
+('HBST-MFG8-摇床'),
+('HBST-MFG8-基础设备操作'),
+('HBST-MFG8-解冻传代'),
+('HBST-MFG8-样品管理'),
+('HBST-MFG8-称量'),
+('HBST-MFG8-取样操作'),
+('HBST-MFG8-滤器完整性测试'),
+('HBST-MFG8-过滤浓缩系统'),
+('HBST-MFG8-不锈钢系统收获'),
+('HBST-MFG8-离心机操作'),
+('HBST-QC-LIMS样品管理'),
+('HBST-QC-人员卫生监测'),
+('HBST-QC-环境监测的微生物取样'),
+('CNMFG-Material Management'),
+('CNMFG-Cell Bank Management'),
+('CNMFG-Cell Passage in Wave'),
+('CNMFG-Bioreactors（Hyclone）'),
+('CNMFG-Electrode Prep'),
+('CNMFG-Refrige./Freezer/Cold Room'),
+('CNMFG-Liquid Nitrogen Freezer'),
+('CNMFG-Sample Test（Vi-cell）'),
+('CNMFG-Sample Test（BGA）'),
+('CNMFG-Sample Test（Cedex）'),
+('CNMFG-CultiBag Install（Hyclone）'),
+('CNMFG-MFG-Bioreactors（ABEC）'),
+('CNMFG-MFG-Bag Installation（ABEC）'),
+('CNMFG-POD Depth Filter Operation'),
+('CNMFG-Centrifuge'),
+('CNMFG-Sample for SSS'),
+('APAC-QC-LIMS All Users'),
+('APAC-QC-LIMS Sample Management'),
+('APAC-QC-LIMS EM Management'),
+('APAC-QA-Computerized System Basic Training'),
+('WAVE账号'),
+('SAP账号'),
+('Osmo账号'),
+('1229样品间门禁')
 ON DUPLICATE KEY UPDATE qualification_name=VALUES(qualification_name);
 
 -- 2. 为现有员工随机分配资质（模拟真实情况）

@@ -7,7 +7,7 @@
   min-height: 100vh;
 }
 
-/* 侧边栏样式 */
+/* Fluent Design 侧边栏样式 */
 .ant-layout-sider {
   overflow: auto;
   height: 100vh;
@@ -16,13 +16,51 @@
   top: 0;
   bottom: 0;
   z-index: 1000;
-  transition: all 0.2s;
+  transition: all 200ms cubic-bezier(0.8, 0, 0.2, 1);
+}
+
+/* Fluent Design 侧边栏菜单项样式 */
+.fluent-sidebar-menu .ant-menu-item {
+  margin: 4px 12px;
+  border-radius: 4px;
+  height: 40px;
+  line-height: 40px;
+  transition: all 100ms cubic-bezier(0.8, 0, 0.2, 1);
+}
+
+.fluent-sidebar-menu .ant-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.fluent-sidebar-menu .ant-menu-item-selected {
+  background: rgba(0, 120, 212, 0.16) !important;
+  color: #0078D4 !important;
+  position: relative;
+}
+
+.fluent-sidebar-menu .ant-menu-item-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #0078D4;
+  border-radius: 0 2px 2px 0;
+}
+
+.fluent-sidebar-menu .ant-menu-item-icon {
+  font-size: 16px;
+}
+
+.fluent-sidebar-menu .ant-menu-item-selected .ant-menu-item-icon {
+  color: #0078D4;
 }
 
 /* 主内容区域动态适应侧边栏 */
 .main-layout {
   margin-left: 250px;
-  transition: all 0.2s;
+  transition: all 200ms cubic-bezier(0.8, 0, 0.2, 1);
 }
 
 .main-layout.collapsed {
@@ -32,4 +70,111 @@
 /* 内容区域 */
 .ant-layout-content {
   overflow: auto;
+}
+
+/* Fluent Design 按钮增强 */
+.fluent-button:hover {
+  background: rgba(0, 120, 212, 0.08);
+  color: #0078D4;
+}
+
+.fluent-button:active {
+  transform: scale(0.98);
+}
+
+.org-workbench-container {
+  display: grid;
+  grid-template-columns: 260px 1fr 260px;
+  gap: 16px;
+  min-height: 600px;
+}
+
+.org-workbench-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.org-workbench-top {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.org-workbench-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.org-workbench-top-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.org-workbench-left,
+.org-workbench-center,
+.org-workbench-right {
+  background: #f8f9fb;
+  border-radius: 8px;
+  padding: 16px;
+  height: fit-content;
+}
+
+.org-workbench-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.org-workbench-card {
+  min-height: 220px;
+}
+
+.org-workbench-tree-panel {
+  max-height: 420px;
+  overflow: auto;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+}
+
+.org-workbench-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.org-workbench-tree-view {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+}
+
+.org-workbench-flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 1200px) {
+  .org-workbench-container {
+    grid-template-columns: 1fr;
+  }
+
+  .org-workbench-left,
+  .org-workbench-center,
+  .org-workbench-right {
+    padding: 12px;
+  }
+
+  .org-workbench-top-stats {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
 }

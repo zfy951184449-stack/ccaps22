@@ -3,6 +3,8 @@ import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import BatchLifecycleService, { BatchLifecycleError } from '../services/batchLifecycleService';
 
+const MUTABLE_BATCH_STATUSES = new Set(['DRAFT', 'PLANNED', 'APPROVED', 'COMPLETED', 'CANCELLED']);
+
 interface BatchPlan {
   id: number;
   batch_code: string;
@@ -113,7 +115,12 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       description,
       notes
     } = req.body;
-    
+    const normalizedStatus = (plan_status || 'DRAFT').toString().toUpperCase();
+    if (!MUTABLE_BATCH_STATUSES.has(normalizedStatus)) {
+      await connection.rollback();
+      return res.status(400).json({ error: '非法的批次状态，请通过生命周期接口激活批次' });
+    }
+
     const insertQuery = `
       INSERT INTO production_batch_plans (
         batch_code, batch_name, template_id, project_code,
@@ -127,7 +134,7 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       template_id,
       project_code || null,
       planned_start_date,
-      plan_status,
+      normalizedStatus,
       description || null,
       notes || null
     ]);
@@ -186,7 +193,50 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       description,
       notes
     } = req.body;
-    
+
+    const [existingRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT id, template_id, DATE_FORMAT(planned_start_date, '%Y-%m-%d') AS planned_start_date, plan_status
+         FROM production_batch_plans
+        WHERE id = ?
+        FOR UPDATE`,
+      [id]
+    );
+
+    if (existingRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Batch plan not found' });
+    }
+
+    const existingPlan = existingRows[0];
+    const existingStatus = String(existingPlan.plan_status || '').toUpperCase();
+
+    const requestedStatus = (plan_status ?? existingStatus).toString().toUpperCase();
+    if (!MUTABLE_BATCH_STATUSES.has(requestedStatus)) {
+      await connection.rollback();
+      return res.status(400).json({ error: '非法的批次状态，请通过生命周期接口激活或撤销批次' });
+    }
+
+    if (existingStatus === 'ACTIVATED' && requestedStatus !== existingStatus) {
+      await connection.rollback();
+      return res.status(400).json({ error: '激活中的批次请通过生命周期接口调整状态' });
+    }
+
+    const nextPlanStatus = existingStatus === 'ACTIVATED' ? existingStatus : requestedStatus;
+
+    const nextTemplateId = template_id ?? existingPlan.template_id;
+    const nextPlannedStartDate = planned_start_date ?? existingPlan.planned_start_date;
+
+    if (
+      existingStatus === 'ACTIVATED' &&
+      (Number(existingPlan.template_id) !== Number(nextTemplateId) || existingPlan.planned_start_date !== nextPlannedStartDate)
+    ) {
+      await connection.rollback();
+      return res.status(409).json({ error: '激活中的批次禁止直接修改模板或开工日期，请先撤销激活。' });
+    }
+
+    const templateChanged = Number(existingPlan.template_id) !== Number(nextTemplateId);
+    const plannedStartChanged = String(existingPlan.planned_start_date) !== String(nextPlannedStartDate);
+
     const updateQuery = `
       UPDATE production_batch_plans
       SET batch_code = ?, batch_name = ?, template_id = ?, 
@@ -198,10 +248,10 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
     const [result]: any = await connection.execute(updateQuery, [
       batch_code,
       batch_name,
-      template_id,
+      nextTemplateId,
       project_code || null,
-      planned_start_date,
-      plan_status,
+      nextPlannedStartDate,
+      nextPlanStatus,
       description || null,
       notes || null,
       id
@@ -212,17 +262,10 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Batch plan not found' });
     }
     
-    // Regenerate operation plans if template or start date changed
-    const [existing] = await connection.execute<RowDataPacket[]>(
-      'SELECT template_id, planned_start_date FROM production_batch_plans WHERE id = ?',
-      [id]
-    );
-    
-    if (existing[0].template_id !== template_id || 
-        existing[0].planned_start_date !== planned_start_date) {
+    if (templateChanged || plannedStartChanged) {
       await connection.execute('CALL generate_batch_operation_plans(?)', [id]);
     }
-    
+
     await connection.commit();
     
     // Fetch updated batch plan

@@ -19,6 +19,7 @@ import shareGroupRoutes from './routes/shareGroupRoutes';
 import schedulingRoutes from './routes/scheduling';
 import organizationRoutes from './routes/organization';
 import organizationHierarchyRoutes from './routes/organizationHierarchy';
+import shiftDefinitionRoutes from './routes/shiftDefinitions';
 import HolidayScheduler from './scheduler/holidayScheduler';
 
 dotenv.config();
@@ -70,6 +71,7 @@ app.use('/api/share-groups', shareGroupRoutes);
 app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/org-structure', organizationHierarchyRoutes);
+app.use('/api/shift-definitions', shiftDefinitionRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'APS Backend API is running' });

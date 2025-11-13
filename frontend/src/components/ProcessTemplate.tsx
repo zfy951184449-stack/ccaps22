@@ -20,10 +20,12 @@ import {
   DeleteOutlined,
   CopyOutlined,
   ProjectOutlined,
-  CalendarOutlined
+  CalendarOutlined,
+  DotChartOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import EnhancedGanttEditor from './EnhancedGanttEditor';
+import ProcessTemplateGanttAligned from './ProcessTemplateGanttAligned';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -44,6 +46,7 @@ const ProcessTemplate: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [viewMode, setViewMode] = useState<'legacy' | 'aligned'>('legacy');
   const [form] = Form.useForm();
 
   const API_BASE_URL = 'http://localhost:3001/api';
@@ -134,6 +137,12 @@ const ProcessTemplate: React.FC = () => {
   };
 
   const handleManageStages = (template: Template) => {
+    setViewMode('legacy');
+    setSelectedTemplate(template);
+  };
+
+  const handleManageStagesAligned = (template: Template) => {
+    setViewMode('aligned');
     setSelectedTemplate(template);
   };
 
@@ -175,7 +184,7 @@ const ProcessTemplate: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      width: 200,
+      width: 240,
       render: (_: any, record: Template) => (
         <Space size="small">
           <Tooltip title="管理阶段">
@@ -186,6 +195,15 @@ const ProcessTemplate: React.FC = () => {
               onClick={() => handleManageStages(record)}
             >
               阶段
+            </Button>
+          </Tooltip>
+          <Tooltip title="新甘特（实验）">
+            <Button
+              size="small"
+              icon={<DotChartOutlined />}
+              onClick={() => handleManageStagesAligned(record)}
+            >
+              新甘特
             </Button>
           </Tooltip>
           <Tooltip title="编辑">
@@ -226,11 +244,25 @@ const ProcessTemplate: React.FC = () => {
   ];
 
   if (selectedTemplate) {
+    if (viewMode === 'aligned') {
+      return (
+        <ProcessTemplateGanttAligned
+          template={selectedTemplate}
+          onBack={() => {
+            setSelectedTemplate(null);
+            setViewMode('legacy');
+            fetchTemplates();
+          }}
+        />
+      );
+    }
+
     return (
       <EnhancedGanttEditor
         template={selectedTemplate}
         onBack={() => {
           setSelectedTemplate(null);
+          setViewMode('legacy');
           fetchTemplates();
         }}
       />

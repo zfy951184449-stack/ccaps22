@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import dayjs from 'dayjs';
 import pool from '../config/database';
 import { PersonnelSchedule } from '../models/types';
 
@@ -63,6 +64,10 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
          esp.employee_id,
          e.employee_code,
          e.employee_name,
+         e.primary_role_id,
+         er.role_code AS primary_role_code,
+         er.role_name AS primary_role_name,
+         e.org_role,
          esp.plan_date,
          esp.plan_category,
          esp.plan_state,
@@ -92,6 +97,7 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
          ps.stage_name
        FROM employee_shift_plans esp
        JOIN employees e ON esp.employee_id = e.id
+       LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        LEFT JOIN shift_definitions sd ON esp.shift_id = sd.id
        LEFT JOIN batch_operation_plans bop ON esp.batch_operation_plan_id = bop.id
        LEFT JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
@@ -107,6 +113,160 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
     res.json(rows);
   } catch (error) {
     console.error('Error getting shift calendar overview:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getEmployeeWorkloadMetricsRange = async (req: Request, res: Response) => {
+  try {
+    const referenceDateInput = (req.query.reference_date as string) || dayjs().format('YYYY-MM-DD');
+    const referenceDate = dayjs(referenceDateInput);
+
+    if (!referenceDate.isValid()) {
+      return res.status(400).json({ error: '无效的 reference_date 参数' });
+    }
+
+    const employeeIdsParam = (req.query.employee_ids as string) || '';
+    const employeeIds = employeeIdsParam
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (!employeeIds.length) {
+      return res.json([]);
+    }
+
+    const quarterStart = referenceDate.startOf('quarter').format('YYYY-MM-DD');
+    const quarterEnd = referenceDate.endOf('quarter').format('YYYY-MM-DD');
+    const monthStart = referenceDate.startOf('month').format('YYYY-MM-DD');
+    const monthEnd = referenceDate.endOf('month').format('YYYY-MM-DD');
+
+    // 折算工时：plan_hours 已经包含了加班费率的折算，不需要再加 overtime_hours
+    const totalHoursExpression =
+      "CASE WHEN UPPER(esp.plan_category) <> 'REST' THEN COALESCE(esp.plan_hours, 0) ELSE 0 END";
+    const shopHoursExpression =
+      "CASE WHEN UPPER(esp.plan_category) IN ('PRODUCTION', 'OPERATION', 'OVERTIME') THEN COALESCE(esp.plan_hours, 0) ELSE 0 END";
+
+    const placeholders = employeeIds.map(() => '?').join(',');
+
+    const [rows] = await pool.execute<any[]>(
+      `
+        SELECT
+          esp.employee_id AS employeeId,
+          SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? THEN ${totalHoursExpression} ELSE 0 END) AS quarterHours,
+          SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? THEN ${shopHoursExpression} ELSE 0 END) AS quarterShopHours,
+          SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? THEN ${totalHoursExpression} ELSE 0 END) AS monthHours,
+          SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? THEN ${shopHoursExpression} ELSE 0 END) AS monthShopHours
+        FROM employee_shift_plans esp
+        WHERE esp.plan_date BETWEEN ? AND ?
+          AND COALESCE(UPPER(esp.plan_state), '') <> 'VOID'
+          AND esp.employee_id IN (${placeholders})
+        GROUP BY esp.employee_id
+      `,
+      [
+        quarterStart,
+        quarterEnd,
+        quarterStart,
+        quarterEnd,
+        monthStart,
+        monthEnd,
+        monthStart,
+        monthEnd,
+        quarterStart,
+        quarterEnd,
+        ...employeeIds,
+      ],
+    );
+
+    const metricsMap = new Map<number, {
+      quarterHours: number;
+      quarterShopHours: number;
+      monthHours: number;
+      monthShopHours: number;
+    }>();
+
+    rows.forEach((row) => {
+      const employeeId = Number(row.employeeId);
+      metricsMap.set(employeeId, {
+        quarterHours: Number(row.quarterHours ?? 0),
+        quarterShopHours: Number(row.quarterShopHours ?? 0),
+        monthHours: Number(row.monthHours ?? 0),
+        monthShopHours: Number(row.monthShopHours ?? 0),
+      });
+    });
+
+    const [workdayRows] = await pool.execute<any[]>(
+      `
+        SELECT
+          SUM(CASE WHEN calendar_date BETWEEN ? AND ? AND is_workday = 1 THEN 1 ELSE 0 END) AS quarterWorkdays,
+          SUM(CASE WHEN calendar_date BETWEEN ? AND ? AND is_workday = 1 THEN 1 ELSE 0 END) AS monthWorkdays
+        FROM calendar_workdays
+      `,
+      [quarterStart, quarterEnd, monthStart, monthEnd],
+    );
+
+    const quarterWorkdays = Number(workdayRows?.[0]?.quarterWorkdays ?? 0);
+    const monthWorkdays = Number(workdayRows?.[0]?.monthWorkdays ?? 0);
+    const fallbackQuarterStandard = quarterWorkdays * 8;
+    const fallbackMonthStandard = monthWorkdays * 8;
+
+    const [limitRows] = await pool.execute<any[]>(
+      `
+        SELECT employee_id, quarter_standard_hours, month_standard_hours, effective_from
+        FROM employee_shift_limits
+        WHERE employee_id IN (${placeholders})
+          AND effective_from <= ?
+          AND (effective_to IS NULL OR effective_to >= ?)
+        ORDER BY employee_id, effective_from DESC
+      `,
+      [...employeeIds, referenceDate.format('YYYY-MM-DD'), referenceDate.format('YYYY-MM-DD')],
+    );
+
+    const limitMap = new Map<number, { quarter?: number | null; month?: number | null }>();
+    limitRows.forEach((row) => {
+      const employeeId = Number(row.employee_id);
+      if (limitMap.has(employeeId)) {
+        return;
+      }
+      limitMap.set(employeeId, {
+        quarter: row.quarter_standard_hours !== null ? Number(row.quarter_standard_hours) : null,
+        month: row.month_standard_hours !== null ? Number(row.month_standard_hours) : null,
+      });
+    });
+
+    const results = employeeIds.map((employeeId) => {
+      const actual = metricsMap.get(employeeId) || {
+        quarterHours: 0,
+        quarterShopHours: 0,
+        monthHours: 0,
+        monthShopHours: 0,
+      };
+      const limit = limitMap.get(employeeId);
+      const quarterStandard =
+        limit?.quarter !== null && limit?.quarter !== undefined && limit.quarter > 0
+          ? Number(limit.quarter)
+          : fallbackQuarterStandard;
+      const monthStandard =
+        limit?.month !== null && limit?.month !== undefined && limit.month > 0
+          ? Number(limit.month)
+          : fallbackMonthStandard;
+
+      return {
+        employeeId,
+        quarterHours: actual.quarterHours,
+        quarterShopHours: actual.quarterShopHours,
+        monthHours: actual.monthHours,
+        monthShopHours: actual.monthShopHours,
+        quarterStandardHours: quarterStandard,
+        monthStandardHours: monthStandard,
+        quarterDeviation: actual.quarterHours - quarterStandard,
+        monthDeviation: actual.monthHours - monthStandard,
+      };
+    });
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error computing employee workload metrics:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -304,6 +464,46 @@ export const getAvailableEmployees = async (req: Request, res: Response) => {
     res.json(rows);
   } catch (error) {
     console.error('Error getting available employees:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getEmployeeWorkloadMetrics = async (req: Request, res: Response) => {
+  try {
+    const { start_date, end_date, employee_id } = req.query;
+    
+    if (!start_date || !end_date) {
+      return res.status(400).json({ error: 'start_date 和 end_date 为必填参数' });
+    }
+    
+    const params: any[] = [start_date, end_date];
+    let employeeFilter = '';
+    if (employee_id) {
+      employeeFilter = ' AND esp.employee_id = ?';
+      params.push(employee_id);
+    }
+    
+    const [rows] = await pool.execute(
+      `SELECT 
+         esp.employee_id,
+         e.employee_code,
+         e.employee_name,
+         COUNT(DISTINCT esp.plan_date) AS work_days,
+         SUM(esp.plan_hours) AS total_hours,
+         SUM(esp.overtime_hours) AS total_overtime_hours,
+         AVG(esp.plan_hours) AS avg_daily_hours
+       FROM employee_shift_plans esp
+       JOIN employees e ON esp.employee_id = e.id
+       WHERE esp.plan_date BETWEEN ? AND ?
+       ${employeeFilter}
+       GROUP BY esp.employee_id, e.employee_code, e.employee_name
+       ORDER BY total_hours DESC`,
+      params
+    );
+    
+    res.json(rows);
+  } catch (error) {
+    console.error('Error getting employee workload metrics:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

@@ -6,6 +6,10 @@ import {
   deleteAssignment as deleteAssignmentService,
 } from '../services/organizationAssignmentService'
 import { fetchEmployeeOrgContext } from '../services/organizationEmployeeService'
+import {
+  syncGroupStructureForLeader,
+  syncShiftStructureForLeader,
+} from '../services/organizationAutoStructureService'
 
 const mapNullableNumber = (value: any): number | null => {
   if (value === null || value === undefined) {
@@ -75,10 +79,39 @@ export const createEmployee = async (req: Request, res: Response) => {
 };
 
 export const updateEmployee = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const numericId = Number(id);
+
+  if (!id || Number.isNaN(numericId)) {
+    res.status(400).json({ error: 'Invalid employee id' });
+    return;
+  }
+
+  const connection = await pool.getConnection();
+
   try {
-    const { id } = req.params;
-    if (!id || Number.isNaN(Number(id))) {
-      res.status(400).json({ error: 'Invalid employee id' });
+    await connection.beginTransaction();
+
+    const [[existing]] = await connection.execute<RowDataPacket[]>(
+      `SELECT id,
+              employee_name AS employeeName,
+              department_id AS departmentId,
+              primary_team_id AS primaryTeamId,
+              primary_role_id AS primaryRoleId,
+              employment_status AS employmentStatus,
+              hire_date AS hireDate,
+              shopfloor_baseline_pct AS shopfloorBaselinePct,
+              shopfloor_upper_pct AS shopfloorUpperPct,
+              org_role AS orgRole
+         FROM employees
+        WHERE id = ?
+        LIMIT 1`,
+      [numericId],
+    );
+
+    if (!existing) {
+      await connection.rollback();
+      res.status(404).json({ error: 'Employee not found' });
       return;
     }
 
@@ -94,7 +127,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
       orgRole,
     } = req.body || {};
 
-    const sql = `
+    const updateSql = `
       UPDATE employees
          SET employee_name = COALESCE(?, employee_name),
              department_id = ?,
@@ -109,28 +142,56 @@ export const updateEmployee = async (req: Request, res: Response) => {
        LIMIT 1
     `;
 
-    const [result] = await pool.execute<ResultSetHeader>(sql, [
+    const [result] = await connection.execute<ResultSetHeader>(updateSql, [
       employeeName ? String(employeeName).trim() : null,
-      departmentId ?? null,
-      primaryTeamId ?? null,
-      primaryRoleId ?? null,
+      departmentId ?? existing.departmentId ?? null,
+      primaryTeamId ?? existing.primaryTeamId ?? null,
+      primaryRoleId ?? existing.primaryRoleId ?? null,
       employmentStatus ? String(employmentStatus) : null,
       hireDate ? String(hireDate) : null,
       shopfloorBaselinePct ?? null,
       shopfloorUpperPct ?? null,
       orgRole ? String(orgRole) : null,
-      Number(id),
+      numericId,
     ]);
 
     if (result.affectedRows === 0) {
+      await connection.rollback();
       res.status(404).json({ error: 'Employee not found' });
       return;
     }
 
+    const resolvedEmployeeName = employeeName ? String(employeeName).trim() : existing.employeeName;
+    const resolvedPrimaryTeamId =
+      primaryTeamId !== undefined ? primaryTeamId ?? null : existing.primaryTeamId ?? null;
+    const resolvedOrgRole = orgRole ? String(orgRole) : existing.orgRole || 'FRONTLINE';
+
+    if (resolvedOrgRole === 'GROUP_LEADER') {
+      await syncGroupStructureForLeader(connection, {
+        connection,
+        employeeId: numericId,
+        employeeName: resolvedEmployeeName,
+        primaryTeamId: resolvedPrimaryTeamId,
+      });
+    }
+
+    if (resolvedOrgRole === 'SHIFT_LEADER') {
+      await syncShiftStructureForLeader(connection, {
+        connection,
+        employeeId: numericId,
+        employeeName: resolvedEmployeeName,
+        primaryTeamId: resolvedPrimaryTeamId,
+      });
+    }
+
+    await connection.commit();
     res.json({ success: true });
   } catch (error) {
+    await connection.rollback();
     console.error('Error updating employee:', error);
     res.status(500).json({ error: 'Failed to update employee' });
+  } finally {
+    connection.release();
   }
 };
 

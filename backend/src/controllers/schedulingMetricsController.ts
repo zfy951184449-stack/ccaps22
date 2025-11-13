@@ -52,3 +52,4 @@ export const listMetricsSnapshots = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to list metrics snapshots' })
   }
 }
+

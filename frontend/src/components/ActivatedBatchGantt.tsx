@@ -19,10 +19,12 @@ import {
   Divider,
   Select,
   DatePicker,
+  Input,
   Checkbox,
   Slider,
   Modal,
   Drawer,
+  List,
   Form,
   InputNumber,
   Descriptions,
@@ -33,7 +35,14 @@ import dayjs from 'dayjs';
 import axios from 'axios';
 import classNames from 'classnames';
 import './ActivatedBatchGantt.css';
-import { SyncOutlined } from '@ant-design/icons';
+import { SyncOutlined, WarningOutlined } from '@ant-design/icons';
+import { 
+  GANTT_ROW_HEIGHT as ROW_HEIGHT,
+  GANTT_BASE_DAY_WIDTH as BASE_DAY_WIDTH,
+  getRowTop,
+  getRowCenterY,
+  getTotalHeight,
+} from '../utils/ganttConstants';
 
 type DayjsInstance = ReturnType<typeof dayjs>;
 
@@ -49,6 +58,8 @@ interface ActiveOperation {
   batch_color?: string;
   plan_status: string;
   stage_name: string;
+  stage_id?: number;
+  stage_start_day?: number | null;
   operation_name: string;
   planned_start_datetime: string;
   planned_end_datetime: string;
@@ -88,9 +99,17 @@ interface RecommendedPersonnel {
   has_conflict?: boolean;
 }
 
+export interface ActivatedBatchGanttActionRequest {
+  operationPlanId: number;
+  action: 'focus' | 'assign';
+  requestedAt?: number;
+}
+
 interface ActivatedBatchGanttProps {
   visible: boolean;
   onClose: () => void;
+  actionRequest?: ActivatedBatchGanttActionRequest | null;
+  onActionHandled?: () => void;
 }
 
 interface BatchConstraintEdge {
@@ -153,9 +172,6 @@ interface BatchRow {
   stageCount: number;
   operationCount: number;
 }
-
-const ROW_HEIGHT = 48;
-const BASE_DAY_WIDTH = 120;
 
 const DEFAULT_COLORS = ['#1890ff', '#52c41a', '#fa8c16', '#13c2c2', '#722ed1'];
 
@@ -459,6 +475,8 @@ const buildTreeData = (operations: ActiveOperation[]) => {
 const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
   visible,
   onClose,
+  actionRequest,
+  onActionHandled,
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -486,6 +504,8 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
   const timelineScrollRef = useRef<HTMLDivElement>(null);
   const axisScrollRef = useRef<HTMLDivElement>(null);
   const syncingRef = useRef(false);
+  // 用于存储左侧树容器的transform偏移量
+  const [treeTransformY, setTreeTransformY] = useState(0);
   const [batchConstraints, setBatchConstraints] = useState<BatchConstraintEdge[]>([]);
   const [operationDetail, setOperationDetail] = useState<OperationDetailResponse | null>(null);
   const [operationDetailLoading, setOperationDetailLoading] = useState(false);
@@ -496,8 +516,61 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignSubmitting, setAssignSubmitting] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignSearch, setAssignSearch] = useState('');
   const [lockLoading, setLockLoading] = useState(false);
   const [operationDetailDrawerVisible, setOperationDetailDrawerVisible] = useState(false);
+  const [pendingScrollKey, setPendingScrollKey] = useState<string | null>(null);
+  const [conflictDrawerVisible, setConflictDrawerVisible] = useState(false);
+  const [timelineViewportHeight, setTimelineViewportHeight] = useState(600);
+  const [timelineScrollTop, setTimelineScrollTop] = useState(0);
+
+  const actionRequestRef = useRef<ActivatedBatchGanttActionRequest | null>(null);
+  const pendingAssignRef = useRef(false);
+
+  useEffect(() => {
+    const element = timelineScrollRef.current;
+    if (!element) {
+      return;
+    }
+
+    const handleScroll = () => {
+      const scrollTop = element.scrollTop;
+      const scrollLeft = element.scrollLeft;
+      setTimelineScrollTop(scrollTop);
+      setTreeTransformY(scrollTop);
+      if (axisScrollRef.current && !syncingRef.current) {
+        syncingRef.current = true;
+        axisScrollRef.current.scrollLeft = scrollLeft;
+        syncingRef.current = false;
+      }
+    };
+
+    element.addEventListener('scroll', handleScroll, { passive: true });
+    setTimelineViewportHeight(element.clientHeight || 600);
+    setTimelineScrollTop(element.scrollTop || 0);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        setTimelineViewportHeight(element.clientHeight || 600);
+      });
+      resizeObserver.observe(element);
+    } else {
+      const handleWindowResize = () => {
+        setTimelineViewportHeight(element.clientHeight || 600);
+      };
+      window.addEventListener('resize', handleWindowResize);
+      return () => {
+        element.removeEventListener('scroll', handleScroll);
+        window.removeEventListener('resize', handleWindowResize);
+      };
+    }
+
+    return () => {
+      element.removeEventListener('scroll', handleScroll);
+      resizeObserver?.disconnect();
+    };
+  }, [visible]);
 
   const loadOperations = useCallback(async () => {
     setLoading(true);
@@ -580,6 +653,22 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
     statusFilter.complete,
   ]);
 
+  const conflictOperations = useMemo(() => {
+    return filteredOperations.filter(
+      (op) => (op.assigned_people || 0) < (op.required_people || 0),
+    );
+  }, [filteredOperations]);
+
+  const sortedConflictOperations = useMemo(() => {
+    return conflictOperations
+      .slice()
+      .sort(
+        (a, b) =>
+          dayjs(a.planned_start_datetime).valueOf() -
+          dayjs(b.planned_start_datetime).valueOf(),
+      );
+  }, [conflictOperations]);
+
   useEffect(() => {
     if (!visible) {
       return;
@@ -640,12 +729,29 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
     setZoom(numeric);
   };
 
+  const handleTreeWheel = useCallback(
+    (event: React.WheelEvent<HTMLDivElement>) => {
+      if (!timelineScrollRef.current) {
+        return;
+      }
+      event.preventDefault();
+      const container = timelineScrollRef.current;
+      if (event.deltaY !== 0) {
+        container.scrollTop += event.deltaY;
+      }
+      if (event.deltaX !== 0) {
+        container.scrollLeft += event.deltaX;
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     setExpandedKeys(defaultExpanded);
     setSelectedKeys([]);
-    if (treeScrollRef.current) {
-      treeScrollRef.current.scrollTop = 0;
-    }
+    // 重置滚动位置
+    setTreeTransformY(0);
+    setTimelineScrollTop(0);
     if (timelineScrollRef.current) {
       timelineScrollRef.current.scrollTop = 0;
       timelineScrollRef.current.scrollLeft = 0;
@@ -733,6 +839,65 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
     }
   }, [assignModalVisible, operationDetail]);
 
+  useEffect(() => {
+    if (actionRequest) {
+      actionRequestRef.current = actionRequest;
+    }
+  }, [actionRequest]);
+
+  useEffect(() => {
+    const request = actionRequestRef.current;
+    if (!request || !visible) {
+      return;
+    }
+    if (!operations.length) {
+      return;
+    }
+
+    const operationKey = `operation-${request.operationPlanId}`;
+    const meta = nodeMeta.get(operationKey);
+    if (!meta) {
+      pendingAssignRef.current = false;
+      actionRequestRef.current = null;
+      message.warning('未在激活批次中找到该操作');
+      onActionHandled?.();
+      return;
+    }
+
+    const stageKey = meta.stageKey;
+    const batchKey = stageKey ? stageKey.split('-stage-')[0] : `batch-${meta.batchId}`;
+
+    setSelectedBatchIds([meta.batchId]);
+    setDateRange(null);
+    setStatusFilter({ unassigned: true, partial: true, complete: true });
+
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      next.add(batchKey);
+      if (stageKey) {
+        next.add(stageKey);
+      }
+      return Array.from(next);
+    });
+
+    setSelectedKeys([operationKey]);
+    setPendingScrollKey(operationKey);
+
+    if (request.action === 'assign') {
+      pendingAssignRef.current = true;
+    } else {
+      pendingAssignRef.current = false;
+    }
+
+    actionRequestRef.current = null;
+    onActionHandled?.();
+  }, [
+    visible,
+    operations,
+    nodeMeta,
+    onActionHandled,
+  ]);
+
   const timeMetrics = useMemo(() => {
     if (!filteredOperations.length) {
       return null;
@@ -762,6 +927,40 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
       setDateRange([values[0], values[1]]);
     }
   };
+
+  const focusOperation = useCallback(
+    (operationPlanId: number) => {
+      const operationKey = `operation-${operationPlanId}`;
+      const meta = nodeMeta.get(operationKey);
+      if (!meta) {
+        message.warning('未在激活批次中找到该操作');
+        return;
+      }
+
+      const stageKey = meta.stageKey;
+      const batchKey = stageKey
+        ? stageKey.split('-stage-')[0]
+        : `batch-${meta.batchId}`;
+
+      setSelectedBatchIds((prev) =>
+        prev.includes(meta.batchId) ? prev : [meta.batchId],
+      );
+      setDateRange(null);
+      setStatusFilter({ unassigned: true, partial: true, complete: true });
+      setExpandedKeys((prev) => {
+        const next = new Set(prev);
+        next.add(batchKey);
+        if (stageKey) {
+          next.add(stageKey);
+        }
+        return Array.from(next);
+      });
+      setSelectedKeys([operationKey]);
+      setPendingScrollKey(operationKey);
+      setConflictDrawerVisible(false);
+    },
+    [nodeMeta],
+  );
 
   const resourceSummary = useMemo(() => {
     if (!timeMetrics) {
@@ -873,13 +1072,59 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
       const left = start.diff(timeMetrics.minStart, 'hour', true) * hourWidth;
       const width = Math.max(end.diff(start, 'hour', true), 0.3) * hourWidth;
       map.set(key, {
-        centerY: index * ROW_HEIGHT + ROW_HEIGHT / 2,
+        centerY: getRowCenterY(index),
         left,
         right: left + width,
       });
     });
     return map;
   }, [laneKeys, nodeMeta, operationRowMap, timeMetrics, hourWidth]);
+
+  useEffect(() => {
+    if (!pendingScrollKey) {
+      return;
+    }
+
+    const key = pendingScrollKey;
+    const rowIndex = laneKeys.findIndex((laneKey) => laneKey === key);
+    const containerHeight = timelineScrollRef.current?.clientHeight ?? 0;
+    if (rowIndex >= 0) {
+      const targetTop =
+        getRowTop(rowIndex) -
+        Math.max(containerHeight / 2 - ROW_HEIGHT / 2, 0);
+      const normalizedTop = Math.max(targetTop, 0);
+      if (timelineScrollRef.current) {
+        syncingRef.current = true;
+        timelineScrollRef.current.scrollTop = normalizedTop;
+        // 同步左侧树：通过transform
+        setTreeTransformY(normalizedTop);
+        setTimelineScrollTop(normalizedTop);
+      }
+    }
+
+    const position = operationPositions.get(key);
+    if (position) {
+      const container = timelineScrollRef.current;
+      const axis = axisScrollRef.current;
+      const center = (position.left + position.right) / 2;
+      const viewWidth = container?.clientWidth ?? 0;
+      const targetLeft = Math.max(center - viewWidth / 2, 0);
+      if (container) {
+        syncingRef.current = true;
+        container.scrollLeft = targetLeft;
+      }
+      if (axis) {
+        syncingRef.current = true;
+        axis.scrollLeft = targetLeft;
+        syncingRef.current = false;
+      }
+    }
+
+    // 注意：左侧树现在通过transform同步，不需要scrollIntoView
+    // 如果需要定位到特定节点，可以通过其他方式实现
+
+    setPendingScrollKey(null);
+  }, [pendingScrollKey, laneKeys, operationPositions]);
 
   const constraintLines = useMemo(() => {
     if (!timeMetrics || !batchConstraints.length) {
@@ -1075,6 +1320,7 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
     setAssignCandidates([]);
     setAssignSelectedIds([]);
     setAssignError(null);
+    setAssignSearch('');
   }, []);
 
   const handleAssignSelectionChange = useCallback(
@@ -1121,16 +1367,25 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
         });
       }
 
-      setAssignCandidates(enrichedList);
+      const normalizedList = enrichedList
+        .filter((item) => item.employee_id !== null && item.employee_id !== undefined)
+        .map((item) => ({
+          ...item,
+          employee_id: Number(item.employee_id),
+        }));
+
+      setAssignCandidates(normalizedList);
+      setAssignSearch('');
 
       if (operationDetail?.assigned_personnel?.length) {
         setAssignSelectedIds(
-          operationDetail.assigned_personnel.map(
-            (person) => person.employee_id,
-          ),
+          operationDetail.assigned_personnel
+            .map((person) => person.employee_id)
+            .filter((id): id is number => id !== null && id !== undefined)
+            .map((id) => Number(id)),
         );
       } else {
-        const initial = enrichedList
+        const initial = normalizedList
           .filter((item) =>
             ['HIGHLY_RECOMMENDED', 'RECOMMENDED'].includes(
               (item.recommendation || '').toUpperCase(),
@@ -1146,6 +1401,29 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
       setAssignLoading(false);
     }
   }, [operationDetail, selectedOperationRow]);
+
+  useEffect(() => {
+    if (!pendingAssignRef.current) {
+      return;
+    }
+    if (operationDetailError) {
+      pendingAssignRef.current = false;
+      message.error('无法加载操作详情，请稍后再试');
+      return;
+    }
+    if (operationDetailLoading || !selectedOperationRow || !operationDetail) {
+      return;
+    }
+
+    pendingAssignRef.current = false;
+    void handleOpenAssignModal();
+  }, [
+    operationDetail,
+    operationDetailLoading,
+    operationDetailError,
+    selectedOperationRow,
+    handleOpenAssignModal,
+  ]);
 
   const handleAssignSubmit = useCallback(async () => {
     if (!selectedOperationRow) {
@@ -1208,6 +1486,106 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
       setLockLoading(false);
     }
   }, [loadOperations, selectedOperationRow]);
+
+  const filteredAssignCandidates = useMemo(() => {
+    if (!assignSearch.trim()) {
+      return assignCandidates;
+    }
+    const keyword = assignSearch.trim().toLowerCase();
+    return assignCandidates.filter((candidate) => {
+      const fields = [
+        candidate.employee_name,
+        candidate.employee_code,
+        candidate.department,
+        candidate.qualifications,
+      ]
+        .filter(Boolean)
+        .map((item) => String(item).toLowerCase());
+      return fields.some((field) => field.includes(keyword));
+    });
+  }, [assignCandidates, assignSearch]);
+
+  const categorizedAssignCandidates = useMemo(() => {
+    const recommended: RecommendedPersonnel[] = [];
+    const available: RecommendedPersonnel[] = [];
+    const conflicted: RecommendedPersonnel[] = [];
+
+    filteredAssignCandidates.forEach((candidate) => {
+      if (candidate.has_conflict) {
+        conflicted.push(candidate);
+        return;
+      }
+
+      const recommendation = (candidate.recommendation || '').toUpperCase();
+      if (
+        recommendation === 'HIGHLY_RECOMMENDED' ||
+        recommendation === 'RECOMMENDED' ||
+        recommendation === 'CURRENT'
+      ) {
+        recommended.push(candidate);
+      } else {
+        available.push(candidate);
+      }
+    });
+
+    return {
+      recommended,
+      available,
+      conflicted,
+    };
+  }, [filteredAssignCandidates]);
+
+  const renderAssignCandidate = useCallback(
+    (candidate: RecommendedPersonnel) => (
+      <div key={candidate.employee_id} className="abg-assign-item">
+        <Checkbox value={candidate.employee_id} disabled={candidate.has_conflict}>
+          <Space size={8} wrap>
+            <Text>{candidate.employee_name}</Text>
+            {candidate.employee_code && (
+              <Text type="secondary">({candidate.employee_code})</Text>
+            )}
+            {candidate.recommendation && (
+              <Tag color={recommendationColor(candidate.recommendation)}>
+                {recommendationLabel(candidate.recommendation)}
+              </Tag>
+            )}
+            {candidate.has_conflict && <Tag color="red">冲突</Tag>}
+          </Space>
+        </Checkbox>
+        {candidate.qualifications && (
+          <div className="abg-assign-desc">{candidate.qualifications}</div>
+        )}
+      </div>
+    ),
+    [],
+  );
+
+  const assignGroupConfigs = useMemo(
+    () => [
+      {
+        key: 'recommended',
+        title: '推荐候选',
+        description: '优先、推荐、已分配',
+        data: categorizedAssignCandidates.recommended,
+        emptyText: '暂无推荐人员',
+      },
+      {
+        key: 'available',
+        title: '可用候选',
+        description: '符合条件的其他可用人员',
+        data: categorizedAssignCandidates.available,
+        emptyText: '暂无可用人员',
+      },
+      {
+        key: 'conflicted',
+        title: '存在冲突',
+        description: '当前时间段存在冲突或已排班',
+        data: categorizedAssignCandidates.conflicted,
+        emptyText: '暂无冲突人员',
+      },
+    ],
+    [categorizedAssignCandidates],
+  );
 
   const handleEditModalCancel = () => {
     setEditModalVisible(false);
@@ -1387,14 +1765,165 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
     );
   };
 
+  // 渲染单行甘特图（用于虚拟滚动）
+  const renderGanttRow = useCallback((
+    index: number,
+    style: React.CSSProperties = {},
+    keyOverride?: string
+  ) => {
+    if (index >= laneKeys.length) {
+      return <div key={keyOverride ?? `lane-${index}`} style={style} />;
+    }
+    
+    const key = laneKeys[index];
+    const laneClass = index % 2 === 0 ? 'abg-lane-even' : 'abg-lane-odd';
+    const meta = nodeMeta.get(key);
+    if (!meta || !timeMetrics) {
+      return <div key={keyOverride ?? key} style={style} />;
+    }
+
+    if (meta.type === 'batch') {
+      const batch = batchRowMap.get(key);
+      if (!batch) {
+        return <div key={keyOverride ?? key} style={style} />;
+      }
+      const batchColor = batch.batchColor;
+      const batchActive = selectedKeys.includes(batch.key);
+      const batchLeft = Math.max(
+        0,
+        batch.start.diff(timeMetrics.minStart, 'hour', true) * hourWidth,
+      );
+      const batchWidth = Math.max(
+        8,
+        batch.end.diff(batch.start, 'hour', true) * hourWidth,
+      );
+
+      return (
+        <div
+          key={keyOverride ?? key}
+          className={classNames('abg-batch-row', laneClass, {
+            'abg-batch-row-active': batchActive,
+          })}
+          style={{ ...style, height: ROW_HEIGHT }}
+          onClick={() => setSelectedKeys([batch.key])}
+        >
+          <div className="abg-batch-background" />
+          <div
+            className="abg-batch-block"
+            style={{
+              left: batchLeft,
+              width: batchWidth,
+              borderColor: batchColor,
+              background: applyAlpha(batchColor, 0.2),
+            }}
+          >
+            <span className="abg-batch-label">
+              {batch.batchCode}｜{batch.stageCount} 阶段｜{batch.operationCount} 操作
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    if (meta.type === 'stage') {
+      const stage = stageRowMap.get(key);
+      if (!stage) {
+        return <div key={keyOverride ?? key} style={style} />;
+      }
+      const batchColor = stage.batchColor || DEFAULT_COLORS[0];
+      const stageActive =
+        selectedKeys.includes(stage.key) ||
+        (selectedMeta?.type === 'operation' &&
+          selectedMeta.stageKey === stage.key);
+
+      const stageLeft = Math.max(
+        0,
+        stage.start.diff(timeMetrics.minStart, 'hour', true) * hourWidth,
+      );
+      const stageWidth = Math.max(
+        6,
+        stage.end.diff(stage.start, 'hour', true) * hourWidth,
+      );
+
+      return (
+        <div
+          key={keyOverride ?? key}
+          className={classNames('abg-stage-row', laneClass, {
+            'abg-stage-row-active': stageActive,
+          })}
+          style={{ ...style, height: ROW_HEIGHT }}
+          onClick={() => setSelectedKeys([stage.key])}
+        >
+          <div className="abg-stage-background" />
+          <div
+            className="abg-stage-block"
+            style={{
+              left: stageLeft,
+              width: stageWidth,
+              background: applyAlpha(batchColor, 0.18),
+              borderColor: batchColor,
+            }}
+          >
+            <span className="abg-stage-label">{stage.stageName}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (meta.type === 'operation') {
+      const opRow = operationRowMap.get(key);
+      if (!opRow) {
+        return <div key={keyOverride ?? key} style={style} />;
+      }
+      const stage = stageRowMap.get(opRow.stageKey);
+      const batchColor =
+        opRow.batchColor || stage?.batchColor || DEFAULT_COLORS[0];
+      const conflict =
+        opRow.operation.assigned_people <
+        opRow.operation.required_people;
+
+      return (
+        <div
+          key={keyOverride ?? key}
+          className={classNames('abg-operation-row', laneClass)}
+          style={{ ...style, height: ROW_HEIGHT }}
+        >
+          <div className="abg-operation-row-background" />
+          {renderOperationWindow(opRow.operation, batchColor)}
+          {renderOperationBlock(
+            opRow,
+            stage || {
+              key: opRow.stageKey,
+              batchId: opRow.batchId,
+              batchCode: opRow.batchCode,
+              batchName: opRow.batchName,
+              batchColor,
+              stageName: opRow.stageName,
+              operations: [opRow.operation],
+              start: opRow.start,
+              end: opRow.end,
+            },
+            batchColor,
+            selectedKeys.includes(opRow.key),
+            conflict,
+          )}
+        </div>
+      );
+    }
+
+    return <div key={keyOverride ?? key} style={style} />;
+  }, [laneKeys, nodeMeta, timeMetrics, hourWidth, batchRowMap, stageRowMap, operationRowMap, selectedKeys, selectedMeta, renderOperationWindow, renderOperationBlock]);
+
   const renderTimelineRows = () => {
-    if (!timeMetrics) {
+    if (!timeMetrics || laneKeys.length === 0) {
       return null;
     }
-    const totalHeight = laneKeys.length * ROW_HEIGHT;
+    
+    const totalHeight = getTotalHeight(laneKeys.length);
     const hourLines: React.ReactNode[] = [];
     const shiftBands: React.ReactNode[] = [];
     const totalHours = timeMetrics.totalDays * 24;
+    
     for (let i = 0; i <= totalHours; i += 1) {
       const isDayBoundary = i % 24 === 0;
       const isMajor = i % 6 === 0;
@@ -1440,15 +1969,20 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
         style={{
           width: timelineWidth,
           height: totalHeight,
+          position: 'relative',
         }}
       >
+        {/* 背景层：班次带和时间线 */}
         <div className="abg-shift-bands">{shiftBands}</div>
         <div className="abg-hour-lines">{hourLines}</div>
+        
+        {/* 约束线SVG */}
         <svg
           className="abg-constraint-svg"
           width={timelineWidth}
           height={totalHeight}
           viewBox={`0 0 ${timelineWidth} ${totalHeight}`}
+          style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 1 }}
         >
           <defs>
             <marker
@@ -1474,165 +2008,67 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
             </g>
           ))}
         </svg>
-        {laneKeys.map((key, index) => {
-          const laneClass = index % 2 === 0 ? 'abg-lane-even' : 'abg-lane-odd';
-          const meta = nodeMeta.get(key);
-          if (!meta) {
-            return null;
-          }
-          const top = index * ROW_HEIGHT;
-
-          if (meta.type === 'batch') {
-            const batch = batchRowMap.get(key);
-            if (!batch || !timeMetrics) {
-              return null;
-            }
-            const batchColor = batch.batchColor;
-            const batchActive = selectedKeys.includes(batch.key);
-            const batchLeft = Math.max(
+        <div
+          className="abg-timeline-rows"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: totalHeight,
+            zIndex: 2,
+          }}
+        >
+          {(() => {
+            const viewportHeight = timelineViewportHeight || 600;
+            const overscan = 6;
+            const estimatedVisible =
+              Math.ceil(viewportHeight / ROW_HEIGHT) + overscan * 2;
+            const startIndex = Math.max(
+              Math.floor(timelineScrollTop / ROW_HEIGHT) - overscan,
               0,
-              batch.start.diff(timeMetrics.minStart, 'hour', true) * hourWidth,
             );
-            const batchWidth = Math.max(
-              8,
-              batch.end.diff(batch.start, 'hour', true) * hourWidth,
+            const endIndex = Math.min(
+              startIndex + estimatedVisible,
+              laneKeys.length,
             );
+            const rows: React.ReactNode[] = [];
 
-            return (
-              <div
-                key={batch.key}
-                className={classNames('abg-batch-row', laneClass, {
-                  'abg-batch-row-active': batchActive,
-                })}
-                style={{ top, height: ROW_HEIGHT }}
-                onClick={() => setSelectedKeys([batch.key])}
-              >
-                <div className="abg-batch-background" />
-                <div
-                  className="abg-batch-block"
-                  style={{
-                    left: batchLeft,
-                    width: batchWidth,
-                    borderColor: batchColor,
-                    background: applyAlpha(batchColor, 0.2),
-                  }}
-                >
-                  <span className="abg-batch-label">
-                    {batch.batchCode}｜{batch.stageCount} 阶段｜{batch.operationCount} 操作
-                  </span>
-                </div>
-              </div>
-            );
-          }
-
-          if (meta.type === 'stage') {
-            const stage = stageRowMap.get(key);
-            if (!stage) {
-              return null;
+            for (let index = startIndex; index < endIndex; index += 1) {
+              const top = getRowTop(index);
+              const style: React.CSSProperties = {
+                position: 'absolute',
+                top,
+                left: 0,
+                width: '100%',
+                height: ROW_HEIGHT,
+              };
+              rows.push(renderGanttRow(index, style, laneKeys[index]));
             }
-            const batchColor = stage.batchColor || DEFAULT_COLORS[0];
-            const stageActive =
-              selectedKeys.includes(stage.key) ||
-              (selectedMeta?.type === 'operation' &&
-                selectedMeta.stageKey === stage.key);
 
-            const stageLeft = Math.max(
-              0,
-              stage.start.diff(timeMetrics.minStart, 'hour', true) * hourWidth,
-            );
-            const stageWidth = Math.max(
-              6,
-              stage.end.diff(stage.start, 'hour', true) * hourWidth,
-            );
-
-            return (
-              <div
-                key={stage.key}
-                className={classNames('abg-stage-row', laneClass, {
-                  'abg-stage-row-active': stageActive,
-                })}
-                style={{ top, height: ROW_HEIGHT }}
-                onClick={() => setSelectedKeys([stage.key])}
-              >
-                <div className="abg-stage-background" />
-                <div
-                  className="abg-stage-block"
-                  style={{
-                    left: stageLeft,
-                    width: stageWidth,
-                    background: applyAlpha(batchColor, 0.18),
-                    borderColor: batchColor,
-                  }}
-                >
-                  <span className="abg-stage-label">{stage.stageName}</span>
-                </div>
-              </div>
-            );
-          }
-
-          if (meta.type === 'operation') {
-            const opRow = operationRowMap.get(key);
-            if (!opRow) {
-              return null;
-            }
-            const stage = stageRowMap.get(opRow.stageKey);
-            const batchColor =
-              opRow.batchColor || stage?.batchColor || DEFAULT_COLORS[0];
-            const conflict =
-              opRow.operation.assigned_people <
-              opRow.operation.required_people;
-
-            return (
-              <div
-                key={opRow.key}
-                className={classNames('abg-operation-row', laneClass)}
-                style={{ top, height: ROW_HEIGHT }}
-              >
-                <div className="abg-operation-row-background" />
-                {renderOperationWindow(opRow.operation, batchColor)}
-                {renderOperationBlock(
-                  opRow,
-                  stage || {
-                    key: opRow.stageKey,
-                    batchId: opRow.batchId,
-                    batchCode: opRow.batchCode,
-                    batchName: opRow.batchName,
-                    batchColor,
-                    stageName: opRow.stageName,
-                    operations: [opRow.operation],
-                    start: opRow.start,
-                    end: opRow.end,
-                  },
-                  batchColor,
-                  selectedKeys.includes(opRow.key),
-                  conflict,
-                )}
-              </div>
-            );
-          }
-
-          return null;
-        })}
+            return rows;
+          })()}
+        </div>
       </div>
     );
   };
 
-  if (!visible) {
-    return null;
-  }
+  const renderMainContent = () => {
+    if (!visible) {
+      return null;
+    }
 
-  return (
-    <>
+    return (
       <Card
-      className="abg-card"
-      title="激活批次甘特图（测试版）"
-      variant="borderless"
-      extra={
-        <Button onClick={onClose} size="small">
-          收起
-        </Button>
-      }
-    >
+        className="abg-card"
+        title="激活批次甘特图（测试版）"
+        variant="borderless"
+        extra={
+          <Button onClick={onClose} size="small">
+            收起
+          </Button>
+        }
+      >
       <div className="abg-toolbar">
         <Space size={16} wrap align="center">
           <Space size={6} align="center">
@@ -1707,6 +2143,24 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
               重置
             </Button>
           </Space>
+          <Space size={6} align="center">
+            {conflictOperations.length > 0 ? (
+              <Button
+                type="primary"
+                danger
+                icon={<WarningOutlined />}
+                onClick={() => setConflictDrawerVisible(true)}
+              >
+                缺口列表 ({conflictOperations.length})
+              </Button>
+            ) : (
+              <Tooltip title="当前没有缺口">
+                <Button icon={<WarningOutlined />} disabled>
+                  缺口列表 (0)
+                </Button>
+              </Tooltip>
+            )}
+          </Space>
         </Space>
         <div className="abg-toolbar-legend">
           <Text strong>激活批次：</Text>
@@ -1720,7 +2174,14 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
         </div>
       </div>
       <div className="abg-layout">
-        <div className="abg-main">
+        <div
+          className="abg-main"
+          style={{
+            display: 'flex',
+            flexWrap: 'nowrap',
+            width: '100%',
+          }}
+        >
           <div className="abg-side">
             <div className="abg-side-header">
               <span className="abg-side-header-title">批次结构</span>
@@ -1729,15 +2190,11 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
             <div
               className="abg-side-body"
               ref={treeScrollRef}
-              onScroll={(event) => {
-                if (syncingRef.current) {
-                  syncingRef.current = false;
-                  return;
-                }
-                syncingRef.current = true;
-                if (timelineScrollRef.current) {
-                  timelineScrollRef.current.scrollTop = event.currentTarget.scrollTop;
-                }
+              onWheel={handleTreeWheel}
+              style={{
+                overflow: 'hidden', // 禁用左侧滚动，只跟随右侧
+                transform: `translateY(${-treeTransformY}px)`,
+                transition: 'transform 0s', // 不使用transition，确保同步
               }}
             >
               <Tree
@@ -1765,9 +2222,11 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
                   return;
                 }
                 syncingRef.current = true;
+                // 时间轴头部滚动时，同步右侧甘特图的水平滚动
                 if (timelineScrollRef.current) {
                   timelineScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
                 }
+                syncingRef.current = false;
               }}
             >
               {renderTimelineAxis()}
@@ -1775,19 +2234,7 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
             <div
               className="abg-timeline-scroll"
               ref={timelineScrollRef}
-              onScroll={(event) => {
-                if (syncingRef.current) {
-                  syncingRef.current = false;
-                  return;
-                }
-                syncingRef.current = true;
-                if (treeScrollRef.current) {
-                  treeScrollRef.current.scrollTop = event.currentTarget.scrollTop;
-                }
-                if (axisScrollRef.current) {
-                  axisScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
-                }
-              }}
+              style={{ position: 'relative', overflow: 'auto' }}
             >
               {renderTimelineRows()}
             </div>
@@ -1868,6 +2315,47 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
         return null;
       })()}
       </Card>
+    );
+  };
+
+  return (
+    <>
+      {renderMainContent()}
+      <Drawer
+        title="缺口清单"
+        width={420}
+        open={conflictDrawerVisible}
+        onClose={() => setConflictDrawerVisible(false)}
+        destroyOnClose
+      >
+        {sortedConflictOperations.length ? (
+          <List
+            dataSource={sortedConflictOperations}
+            renderItem={(op) => (
+              <List.Item
+                key={op.operation_plan_id}
+                actions={[
+                  <Button
+                    key="focus"
+                    type="link"
+                    onClick={() => focusOperation(op.operation_plan_id)}
+                  >
+                    定位
+                  </Button>,
+                ]}
+              >
+                <List.Item.Meta
+                  title={`${op.batch_code || '批次'} · ${op.stage_name} · ${op.operation_name}`}
+                  description={`${dayjs(op.planned_start_datetime).format('MM/DD HH:mm')} - ${dayjs(op.planned_end_datetime).format('HH:mm')} · 需 ${op.required_people} 人 · 已 ${op.assigned_people || 0} 人`}
+                />
+                <Tag color="volcano">缺口 {Math.max(op.required_people - (op.assigned_people || 0), 0)}</Tag>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description="当前没有缺口" />
+        )}
+      </Drawer>
       <Drawer
         title="操作详情"
         width={520}
@@ -2073,43 +2561,64 @@ const ActivatedBatchGantt: React.FC<ActivatedBatchGanttProps> = ({
         ) : (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             {assignError && <Alert type="error" message={assignError} showIcon />}
-            {assignCandidates.length ? (
-              <Checkbox.Group
-                style={{ width: '100%' }}
-                value={assignSelectedIds}
-                onChange={handleAssignSelectionChange}
-              >
-                <Space direction="vertical" style={{ width: '100%' }} size={6}>
-                  {assignCandidates.map((candidate) => (
-                    <div key={candidate.employee_id} className="abg-assign-item">
-                      <Checkbox
-                        value={candidate.employee_id}
-                        disabled={candidate.has_conflict}
-                      >
-                        <Space size={8} wrap>
-                          <Text>{candidate.employee_name}</Text>
-                          {candidate.employee_code && (
-                            <Text type="secondary">
-                              ({candidate.employee_code})
-                            </Text>
+            {assignCandidates.length > 0 ? (
+              <>
+                <Input.Search
+                  placeholder="搜索姓名 / 工号 / 部门"
+                  allowClear
+                  value={assignSearch}
+                  onChange={(event) => setAssignSearch(event.target.value)}
+                  onSearch={(value) => setAssignSearch(value)}
+                />
+                <Checkbox.Group
+                  style={{ width: '100%' }}
+                  value={assignSelectedIds}
+                  onChange={handleAssignSelectionChange}
+                >
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: 16,
+                      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                    }}
+                  >
+                    {assignGroupConfigs.map((group) => (
+                      <div key={group.key} className="abg-assign-column">
+                        <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                          <div>
+                            <Text strong>{group.title}</Text>
+                            <div className="abg-assign-column-desc">{group.description}</div>
+                          </div>
+                          {group.data.length ? (
+                            <Space
+                              direction="vertical"
+                              size={6}
+                              style={{ width: '100%' }}
+                            >
+                              {group.data.map((candidate) =>
+                                renderAssignCandidate(candidate),
+                              )}
+                            </Space>
+                          ) : (
+                            <Empty
+                              image={Empty.PRESENTED_IMAGE_SIMPLE}
+                              description={group.emptyText}
+                            />
                           )}
-                          {candidate.recommendation && (
-                            <Tag color={recommendationColor(candidate.recommendation)}>
-                              {recommendationLabel(candidate.recommendation)}
-                            </Tag>
-                          )}
-                          {candidate.has_conflict && <Tag color="red">冲突</Tag>}
                         </Space>
-                      </Checkbox>
-                      {candidate.qualifications && (
-                        <div className="abg-assign-desc">
-                          {candidate.qualifications}
-                        </div>
-                      )}
+                      </div>
+                    ))}
+                  </div>
+                  {filteredAssignCandidates.length === 0 && (
+                    <div style={{ paddingTop: 8 }}>
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description="未找到匹配的人员"
+                      />
                     </div>
-                  ))}
-                </Space>
-              </Checkbox.Group>
+                  )}
+                </Checkbox.Group>
+              </>
             ) : (
               <Empty description="暂无推荐人员" />
             )}

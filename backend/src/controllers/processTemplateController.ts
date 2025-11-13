@@ -304,8 +304,8 @@ export const copyTemplate = async (req: Request, res: Response) => {
       // 复制该阶段的操作安排
       await connection.execute(`
         INSERT INTO stage_operation_schedules 
-        (stage_id, operation_id, operation_day, recommended_time, window_start_time, window_end_time, operation_order)
-        SELECT ?, operation_id, operation_day, recommended_time, window_start_time, window_end_time, operation_order
+        (stage_id, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order)
+        SELECT ?, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order
         FROM stage_operation_schedules
         WHERE stage_id = ?
       `, [newStageId, stage.id]);

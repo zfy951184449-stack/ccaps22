@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
-  Tree, 
   Typography, 
   Space, 
   Tag, 
@@ -38,7 +37,6 @@ import {
   DragOutlined,
   SafetyOutlined
 } from '@ant-design/icons';
-import type { DataNode } from 'antd/es/tree';
 import axios from 'axios';
 import OperationConstraintsPanel from './OperationConstraintsPanel';
 import { ConstraintValidationResult, ConstraintConflict } from '../types';
@@ -46,6 +44,7 @@ import { ConstraintValidationResult, ConstraintConflict } from '../types';
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { TabPane } = Tabs;
+const { TextArea } = Input;
 
 // 接口定义 - 匹配我们的数据库结构
 interface ProcessTemplate {
@@ -74,8 +73,11 @@ interface StageOperation {
   operation_name: string;
   operation_day: number;
   recommended_time: number;
+  recommended_day_offset?: number;
   window_start_time: number;
+  window_start_day_offset?: number;
   window_end_time: number;
+  window_end_day_offset?: number;
   operation_order: number;
   standard_time?: number;
   required_people?: number;
@@ -87,6 +89,7 @@ interface Operation {
   operation_name: string;
   standard_time: number;
   required_people: number;
+  description?: string;
 }
 
 interface Constraint {
@@ -172,6 +175,12 @@ interface TimeBlock {
   isStage?: boolean;
 }
 
+interface VisibleRow {
+  id: string;
+  depth: number;
+  node: GanttNode;
+}
+
 // 阶段颜色映射
 const STAGE_COLORS: Record<string, string> = {
   'STAGE1': '#1890ff',
@@ -184,7 +193,10 @@ const STAGE_COLORS: Record<string, string> = {
 
 // 时间轴配置
 const BASE_HOUR_WIDTH = 8; // 基础每小时像素宽度
-const HEADER_HEIGHT = 36; // 表头统一高度
+const AXIS_DAY_HEIGHT = 20;
+const AXIS_HOUR_HEIGHT = 20;
+const TIMELINE_HEADER_HEIGHT = AXIS_DAY_HEIGHT + AXIS_HOUR_HEIGHT; // 时间轴刻度区域高度
+const TOP_HEADER_HEIGHT = 44; // 顶部工具栏与标题高度
 const LEFT_PANEL_WIDTH = 420; // 左侧树列宽度
 const ROW_HEIGHT = 36; // 树与甘特行高度统一
 const DAYS_TO_SHOW = 35; // 显示35天
@@ -213,7 +225,7 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
   const [zoomScale, setZoomScale] = useState(1.0);
   const [loading, setLoading] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [visibleRows, setVisibleRows] = useState<string[]>([]);
+  const [visibleRows, setVisibleRows] = useState<VisibleRow[]>([]);
   const [horizontalScrollLeft, setHorizontalScrollLeft] = useState(0);
   const [verticalScrollTop, setVerticalScrollTop] = useState(0);
   
@@ -244,11 +256,28 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [personnelCurve, setPersonnelCurve] = useState<{ points: { hourIndex: number; requiredPeople: number }[]; peak?: { hourIndex: number; requiredPeople: number } | null }>({ points: [], peak: null });
   const [scheduleConflicts, setScheduleConflicts] = useState<Record<number, string>>({});
+  const [operationModalVisible, setOperationModalVisible] = useState(false);
+  const [operationSubmitting, setOperationSubmitting] = useState(false);
 
   const [form] = Form.useForm();
   const [constraintForm] = Form.useForm();
   const [shareGroupForm] = Form.useForm();
   const [assignGroupForm] = Form.useForm();
+  const [operationForm] = Form.useForm<Operation>();
+
+  const generateOperationCode = useCallback(() => {
+    const base = `OP-${Date.now()}`;
+    if (!availableOperations.some((op) => op.operation_code === base)) {
+      return base;
+    }
+    let counter = 1;
+    let candidate = `${base}-${counter}`;
+    while (availableOperations.some((op) => op.operation_code === candidate)) {
+      counter += 1;
+      candidate = `${base}-${counter}`;
+    }
+    return candidate;
+  }, [availableOperations]);
   const API_BASE_URL = 'http://localhost:3001/api';
 
   const treeContainerRef = useRef<HTMLDivElement>(null);
@@ -350,7 +379,19 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
     };
 
     // 阶段节点
-    stages.forEach((stage) => {
+    const sortedStages = stages
+      .slice()
+      .sort((a, b) => {
+        if (a.start_day !== b.start_day) {
+          return a.start_day - b.start_day;
+        }
+        if (a.stage_order !== b.stage_order) {
+          return a.stage_order - b.stage_order;
+        }
+        return a.id - b.id;
+      });
+
+    sortedStages.forEach((stage) => {
       const stageNode: GanttNode = {
         id: `stage_${stage.id}`,
         title: `${stage.stage_code} - ${stage.stage_name}`,
@@ -367,9 +408,33 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
       };
 
       // 操作节点
-      const operations = stageOpsMap[stage.id] || [];
+      const operations = (stageOpsMap[stage.id] || [])
+        .slice()
+        .sort((a, b) => {
+          const aDay =
+            stage.start_day +
+            a.operation_day +
+            (a.recommended_day_offset ?? 0);
+          const bDay =
+            stage.start_day +
+            b.operation_day +
+            (b.recommended_day_offset ?? 0);
+          if (aDay !== bDay) {
+            return aDay - bDay;
+          }
+          const aTime =
+            typeof a.recommended_time === 'number' ? a.recommended_time : 0;
+          const bTime =
+            typeof b.recommended_time === 'number' ? b.recommended_time : 0;
+          if (aTime !== bTime) {
+            return aTime - bTime;
+          }
+          return a.operation_order - b.operation_order;
+        });
+
       operations.forEach((operation) => {
-        const absoluteStartDay = stage.start_day + operation.operation_day;
+        const recommendedDayOffset = operation.recommended_day_offset ?? 0;
+        const absoluteStartDay = stage.start_day + operation.operation_day + recommendedDayOffset;
         const operationNode: GanttNode = {
           id: `operation_${operation.id}`,
           title: operation.operation_name,
@@ -419,7 +484,8 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
           node.children.forEach(child => {
             const operationData = child.data as StageOperation;
 
-            const opDay = child.start_day || 0;
+            const stageDayBase = node.start_day || 0;
+            const opDay = child.start_day ?? stageDayBase;
             const recommendedTime = typeof operationData?.recommended_time === 'string'
               ? parseFloat(operationData.recommended_time)
               : (operationData?.recommended_time ?? 9);
@@ -491,13 +557,13 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
           : (operationData?.recommended_time || 9); // 默认9:00
         
         // 计算操作的绝对开始时间（小时）
-        // 绝对天数 * 24 + 当天的推荐开始时间
-        let operationAbsoluteStartHour = (node.start_day || 0) * 24 + recommendedTime;
-        
+        const nodeStartDay = node.start_day || 0;
+        let operationAbsoluteStartHour = nodeStartDay * 24 + recommendedTime;
+
         // 数据验证 - 使用默认值而不是跳过
         if (isNaN(operationAbsoluteStartHour)) {
           console.warn('Invalid operationAbsoluteStartHour, using default:', node);
-          operationAbsoluteStartHour = (node.start_day || 0) * 24 + 9; // 默认9:00
+          operationAbsoluteStartHour = nodeStartDay * 24 + 9; // 默认9:00
         }
         
         // 处理 standard_time 可能是字符串的情况
@@ -628,7 +694,7 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
   const headerWidth = Math.max(totalDays, 0) * 24 * hourWidth;
   const curveHeight = personnelCurve.points.length > 0 ? 60 : 0;
 
-  const topBarHeight = HEADER_HEIGHT;
+  const topBarHeight = TOP_HEADER_HEIGHT;
 
   const operationBlockMap = useMemo(() => {
     const map = new Map<number, TimeBlock>();
@@ -648,6 +714,34 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
 
     return map;
   }, [timeBlocks]);
+
+  const rowIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    visibleRows.forEach((row, index) => {
+      map.set(row.id, index);
+    });
+    return map;
+  }, [visibleRows]);
+
+  const rowStageIdMap = useMemo(() => {
+    const map = new Map<string, number>();
+    visibleRows.forEach(({ id, node }) => {
+      if (node.type === 'stage' && node.data) {
+        map.set(id, (node.data as ProcessStage).id);
+      } else if (node.type === 'operation' && node.data) {
+        const operation = node.data as StageOperation;
+        if (operation.stage_id) {
+          map.set(id, operation.stage_id);
+        } else if (node.parent_id) {
+          const parentNode = findNodeById(ganttNodes, node.parent_id);
+          if (parentNode?.type === 'stage' && parentNode.data) {
+            map.set(id, (parentNode.data as ProcessStage).id);
+          }
+        }
+      }
+    });
+    return map;
+  }, [visibleRows, ganttNodes]);
 
   const conflictOperationSet = useMemo(() => {
     const set = new Set<string>();
@@ -690,21 +784,21 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
   }, []);
 
   // 收集可见行
-  const collectVisibleRows = useCallback((nodes: GanttNode[]): string[] => {
-    const rows: string[] = [];
-    
-    const traverse = (nodeList: GanttNode[]) => {
-      nodeList.forEach(node => {
-        rows.push(node.id);
-        if (expandedKeys.includes(node.id) && node.children) {
-          traverse(node.children);
+  const collectVisibleRows = useCallback(
+    (nodes: GanttNode[], depth = 0): VisibleRow[] => {
+      const rows: VisibleRow[] = [];
+
+      nodes.forEach((node) => {
+        rows.push({ id: node.id, depth, node });
+        if (expandedKeys.includes(node.id) && node.children && node.children.length) {
+          rows.push(...collectVisibleRows(node.children, depth + 1));
         }
       });
-    };
-    
-    traverse(nodes);
-    return rows;
-  }, [expandedKeys]);
+
+      return rows;
+    },
+    [expandedKeys],
+  );
 
   useEffect(() => {
     const visible = collectVisibleRows(ganttNodes);
@@ -730,15 +824,35 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
     };
   }, []);
 
-  const handleNodeSelect = (selectedKeys: React.Key[]) => {
-    if (selectedKeys.length > 0) {
-      const nodeId = selectedKeys[0].toString();
+  const handleSelectNode = useCallback(
+    (nodeId: string | null) => {
+      if (!nodeId) {
+        setSelectedNode(null);
+        return;
+      }
       const node = findNodeById(ganttNodes, nodeId);
       setSelectedNode(node);
-    } else {
-      setSelectedNode(null);
-    }
-  };
+    },
+    [ganttNodes],
+  );
+
+  const toggleNodeExpand = useCallback(
+    (nodeId: string) => {
+      setExpandedKeys((prev) => {
+        const next = new Set(prev);
+        if (next.has(nodeId)) {
+          if (nodeId === template.id.toString()) {
+            return Array.from(next); // 根节点保持展开
+          }
+          next.delete(nodeId);
+        } else {
+          next.add(nodeId);
+        }
+        return Array.from(next);
+      });
+    },
+    [template.id],
+  );
 
   const findNodeById = (nodes: GanttNode[], id: string): GanttNode | null => {
     for (const node of nodes) {
@@ -778,13 +892,16 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
           return typeof value === 'number' ? value : 0;
         };
         
-        form.setFieldsValue({
-          operation_id: operationData.operation_id,
-          operation_day: operationData.operation_day,
-          recommended_time: parseTimeValue(operationData.recommended_time),
-          window_start_time: parseTimeValue(operationData.window_start_time),
-          window_end_time: parseTimeValue(operationData.window_end_time)
-        });
+      form.setFieldsValue({
+        operation_id: operationData.operation_id,
+        operation_day: operationData.operation_day,
+        recommended_time: parseTimeValue(operationData.recommended_time ?? 9),
+        recommended_day_offset: operationData.recommended_day_offset ?? 0,
+        window_start_time: parseTimeValue(operationData.window_start_time ?? 9),
+        window_start_day_offset: operationData.window_start_day_offset ?? 0,
+        window_end_time: parseTimeValue(operationData.window_end_time ?? 17),
+        window_end_day_offset: operationData.window_end_day_offset ?? 0,
+      });
         
         // 加载操作的约束和共享组
         loadOperationConstraints(operationData.id);
@@ -793,9 +910,12 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
         // 新建操作 - 设置默认值
         form.setFieldsValue({
           operation_day: 0,
-          recommended_time: 9.0,
-          window_start_time: 7.0,
-          window_end_time: 18.0
+          recommended_time: 9,
+          recommended_day_offset: 0,
+          window_start_time: 9,
+          window_start_day_offset: 0,
+          window_end_time: 17,
+          window_end_day_offset: 0,
         });
         
         // 清空约束和共享组
@@ -831,6 +951,58 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
       console.error('Error loading available operations:', error);
     }
   };
+
+  const openOperationModal = useCallback(() => {
+    operationForm.resetFields();
+    operationForm.setFieldsValue({
+      operation_code: generateOperationCode(),
+      standard_time: 1,
+      required_people: 1,
+    });
+    setOperationModalVisible(true);
+  }, [operationForm, generateOperationCode]);
+
+  const handleOperationModalCancel = useCallback(() => {
+    setOperationModalVisible(false);
+    setOperationSubmitting(false);
+    operationForm.resetFields();
+  }, [operationForm]);
+
+  const handleOperationSubmit = useCallback(async () => {
+    try {
+      const values = await operationForm.validateFields();
+      const payload = {
+        operation_code: values.operation_code.trim(),
+        operation_name: values.operation_name.trim(),
+        standard_time: Number(values.standard_time),
+        required_people: Number(values.required_people),
+        description: values.description?.trim() || undefined,
+      };
+
+      setOperationSubmitting(true);
+      const response = await axios.post(`${API_BASE_URL}/operations`, payload);
+      const created: Operation = response.data;
+
+      setAvailableOperations((prev) => [...prev, created]);
+      loadAvailableOperationsForConstraints();
+
+      if (!editingNode?.data && created?.id) {
+        form.setFieldsValue({ operation_id: created.id });
+      }
+
+      message.success('操作创建成功');
+      setOperationModalVisible(false);
+      operationForm.resetFields();
+    } catch (error: any) {
+      if (error?.errorFields) {
+        return;
+      }
+      const msg = error?.response?.data?.error || error?.message || '创建操作失败';
+      message.error(msg);
+    } finally {
+      setOperationSubmitting(false);
+    }
+  }, [operationForm, editingNode, form, loadAvailableOperationsForConstraints]);
   
   // 加载操作的约束
   const loadOperationConstraints = async (scheduleId: number) => {
@@ -940,7 +1112,7 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
 
       setTimeout(() => {
         const firstNode = operationNodeIds[0];
-        const rowIndex = visibleRows.indexOf(firstNode);
+        const rowIndex = rowIndexMap.get(firstNode) ?? -1;
         if (rowIndex >= 0 && ganttContentRef.current) {
           const targetScrollTop = rowIndex * ROW_HEIGHT - ROW_HEIGHT * 2;
           ganttContentRef.current.scrollTop = Math.max(0, targetScrollTop);
@@ -1107,7 +1279,17 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
       }
 
       if (conflicts.length > 0) {
-        message.warning(`自动排程完成，但存在 ${conflicts.length} 个冲突`);
+        const criticalCount = conflicts.filter((item: any) => item?.severity === 'CRITICAL').length;
+        const conflictPreview = conflicts
+          .slice(0, 3)
+          .map((item: any) => {
+            const namePart = item?.operationName ? `${item.operationName}` : `操作 #${item?.scheduleId ?? ''}`;
+            return `${namePart}: ${item?.message ?? '存在排程冲突'}`;
+          })
+          .join('；');
+        const detailMessage = conflictPreview ? `：${conflictPreview}` : '';
+        const criticalTag = criticalCount ? `（其中 ${criticalCount} 个为阻断项）` : '';
+        message.warning(`自动排程完成，但存在 ${conflicts.length} 个冲突${criticalTag}${detailMessage}`);
       } else {
         message.success('自动排程完成');
       }
@@ -1458,12 +1640,109 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
     );
   };
 
-  const buildTreeData = (nodes: GanttNode[]): DataNode[] => {
-    return nodes.map(node => ({
-      title: renderTreeNodeTitle(node),
-      key: node.id,
-      children: node.children ? buildTreeData(node.children) : undefined,
-    }));
+  const renderTreeRows = () => {
+    if (!visibleRows.length) {
+      return null;
+    }
+
+    const totalHeight = visibleRows.length * ROW_HEIGHT;
+
+    return (
+      <div
+        style={{
+          position: 'relative',
+          height: totalHeight,
+        }}
+      >
+        {visibleRows.map(({ id, node, depth }, index) => {
+          const hasChildren = Boolean(node.children && node.children.length);
+          const isExpanded = expandedKeys.includes(id);
+          const isSelected = selectedNode?.id === id;
+          const baseIndent = depth * 16;
+
+          let backgroundColor = index % 2 === 0 ? '#fafafa' : '#ffffff';
+          if (node.type === 'stage' && node.data) {
+            const color = stageColorMap.get((node.data as ProcessStage).id);
+            if (color) {
+              backgroundColor = toRgba(color, 0.08);
+            }
+          } else if (node.type === 'operation') {
+            const stageId = rowStageIdMap.get(id);
+            if (stageId) {
+              const color = stageColorMap.get(stageId);
+              if (color) {
+                backgroundColor = toRgba(color, 0.04);
+              }
+            }
+          }
+
+          if (isSelected) {
+            backgroundColor = 'rgba(24, 144, 255, 0.12)';
+          }
+
+          return (
+            <div
+              key={id}
+              style={{
+                position: 'absolute',
+                top: index * ROW_HEIGHT,
+                left: 0,
+                right: 0,
+                height: ROW_HEIGHT,
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+                background: backgroundColor,
+                borderBottom: '1px solid rgba(240, 240, 240, 0.6)',
+              }}
+              onClick={() => handleSelectNode(id)}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  paddingLeft: baseIndent + 8,
+                  paddingRight: 8,
+                  gap: 6,
+                }}
+              >
+                {hasChildren ? (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleNodeExpand(id);
+                    }}
+                    style={{
+                      width: 24,
+                      minWidth: 24,
+                      height: 24,
+                      lineHeight: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  />
+                ) : (
+                  <span
+                    style={{
+                      width: 24,
+                      minWidth: 24,
+                      height: 24,
+                      display: 'inline-block',
+                    }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>{renderTreeNodeTitle(node)}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const renderPersonnelCurveSvg = (width: number, startDayValue: number, height: number, hourWidthValue: number) => {
@@ -1568,29 +1847,33 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
               flexShrink: 0 // 防止收缩
             }}>
               {/* 天数标题行 */}
-              <div style={{
-                width: dayWidth,
-                height: 20,
-                border: '1px solid #f0f0f0',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: dayNumber === 0 ? '#e6f7ff' : '#f5f5f5',
-                fontWeight: dayNumber === 0 ? 'bold' : 600,
-                fontSize: 11,
-                borderBottom: 'none',
-                color: dayNumber === 0 ? '#1890ff' : (dayNumber < 0 ? '#ff4d4f' : '#666'),
-                flexShrink: 0
-              }}>
+              <div
+                style={{
+                  width: dayWidth,
+                  height: AXIS_DAY_HEIGHT,
+                  border: '1px solid #f0f0f0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: dayNumber === 0 ? '#e6f7ff' : '#f5f5f5',
+                  fontWeight: dayNumber === 0 ? 'bold' : 600,
+                  fontSize: 11,
+                  borderBottom: 'none',
+                  color: dayNumber === 0 ? '#1890ff' : dayNumber < 0 ? '#ff4d4f' : '#666',
+                  flexShrink: 0,
+                }}
+              >
                 Day {dayNumber}
               </div>
               
               {/* 小时标题行 */}
-              <div style={{ 
-                display: 'flex', 
-                height: 20,
-                flexShrink: 0
-              }}>
+              <div
+                style={{
+                  display: 'flex',
+                  height: AXIS_HOUR_HEIGHT,
+                  flexShrink: 0,
+                }}
+              >
                 {Array.from({ length: 24 }, (_, hourIndex) => {
                   const isWorkingHour = hourIndex >= 9 && hourIndex < 17;
                   const shouldShowHour = hourWidthValue > 15 && (hourIndex % 2 === 0 || hourWidthValue > 25);
@@ -1600,7 +1883,7 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
                       key={`hour-${dayNumber}-${hourIndex}`}
                       style={{
                         width: hourWidthValue,
-                        height: 20,
+                        height: AXIS_HOUR_HEIGHT,
                         border: '1px solid #f0f0f0',
                         borderTop: 'none',
                         display: 'flex',
@@ -1609,7 +1892,7 @@ const EnhancedGanttEditor: React.FC<EnhancedGanttEditorProps> = ({
                         background: isWorkingHour 
                           ? 'rgba(24, 144, 255, 0.15)'
                           : hourIndex % 12 === 0 ? '#fafafa' : 'transparent',
-                        fontSize: Math.max(8, Math.min(10, hourWidth / 4)),
+                        fontSize: Math.max(8, Math.min(10, hourWidthValue / 4)),
                         color: isWorkingHour ? '#1890ff' : '#999',
                         flexShrink: 0
                       }}
@@ -1642,13 +1925,6 @@ const renderTimeBlocks = () => {
     const totalWidth = totalDaysValue * 24 * hourWidthValue;
     const containerHeight = visibleRows.length * ROW_HEIGHT;
 
-    const rowStageIdMap = new Map<string, number>();
-    ganttNodes.forEach(node => {
-      if (node.type === 'operation' && node.data) {
-        rowStageIdMap.set(node.id, (node.data as StageOperation).stage_id);
-      }
-    });
-
     return (
       <div style={{
         position: 'relative',
@@ -1658,28 +1934,25 @@ const renderTimeBlocks = () => {
         minHeight: containerHeight
       }}>
         {/* 行背景（奇偶行交替） */}
-        {visibleRows.map((rowId, index) => {
-          const node = findNodeById(ganttNodes, rowId);
+        {visibleRows.map(({ id, node }, index) => {
           let backgroundColor = index % 2 === 0 ? '#fafafa' : '#ffffff';
 
-          if (node?.type === 'stage' && node.data) {
+          if (node.type === 'stage' && node.data) {
             const color = stageColorMap.get((node.data as ProcessStage).id);
             if (color) {
               backgroundColor = toRgba(color, 0.08);
             }
-          } else if (node?.type === 'operation') {
-            const stageNode = node.parent_id ? findNodeById(ganttNodes, node.parent_id) : null;
-            if (stageNode?.type === 'stage' && stageNode.data) {
-              const color = stageColorMap.get((stageNode.data as ProcessStage).id);
-              if (color) {
-                backgroundColor = toRgba(color, 0.04);
-              }
+          } else if (node.type === 'operation') {
+            const stageId = rowStageIdMap.get(id);
+            if (stageId) {
+              const color = stageColorMap.get(stageId);
+              if (color) backgroundColor = toRgba(color, 0.04);
             }
           }
 
           return (
             <div
-              key={`row-bg-${rowId}`}
+              key={`row-bg-${id}`}
               style={{
                 position: 'absolute',
                 top: index * ROW_HEIGHT,
@@ -1760,8 +2033,8 @@ const renderTimeBlocks = () => {
           );
         })}
         {timeBlocks.map((block) => {
-          const rowIndex = visibleRows.indexOf(block.node_id);
-          if (rowIndex === -1) return null;
+          const rowIndex = rowIndexMap.get(block.node_id);
+          if (rowIndex === undefined) return null;
 
           // 计算时间块的位置：相对于startDay的绝对小时偏移
           const absoluteStartHour = block.start_hour;
@@ -1955,8 +2228,8 @@ const renderTimeBlocks = () => {
           const predecessorNodeId = `operation_${predecessorScheduleId}`;
           const successorNodeId = `operation_${successorScheduleId}`;
 
-          const predecessorRowIndex = visibleRows.indexOf(predecessorNodeId);
-          const successorRowIndex = visibleRows.indexOf(successorNodeId);
+          const predecessorRowIndex = rowIndexMap.get(predecessorNodeId) ?? -1;
+          const successorRowIndex = rowIndexMap.get(successorNodeId) ?? -1;
 
           if (predecessorRowIndex === -1 || successorRowIndex === -1) {
             return null;
@@ -2165,42 +2438,6 @@ const renderTimeBlocks = () => {
           perspective: 1000px;
         }
 
-        /* 树节点高度与甘特行保持一致 */
-        .gantt-tree.ant-tree {
-          padding: 0 !important;
-          margin: 0 !important;
-        }
-        .gantt-tree .ant-tree-list,
-        .gantt-tree .ant-tree-list-holder,
-        .gantt-tree .ant-tree-list-holder-inner {
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-        .gantt-tree .ant-tree-treenode {
-          padding: 0 !important;
-          margin: 0 !important;
-        }
-        .gantt-tree .ant-tree-switcher,
-        .gantt-tree .ant-tree-node-content-wrapper {
-          height: ${ROW_HEIGHT}px;
-          line-height: ${ROW_HEIGHT}px;
-          display: flex;
-          align-items: center;
-          padding: 0 !important;
-        }
-        .gantt-tree .ant-tree-node-content-wrapper {
-          width: 100%;
-        }
-        .gantt-tree .ant-tree-switcher {
-          justify-content: center;
-        }
-        .gantt-tree .ant-tree-indent,
-        .gantt-tree .ant-tree-indent-unit,
-        .gantt-tree .ant-tree-indent-unit::before,
-        .gantt-tree .ant-tree-indent-unit::after {
-          height: ${ROW_HEIGHT}px;
-          min-height: ${ROW_HEIGHT}px;
-        }
       `}</style>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 工具栏 */}
@@ -2289,12 +2526,12 @@ const renderTimeBlocks = () => {
       </div>
 
       {/* 主体内容 - 使用网格确保对齐 */}
-      <div style={{ flex: 1, background: '#fafafa', overflow: 'hidden' }}>
+      <div style={{ flex: 1, background: '#fafafa', overflow: 'visible' }}>
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: `${LEFT_PANEL_WIDTH}px 1fr`,
-            gridTemplateRows: `${topBarHeight}px ${HEADER_HEIGHT}px 1fr`,
+            gridTemplateColumns: `${LEFT_PANEL_WIDTH}px minmax(0, 1fr)`,
+            gridTemplateRows: `${topBarHeight}px ${curveHeight > 0 ? `${curveHeight}px` : '0px'} ${TIMELINE_HEADER_HEIGHT}px 1fr`,
             height: '100%'
           }}
         >
@@ -2308,7 +2545,7 @@ const renderTimeBlocks = () => {
               borderBottom: '1px solid #f0f0f0',
               padding: '8px 12px',
               display: 'flex',
-              alignItems: curveHeight > 0 ? 'flex-end' : 'center',
+              alignItems: 'center',
               fontSize: 14,
               fontWeight: 500,
               height: topBarHeight
@@ -2332,19 +2569,44 @@ const renderTimeBlocks = () => {
             }}
           >
             <span style={{ fontWeight: 500 }}>时间轴</span>
+          </div>
+
+          {/* 左侧人力曲线占位 */}
+          <div
+            style={{
+              gridColumn: '1 / 2',
+              gridRow: '2 / 3',
+              background: '#f5f5f5',
+              borderRight: '1px solid #f0f0f0',
+              borderBottom: curveHeight > 0 ? '1px solid #f0f0f0' : 'none',
+              display: curveHeight > 0 ? 'block' : 'none',
+            }}
+          />
+
+          {/* 人力曲线 */}
+          <div
+            style={{
+              gridColumn: '2 / 3',
+              gridRow: '2 / 3',
+              background: '#f5f5f5',
+              borderBottom: curveHeight > 0 ? '1px solid #f0f0f0' : 'none',
+              overflow: 'hidden',
+              position: 'relative',
+              display: curveHeight > 0 ? 'block' : 'none',
+            }}
+          >
             {curveHeight > 0 && (
-              <div style={{ height: curveHeight, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    transform: `translate3d(-${horizontalScrollLeft}px, 0, 0)`,
-                    transition: 'none',
-                    willChange: 'transform',
-                    backfaceVisibility: 'hidden'
-                  }}
-                >
-                  <div style={{ width: headerWidth, minWidth: headerWidth }}>
-                    {renderPersonnelCurveSvg(headerWidth, startDay, curveHeight, hourWidth)}
-                  </div>
+              <div
+                style={{
+                  height: curveHeight,
+                  transform: `translate3d(-${horizontalScrollLeft}px, 0, 0)`,
+                  transition: 'none',
+                  willChange: 'transform',
+                  backfaceVisibility: 'hidden',
+                }}
+              >
+                <div style={{ width: headerWidth, minWidth: headerWidth }}>
+                  {renderPersonnelCurveSvg(headerWidth, startDay, curveHeight, hourWidth)}
                 </div>
               </div>
             )}
@@ -2354,7 +2616,7 @@ const renderTimeBlocks = () => {
           <div
             style={{
               gridColumn: '1 / 2',
-              gridRow: '2 / 3',
+              gridRow: '3 / 4',
               background: '#f5f5f5',
               borderRight: '1px solid #f0f0f0',
               borderBottom: '1px solid #f0f0f0'
@@ -2365,10 +2627,11 @@ const renderTimeBlocks = () => {
           <div
             style={{
               gridColumn: '2 / 3',
-              gridRow: '2 / 3',
+              gridRow: '3 / 4',
               background: '#f5f5f5',
               borderBottom: '1px solid #f0f0f0',
-              overflow: 'hidden',
+              overflow: 'visible',
+              minWidth: 0,
               position: 'relative',
               transform: `translate3d(-${horizontalScrollLeft}px, 0, 0)`,
               transition: 'none',
@@ -2383,7 +2646,7 @@ const renderTimeBlocks = () => {
           <div
             style={{
               gridColumn: '1 / 2',
-              gridRow: '3 / 4',
+              gridRow: '4 / 5',
               background: '#fff',
               borderRight: '1px solid #f0f0f0',
               position: 'relative',
@@ -2397,36 +2660,13 @@ const renderTimeBlocks = () => {
               style={{ flex: 1, position: 'relative', overflowY: 'auto' }}
               onScroll={handleTreeScroll}
             >
-              <Tree
-                showLine={{ showLeafIcon: false }}
-                switcherIcon={(props) => {
-                  const nodeKey = props.data?.key?.toString();
-                  if (nodeKey && !nodeKey.startsWith('stage_')) {
-                    return null;
-                  }
-                  if (props.data?.children && props.data.children.length > 0) {
-                    return props.expanded ? <CaretDownOutlined /> : <CaretRightOutlined />;
-                  }
-                  return null;
-                }}
-                expandedKeys={expandedKeys}
-                onExpand={(keys) => {
-                  const stringKeys = keys.map(k => k.toString());
-                  const templateKey = ganttNodes[0]?.id;
-
-                  if (templateKey && !stringKeys.includes(templateKey)) {
-                    stringKeys.unshift(templateKey);
-                  }
-
-                  setExpandedKeys(stringKeys);
-                }}
-                onSelect={handleNodeSelect}
-                treeData={buildTreeData(ganttNodes)}
-                blockNode
-                selectable={true}
-                className="gantt-tree"
-                style={{ background: 'transparent' }}
-              />
+              {visibleRows.length ? (
+                renderTreeRows()
+              ) : (
+                <div style={{ padding: 24 }}>
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无节点" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -2434,10 +2674,12 @@ const renderTimeBlocks = () => {
           <div
             style={{
               gridColumn: '2 / 3',
-              gridRow: '3 / 4',
+              gridRow: '4 / 5',
               background: '#fff',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'visible',
+              minWidth: 0,
+              minHeight: 0,
             }}
           >
             <div
@@ -2449,6 +2691,8 @@ const renderTimeBlocks = () => {
                 overflowX: 'auto',
                 overflowY: 'auto',
                 position: 'relative',
+                minWidth: 0,
+                minHeight: 0,
                 scrollbarWidth: 'thin',
                 WebkitOverflowScrolling: 'touch'
               }}
@@ -2562,6 +2806,27 @@ const renderTimeBlocks = () => {
                     disabled={!!editingNode.data}
                     showSearch
                     optionFilterProp="children"
+                    dropdownRender={(menu) => (
+                      <>
+                        {menu}
+                        {!editingNode.data && (
+                          <div style={{ padding: 8, borderTop: '1px solid #f0f0f0' }}>
+                            <Button
+                              type="link"
+                              icon={<PlusOutlined />}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                openOperationModal();
+                              }}
+                              block
+                            >
+                              新建操作
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    )}
                   >
                     {availableOperations.map(op => (
                       <Option key={op.id} value={op.id}>
@@ -2596,6 +2861,7 @@ const renderTimeBlocks = () => {
                 name="recommended_time"
                 label="推荐开始时间（当天内）"
                 tooltip="推荐的操作开始时间，指定在操作当天的几点开始。使用24小时制，例如：9.5表示9:30"
+                initialValue={9}
                 rules={[
                   { required: true, message: '请输入推荐时间' },
                   { 
@@ -2614,8 +2880,34 @@ const renderTimeBlocks = () => {
                   max={23.9}
                   step={0.5}
                   style={{ width: '100%' }}
-                  placeholder="例如: 9.5 表示 9:30"
+                  placeholder="默认 9:00"
                   addonAfter="时"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="recommended_day_offset"
+                label="推荐开始偏移（天）"
+                tooltip="用于表示操作开始时间跨日的情况，例如 1 表示顺延一天，-1 表示提前一天"
+                initialValue={0}
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      const numValue = value !== undefined ? Number(value) : 0;
+                      if (Number.isNaN(numValue) || numValue < -7 || numValue > 7) {
+                        return Promise.reject(new Error('偏移天数需在 -7 到 7 之间'));
+                      }
+                      return Promise.resolve();
+                    }
+                  }
+                ]}
+              >
+                <InputNumber
+                  min={-7}
+                  max={7}
+                  step={1}
+                  style={{ width: '100%' }}
+                  addonAfter="天"
                 />
               </Form.Item>
 
@@ -2625,6 +2917,7 @@ const renderTimeBlocks = () => {
                     name="window_start_time"
                     label="时间窗口开始（当天内）"
                     tooltip="操作可执行的最早时间，在操作当天的几点可以开始"
+                    initialValue={9}
                     rules={[
                       { required: true, message: '请输入开始时间' },
                       { 
@@ -2643,7 +2936,7 @@ const renderTimeBlocks = () => {
                       max={23.9}
                       step={0.5}
                       style={{ width: '100%' }}
-                      placeholder="7.0"
+                      placeholder="默认 9:00"
                       addonAfter="时"
                     />
                   </Form.Item>
@@ -2653,6 +2946,7 @@ const renderTimeBlocks = () => {
                     name="window_end_time"
                     label="时间窗口结束（当天内）"
                     tooltip="操作可执行的最晚时间，在操作当天的几点必须结束"
+                    initialValue={17}
                     rules={[
                       { required: true, message: '请输入结束时间' },
                       { 
@@ -2671,9 +2965,54 @@ const renderTimeBlocks = () => {
                       max={23.9}
                       step={0.5}
                       style={{ width: '100%' }}
-                      placeholder="11.0"
+                      placeholder="默认 17:00"
                       addonAfter="时"
                     />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="window_start_day_offset"
+                    label="窗口开始偏移（天）"
+                    initialValue={0}
+                    tooltip="若窗口开始允许跨日，请设置偏移天数"
+                    rules={[
+                      {
+                        validator: (_, value) => {
+                          const numValue = value !== undefined ? Number(value) : 0;
+                          if (Number.isNaN(numValue) || numValue < -7 || numValue > 7) {
+                            return Promise.reject(new Error('偏移天数需在 -7 到 7 之间'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <InputNumber min={-7} max={7} step={1} style={{ width: '100%' }} addonAfter="天" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="window_end_day_offset"
+                    label="窗口结束偏移（天）"
+                    initialValue={0}
+                    tooltip="若窗口结束跨越至后续日期，请设置偏移天数"
+                    rules={[
+                      {
+                        validator: (_, value) => {
+                          const numValue = value !== undefined ? Number(value) : 0;
+                          if (Number.isNaN(numValue) || numValue < -7 || numValue > 7) {
+                            return Promise.reject(new Error('偏移天数需在 -7 到 7 之间'));
+                          }
+                          return Promise.resolve();
+                        }
+                      }
+                    ]}
+                  >
+                    <InputNumber min={-7} max={7} step={1} style={{ width: '100%' }} addonAfter="天" />
                   </Form.Item>
                 </Col>
               </Row>
@@ -2692,6 +3031,8 @@ const renderTimeBlocks = () => {
                       const stageId = editingNode.parent_id?.replace('stage_', '');
                       const stage = stages.find(s => s.id.toString() === stageId);
                       const operationDay = form.getFieldValue('operation_day') || 0;
+                      const recommendedOffset = form.getFieldValue('recommended_day_offset') || 0;
+                      const absoluteDay = stage ? stage.start_day + operationDay + recommendedOffset : operationDay + recommendedOffset;
                       
                       if (stage) {
                         return (
@@ -2700,7 +3041,7 @@ const renderTimeBlocks = () => {
                               阶段 <Text code>"{stage.stage_name}"</Text> 原点位置：Day{stage.start_day}
                             </div>
                             <div style={{ color: '#1f1f1f', fontSize: '12px', marginTop: '4px' }}>
-                              操作绝对位置：Day{stage.start_day} + Day{operationDay} = <Text strong style={{ color: '#1890ff' }}>Day{stage.start_day + operationDay}</Text>
+                              操作绝对位置：Day{stage.start_day} + Day{operationDay} + 偏移{recommendedOffset}天 = <Text strong style={{ color: '#1890ff' }}>Day{absoluteDay}</Text>
                             </div>
                           </div>
                         );
@@ -2963,6 +3304,49 @@ const renderTimeBlocks = () => {
                 取消
               </Button>
             </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title="新建操作"
+        open={operationModalVisible}
+        onCancel={handleOperationModalCancel}
+        onOk={handleOperationSubmit}
+        confirmLoading={operationSubmitting}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form form={operationForm} layout="vertical">
+          <Form.Item
+            label="操作编码"
+            name="operation_code"
+            rules={[{ required: true, message: '请输入操作编码' }]}
+          >
+            <Input placeholder="自动生成" maxLength={50} disabled />
+          </Form.Item>
+          <Form.Item
+            label="操作名称"
+            name="operation_name"
+            rules={[{ required: true, message: '请输入操作名称' }]}
+          >
+            <Input placeholder="请输入操作名称" maxLength={100} />
+          </Form.Item>
+          <Form.Item
+            label="标准时长 (小时)"
+            name="standard_time"
+            rules={[{ required: true, message: '请输入标准时长' }]}
+          >
+            <InputNumber min={0.1} max={72} step={0.1} style={{ width: '100%' }} placeholder="例如 2.5" />
+          </Form.Item>
+          <Form.Item
+            label="需要人数"
+            name="required_people"
+            rules={[{ required: true, message: '请输入需要人数' }]}
+          >
+            <InputNumber min={1} max={50} step={1} style={{ width: '100%' }} placeholder="例如 3" />
+          </Form.Item>
+          <Form.Item label="操作描述" name="description">
+            <TextArea rows={3} placeholder="可选，补充说明" />
           </Form.Item>
         </Form>
       </Modal>

@@ -405,7 +405,7 @@ SELECT
     TIME(bop.planned_end_datetime) AS end_time,
     ps.stage_name,
     -- 资质要求
-    (SELECT GROUP_CONCAT(CONCAT(q.qualification_name, '(≥', oqr.min_level, '级)'))
+    (SELECT GROUP_CONCAT(CONCAT(q.qualification_name, '(≥', oqr.required_level, '级)'))
      FROM operation_qualification_requirements oqr
      JOIN qualifications q ON oqr.qualification_id = q.id
      WHERE oqr.operation_id = bop.operation_id) AS qualification_requirements
@@ -420,31 +420,4 @@ ORDER BY bop.planned_start_datetime;
 -- 8. 插入测试数据
 -- ====================================
 
--- 插入测试批次（注意：需要先有工艺模版数据）
--- 这里假设已经有template_id = 1的模版
-INSERT INTO production_batch_plans (
-    batch_code, 
-    batch_name, 
-    template_id, 
-    project_code,
-    planned_start_date,
-    plan_status,
-    description
-) VALUES 
-(
-    'BATCH-2024-TEST-001', 
-    '测试批次001', 
-    1, 
-    'PRJ-2024-TEST',
-    '2024-12-01',
-    'DRAFT',
-    '用于测试批次计划系统'
-);
-
--- 生成该批次的操作计划
-SET @last_batch_id = LAST_INSERT_ID();
-CALL generate_batch_operation_plans(@last_batch_id);
-
--- 查看结果
-SELECT 'Batch plan created with ID:' AS message, @last_batch_id AS batch_id;
-SELECT * FROM v_batch_plan_overview WHERE batch_plan_id = @last_batch_id;
+-- 样例数据创建逻辑已移除，如需测试请在应用层创建批次后调用存储过程。

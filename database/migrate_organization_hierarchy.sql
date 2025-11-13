@@ -1,6 +1,6 @@
 -- 组织架构迁移脚本
 -- 目标：将旧有 departments / teams / shifts / employee_team_roles 数据迁移至
---       organization_units 与 employee_org_membership 的统一结构。
+--       organization_units 统一结构（不再依赖 employee_org_membership）。
 
 USE aps_system;
 
@@ -167,74 +167,5 @@ JOIN tmp_shift_unit_map smap ON smap.unit_id = u.id
 JOIN shifts s ON s.id = smap.shift_id
 LEFT JOIN tmp_team_unit_map tmap ON tmap.team_id = s.team_id
    SET u.parent_id = tmap.unit_id;
-
--- ============================================================
--- 4. 迁移员工主归属到 employee_org_membership
--- ============================================================
-
-INSERT INTO employee_org_membership (
-    employee_id,
-    unit_id,
-    assignment_type,
-    role_at_unit,
-    start_date,
-    end_date,
-    is_active
-)
-SELECT e.id,
-       COALESCE(team.unit_id, dept.unit_id),
-       'PRIMARY',
-       CASE
-         WHEN e.org_role IN ('DEPT_MANAGER','TEAM_LEADER','GROUP_LEADER','SHIFT_LEADER') THEN 'LEADER'
-         ELSE 'MEMBER'
-       END,
-       e.hire_date,
-       NULL,
-       1
-  FROM employees e
-  LEFT JOIN tmp_team_unit_map team ON team.team_id = e.primary_team_id
-  LEFT JOIN tmp_department_unit_map dept ON dept.department_id = e.department_id
- WHERE COALESCE(team.unit_id, dept.unit_id) IS NOT NULL
-   AND NOT EXISTS (
-       SELECT 1 FROM employee_org_membership m
-        WHERE m.employee_id = e.id
-          AND m.unit_id = COALESCE(team.unit_id, dept.unit_id)
-          AND m.assignment_type = 'PRIMARY'
-   );
-
--- ============================================================
--- 5. 迁移员工岗位关系（employee_team_roles）
--- ============================================================
-
-INSERT INTO employee_org_membership (
-    employee_id,
-    unit_id,
-    assignment_type,
-    role_at_unit,
-    start_date,
-    end_date,
-    is_active
-)
-SELECT etr.employee_id,
-       COALESCE(shift.unit_id, team.unit_id),
-       CASE WHEN etr.is_primary = 1 THEN 'PRIMARY' ELSE 'SECONDARY' END,
-       CASE
-         WHEN e.org_role IN ('DEPT_MANAGER','TEAM_LEADER','GROUP_LEADER','SHIFT_LEADER') THEN 'LEADER'
-         ELSE 'MEMBER'
-       END,
-       etr.effective_from,
-       etr.effective_to,
-       1
-  FROM employee_team_roles etr
-  JOIN employees e ON e.id = etr.employee_id
-  LEFT JOIN tmp_shift_unit_map shift ON shift.shift_id = etr.shift_id
-  LEFT JOIN tmp_team_unit_map team ON team.team_id = etr.team_id
- WHERE COALESCE(shift.unit_id, team.unit_id) IS NOT NULL
-   AND NOT EXISTS (
-       SELECT 1 FROM employee_org_membership m
-        WHERE m.employee_id = etr.employee_id
-          AND m.unit_id = COALESCE(shift.unit_id, team.unit_id)
-          AND m.assignment_type = CASE WHEN etr.is_primary = 1 THEN 'PRIMARY' ELSE 'SECONDARY' END
-   );
 
 COMMIT;

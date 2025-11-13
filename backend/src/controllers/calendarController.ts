@@ -133,6 +133,47 @@ export const getMonthOperations = async (req: Request, res: Response) => {
   }
 };
 
+export const getWorkdayRange = async (req: Request, res: Response) => {
+  try {
+    const { start_date, end_date } = req.query;
+
+    if (!start_date || !end_date) {
+      return res.status(400).json({ error: 'start_date 和 end_date 为必填参数' });
+    }
+
+    const startDate = dayjs(String(start_date));
+    const endDate = dayjs(String(end_date));
+
+    if (!startDate.isValid() || !endDate.isValid()) {
+      return res.status(400).json({ error: '无效的日期参数' });
+    }
+
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `
+        SELECT
+          calendar_date,
+          is_workday,
+          holiday_name
+        FROM calendar_workdays
+        WHERE calendar_date BETWEEN ? AND ?
+        ORDER BY calendar_date
+      `,
+      [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')],
+    );
+
+    res.json(
+      rows.map((row) => ({
+        calendar_date: dayjs(row.calendar_date).format('YYYY-MM-DD'),
+        is_workday: Number(row.is_workday ?? 1),
+        holiday_name: row.holiday_name ?? null,
+      })),
+    );
+  } catch (error) {
+    console.error('Error fetching workday range:', error);
+    res.status(500).json({ error: 'Failed to fetch workday information' });
+  }
+};
+
 // 获取所有已激活批次的操作计划（用于全局甘特视图）
 export const getActiveBatchOperations = async (req: Request, res: Response) => {
   try {
@@ -144,6 +185,8 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
         pbp.batch_name,
         pbp.batch_color,
         pbp.plan_status,
+        ps.id AS stage_id,
+        ps.start_day AS stage_start_day,
         ps.stage_name,
         o.operation_name,
         bop.planned_start_datetime,
@@ -152,8 +195,11 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
           WHEN sos.window_start_time IS NULL THEN NULL
           ELSE ADDTIME(
             DATE_ADD(
-              pbp.planned_start_date,
-              INTERVAL DATEDIFF(DATE(bop.planned_start_datetime), pbp.planned_start_date) DAY
+              DATE_ADD(
+                pbp.planned_start_date,
+                INTERVAL DATEDIFF(DATE(bop.planned_start_datetime), pbp.planned_start_date) DAY
+              ),
+              INTERVAL COALESCE(sos.window_start_day_offset, 0) DAY
             ),
             SEC_TO_TIME(sos.window_start_time * 3600)
           )
@@ -162,8 +208,11 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
           WHEN sos.window_end_time IS NULL THEN NULL
           ELSE ADDTIME(
             DATE_ADD(
-              pbp.planned_start_date,
-              INTERVAL DATEDIFF(DATE(bop.planned_start_datetime), pbp.planned_start_date) DAY
+              DATE_ADD(
+                pbp.planned_start_date,
+                INTERVAL DATEDIFF(DATE(bop.planned_start_datetime), pbp.planned_start_date) DAY
+              ),
+              INTERVAL COALESCE(sos.window_end_day_offset, 0) DAY
             ),
             SEC_TO_TIME(sos.window_end_time * 3600)
           )
@@ -342,8 +391,26 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
     
     const operation = operationRows[0];
     
-    // 获取推荐人员
-    const query = `
+    const [requirementCountRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT COUNT(*) AS total FROM operation_qualification_requirements WHERE operation_id = ?',
+      [operation.operation_id]
+    );
+    const hasRequirements = Number(requirementCountRows[0]?.total || 0) > 0;
+
+    let personnelRows: RowDataPacket[] = [];
+
+    const baseParams = [
+      operation.planned_start_datetime,
+      operation.planned_start_datetime,
+      operation.planned_end_datetime,
+      operation.planned_end_datetime,
+      operation.planned_start_datetime,
+      operation.planned_end_datetime,
+      operation.planned_start_datetime,
+    ];
+
+    if (hasRequirements) {
+      const query = `
       SELECT 
         e.id as employee_id,
         e.employee_name,
@@ -356,8 +423,8 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
         -- 计算资质匹配分数
         MAX(
           CASE 
-            WHEN eq.qualification_level >= oqr.min_level 
-            THEN (eq.qualification_level - oqr.min_level + 5) * 10
+            WHEN eq.qualification_level >= oqr.required_level 
+            THEN (eq.qualification_level - oqr.required_level + 5) * 10
             ELSE 0
           END
         ) as match_score,
@@ -388,22 +455,60 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
       JOIN operation_qualification_requirements oqr ON eq.qualification_id = oqr.qualification_id
       JOIN qualifications q ON eq.qualification_id = q.id
       WHERE oqr.operation_id = ?
-        AND eq.qualification_level >= oqr.min_level
+        AND eq.qualification_level >= oqr.required_level
       GROUP BY e.id
       ORDER BY match_score DESC, conflict_count ASC, weekly_workload ASC
       LIMIT 20
     `;
-    
-    const [personnelRows] = await pool.execute<RowDataPacket[]>(query, [
-      operation.planned_start_datetime,
-      operation.planned_start_datetime,
-      operation.planned_end_datetime,
-      operation.planned_end_datetime,
-      operation.planned_start_datetime,
-      operation.planned_end_datetime,
-      operation.planned_start_datetime,
-      operation.operation_id
-    ]);
+      const [rows] = await pool.execute<RowDataPacket[]>(query, [
+        ...baseParams,
+        operation.operation_id,
+      ]);
+      personnelRows = rows;
+    } else {
+      // 无资质要求时，采用默认候选：所有在职员工，配合冲突/工作量排序
+      const fallbackQuery = `
+        SELECT
+          e.id AS employee_id,
+          e.employee_name,
+          e.employee_code,
+          e.department,
+          GROUP_CONCAT(
+            CONCAT(q.qualification_name, '(', IFNULL(eq.qualification_level, 0), '级)')
+            SEPARATOR ', '
+          ) AS qualifications,
+          60 AS match_score,
+          (
+            SELECT COUNT(*)
+            FROM batch_personnel_assignments bpa2
+            JOIN batch_operation_plans bop2 ON bpa2.batch_operation_plan_id = bop2.id
+            WHERE bpa2.employee_id = e.id
+              AND bpa2.assignment_status IN ('PLANNED', 'CONFIRMED')
+              AND (
+                (bop2.planned_start_datetime <= ? AND bop2.planned_end_datetime > ?)
+                OR (bop2.planned_start_datetime < ? AND bop2.planned_end_datetime >= ?)
+                OR (bop2.planned_start_datetime >= ? AND bop2.planned_end_datetime <= ?)
+              )
+          ) AS conflict_count,
+          (
+            SELECT COUNT(*)
+            FROM batch_personnel_assignments bpa3
+            JOIN batch_operation_plans bop3 ON bpa3.batch_operation_plan_id = bop3.id
+            WHERE bpa3.employee_id = e.id
+              AND bpa3.assignment_status IN ('PLANNED', 'CONFIRMED')
+              AND WEEK(bop3.planned_start_datetime) = WEEK(?)
+          ) AS weekly_workload
+        FROM employees e
+        LEFT JOIN employee_qualifications eq ON e.id = eq.employee_id
+        LEFT JOIN qualifications q ON eq.qualification_id = q.id
+        WHERE e.employment_status = 'ACTIVE'
+        GROUP BY e.id
+        ORDER BY conflict_count ASC, weekly_workload ASC, e.employee_code
+        LIMIT 20
+      `;
+      const [rows] = await pool.execute<RowDataPacket[]>(fallbackQuery, baseParams);
+      personnelRows = rows;
+    }
     
     // 分类推荐等级
     const recommendedPersonnel = personnelRows.map((person: any) => ({
@@ -516,7 +621,7 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
         JOIN employee_qualifications eq ON e.id = eq.employee_id
         JOIN operation_qualification_requirements oqr ON eq.qualification_id = oqr.qualification_id
         WHERE oqr.operation_id = ?
-          AND eq.qualification_level >= oqr.min_level
+          AND eq.qualification_level >= oqr.required_level
           AND e.id NOT IN (
             SELECT employee_id 
             FROM batch_personnel_assignments 

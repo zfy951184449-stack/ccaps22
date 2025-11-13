@@ -42,7 +42,7 @@ SELECT
      WHERE batch_operation_plan_id = bop.id 
      AND assignment_status IN ('PLANNED', 'CONFIRMED')) AS assigned_people,
     -- 获取资质要求
-    (SELECT GROUP_CONCAT(CONCAT(q.qualification_name, '≥', oqr.min_level, '级'))
+    (SELECT GROUP_CONCAT(CONCAT(q.qualification_name, '≥', oqr.required_level, '级'))
      FROM operation_qualification_requirements oqr
      JOIN qualifications q ON oqr.qualification_id = q.id
      WHERE oqr.operation_id = bop.operation_id) AS qualification_requirements,

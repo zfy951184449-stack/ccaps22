@@ -53,24 +53,6 @@ CREATE TABLE organization_units (
     CONSTRAINT fk_org_parent FOREIGN KEY (parent_id) REFERENCES organization_units(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一组织单元表';
 
-CREATE TABLE employee_org_membership (
-    id INT PRIMARY KEY AUTO_INCREMENT COMMENT '员工组织归属ID',
-    employee_id INT NOT NULL COMMENT '员工ID',
-    unit_id INT NOT NULL COMMENT '组织单元ID',
-    assignment_type ENUM('PRIMARY','SECONDARY') NOT NULL DEFAULT 'PRIMARY' COMMENT '归属类型',
-    role_at_unit ENUM('LEADER','MEMBER','SUPPORT') NOT NULL DEFAULT 'MEMBER' COMMENT '在单元内角色',
-    start_date DATE DEFAULT NULL COMMENT '生效日期',
-    end_date DATE DEFAULT NULL COMMENT '结束日期',
-    is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否有效',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_employee_unit_assignment (employee_id, unit_id, assignment_type),
-    INDEX idx_membership_unit (unit_id),
-    INDEX idx_membership_employee (employee_id),
-    CONSTRAINT fk_membership_employee FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
-    CONSTRAINT fk_membership_unit FOREIGN KEY (unit_id) REFERENCES organization_units(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='员工与组织单元归属关系';
-
 -- 2. 资质信息表 (qualifications)
 CREATE TABLE qualifications (
     id INT PRIMARY KEY AUTO_INCREMENT COMMENT '资质ID',
@@ -109,15 +91,19 @@ CREATE TABLE operations (
 CREATE TABLE operation_qualification_requirements (
     id INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
     operation_id INT NOT NULL COMMENT '操作ID',
+    position_number INT NOT NULL COMMENT '位置编号（从1开始）',
     qualification_id INT NOT NULL COMMENT '资质ID',
-    required_level TINYINT NOT NULL COMMENT '要求等级（1-5级）',
+    min_level TINYINT NOT NULL DEFAULT 1 COMMENT '最低等级要求（1-5级）',
+    required_level TINYINT NOT NULL DEFAULT 1 COMMENT '要求等级（兼容旧逻辑）',
     required_count INT DEFAULT 1 COMMENT '该等级要求人数',
     is_mandatory TINYINT DEFAULT 1 COMMENT '是否必须：1-必须，0-可选',
     
     FOREIGN KEY (operation_id) REFERENCES operations(id) ON DELETE CASCADE,
     FOREIGN KEY (qualification_id) REFERENCES qualifications(id),
     INDEX idx_operation_id (operation_id),
+    INDEX idx_operation_position (operation_id, position_number),
     INDEX idx_qualification_id (qualification_id),
+    INDEX idx_min_level (min_level),
     INDEX idx_required_level (required_level),
     INDEX idx_required_count (required_count)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作资质要求表';
@@ -159,8 +145,11 @@ CREATE TABLE stage_operation_schedules (
     operation_id INT NOT NULL COMMENT '操作ID',
     operation_day INT NOT NULL COMMENT '操作相对天数（相对阶段开始的第几天，day0=阶段第1天）',
     recommended_time DECIMAL(3,1) NOT NULL COMMENT '推荐开始时间（小时，0.5粒度）',
+    recommended_day_offset TINYINT NOT NULL DEFAULT 0 COMMENT '推荐开始时间跨日偏移（相对于operation_day）',
     window_start_time DECIMAL(3,1) NOT NULL COMMENT '窗口开始时间（小时，0.5粒度）',
+    window_start_day_offset TINYINT NOT NULL DEFAULT 0 COMMENT '时间窗口开始跨日偏移（相对于operation_day）',
     window_end_time DECIMAL(3,1) NOT NULL COMMENT '窗口结束时间（小时，0.5粒度）',
+    window_end_day_offset TINYINT NOT NULL DEFAULT 0 COMMENT '时间窗口结束跨日偏移（相对于operation_day）',
     operation_order INT COMMENT '操作在阶段中的顺序',
     
     FOREIGN KEY (stage_id) REFERENCES process_stages(id) ON DELETE CASCADE,

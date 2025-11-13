@@ -29,6 +29,17 @@ interface BatchRow extends RowDataPacket {
 }
 
 export class BatchLifecycleService {
+  private static isOptionalSchemaError(error: any): boolean {
+    if (!error) {
+      return false;
+    }
+    if (typeof error.sqlState === 'string' && error.sqlState.startsWith('42')) {
+      return true;
+    }
+    const optionalCodes = new Set(['ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR', 'ER_BAD_TABLE_ERROR', 'ER_NO_SUCH_FIELD']);
+    return optionalCodes.has(error.code);
+  }
+
   static async activate(batchId: number, options: LifecycleOptions = {}): Promise<LifecycleResult> {
     const connection = await pool.getConnection();
     const warnings: string[] = [];
@@ -216,44 +227,77 @@ export class BatchLifecycleService {
     );
     summary.batch_personnel_assignments = Number(assignmentRows[0].count || 0);
 
-    const [shiftPlanRows] = await connection.execute<RowDataPacket[]>(
-      `SELECT id
-         FROM employee_shift_plans
-        WHERE batch_operation_plan_id IN (${opPlaceholders})`,
-      operationIds,
-    );
-    const shiftPlanIds = shiftPlanRows.map((row) => Number(row.id));
+    let shiftPlanIds: number[] = [];
+    try {
+      const [shiftPlanRows] = await connection.execute<RowDataPacket[]>(
+        `SELECT id
+           FROM employee_shift_plans
+          WHERE batch_operation_plan_id IN (${opPlaceholders})`,
+        operationIds,
+      );
+      shiftPlanIds = shiftPlanRows.map((row) => Number(row.id));
+    } catch (error) {
+      if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+        console.warn('detectResidualSchedulingData: 无法读取 employee_shift_plans，可选查询将忽略。', error);
+      }
+      shiftPlanIds = [];
+    }
     summary.employee_shift_plans = shiftPlanIds.length;
 
     if (shiftPlanIds.length) {
       const shiftPlaceholders = shiftPlanIds.map(() => '?').join(',');
 
-      const [shiftChangeRows] = await connection.execute<RowDataPacket[]>(
-        `SELECT COUNT(*) AS count
-           FROM shift_change_logs
-          WHERE shift_plan_id IN (${shiftPlaceholders})`,
-        shiftPlanIds,
-      );
-      summary.shift_change_logs = Number(shiftChangeRows[0].count || 0);
+      try {
+        const [shiftChangeRows] = await connection.execute<RowDataPacket[]>(
+          `SELECT COUNT(*) AS count
+             FROM shift_change_logs
+            WHERE shift_plan_id IN (${shiftPlaceholders})`,
+          shiftPlanIds,
+        );
+        summary.shift_change_logs = Number(shiftChangeRows[0].count || 0);
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('detectResidualSchedulingData: 统计 shift_change_logs 失败，将忽略。', error);
+        }
+        summary.shift_change_logs = 0;
+      }
 
-      const [overtimeRows] = await connection.execute<RowDataPacket[]>(
-        `SELECT COUNT(*) AS count
-           FROM overtime_records
-          WHERE related_shift_plan_id IN (${shiftPlaceholders})`,
-        shiftPlanIds,
-      );
-      summary.overtime_by_shift = Number(overtimeRows[0].count || 0);
+      try {
+        const [overtimeRows] = await connection.execute<RowDataPacket[]>(
+          `SELECT COUNT(*) AS count
+             FROM overtime_records
+            WHERE related_shift_plan_id IN (${shiftPlaceholders})`,
+          shiftPlanIds,
+        );
+        summary.overtime_by_shift = Number(overtimeRows[0].count || 0);
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('detectResidualSchedulingData: 统计 overtime_records 失败，将忽略。', error);
+        }
+        summary.overtime_by_shift = 0;
+      }
 
-      const [scheduleRows] = await connection.execute<RowDataPacket[]>(
-        `SELECT COUNT(*) AS count
-           FROM personnel_schedules ps
-           JOIN employee_shift_plans esp ON ps.employee_id = esp.employee_id
-                                        AND ps.schedule_date = esp.plan_date
-          WHERE esp.id IN (${shiftPlaceholders})
-            AND ps.notes = 'AUTO_GENERATED'`,
-        shiftPlanIds,
-      );
-      summary.personnel_schedules = Number(scheduleRows[0].count || 0);
+      try {
+        const [scheduleRows] = await connection.execute<RowDataPacket[]>(
+          `SELECT COUNT(*) AS count
+             FROM personnel_schedules ps
+             JOIN employee_shift_plans esp ON ps.employee_id = esp.employee_id
+                                          AND ps.schedule_date = esp.plan_date
+            WHERE esp.id IN (${shiftPlaceholders})
+              AND ps.notes = 'AUTO_GENERATED'`,
+          shiftPlanIds,
+        );
+        summary.personnel_schedules = Number(scheduleRows[0].count || 0);
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('detectResidualSchedulingData: 统计 personnel_schedules 失败，将忽略。', error);
+        }
+        summary.personnel_schedules = 0;
+      }
+    } else {
+      summary.shift_change_logs = 0;
+      summary.overtime_by_shift = 0;
+      summary.personnel_schedules = 0;
     }
 
     const hasResidual = Object.values(summary).some((count) => count > 0);
@@ -285,29 +329,53 @@ export class BatchLifecycleService {
     if (diagnostics?.shiftPlanIds?.length) {
       const shiftPlaceholders = diagnostics.shiftPlanIds.map(() => '?').join(',');
 
-      await connection.execute(
-        `DELETE FROM shift_change_logs WHERE shift_plan_id IN (${shiftPlaceholders})`,
-        diagnostics.shiftPlanIds,
-      );
+      try {
+        await connection.execute(
+          `DELETE FROM shift_change_logs WHERE shift_plan_id IN (${shiftPlaceholders})`,
+          diagnostics.shiftPlanIds,
+        );
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('cleanupAutoSchedulingData: 删除 shift_change_logs 失败，继续。', error);
+        }
+      }
 
-      await connection.execute(
-        `DELETE FROM overtime_records WHERE related_shift_plan_id IN (${shiftPlaceholders})`,
-        diagnostics.shiftPlanIds,
-      );
+      try {
+        await connection.execute(
+          `DELETE FROM overtime_records WHERE related_shift_plan_id IN (${shiftPlaceholders})`,
+          diagnostics.shiftPlanIds,
+        );
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('cleanupAutoSchedulingData: 删除 overtime_records(shift) 失败，继续。', error);
+        }
+      }
 
-      await connection.execute(
-        `DELETE ps FROM personnel_schedules ps
-              JOIN employee_shift_plans esp ON ps.employee_id = esp.employee_id
-                                          AND ps.schedule_date = esp.plan_date
-             WHERE ps.notes = 'AUTO_GENERATED'
-               AND esp.id IN (${shiftPlaceholders})`,
-        diagnostics.shiftPlanIds,
-      );
+      try {
+        await connection.execute(
+          `DELETE ps FROM personnel_schedules ps
+                JOIN employee_shift_plans esp ON ps.employee_id = esp.employee_id
+                                            AND ps.schedule_date = esp.plan_date
+               WHERE ps.notes = 'AUTO_GENERATED'
+                 AND esp.id IN (${shiftPlaceholders})`,
+          diagnostics.shiftPlanIds,
+        );
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('cleanupAutoSchedulingData: 删除 personnel_schedules 失败，继续。', error);
+        }
+      }
 
-      await connection.execute(
-        `DELETE FROM employee_shift_plans WHERE id IN (${shiftPlaceholders})`,
-        diagnostics.shiftPlanIds,
-      );
+      try {
+        await connection.execute(
+          `DELETE FROM employee_shift_plans WHERE id IN (${shiftPlaceholders})`,
+          diagnostics.shiftPlanIds,
+        );
+      } catch (error) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          console.warn('cleanupAutoSchedulingData: 删除 employee_shift_plans 失败，继续。', error);
+        }
+      }
     }
 
     await connection.execute(
@@ -315,10 +383,16 @@ export class BatchLifecycleService {
       operationIds,
     );
 
-    await connection.execute(
-      `DELETE FROM overtime_records WHERE related_operation_plan_id IN (${opPlaceholders})`,
-      operationIds,
-    );
+    try {
+      await connection.execute(
+        `DELETE FROM overtime_records WHERE related_operation_plan_id IN (${opPlaceholders})`,
+        operationIds,
+      );
+    } catch (error) {
+      if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+        console.warn('cleanupAutoSchedulingData: 删除 overtime_records(operation) 失败，继续。', error);
+      }
+    }
   }
 
   private static async resetActivationState(connection: PoolConnection, batchId: number) {

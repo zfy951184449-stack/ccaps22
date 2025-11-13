@@ -4,10 +4,12 @@ export interface CandidateProfile {
   employeeName: string
   department?: string
   role?: string
+  orgRole?: string
   qualifications: Array<{ qualificationId: number; qualificationLevel: number }>
   weeklyHours: number
   monthlyHours: number
   consecutiveDays: number
+  quarterRemaining?: number
   preferences?: {
     preferredShifts?: string[]
     nightShiftWillingness?: number
@@ -27,16 +29,25 @@ export interface OperationContext {
   endTime: string
   shiftCode?: string
   isCritical?: boolean
+  preferredGroupEmployeeIds?: number[]
+  preferredPreferenceEmployeeIds?: number[]
+  shareGroupWeightMultiplier?: number
+  sharePreferenceWeightMultiplier?: number
+  workloadWeightMultiplier?: number
+  changeCostWeightMultiplier?: number
 }
 
 export interface ScoringWeights {
   qualificationMatch: number
   workloadBalance: number
+  hourReserve: number
   consecutiveShiftRisk: number
   preferenceMatch: number
   rolePenalty: number
   changeCost: number
   criticalOperationBonus: number
+  shareGroupBonus: number
+  sharePreferenceBonus: number
 }
 
 export interface CandidateScoreDetail {
@@ -50,11 +61,14 @@ export interface CandidateScoreDetail {
 export const DEFAULT_SCORING_WEIGHTS: ScoringWeights = {
   qualificationMatch: 5,
   workloadBalance: 2,
+  hourReserve: 3,
   consecutiveShiftRisk: 3,
   preferenceMatch: 1,
   rolePenalty: 2,
   changeCost: 3,
-  criticalOperationBonus: 2
+  criticalOperationBonus: 2,
+  shareGroupBonus: 4,
+  sharePreferenceBonus: 3
 }
 
 export class HeuristicScoringService {
@@ -96,11 +110,20 @@ export class HeuristicScoringService {
     const workloadScore = this.calculateWorkloadBalance(candidate)
     rawBreakdown.workloadBalance = workloadScore
 
+    const hourReserveScore = this.calculateHourReserve(candidate)
+    rawBreakdown.hourReserve = hourReserveScore
+
     const consecutiveRiskScore = this.calculateConsecutiveShiftRisk(candidate, operation)
     rawBreakdown.consecutiveShiftRisk = consecutiveRiskScore
 
     const preferenceScore = this.calculatePreferenceMatch(candidate, operation)
     rawBreakdown.preferenceMatch = preferenceScore
+
+    const shareGroupScore = this.calculateShareGroupBonus(candidate, operation)
+    rawBreakdown.shareGroupBonus = shareGroupScore
+
+    const sharePreferenceScore = this.calculateSharePreferenceBonus(candidate, operation)
+    rawBreakdown.sharePreferenceBonus = sharePreferenceScore
 
     const roleScore = this.calculateRolePenalty(candidate)
     rawBreakdown.rolePenalty = roleScore
@@ -115,7 +138,9 @@ export class HeuristicScoringService {
     let totalScore = 0
     Object.entries(rawBreakdown).forEach(([key, raw]) => {
       const factor = key as keyof ScoringWeights
-      const weight = this.weights[factor] ?? 1
+      const baseWeight = this.weights[factor] ?? 1
+      const multiplier = this.resolveWeightModifier(factor, operation)
+      const weight = Number((baseWeight * multiplier).toFixed(4))
       const contribution = raw * weight
       weightedBreakdown[key] = Number(contribution.toFixed(4))
       totalScore += contribution
@@ -135,6 +160,24 @@ export class HeuristicScoringService {
       rawBreakdown,
       weightedBreakdown,
       reasons
+    }
+  }
+
+  private resolveWeightModifier(
+    factor: keyof ScoringWeights,
+    operation: OperationContext
+  ): number {
+    switch (factor) {
+      case 'shareGroupBonus':
+        return operation.shareGroupWeightMultiplier ?? 1
+      case 'sharePreferenceBonus':
+        return operation.sharePreferenceWeightMultiplier ?? 1
+      case 'workloadBalance':
+        return operation.workloadWeightMultiplier ?? 1
+      case 'changeCost':
+        return operation.changeCostWeightMultiplier ?? 1
+      default:
+        return 1
     }
   }
 
@@ -162,6 +205,20 @@ export class HeuristicScoringService {
     const monthlyScore = Math.max(0, (monthlyThreshold - candidate.monthlyHours) / monthlyThreshold)
 
     return (weeklyScore + monthlyScore) / 2
+  }
+
+  private calculateHourReserve(candidate: CandidateProfile): number {
+    if (typeof candidate.quarterRemaining !== 'number' || Number.isNaN(candidate.quarterRemaining)) {
+      return 0
+    }
+    if (candidate.quarterRemaining <= 0) {
+      return -1
+    }
+    const cap = 40
+    if (candidate.quarterRemaining >= cap) {
+      return 1
+    }
+    return Number((candidate.quarterRemaining / cap).toFixed(4))
   }
 
   private calculateConsecutiveShiftRisk(candidate: CandidateProfile, operation: OperationContext): number {
@@ -199,6 +256,20 @@ export class HeuristicScoringService {
     return score
   }
 
+  private calculateShareGroupBonus(candidate: CandidateProfile, operation: OperationContext): number {
+    if (!operation.preferredGroupEmployeeIds?.length) {
+      return 0
+    }
+    return operation.preferredGroupEmployeeIds.includes(candidate.employeeId) ? 1 : 0
+  }
+
+  private calculateSharePreferenceBonus(candidate: CandidateProfile, operation: OperationContext): number {
+    if (!operation.preferredPreferenceEmployeeIds?.length) {
+      return 0
+    }
+    return operation.preferredPreferenceEmployeeIds.includes(candidate.employeeId) ? 1 : 0.5
+  }
+
   private calculateRolePenalty(candidate: CandidateProfile): number {
     if (!candidate.role) {
       return 0
@@ -234,4 +305,3 @@ export class HeuristicScoringService {
 }
 
 export default HeuristicScoringService
-

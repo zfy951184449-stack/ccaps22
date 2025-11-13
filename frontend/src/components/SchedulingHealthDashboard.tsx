@@ -20,12 +20,13 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs, { Dayjs } from 'dayjs';
 import type {
   ComputeSchedulingMetricsPayload,
+  Department,
   MetricGrade,
   MetricPeriodType,
   SchedulingMetric,
   SchedulingMetricsSnapshot
 } from '../types';
-import { schedulingMetricsApi } from '../services/api';
+import { organizationApi, schedulingMetricsApi } from '../services/api';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -50,6 +51,8 @@ const SchedulingHealthDashboard: React.FC = () => {
   const [periodType, setPeriodType] = useState<MetricPeriodType>('MONTHLY');
   const [referenceDate, setReferenceDate] = useState<Dayjs>(dayjs());
   const [departmentIds, setDepartmentIds] = useState<number[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
   const [snapshot, setSnapshot] = useState<SchedulingMetricsSnapshot | null>(null);
   const [history, setHistory] = useState<SchedulingMetricsSnapshot[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -142,6 +145,19 @@ const SchedulingHealthDashboard: React.FC = () => {
     }
   };
 
+  const loadDepartments = async () => {
+    setDepartmentsLoading(true);
+    try {
+      const data = await organizationApi.getDepartments();
+      setDepartments(data);
+    } catch (err: any) {
+      console.error('Failed to load departments for scheduling health dashboard', err);
+      message.error('加载部门列表失败');
+    } finally {
+      setDepartmentsLoading(false);
+    }
+  };
+
   const refreshHistory = async () => {
     setHistoryLoading(true);
     try {
@@ -156,6 +172,7 @@ const SchedulingHealthDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    loadDepartments();
     refreshHistory();
     fetchMetrics();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,6 +200,24 @@ const SchedulingHealthDashboard: React.FC = () => {
             options={periodOptions}
             onChange={handlePeriodChange}
             style={{ width: 160 }}
+          />
+          <Select
+            mode="multiple"
+            allowClear
+            placeholder="选择部门（留空=全部）"
+            value={departmentIds}
+            onChange={(values: number[]) => setDepartmentIds(values)}
+            loading={departmentsLoading}
+            showSearch
+            optionFilterProp="label"
+            options={departments
+              .filter((dept) => typeof dept.id === 'number')
+              .map((dept) => ({
+                label: dept.dept_name ?? dept.deptName ?? dept.dept_code ?? `部门 ${dept.id}`,
+                value: dept.id as number
+              }))}
+            style={{ width: 260 }}
+            maxTagCount="responsive"
           />
           <DatePicker
             picker={periodType === 'MONTHLY' ? 'month' : 'quarter'}

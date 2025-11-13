@@ -11,6 +11,15 @@ export enum MetricGrade {
   CRITICAL = 'CRITICAL'
 }
 
+const MANAGEMENT_ROLE_CODES = new Set([
+  'TEAM_LEADER',
+  'GROUP_LEADER',
+  'SHIFT_LEADER',
+  'DEPT_MANAGER',
+  'SUPERVISOR',
+  'MANAGER',
+]);
+
 export interface MetricThreshold {
   green: string
   yellow?: string
@@ -107,14 +116,19 @@ export class MetricsService {
              e.department_id AS departmentId,
              COALESCE(e.shopfloor_baseline_pct, 0.6) AS baselinePct,
              COALESCE(e.shopfloor_upper_pct, 0.9) AS upperPct,
-             e.role_code AS roleCode
+             COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS roleCode
         FROM employee_shift_plans esp
         JOIN employees e ON e.id = esp.employee_id
+        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        WHERE esp.plan_date BETWEEN ? AND ?
          AND esp.plan_category IN ('PRODUCTION', 'OPERATION')
          AND esp.plan_state <> 'VOID'
          ${departmentIds?.length ? `AND e.department_id IN (${departmentIds.map(() => '?').join(',')})` : ''}
-       GROUP BY esp.employee_id, e.department_id, e.shopfloor_baseline_pct, e.shopfloor_upper_pct, e.role_code
+       GROUP BY esp.employee_id,
+                e.department_id,
+                e.shopfloor_baseline_pct,
+                e.shopfloor_upper_pct,
+                roleCode
     `
 
     const params: any[] = [periodStart, periodEnd]
@@ -124,7 +138,7 @@ export class MetricsService {
 
     const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
 
-    const filtered = rows.filter((row) => !['TEAM_LEADER', 'GROUP_LEADER', 'SUPERVISOR', 'MANAGER'].includes(String(row.roleCode)))
+    const filtered = rows.filter((row) => !MANAGEMENT_ROLE_CODES.has(String(row.roleCode || '')))
     const hours = filtered.map((row) => Number(row.shopfloorHours || 0))
 
     if (!hours.length) {
@@ -195,14 +209,18 @@ export class MetricsService {
              SUM(esp.plan_hours + esp.overtime_hours) AS shopfloorHours,
              e.shopfloor_baseline_pct AS baselinePct,
              e.shopfloor_upper_pct AS upperPct,
-             e.role_code AS roleCode
+             COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS roleCode
         FROM employee_shift_plans esp
         JOIN employees e ON e.id = esp.employee_id
+        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        WHERE esp.plan_date BETWEEN ? AND ?
          AND esp.plan_category IN ('PRODUCTION', 'OPERATION')
          AND esp.plan_state <> 'VOID'
          ${departmentIds?.length ? `AND e.department_id IN (${departmentIds.map(() => '?').join(',')})` : ''}
-       GROUP BY esp.employee_id, e.shopfloor_baseline_pct, e.shopfloor_upper_pct, e.role_code
+       GROUP BY esp.employee_id,
+                e.shopfloor_baseline_pct,
+                e.shopfloor_upper_pct,
+                roleCode
     `
 
     const params: any[] = [periodStart, periodEnd]
@@ -211,7 +229,7 @@ export class MetricsService {
     }
 
     const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
-    const eligible = rows.filter((row) => !['TEAM_LEADER', 'GROUP_LEADER', 'SUPERVISOR', 'MANAGER'].includes(String(row.roleCode)))
+    const eligible = rows.filter((row) => !MANAGEMENT_ROLE_CODES.has(String(row.roleCode || '')))
 
     return eligible.map((row) => {
       const plannedHours = Number(row.shopfloorHours || 0)
@@ -237,14 +255,17 @@ export class MetricsService {
       SELECT e.department_id AS departmentId,
              esp.employee_id AS employeeId,
              SUM(esp.plan_hours + esp.overtime_hours) AS shopfloorHours,
-             e.role_code AS roleCode
+             COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS roleCode
         FROM employee_shift_plans esp
         JOIN employees e ON e.id = esp.employee_id
+        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        WHERE esp.plan_date BETWEEN ? AND ?
          AND esp.plan_category IN ('PRODUCTION', 'OPERATION')
          AND esp.plan_state <> 'VOID'
          ${departmentIds?.length ? `AND e.department_id IN (${departmentIds.map(() => '?').join(',')})` : ''}
-       GROUP BY e.department_id, esp.employee_id, e.role_code
+       GROUP BY e.department_id,
+                esp.employee_id,
+                roleCode
     `
 
     const params: any[] = [periodStart, periodEnd]
@@ -256,7 +277,7 @@ export class MetricsService {
 
     const departmentMap = new Map<number, number[]>()
     rows.forEach((row) => {
-      if (['TEAM_LEADER', 'GROUP_LEADER', 'SUPERVISOR', 'MANAGER'].includes(String(row.roleCode))) {
+      if (MANAGEMENT_ROLE_CODES.has(String(row.roleCode || ''))) {
         return
       }
       const departmentId = Number(row.departmentId)
@@ -399,16 +420,20 @@ export class MetricsService {
              SUM(esp.plan_hours) AS nightHours,
              COUNT(*) AS nightCount,
              e.department_id AS departmentId,
-             e.role_code AS roleCode,
+             COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS roleCode,
              e.night_shift_eligible AS isNightEligible
         FROM employee_shift_plans esp
         JOIN shift_types st ON st.id = esp.shift_id
         JOIN employees e ON e.id = esp.employee_id
+        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        WHERE esp.plan_date BETWEEN ? AND ?
          AND esp.plan_state <> 'VOID'
          AND st.is_night_shift = 1
          ${departmentIds?.length ? `AND e.department_id IN (${departmentIds.map(() => '?').join(',')})` : ''}
-       GROUP BY esp.employee_id, e.department_id, e.role_code, e.night_shift_eligible
+       GROUP BY esp.employee_id,
+                e.department_id,
+                roleCode,
+                e.night_shift_eligible
     `
 
     const params: any[] = [periodStart, periodEnd]
@@ -418,7 +443,10 @@ export class MetricsService {
 
     const [rows] = await pool.execute<RowDataPacket[]>(sql, params)
 
-    const eligible = rows.filter((row) => Number(row.isNightEligible) === 1 && !['TEAM_LEADER', 'GROUP_LEADER', 'SUPERVISOR', 'MANAGER'].includes(String(row.roleCode)))
+    const eligible = rows.filter(
+      (row) =>
+        Number(row.isNightEligible) === 1 && !MANAGEMENT_ROLE_CODES.has(String(row.roleCode || ''))
+    )
 
     if (!eligible.length) {
       return {
@@ -482,15 +510,18 @@ export class MetricsService {
              SUM(esp.plan_hours) AS holidayHours,
              COUNT(*) AS holidayCount,
              h.holiday_type AS holidayType,
-             e.role_code AS roleCode
+             COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS roleCode
         FROM employee_shift_plans esp
         JOIN calendar_workdays h ON h.calendar_date = esp.plan_date
         JOIN employees e ON e.id = esp.employee_id
+        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        WHERE esp.plan_date BETWEEN ? AND ?
          AND esp.plan_state <> 'VOID'
          AND h.holiday_type = 'LEGAL_HOLIDAY'
          ${departmentIds?.length ? `AND e.department_id IN (${departmentIds.map(() => '?').join(',')})` : ''}
-       GROUP BY esp.employee_id, h.holiday_type, e.role_code
+       GROUP BY esp.employee_id,
+                h.holiday_type,
+                roleCode
     `
 
     const params: any[] = [periodStart, periodEnd]

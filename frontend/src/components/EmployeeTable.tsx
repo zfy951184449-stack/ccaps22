@@ -152,7 +152,13 @@ const EmployeeTable: React.FC = () => {
     const map = new Map<number, string>();
     departments.forEach((dept) => {
       if (dept.id !== undefined) {
-        map.set(dept.id, dept.dept_name);
+        const name =
+          dept.deptName ??
+          dept.dept_name ??
+          dept.unitName ??
+          dept.unit_name ??
+          '';
+        map.set(dept.id, name);
       }
     });
     return map;
@@ -162,7 +168,13 @@ const EmployeeTable: React.FC = () => {
     const map = new Map<number, string>();
     teams.forEach((team) => {
       if (team.id !== undefined) {
-        map.set(team.id, team.team_name);
+        const name =
+          team.teamName ??
+          team.team_name ??
+          team.unitName ??
+          team.unit_name ??
+          '';
+        map.set(team.id, name);
       }
     });
     return map;

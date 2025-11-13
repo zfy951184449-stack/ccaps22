@@ -166,8 +166,11 @@ export interface StageOperationSchedule {
   operation_id: number;
   operation_day: number;
   recommended_time: number;
+  recommended_day_offset?: number;
   window_start_time: number;
+  window_start_day_offset?: number;
   window_end_time: number;
+  window_end_day_offset?: number;
   operation_order?: number;
 }
 
@@ -183,29 +186,103 @@ export interface OperationConstraint {
   constraint_name?: string;
 }
 
-export interface Department {
+export type ShiftDefinitionCategory = 'STANDARD' | 'SPECIAL' | 'TEMPORARY';
+
+export interface ShiftDefinition {
   id?: number;
-  parent_id?: number | null;
-  dept_code: string;
-  dept_name: string;
+  shift_code: string;
+  shift_name: string;
+  category: ShiftDefinitionCategory;
+  start_time: string;
+  end_time: string;
+  is_cross_day: boolean;
+  nominal_hours: number;
+  max_extension_hours?: number;
   description?: string | null;
-  sort_order?: number;
-  is_active?: boolean;
+  is_active: boolean;
+  created_by?: number | null;
   created_at?: string;
   updated_at?: string;
 }
 
+export type SchedulingRunStage =
+  | 'QUEUED'
+  | 'PREPARING'
+  | 'LOADING_DATA'
+  | 'PLANNING'
+  | 'PERSISTING'
+  | 'COMPLETED'
+  | 'FAILED';
+
+export type SchedulingRunEventStatus =
+  | 'INFO'
+  | 'WARN'
+  | 'ERROR'
+  | 'SUCCESS'
+  | 'PROGRESS';
+
+export interface SchedulingRunEvent {
+  id: number;
+  run_id: number;
+  event_key: string;
+  stage: SchedulingRunStage;
+  status: SchedulingRunEventStatus;
+  message?: string | null;
+  metadata?: any;
+  created_at?: string;
+}
+
+export interface Department {
+  id?: number;
+  parent_id?: number | null;
+  parentId?: number | null;
+  unit_code?: string | null;
+  unitCode?: string | null;
+  unit_name?: string;
+  unitName?: string;
+  dept_code?: string | null;
+  deptCode?: string | null;
+  dept_name?: string;
+  deptName?: string;
+  description?: string | null;
+  sort_order?: number | null;
+  sortOrder?: number | null;
+  is_active?: boolean | number;
+  isActive?: boolean | number;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+  createdAt?: string | null;
+  updated_at?: string | null;
+  updatedAt?: string | null;
+  unitType?: 'DEPARTMENT';
+}
+
 export interface Team {
   id?: number;
-  department_id: number;
-  team_code: string;
-  team_name: string;
+  department_id?: number | null;
+  departmentId?: number | null;
+  parent_id?: number | null;
+  parentId?: number | null;
+  unit_code?: string | null;
+  unitCode?: string | null;
+  unit_name?: string;
+  unitName?: string;
+  team_code?: string | null;
+  teamCode?: string | null;
+  team_name?: string;
+  teamName?: string;
   description?: string | null;
-  is_active?: boolean;
+  metadata?: Record<string, unknown> | null;
+  is_active?: boolean | number;
+  isActive?: boolean | number;
   default_shift_code?: string | null;
-  created_at?: string;
-  updated_at?: string;
-  departmentName?: string;
+  defaultShiftCode?: string | null;
+  created_at?: string | null;
+  createdAt?: string | null;
+  updated_at?: string | null;
+  updatedAt?: string | null;
+  departmentName?: string | null;
+  unitType?: 'TEAM';
 }
 
 export interface EmployeeRole {

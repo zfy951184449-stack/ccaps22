@@ -73,8 +73,11 @@ interface StageOperation {
   operation_name: string;
   operation_day: number;
   recommended_time: number;
+  recommended_day_offset?: number;
   window_start_time: number;
+  window_start_day_offset?: number;
   window_end_time: number;
+  window_end_day_offset?: number;
   operation_order: number;
   standard_time?: number;
   required_people?: number;
@@ -390,8 +393,11 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
         operation_id: operationData.operation_id,
         operation_day: operationData.operation_day,
         recommended_time: operationData.recommended_time,
+        recommended_day_offset: operationData.recommended_day_offset ?? 0,
         window_start_time: operationData.window_start_time,
-        window_end_time: operationData.window_end_time
+        window_start_day_offset: operationData.window_start_day_offset ?? 0,
+        window_end_time: operationData.window_end_time,
+        window_end_day_offset: operationData.window_end_day_offset ?? 0
       });
     }
     
@@ -1342,6 +1348,23 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
                 <InputNumber min={0} max={23.9} step={0.5} style={{ width: '100%' }} />
               </Form.Item>
 
+              <Form.Item
+                name="recommended_day_offset"
+                label="推荐开始偏移（天）"
+                initialValue={0}
+                rules={[{
+                  validator: (_, value) => {
+                    const numValue = value !== undefined ? Number(value) : 0;
+                    if (Number.isNaN(numValue) || numValue < -7 || numValue > 7) {
+                      return Promise.reject(new Error('偏移天数需在 -7 到 7 之间'));
+                    }
+                    return Promise.resolve();
+                  }
+                }]}
+              >
+                <InputNumber min={-7} max={7} step={1} style={{ width: '100%' }} addonAfter="天" />
+              </Form.Item>
+
               <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item
@@ -1359,6 +1382,45 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
                     rules={[{ required: true, message: '请输入结束时间' }]}
                   >
                     <InputNumber min={0} max={23.9} step={0.5} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="window_start_day_offset"
+                    label="窗口开始偏移（天）"
+                    initialValue={0}
+                    rules={[{
+                      validator: (_, value) => {
+                        const numValue = value !== undefined ? Number(value) : 0;
+                        if (Number.isNaN(numValue) || numValue < -7 || numValue > 7) {
+                          return Promise.reject(new Error('偏移天数需在 -7 到 7 之间'));
+                        }
+                        return Promise.resolve();
+                      }
+                    }]}
+                  >
+                    <InputNumber min={-7} max={7} step={1} style={{ width: '100%' }} addonAfter="天" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="window_end_day_offset"
+                    label="窗口结束偏移（天）"
+                    initialValue={0}
+                    rules={[{
+                      validator: (_, value) => {
+                        const numValue = value !== undefined ? Number(value) : 0;
+                        if (Number.isNaN(numValue) || numValue < -7 || numValue > 7) {
+                          return Promise.reject(new Error('偏移天数需在 -7 到 7 之间'));
+                        }
+                        return Promise.resolve();
+                      }
+                    }]}
+                  >
+                    <InputNumber min={-7} max={7} step={1} style={{ width: '100%' }} addonAfter="天" />
                   </Form.Item>
                 </Col>
               </Row>
