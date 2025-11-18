@@ -1304,6 +1304,8 @@ interface IntelligentSchedulingAssistant {
 
 2. **节假日检查与工作日缓存**  
    调用 `HolidayService.ensureCalendarCoverage`（节假日日历覆盖校验）确认节假日表覆盖目标区间，未覆盖时自动导入或给出警告；同时统计 `calendar_workdays`（工作日日历），供后续工时均衡使用。
+   - 节假日数据来源：`HolidayService` 通过天行数据 `https://apis.tianapi.com/jiejiari/index`（`TIANAPI_KEY` 环境变量）按年份拉取官方放假、调休与 3 倍工资日，并在失败时回退到 `NateScarlet/holiday-cn` 开源数据集，最终写入 `calendar_workdays`。
+   - 前端需提供“节假日服务状态面板”：支持配置/更新 `TIANAPI_KEY`（使用受保护的后台接口保存）、实时展示上次同步时间、成功/失败次数、剩余调用额度，并允许调度员一键触发“立即导入指定年份”的 API；面板也要定时轮询 `HolidayService` 的 `/holidays/status`（新增 API，返回最近一次调用状态和警告列表），一旦检测连续失败则在前端发出提醒。
 
 3. **上下文对象**  
    上下文保存了后续会频繁访问的集合：批次、操作、员工列表、基础班次/生产 assignment（班次分配）索引、历史工时、资质、偏好、共享偏好、已锁定班表、夜班计数、迭代配置等。
@@ -11564,5 +11566,3 @@ class MLSchedulingService {
 ### 验证与节奏
 - 每轮改动前执行 `npm run build` 与 `CI=true npm test -- --watchAll=false --passWithNoTests` 确认构建稳定。
 - 采用双周节奏：第 1 周完成方案/POC，第 2 周集成验证、收集反馈，并同步更新本计划文档。
-
-

@@ -40,6 +40,8 @@ export interface AutoPlanRequest {
     asyncProgress?: boolean;
     allowedOrgRoles?: string[];
     monthHourTolerance?: number;
+    adaptiveParams?: boolean;
+    earlyStop?: boolean;
   };
 }
 
@@ -5161,7 +5163,7 @@ export class SchedulingService {
     if (nightRestAdjustments > 0) {
       convertedToRest += nightRestAdjustments;
       context.logs.push(
-        `Night-shift rest enforced: converted ${nightRestAdjustments} day(s) to REST after night duty. / 夜班后自动安排休息 ${nightRestAdjustments} 天`,
+        `Night-shift rest enforced (primary/secondary): converted ${nightRestAdjustments} day(s) to REST after night duty. / 夜班后自动安排（含首日/次日）休息 ${nightRestAdjustments} 天`,
       );
     }
 
@@ -6705,7 +6707,7 @@ export class SchedulingService {
     qualifiedSet?: Set<number>,
   ): CandidateSelectionResult {
     const planDate = dayjs(operation.plannedStart).format("YYYY-MM-DD");
-    const NIGHT_REST_ONE_DAY_PENALTY = 0.6;
+    const NIGHT_REST_ONE_DAY_PENALTY = 1.2;
     const baseAssignments = context.baseRosterIndex.get(planDate) || [];
     const dailyAssignments = context.employeeDailyAssignments.get(planDate);
     const lockedEmployees = new Set<number>();
@@ -6919,6 +6921,20 @@ export class SchedulingService {
         }
       }
 
+      const restPenaltyA = nightRestPenalty.get(a);
+      const restPenaltyB = nightRestPenalty.get(b);
+      const hasRestPenaltyA = restPenaltyA !== undefined;
+      const hasRestPenaltyB = restPenaltyB !== undefined;
+      if (hasRestPenaltyA !== hasRestPenaltyB) {
+        return hasRestPenaltyA ? 1 : -1;
+      }
+      if (hasRestPenaltyA && hasRestPenaltyB) {
+        const penaltyDiff = restPenaltyA!.penalty - restPenaltyB!.penalty;
+        if (Math.abs(penaltyDiff) > 0.0001) {
+          return penaltyDiff > 0 ? 1 : -1;
+        }
+      }
+
       const envelopeA = context.employeeHourEnvelope.get(a);
       const envelopeB = context.employeeHourEnvelope.get(b);
       const remainingA = envelopeA?.remaining ?? Number.POSITIVE_INFINITY;
@@ -7078,14 +7094,45 @@ export class SchedulingService {
     context: SchedulingContext,
   ): number {
     const epsilon = 0.0001;
-    const targets = new Map<string, Set<number>>();
+    type RestRequestType = "PRIMARY" | "SECONDARY";
+    const targets = new Map<string, Map<number, RestRequestType>>();
     const periodEnd = dayjs(context.period.endDate);
+    const processedNightKeys = new Set<string>();
 
-    const addTarget = (dateKey: string, employeeId: number) => {
+    const addTarget = (
+      dateKey: string,
+      employeeId: number,
+      type: RestRequestType,
+    ) => {
       if (!targets.has(dateKey)) {
-        targets.set(dateKey, new Set<number>());
+        targets.set(dateKey, new Map<number, RestRequestType>());
       }
-      targets.get(dateKey)!.add(employeeId);
+      const employeeTargets = targets.get(dateKey)!;
+      const existing = employeeTargets.get(employeeId);
+      if (existing === "PRIMARY") {
+        return;
+      }
+      if (!existing || type === "PRIMARY") {
+        employeeTargets.set(employeeId, type);
+      }
+    };
+
+    const registerNightShift = (planDate: string, employeeId: number) => {
+      const key = `${employeeId}-${planDate}`;
+      if (processedNightKeys.has(key)) {
+        return;
+      }
+      processedNightKeys.add(key);
+
+      const firstRest = dayjs(planDate).add(1, "day");
+      if (!firstRest.isAfter(periodEnd)) {
+        addTarget(firstRest.format("YYYY-MM-DD"), employeeId, "PRIMARY");
+      }
+
+      const secondRest = dayjs(planDate).add(2, "day");
+      if (!secondRest.isAfter(periodEnd)) {
+        addTarget(secondRest.format("YYYY-MM-DD"), employeeId, "SECONDARY");
+      }
     };
 
     context.baseRosterAssignments.forEach((assignment) => {
@@ -7093,11 +7140,7 @@ export class SchedulingService {
         (assignment.planHours ?? 0) > epsilon &&
         SchedulingService.isNightShiftCode(assignment.shiftCode)
       ) {
-        const nextDate = dayjs(assignment.planDate).add(1, "day");
-        if (nextDate.isAfter(periodEnd)) {
-          return;
-        }
-        addTarget(nextDate.format("YYYY-MM-DD"), assignment.employeeId);
+        registerNightShift(assignment.planDate, assignment.employeeId);
       }
     });
 
@@ -7106,25 +7149,29 @@ export class SchedulingService {
         assignment.planHours > epsilon &&
         SchedulingService.isNightShiftCode(assignment.shiftCode)
       ) {
-        const nextDate = dayjs(assignment.planDate).add(1, "day");
-        if (nextDate.isAfter(periodEnd)) {
-          return;
-        }
-        addTarget(nextDate.format("YYYY-MM-DD"), assignment.employeeId);
+        registerNightShift(assignment.planDate, assignment.employeeId);
       }
     });
 
     let adjustments = 0;
-    targets.forEach((employeeSet, restDate) => {
+    const failedPrimary: Array<{ employeeId: number; date: string }> = [];
+    const failedSecondary: Array<{ employeeId: number; date: string }> = [];
+
+    targets.forEach((employeeMap, restDate) => {
       const assignments = context.baseRosterIndex.get(restDate) || [];
       const assignmentMap = new Map<number, BaseRosterAssignment>();
       assignments.forEach((assignment) => {
         assignmentMap.set(assignment.employeeId, assignment);
       });
-      employeeSet.forEach((employeeId) => {
+
+      employeeMap.forEach((requestType, employeeId) => {
         const assignment = assignmentMap.get(employeeId);
         if (assignment) {
           if (assignment.source === "LOCKED") {
+            (requestType === "PRIMARY" ? failedPrimary : failedSecondary).push({
+              employeeId,
+              date: restDate,
+            });
             return;
           }
           if (
@@ -7135,20 +7182,46 @@ export class SchedulingService {
             assignment.shiftCode = "REST";
             adjustments += 1;
           }
-        } else {
-          const restAssignment: BaseRosterAssignment = {
-            employeeId,
-            planDate: restDate,
-            shiftCode: "REST",
-            planHours: 0,
-            source: "AUTO_BASE",
-          };
-          context.baseRosterAssignments.push(restAssignment);
-          SchedulingService.indexBaseAssignment(context, restAssignment);
-          adjustments += 1;
+          return;
         }
+
+        const restAssignment: BaseRosterAssignment = {
+          employeeId,
+          planDate: restDate,
+          shiftCode: "REST",
+          planHours: 0,
+          source: "AUTO_BASE",
+        };
+        context.baseRosterAssignments.push(restAssignment);
+        SchedulingService.indexBaseAssignment(context, restAssignment);
+        adjustments += 1;
       });
     });
+
+    const logRestFailure = (
+      items: Array<{ employeeId: number; date: string }>,
+      label: string,
+      localizedLabel: string,
+    ) => {
+      if (!items.length) {
+        return;
+      }
+      const sample = items
+        .slice(0, 5)
+        .map((item) => `${item.employeeId}@${item.date}`)
+        .join(", ");
+      const suffix = items.length > 5 ? " ..." : "";
+      const message = `Night-shift ${label} rest skipped for ${items.length} day(s): ${sample}${suffix}`;
+      context.logs.push(
+        `${message} / 夜班${localizedLabel}休息有 ${items.length} 天因锁定或关键排班未能调整`,
+      );
+      context.warnings.push(
+        `夜班${localizedLabel}休息未全部保障（${items.length} 天）`,
+      );
+    };
+
+    logRestFailure(failedPrimary, "primary-day", "首日");
+    logRestFailure(failedSecondary, "secondary-day", "次日");
 
     return adjustments;
   }

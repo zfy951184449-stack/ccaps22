@@ -148,26 +148,56 @@ export const getWorkdayRange = async (req: Request, res: Response) => {
       return res.status(400).json({ error: '无效的日期参数' });
     }
 
+    // 获取日历数据和3倍工资配置
     const [rows] = await pool.execute<RowDataPacket[]>(
       `
         SELECT
-          calendar_date,
-          is_workday,
-          holiday_name
-        FROM calendar_workdays
-        WHERE calendar_date BETWEEN ? AND ?
-        ORDER BY calendar_date
+          cw.calendar_date,
+          cw.is_workday,
+          cw.holiday_name,
+          cw.holiday_type,
+          cw.source,
+          hsc.salary_multiplier,
+          hsc.config_source
+        FROM calendar_workdays cw
+        LEFT JOIN holiday_salary_config hsc ON cw.calendar_date = hsc.calendar_date
+          AND hsc.year = YEAR(cw.calendar_date)
+          AND hsc.is_active = 1
+        WHERE cw.calendar_date BETWEEN ? AND ?
+        ORDER BY cw.calendar_date
       `,
       [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')],
     );
 
-    res.json(
-      rows.map((row) => ({
-        calendar_date: dayjs(row.calendar_date).format('YYYY-MM-DD'),
+    const result = rows.map((row) => {
+      const date = dayjs(row.calendar_date);
+      const isWeekend = [0, 6].includes(date.day()); // 0=周日, 6=周六
+      const isTripleSalary = Number(row.salary_multiplier || 0) >= 3.0;
+
+      return {
+        calendar_date: date.format('YYYY-MM-DD'),
         is_workday: Number(row.is_workday ?? 1),
         holiday_name: row.holiday_name ?? null,
-      })),
-    );
+        holiday_type: row.holiday_type ?? null,
+        source: row.source ?? null,
+        is_weekend: isWeekend,
+        is_triple_salary: isTripleSalary,
+        salary_multiplier: Number(row.salary_multiplier || 0),
+        config_source: row.config_source ?? null,
+        // 额外的显示信息
+        display_info: {
+          is_holiday: Boolean(row.holiday_name),
+          is_legal_holiday: row.holiday_type === 'LEGAL_HOLIDAY',
+          is_makeup_work: row.holiday_type === 'MAKEUP_WORK',
+          is_weekend_adjustment: row.holiday_type === 'WEEKEND_ADJUSTMENT',
+          requires_triple_salary: isTripleSalary,
+          day_of_week: date.day(), // 0=周日, 1=周一, ..., 6=周六
+          day_name: ['日', '一', '二', '三', '四', '五', '六'][date.day()]
+        }
+      };
+    });
+
+    res.json(result);
   } catch (error) {
     console.error('Error fetching workday range:', error);
     res.status(500).json({ error: 'Failed to fetch workday information' });
@@ -760,5 +790,63 @@ export const importHolidays = async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error importing holidays:', error);
     return res.status(500).json({ error: error?.message || '节假日数据导入失败' });
+  }
+};
+
+/**
+ * 获取节假日服务缓存统计信息
+ */
+export const getHolidayCacheStats = async (req: Request, res: Response) => {
+  try {
+    const stats = HolidayService.getCacheStats();
+    return res.json({
+      apiCacheSize: stats.apiCacheSize,
+      importTasksSize: stats.importTasksSize,
+      cacheHitRatio: '未知', // 可以后续实现更详细的统计
+      lastCleanup: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error getting cache stats:', error);
+    return res.status(500).json({ error: error?.message || '获取缓存统计失败' });
+  }
+};
+
+/**
+ * 手动清理过期缓存
+ */
+export const cleanupHolidayCache = async (req: Request, res: Response) => {
+  try {
+    HolidayService.cleanupExpiredCache();
+    return res.json({ message: '缓存清理完成' });
+  } catch (error: any) {
+    console.error('Error cleaning cache:', error);
+    return res.status(500).json({ error: error?.message || '缓存清理失败' });
+  }
+};
+
+/**
+ * 预加载未来年份节假日数据
+ */
+export const preloadHolidayData = async (req: Request, res: Response) => {
+  try {
+    const { yearsAhead } = req.body;
+    const years = Number(yearsAhead) || 2;
+
+    if (years < 0 || years > 5) {
+      return res.status(400).json({ error: 'yearsAhead必须在0-5之间' });
+    }
+
+    // 异步执行预加载，不阻塞响应
+    HolidayService.preloadFutureYears(years).catch(error => {
+      console.error('预加载节假日数据失败:', error);
+    });
+
+    return res.json({
+      message: `已启动预加载未来${years}年节假日数据`,
+      yearsAhead: years
+    });
+  } catch (error: any) {
+    console.error('Error preloading holiday data:', error);
+    return res.status(500).json({ error: error?.message || '预加载失败' });
   }
 };

@@ -192,7 +192,7 @@ CREATE TABLE employee_shift_preferences (
 );
 
 -- 10. 节假日更新日志表 (holiday_update_log)
-CREATE TABLE holiday_update_log (
+CREATE TABLE IF NOT EXISTS holiday_update_log (
     id INT PRIMARY KEY AUTO_INCREMENT,
     update_year INT NOT NULL COMMENT '更新年份',
     update_source VARCHAR(100) NOT NULL COMMENT '更新来源',

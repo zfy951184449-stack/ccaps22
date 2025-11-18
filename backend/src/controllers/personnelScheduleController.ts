@@ -1,5 +1,9 @@
 import { Request, Response } from 'express';
 import dayjs from 'dayjs';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+
+dayjs.extend(quarterOfYear);
+
 import pool from '../config/database';
 import { PersonnelSchedule } from '../models/types';
 
@@ -471,20 +475,20 @@ export const getAvailableEmployees = async (req: Request, res: Response) => {
 export const getEmployeeWorkloadMetrics = async (req: Request, res: Response) => {
   try {
     const { start_date, end_date, employee_id } = req.query;
-    
+
     if (!start_date || !end_date) {
       return res.status(400).json({ error: 'start_date 和 end_date 为必填参数' });
     }
-    
+
     const params: any[] = [start_date, end_date];
     let employeeFilter = '';
     if (employee_id) {
       employeeFilter = ' AND esp.employee_id = ?';
       params.push(employee_id);
     }
-    
+
     const [rows] = await pool.execute(
-      `SELECT 
+      `SELECT
          esp.employee_id,
          e.employee_code,
          e.employee_name,
@@ -500,10 +504,129 @@ export const getEmployeeWorkloadMetrics = async (req: Request, res: Response) =>
        ORDER BY total_hours DESC`,
       params
     );
-    
+
     res.json(rows);
   } catch (error) {
     console.error('Error getting employee workload metrics:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+export const getEmployeeMetrics = async (req: Request, res: Response) => {
+  console.log('=== getEmployeeMetrics called ===');
+  try {
+    const { reference_date, employee_ids } = req.query;
+    console.log('Params:', { reference_date, employee_ids });
+
+    // 测试数据库连接
+    console.log('Testing database connection...');
+    const [testRows] = await pool.execute('SELECT 1 as test');
+    console.log('Database connection OK, test result:', testRows);
+
+    if (!reference_date) {
+      return res.status(400).json({ error: 'reference_date 为必填参数' });
+    }
+
+    const refDate = dayjs(reference_date as string);
+    const quarterStart = refDate.startOf('quarter').format('YYYY-MM-DD');
+    const quarterEnd = refDate.endOf('quarter').format('YYYY-MM-DD');
+    const monthStart = refDate.startOf('month').format('YYYY-MM-DD');
+    const monthEnd = refDate.endOf('month').format('YYYY-MM-DD');
+
+    const employeeIds = employee_ids ? (employee_ids as string).split(',').map(id => parseInt(id.trim())) : [];
+
+    let employeeFilter = '';
+    const params: any[] = [quarterStart, quarterEnd, monthStart, monthEnd];
+
+    if (employeeIds.length > 0) {
+      employeeFilter = ` AND esp.employee_id IN (${employeeIds.map(() => '?').join(',')})`;
+      params.push(...employeeIds);
+    }
+
+    // 计算季度和月度工时
+    const [rows] = await pool.execute(
+      `SELECT
+         esp.employee_id,
+         -- 季度总工时
+         COALESCE(SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? THEN esp.plan_hours END), 0) AS quarterHours,
+         -- 季度车间工时 (batch_operation_plan_id > 0)
+         COALESCE(SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? AND esp.batch_operation_plan_id > 0 THEN esp.plan_hours END), 0) AS quarterShopHours,
+         -- 月度总工时
+         COALESCE(SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? THEN esp.plan_hours END), 0) AS monthHours,
+         -- 月度车间工时 (batch_operation_plan_id > 0)
+         COALESCE(SUM(CASE WHEN esp.plan_date BETWEEN ? AND ? AND esp.batch_operation_plan_id > 0 THEN esp.plan_hours END), 0) AS monthShopHours
+       FROM employee_shift_plans esp
+       WHERE (esp.plan_date BETWEEN ? AND ? OR esp.plan_date BETWEEN ? AND ?)
+       ${employeeFilter}
+       GROUP BY esp.employee_id`,
+      params
+    );
+
+    // 计算标准工时 (工作日数 × 8小时)
+    const quarterWorkingDays = await calculateWorkingDaysFromCalendar(quarterStart, quarterEnd);
+    const monthWorkingDays = await calculateWorkingDaysFromCalendar(monthStart, monthEnd);
+    const quarterStandardHours = quarterWorkingDays * 8;
+    const monthStandardHours = monthWorkingDays * 8;
+
+    const result = (rows as any[]).map(row => ({
+      employeeId: row.employee_id,
+      quarterHours: Number(row.quarterHours),
+      quarterShopHours: Number(row.quarterShopHours),
+      quarterStandardHours,
+      monthHours: Number(row.monthHours),
+      monthShopHours: Number(row.monthShopHours),
+      monthStandardHours
+    }));
+
+    // 如果没有实际数据，返回带有标准工时的空数据
+    if (result.length === 0 && employeeIds.length > 0) {
+      return employeeIds.map(employeeId => ({
+        employeeId,
+        quarterHours: 0,
+        quarterShopHours: 0,
+        quarterStandardHours,
+        monthHours: 0,
+        monthShopHours: 0,
+        monthStandardHours
+      }));
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error getting employee metrics:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// 辅助函数：从日历表计算工作日数
+async function calculateWorkingDaysFromCalendar(startDate: string, endDate: string): Promise<number> {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT COUNT(*) AS working_days
+       FROM calendar_workdays
+       WHERE calendar_date BETWEEN ? AND ?
+         AND is_workday = 1`,
+      [startDate, endDate]
+    );
+
+    const rowsArray = Array.isArray(rows) ? rows : [];
+    return rowsArray.length > 0 ? Number((rowsArray[0] as any).working_days || 0) : 0;
+  } catch (error) {
+    console.error("Failed to calculate working days from calendar:", error);
+    // 如果查询失败，使用简单的天数估算（排除周末）
+    const start = dayjs(startDate);
+    const end = dayjs(endDate);
+    let workingDays = 0;
+    let current = start;
+
+    while (current.isSameOrBefore(end)) {
+      // 周一到周五为工作日 (day() 返回 0-6，0为周日，1为周一)
+      if (current.day() >= 1 && current.day() <= 5) {
+        workingDays++;
+      }
+      current = current.add(1, 'day');
+    }
+
+    return workingDays;
+  }
+}

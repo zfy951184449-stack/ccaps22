@@ -12,6 +12,7 @@
     "migrate:personnel": "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE < ../database/update_personnel_scheduling_schema.sql"
   },
   "dependencies": {
+    "axios": "^1.13.2",
     "cors": "^2.8.5",
     "dayjs": "^1.11.18",
     "dotenv": "^16.3.0",

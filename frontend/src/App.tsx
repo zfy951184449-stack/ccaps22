@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Typography, Button, Space, ConfigProvider } from 'antd';
+import { Layout, Menu, Typography, Button, ConfigProvider } from 'antd';
 import {
   SafetyOutlined,
   SettingOutlined,
@@ -9,30 +9,50 @@ import {
   MenuUnfoldOutlined,
   TableOutlined,
   ClockCircleOutlined,
-  AppstoreOutlined,
-  HeartOutlined,
   ApartmentOutlined,
-  ScheduleOutlined
+  ScheduleOutlined,
+  AppstoreOutlined,
+  DashboardOutlined,
 } from '@ant-design/icons';
-import QualificationTable from './components/QualificationTable';
-import QualificationMatrix from './components/QualificationMatrix';
-import OperationTable from './components/OperationTable';
-import ProcessTemplate from './components/ProcessTemplate';
-import PersonnelCalendar from './components/PersonnelCalendar';
-import SchedulingHealthDashboard from './components/SchedulingHealthDashboard';
-import SchedulingHealthSummaryCard from './components/SchedulingHealthSummaryCard';
-import BatchManagement from './components/BatchManagement';
-import OrganizationWorkbench from './components/OrganizationWorkbench';
-import ShiftDefinitionManagement from './components/ShiftDefinitionManagement';
+import zhCN from 'antd/locale/zh_CN';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import OrganizationWorkbenchPage from './pages/OrganizationWorkbenchPage';
+import QualificationsPage from './pages/QualificationsPage';
+import QualificationMatrixPage from './pages/QualificationMatrixPage';
+import OperationsPage from './pages/OperationsPage';
+import ProcessTemplatesPage from './pages/ProcessTemplatesPage';
+import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
+import BatchManagementPage from './pages/BatchManagementPage';
+import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
+import OperationConstraintsPage from './pages/OperationConstraintsPage';
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
+import SystemMonitorPage from './pages/SystemMonitorPage';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
-const App: React.FC = () => {
-  const [selectedMenu, setSelectedMenu] = useState('organization-workbench');
+// 路由路径映射到菜单key
+const pathToMenuKey: { [key: string]: string } = {
+  '/': 'organization-workbench',
+  '/qualifications': 'qualifications',
+  '/qualification-matrix': 'qualification-matrix',
+  '/operations': 'operations',
+  '/process-templates': 'process-templates',
+  '/batch-management': 'batch-management',
+  '/personnel-scheduling': 'personnel-scheduling',
+  '/shift-definitions': 'shift-definitions',
+  '/operation-constraints': 'operation-constraints',
+  '/system-monitor': 'system-monitor',
+};
+
+const AppLayout: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+
+  // 根据当前路径确定选中的菜单项
+  const selectedMenu = pathToMenuKey[location.pathname] || 'organization-workbench';
 
   const menuItems = [
     {
@@ -76,54 +96,27 @@ const App: React.FC = () => {
       label: '班次定义',
     },
     {
-      key: 'scheduling-health',
-      icon: <HeartOutlined />,
-      label: '排班健康',
-    },
-    {
       key: 'operation-constraints',
       icon: <LinkOutlined />,
       label: '操作约束',
     },
+    {
+      key: 'system-monitor',
+      icon: <DashboardOutlined />,
+      label: '系统监控',
+    },
   ];
 
-  const renderContent = () => {
-    switch (selectedMenu) {
-      case 'organization-workbench':
-        return <OrganizationWorkbench />;
-      case 'qualifications':
-        return <QualificationTable />;
-      case 'qualification-matrix':
-        return <QualificationMatrix />;
-      case 'operations':
-        return <OperationTable />;
-      case 'process-templates':
-        return <ProcessTemplate />;
-      case 'batch-management':
-        return <BatchManagement />;
-      case 'personnel-scheduling':
-        return (
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <SchedulingHealthSummaryCard onViewDetails={() => setSelectedMenu('scheduling-health')} />
-            <PersonnelCalendar />
-          </Space>
-        );
-      case 'scheduling-health':
-        return <SchedulingHealthDashboard />;
-      case 'shift-definitions':
-        return <ShiftDefinitionManagement />;
-      default:
-        return (
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <Title level={3}>功能开发中...</Title>
-            <p>当前选择：{menuItems.find(item => item.key === selectedMenu)?.label}</p>
-          </div>
-        );
-    }
+  // 处理菜单点击
+  const handleMenuClick = ({ key }: { key: string }) => {
+    // 找到对应的路径
+    const path = Object.keys(pathToMenuKey).find(path => pathToMenuKey[path] === key) || '/';
+    navigate(path);
   };
 
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={{
         token: {
           colorPrimary: fluentDesignTokens.colors.accent,
@@ -182,7 +175,7 @@ const App: React.FC = () => {
             mode="inline"
             selectedKeys={[selectedMenu]}
             items={menuItems}
-            onClick={({ key }) => setSelectedMenu(key)}
+            onClick={handleMenuClick}
             inlineCollapsed={collapsed}
             style={{
               border: 'none',
@@ -232,9 +225,9 @@ const App: React.FC = () => {
             </div>
           </Header>
           
-          <Content 
+          <Content
             className="fluent-content"
-            style={{ 
+            style={{
               margin: fluentDesignTokens.spacing.lg,
               padding: fluentDesignTokens.spacing.xxl,
               background: fluentDesignTokens.colors.background,
@@ -243,12 +236,29 @@ const App: React.FC = () => {
               minHeight: 'calc(100vh - 64px - 32px)',
             }}
           >
-            {renderContent()}
+            <Routes>
+              <Route path="/" element={<OrganizationWorkbenchPage />} />
+              <Route path="/qualifications" element={<QualificationsPage />} />
+              <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
+              <Route path="/operations" element={<OperationsPage />} />
+              <Route path="/process-templates" element={<ProcessTemplatesPage />} />
+              <Route path="/batch-management" element={<BatchManagementPage />} />
+              <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
+              <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
+              <Route path="/operation-constraints" element={<OperationConstraintsPage />} />
+              <Route path="/system-monitor" element={<SystemMonitorPage />} />
+            </Routes>
           </Content>
         </Layout>
       </Layout>
     </ConfigProvider>
   );
 };
+
+const App: React.FC = () => (
+  <Router>
+    <AppLayout />
+  </Router>
+);
 
 export default App;

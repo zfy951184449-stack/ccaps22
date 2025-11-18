@@ -6,14 +6,18 @@ import {
   updatePersonnelSchedule,
   deletePersonnelSchedule,
   getAvailableEmployees,
-  getShiftCalendarOverview
+  getShiftCalendarOverview,
+  getEmployeeMetrics
 } from '../controllers/personnelScheduleController';
+
+console.log('=== Loading personnelSchedules routes ===');
 
 const router = express.Router();
 
 router.get('/', getPersonnelSchedules);
 router.get('/available-employees', getAvailableEmployees);
 router.get('/overview', getShiftCalendarOverview);
+router.get('/metrics', getEmployeeMetrics);
 router.get('/:id(\\d+)', getPersonnelScheduleById);
 router.post('/', createPersonnelSchedule);
 router.put('/:id', updatePersonnelSchedule);

@@ -544,27 +544,28 @@ export class ScheduleQualityEvaluator {
       const current = sortedSchedules[i];
       const next = sortedSchedules[i + 1];
 
-      // 检查是否为夜班
       const isNightShift =
         current.shiftCode?.toUpperCase().includes("NIGHT") || false;
 
       if (isNightShift && (next.planHours || 0) > 0) {
         const daysDiff = dayjs(next.date).diff(dayjs(current.date), "day");
-        if (daysDiff < 1) {
+        const restDays = Math.max(0, daysDiff - 1);
+
+        if (restDays <= 0) {
           violations.push({
             type: "NIGHT_SHIFT_REST_VIOLATION",
             severity: "CRITICAL",
             employeeId: current.employeeId,
             date: next.date,
-            description: `夜班后未休息，次日仍有排班`,
+            description: `夜班后未休息或次日仍排班`,
           });
-        } else if (daysDiff === 1) {
+        } else if (restDays === 1) {
           violations.push({
             type: "NIGHT_SHIFT_REST_INSUFFICIENT",
-            severity: "MEDIUM",
+            severity: "HIGH",
             employeeId: current.employeeId,
             date: next.date,
-            description: `夜班后仅休息1天，建议休息2天`,
+            description: `夜班后仅休息1天，建议至少休息2天`,
           });
         }
       }
@@ -1197,4 +1198,3 @@ export class ScheduleQualityEvaluator {
 }
 
 export default ScheduleQualityEvaluator;
-

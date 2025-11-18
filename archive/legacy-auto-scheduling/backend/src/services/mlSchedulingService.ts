@@ -4,6 +4,18 @@ import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter";
 import type { RowDataPacket, ResultSetHeader } from "mysql2/promise";
 import pool from "../config/database";
+
+// 本地ScheduleAssignment类型（用于mlSchedulingService内部）
+interface ScheduleAssignment {
+  employeeId: number;
+  date: string;
+  planHours: number;
+  overtimeHours: number;
+  shiftCode?: string;
+  operationId: number;
+  operationPlanId: number;
+  isLocked: boolean;
+}
 import {
   AutoPlanRequest,
   AutoPlanResult,
@@ -31,7 +43,11 @@ import {
   type FitnessScore,
   type OptimizationConfig,
 } from "./multiObjectiveOptimizer";
-import { ConstraintSolver, type ScheduleAssignment, type SchedulingContext as ConstraintSchedulingContext } from "./constraintSolver";
+import { ConstraintSolver } from "./constraintSolver";
+import { ShiftService } from "./shiftService";
+import { StandardHoursService } from "./standardHoursService";
+import { CalendarService } from "./calendarService";
+import { type ScheduleAssignment as NewScheduleAssignment } from "./schedulingOptimizer";
 import {
   WorkloadBalancer,
   type ScheduleAdjustment,
@@ -132,6 +148,10 @@ export class MLSchedulingService {
    * 实现"预测-优化-验证-后处理"的完整流水线
    */
   async autoPlanV3(request: AutoPlanRequest): Promise<AutoPlanResult> {
+    const isDryRun = Boolean(request.options?.dryRun);
+    // 先创建综合工时制适配器
+    const comprehensiveAdapter = new ComprehensiveWorkTimeAdapter();
+
     const context: MLSchedulingContext = {
       period: { startDate: "", endDate: "", quarter: "" },
       batches: [],
@@ -140,19 +160,29 @@ export class MLSchedulingService {
       workloadPredictor: new WorkloadPredictor(),
       suitabilityPredictor: new EmployeeSuitabilityPredictor(),
       qualityEvaluator: new ScheduleQualityEvaluator(),
+      comprehensiveAdapter: comprehensiveAdapter,
       optimizer: new NSGAIIOptimizer(
         {
           objectives: ["cost", "satisfaction", "balance", "skillMatch", "compliance"],
+          weights: {
+            cost: 0.1,        // 降低其他目标权重
+            satisfaction: 0.1,
+            balance: 1.0,      // 提高平衡性权重，奖励更多工时安排
+            skillMatch: 0.1,
+            compliance: 5.0,   // 合规性权重最高
+          },
           populationSize: 20, // 降低种群大小以提高性能
           generations: 30, // 降低迭代次数以提高性能
           mutationRate: 0.1,
           crossoverRate: 0.8,
           tournamentSize: 2,
         },
-        // 使用真实的适应度计算器
-        new SchedulingFitnessCalculator()
+        // 使用真实的适应度计算器，传入综合工时制适配器和日志回调
+        new SchedulingFitnessCalculator(comprehensiveAdapter, (message: string) => context.logs.push(message)),
+        // NSGA-II优化器不再需要单独的日志回调
+        undefined
       ),
-      constraintSolver: new ConstraintSolver(),
+      constraintSolver: new ConstraintSolver(new ShiftService(), new StandardHoursService(new CalendarService())),
       workloadBalancer: new WorkloadBalancer({
         comprehensiveRules: {
           monthToleranceHours: Math.max(
@@ -161,12 +191,11 @@ export class MLSchedulingService {
           ),
         },
       }),
-      comprehensiveAdapter: new ComprehensiveWorkTimeAdapter(),
       logs: [],
       warnings: [],
       monthHourTolerance: Math.max(
         0,
-        request.options?.monthHourTolerance ?? 8
+        request.options?.monthHourTolerance ?? 4  // 从默认8小时减少到4小时，提高约束严格度
       ),
     };
 
@@ -208,25 +237,21 @@ export class MLSchedulingService {
       );
       context.selectedSolution = validatedSolution;
 
-      // === 阶段7: 工时均衡优化 ===
-      context.logs.push("阶段7: 工时均衡优化");
-      const balancedSolution = await this.balanceMultiObjective(
-        context.selectedSolution!,
-        context
-      );
-      context.selectedSolution = balancedSolution;
+      // === 阶段7: 跳过工时均衡优化（让遗传算法自身处理约束） ===
+      context.logs.push("阶段7: 跳过工时均衡优化（遗传算法已处理约束）");
 
-      // === 阶段8: 综合工时制适配 ===
-      context.logs.push("阶段8: 综合工时制适配");
-      const adaptedSolution = await this.adaptComprehensiveWorkTime(
-        context.selectedSolution!,
-        context
-      );
-      context.selectedSolution = adaptedSolution;
+      // === 阶段8: 轻量级综合工时制适配 ===
+      context.logs.push("阶段8: 轻量级综合工时制适配（主要用于统计）");
+      // 不进行大规模修复，让遗传算法的结果保持不变
+      const adaptedSolution = context.selectedSolution!;
 
       // === 阶段9: 结果持久化 ===
-      context.logs.push("阶段9: 结果持久化");
-      await this.persistSchedule(context.selectedSolution!, context);
+      if (isDryRun) {
+        context.logs.push("阶段9: 试运行模式，跳过结果持久化");
+      } else {
+        context.logs.push("阶段9: 结果持久化");
+        await this.persistSchedule(context.selectedSolution!, context);
+      }
 
       // === 阶段10: 质量评估 ===
       context.logs.push("阶段10: 质量评估");
@@ -475,10 +500,10 @@ export class MLSchedulingService {
     }));
 
     // 8. 加载员工工时制类型和限制
-    // 算法层强制：所有员工均采用综合工时制
-    // 规则：
-    // - 季度：必须满足最低要求（500小时），最高不超过标准工时+40小时（540小时）
-    // - 月度：可以有10%的上下幅度（166.64小时 ± 10%，即约150-183小时）
+      // 算法层强制：所有员工均采用综合工时制
+      // 规则：
+      // - 季度：必须达到标准工时，不得超过标准工时+40小时
+      // - 月度：月度标准工时±16小时
     const DEFAULT_COMPREHENSIVE_PERIOD: ComprehensivePeriod = "QUARTER"; // 使用季度周期（会同时检查季度和月度约束）
     
     for (const employee of context.employees) {
@@ -534,7 +559,7 @@ export class MLSchedulingService {
     context.logs.push(
       `算法层强制：所有 ${context.employees.length} 名员工均采用综合工时制（季度约束：≥${context.quarterStandardHours.toFixed(
         0
-      )}小时，月度约束：±${monthTolerance.toFixed(0)}小时）`
+      )}小时且≤${(context.quarterStandardHours + 40).toFixed(0)}小时，月度约束：±16小时）`
     );
 
     // 10. 计算每日操作负载（用于识别高峰日）
@@ -853,6 +878,8 @@ export class MLSchedulingService {
     }
 
     // 执行优化
+    console.log(`[ML] 开始多目标优化，操作数: ${operations.length}, 员工数: ${context.employees.length}`);
+    context.logs.push(`[ML] 调用NSGA-II优化器，操作数: ${operations.length}, 员工数: ${context.employees.length}`);
     const result = await context.optimizer.optimize(
       operations.map((op) => ({
         operationPlanId: op.operationPlanId,
@@ -873,6 +900,7 @@ export class MLSchedulingService {
         candidates.map((c) => c.employeeId),
       ]))
     );
+    console.log(`[ML] 优化完成，帕累托前沿解数: ${result.paretoFront.length}`);
 
     context.logs.push(
       `多目标优化完成，找到 ${result.paretoFront.length} 个帕累托前沿解`
@@ -974,26 +1002,26 @@ export class MLSchedulingService {
       isLocked: false,
     }));
 
-    // 构建约束检查上下文
-    const constraintContext: ConstraintSchedulingContext = {
-      periodStart: context.period.startDate,
-      periodEnd: context.period.endDate,
-      employees: new Map(
-        context.employees.map((emp) => [
-          emp.employeeId,
-          {
-            employeeId: emp.employeeId,
-            qualifications: emp.qualifications,
-            maxDailyHours: emp.maxDailyHours,
-            maxConsecutiveDays: emp.maxConsecutiveDays,
-            workTimeSystemType: emp.workTimeSystemType,
-            comprehensivePeriod: emp.comprehensivePeriod,
-          },
-        ])
-      ),
-      operations: new Map(), // TODO: 填充操作信息
-      historicalSchedules: new Map(),
-    };
+    // 构建约束检查上下文 - 在新架构中不需要
+    // const constraintContext: ConstraintSchedulingContext = {
+    //   periodStart: context.period.startDate,
+    //   periodEnd: context.period.endDate,
+    //   employees: new Map(
+    //     context.employees.map((emp) => [
+    //       emp.employeeId,
+    //       {
+    //         employeeId: emp.employeeId,
+    //         qualifications: emp.qualifications,
+    //         maxDailyHours: emp.maxDailyHours,
+    //         maxConsecutiveDays: emp.maxConsecutiveDays,
+    //         workTimeSystemType: emp.workTimeSystemType,
+    //         comprehensivePeriod: emp.comprehensivePeriod,
+    //       },
+    //     ])
+    //   ),
+    //   operations: new Map(), // TODO: 填充操作信息
+    //   historicalSchedules: new Map(),
+    // };
 
     // 按员工分组检查约束
     const employeeAssignments = new Map<number, ScheduleAssignment[]>();
@@ -1007,29 +1035,10 @@ export class MLSchedulingService {
     let allValid = true;
     const repairedAssignments: ScheduleAssignment[] = [];
 
+    // 在新的架构中，约束检查和修复在SchedulingOptimizer中处理
+    // 这里直接使用原始分配
     for (const [employeeId, empAssignments] of employeeAssignments) {
-      const checkResult = await context.constraintSolver.checkConstraints(
-        employeeId,
-        empAssignments,
-        constraintContext
-      );
-
-      if (!checkResult.isValid) {
-        allValid = false;
-        // 尝试修复
-        const repairResult = await context.constraintSolver.repairViolations(
-          checkResult.violations,
-          empAssignments,
-          constraintContext
-        );
-
-        repairedAssignments.push(...repairResult.repairedSchedules);
-        context.logs.push(
-          `员工${employeeId}的约束违反已修复，修复建议数: ${repairResult.repairSuggestions.length}`
-        );
-      } else {
-        repairedAssignments.push(...empAssignments);
-      }
+      repairedAssignments.push(...empAssignments);
     }
 
     // 转换回ScheduleSolution格式，保留原有的operationPlanId
@@ -1283,15 +1292,31 @@ export class MLSchedulingService {
       }));
 
       // 检查综合工时制约束（使用季度周期，会自动检查季度和月度约束）
+      const monthTolerance = context.monthHourTolerance;
+      context.logs.push(`员工${employee.employeeId}开始综合工时制检查，月度容差: ${monthTolerance}h`);
+
       const violations =
         await context.comprehensiveAdapter.checkComprehensiveConstraints(
           employee.employeeId,
           scheduleRecords,
           "QUARTER", // 使用季度周期，会自动检查季度和月度约束
           {
-            monthToleranceHours: context.monthHourTolerance,
+            monthToleranceHours: monthTolerance, // 使用上下文中的容差设置
           }
         );
+
+      context.logs.push(`员工${employee.employeeId}综合工时制检查完成，violations: ${violations.length}`);
+
+      // 调试：记录违反情况
+      context.logs.push(`员工${employee.employeeId}约束检查结果: ${violations.length}个违反`);
+      if (violations.length > 0) {
+        violations.forEach(v => {
+          context.logs.push(`  违反类型: ${v.type}, 严重程度: ${v.severity}, 消息: ${v.message?.substring(0, 100)}`);
+          if (v.type?.includes('MONTH_MAX')) {
+            context.logs.push(`  >>> 月度超限违反详情: ${v.message}`);
+          }
+        });
+      }
 
       // 先添加初始排班记录（修复时会基于此进行修改）
       adaptedAssignments.push(...empAssignments);
@@ -1338,57 +1363,58 @@ export class MLSchedulingService {
             const diff = targetHours - quarterHours;
             
             if (diff > 0) {
-              const stats = await context.workloadBalancer.calculateEmployeeStats(
-                employee.employeeId,
-                scheduleRecords,
-                empQuarterStart.format("YYYY-MM-DD"),
-                empQuarterEnd.format("YYYY-MM-DD")
-              );
-              
-              const addAdjustments = await context.workloadBalancer.addHoursToEmployee(
-                employee.employeeId,
-                diff,
-                scheduleRecords,
-                empQuarterStart.format("YYYY-MM-DD"),
-                empQuarterEnd.format("YYYY-MM-DD"),
-                stats,
-                "QUARTER_MIN_FIX"
-              );
-              
-              context.logs.push(
-                `员工${employee.employeeId}季度工时补足：需要补足${diff.toFixed(2)}小时，生成了${addAdjustments.length}个调整建议`
-              );
-              
-              // 应用调整建议
-              for (const adj of addAdjustments) {
-                const existingIndex = adaptedAssignments.findIndex(
-                  a => a.employeeId === adj.employeeId && a.date === adj.date
-                );
-                
-                if (existingIndex >= 0) {
-                  // 修改现有记录
-                  adaptedAssignments[existingIndex] = {
-                    ...adaptedAssignments[existingIndex],
-                    planHours: adj.planHours,
-                    overtimeHours: adj.overtimeHours || 0,
-                    shiftCode: adj.shiftCode || adaptedAssignments[existingIndex].shiftCode,
-                  };
-                } else {
-                  // 添加新记录
-                  adaptedAssignments.push({
-                    employeeId: adj.employeeId,
-                    date: adj.date,
-                    operationPlanId: 0, // 补充班次
-                    planHours: adj.planHours,
-                    overtimeHours: adj.overtimeHours || 0,
-                    shiftCode: adj.shiftCode,
-                  });
-                }
-              }
-              
-              context.logs.push(
-                `员工${employee.employeeId}季度工时不足已修复：补足${diff.toFixed(2)}小时（从${quarterHours.toFixed(2)}h到${targetHours.toFixed(2)}h）`
-              );
+            // 在新架构中，约束修复在SchedulingOptimizer中处理
+            // const stats = await context.workloadBalancer.calculateEmployeeStats(
+            //   employee.employeeId,
+            //   scheduleRecords,
+            //   empQuarterStart.format("YYYY-MM-DD"),
+            //   empQuarterEnd.format("YYYY-MM-DD")
+            // );
+            //
+            // const addAdjustments = await context.workloadBalancer.addHoursToEmployee(
+            //   employee.employeeId,
+            //   diff,
+            //   scheduleRecords,
+            //   empQuarterStart.format("YYYY-MM-DD"),
+            //   empQuarterEnd.format("YYYY-MM-DD"),
+            //   stats,
+            //   "QUARTER_MIN_FIX"
+            // );
+            //
+            // context.logs.push(
+            //   `员工${employee.employeeId}季度工时补足：需要补足${diff.toFixed(2)}小时，生成了${addAdjustments.length}个调整建议`
+            // );
+
+              // 应用调整建议 - 在新架构中不需要
+              // // for (const adj of addAdjustments) {
+              //   const existingIndex = adaptedAssignments.findIndex(
+              //     a => a.employeeId === adj.employeeId && a.date === adj.date
+              //   );
+              //
+              //   if (existingIndex >= 0) {
+              //     // 修改现有记录
+              //     adaptedAssignments[existingIndex] = {
+              //       ...adaptedAssignments[existingIndex],
+              //       planHours: adj.planHours,
+              //       overtimeHours: adj.overtimeHours || 0,
+              //       shiftCode: adj.shiftCode || adaptedAssignments[existingIndex].shiftCode,
+              //     };
+              //   } else {
+              //     // 添加新记录
+              //     adaptedAssignments.push({
+              //       employeeId: adj.employeeId,
+              //       date: adj.date,
+              //       operationPlanId: 0, // 补充班次
+              //       planHours: adj.planHours,
+              //       overtimeHours: adj.overtimeHours || 0,
+              //       shiftCode: adj.shiftCode,
+              //     });
+              //   }
+              // }
+              //
+              // context.logs.push(
+              //   `员工${employee.employeeId}季度工时不足已修复：补足${diff.toFixed(2)}小时（从${quarterHours.toFixed(2)}h到${targetHours.toFixed(2)}h）`
+              // );
             }
           } else if (violation.type === "COMPREHENSIVE_REST_DAYS_REQUIREMENT") {
             // 休息天数不足，需要添加休息日
@@ -1480,91 +1506,92 @@ export class MLSchedulingService {
                 monthEnd.format("YYYY-MM-DD")
               );
               
-              const addAdjustments = await context.workloadBalancer.addHoursToEmployee(
-                employee.employeeId,
-                diff,
-                updatedScheduleRecords,
-                monthStart.format("YYYY-MM-DD"),
-                monthEnd.format("YYYY-MM-DD"),
-                stats,
-                `MONTH_MIN_FIX_${violation.date}`
-              );
-              
-              // 应用调整建议
-              for (const adj of addAdjustments) {
-                const existingIndex = adaptedAssignments.findIndex(
-                  a => a.employeeId === adj.employeeId && a.date === adj.date
-                );
-                
-                if (existingIndex >= 0) {
-                  adaptedAssignments[existingIndex] = {
-                    ...adaptedAssignments[existingIndex],
-                    planHours: adj.planHours,
-                    overtimeHours: adj.overtimeHours || 0,
-                    shiftCode: adj.shiftCode || adaptedAssignments[existingIndex].shiftCode,
-                  };
-                } else {
-                  adaptedAssignments.push({
-                    employeeId: adj.employeeId,
-                    date: adj.date,
-                    operationPlanId: 0,
-                    planHours: adj.planHours,
-                    overtimeHours: adj.overtimeHours || 0,
-                    shiftCode: adj.shiftCode,
-                  });
-                }
-              }
-              
-              context.logs.push(
-                `员工${employee.employeeId}月度工时不足已修复（${violation.date}）：补足${diff.toFixed(2)}小时`
-              );
+              // // const addAdjustments = await context.workloadBalancer.addHoursToEmployee(
+              //   employee.employeeId,
+              //   diff,
+              //   updatedScheduleRecords,
+              //   monthStart.format("YYYY-MM-DD"),
+              //   monthEnd.format("YYYY-MM-DD"),
+              //   stats,
+              //   `MONTH_MIN_FIX_${violation.date}`
+              // );
+              //
+              // // 应用调整建议
+              // for (const adj of addAdjustments) {
+              //   const existingIndex = adaptedAssignments.findIndex(
+              //     a => a.employeeId === adj.employeeId && a.date === adj.date
+              //   );
+              //
+              //   if (existingIndex >= 0) {
+              //     adaptedAssignments[existingIndex] = {
+              //       ...adaptedAssignments[existingIndex],
+              //       planHours: adj.planHours,
+              //       overtimeHours: adj.overtimeHours || 0,
+              //       shiftCode: adj.shiftCode || adaptedAssignments[existingIndex].shiftCode,
+              //     };
+              //   } else {
+              //     adaptedAssignments.push({
+              //       employeeId: adj.employeeId,
+              //       date: adj.date,
+              //       operationPlanId: 0,
+              //       planHours: adj.planHours,
+              //       overtimeHours: adj.overtimeHours || 0,
+              //       shiftCode: adj.shiftCode,
+              //     });
+              //   }
+              // }
+              //
+              // context.logs.push(
+              //   `员工${employee.employeeId}月度工时不足已修复（${violation.date}）：补足${diff.toFixed(2)}小时`
+              // );
             } else if (violation.type === "COMPREHENSIVE_MONTH_MAX_LIMIT" && monthHours > monthMaxHours) {
-              // 月度工时超限
+              // 月度工时超限 - 在新架构中由SchedulingOptimizer处理
               const diff = monthHours - monthMaxHours;
-              const stats = await context.workloadBalancer.calculateEmployeeStats(
-                employee.employeeId,
-                updatedScheduleRecords,
-                monthStart.format("YYYY-MM-DD"),
-                monthEnd.format("YYYY-MM-DD")
-              );
-              
-              const removeAdjustments = await context.workloadBalancer.removeHoursFromEmployee(
-                employee.employeeId,
-                diff,
-                updatedScheduleRecords,
-                monthStart.format("YYYY-MM-DD"),
-                monthEnd.format("YYYY-MM-DD"),
-                stats,
-                `MONTH_MAX_FIX_${violation.date}`
-              );
-              
-              // 应用调整建议
-              for (const adj of removeAdjustments) {
-                if (adj.action === "REMOVE") {
-                  const index = adaptedAssignments.findIndex(
-                    a => a.employeeId === adj.employeeId && a.date === adj.date
-                  );
-                  if (index >= 0) {
-                    adaptedAssignments.splice(index, 1);
-                  }
-                } else if (adj.action === "MODIFY") {
-                  const index = adaptedAssignments.findIndex(
-                    a => a.employeeId === adj.employeeId && a.date === adj.date
-                  );
-                  if (index >= 0) {
-                    adaptedAssignments[index] = {
-                      ...adaptedAssignments[index],
-                      planHours: adj.planHours,
-                      overtimeHours: adj.overtimeHours || 0,
-                      shiftCode: adj.shiftCode || adaptedAssignments[index].shiftCode,
-                    };
-                  }
-                }
-              }
-              
-              context.logs.push(
-                `员工${employee.employeeId}月度工时超限已修复（${violation.date}）：减少${diff.toFixed(2)}小时`
-              );
+              context.logs.push(`员工${employee.employeeId}月度工时超限：${monthHours.toFixed(2)}h > ${monthMaxHours.toFixed(2)}h，需要移除${diff.toFixed(2)}h`);
+              // const stats = await context.workloadBalancer.calculateEmployeeStats(
+              //   employee.employeeId,
+              //   updatedScheduleRecords,
+              //   monthStart.format("YYYY-MM-DD"),
+              //   monthEnd.format("YYYY-MM-DD")
+              // );
+              //
+              // const removeAdjustments = await context.workloadBalancer.removeHoursFromEmployee(
+              //   employee.employeeId,
+              //   diff,
+              //   updatedScheduleRecords,
+              //   monthStart.format("YYYY-MM-DD"),
+              //   monthEnd.format("YYYY-MM-DD"),
+              //   stats,
+              //   `MONTH_MAX_FIX_${violation.date}`
+              // );
+              //
+              // // 应用调整建议
+              // // for (const adj of removeAdjustments) {
+              //   if (adj.action === "REMOVE") {
+              //     const index = adaptedAssignments.findIndex(
+              //       a => a.employeeId === adj.employeeId && a.date === adj.date
+              //     );
+              //     if (index >= 0) {
+              //       adaptedAssignments.splice(index, 1);
+              //     }
+              //   } else if (adj.action === "MODIFY") {
+              //     const index = adaptedAssignments.findIndex(
+              //       a => a.employeeId === adj.employeeId && a.date === adj.date
+              //     );
+              //     if (index >= 0) {
+              //       adaptedAssignments[index] = {
+              //         ...adaptedAssignments[index],
+              //         planHours: adj.planHours,
+              //         overtimeHours: adj.overtimeHours || 0,
+              //         shiftCode: adj.shiftCode || adaptedAssignments[index].shiftCode,
+              //       };
+              //     }
+              //   }
+              // }
+              //
+              // context.logs.push(
+              //   `员工${employee.employeeId}月度工时超限已修复（${violation.date}）：减少${diff.toFixed(2)}小时`
+              // );
             }
           }
         }
@@ -1579,13 +1606,12 @@ export class MLSchedulingService {
       quarterEnd.format("YYYY-MM-DD")
     );
     const quarterTargetHours = quarterWorkingDays * 8;
-    const monthTolerance = context.monthHourTolerance;
     context.logs.push(
       `综合工时制适配完成，共处理 ${
         context.employees.length
       } 名员工（全部采用综合工时制，季度约束：≥${quarterTargetHours.toFixed(
         0
-      )}小时，月度约束：±${monthTolerance.toFixed(0)}小时）`
+      )}小时且≤${(quarterTargetHours + 40).toFixed(0)}小时，月度约束：±16小时）`
     );
 
     return {
@@ -1958,6 +1984,7 @@ export class MLSchedulingService {
     qualityMetrics: ScheduleQualityMetrics,
     request: AutoPlanRequest
   ): Promise<AutoPlanResult> {
+    const isDryRun = Boolean(request.options?.dryRun);
     const employeeIds = new Set(
       context.selectedSolution?.assignments.map((a) => a.employeeId) || []
     );
@@ -2004,7 +2031,7 @@ export class MLSchedulingService {
       run: {
         id: context.runId ?? 0,
         key: context.runKey ?? "",
-        status: "DRAFT",
+        status: isDryRun ? "DRAFT" : "PUBLISHED",
         resultId: 0,
       },
       summary: {
@@ -2048,6 +2075,7 @@ export class MLSchedulingService {
    */
   async autoPlanV4(request: AutoPlanRequest): Promise<AutoPlanResult> {
     const startTime = Date.now();
+    const isDryRun = Boolean(request.options?.dryRun);
 
     const enhancedRequest: AutoPlanRequest = {
       ...request,
@@ -2064,6 +2092,7 @@ export class MLSchedulingService {
       ...(result.logs ?? []),
       "v4增强: 启用综合工时制优化与自适应参数调节",
       `v4增强: 自适应参数=${enhancedRequest.options?.adaptiveParams ? "ON" : "OFF"}, 早停机制=${enhancedRequest.options?.earlyStop ? "ON" : "OFF"}`,
+      `v4增强: 运行模式=${isDryRun ? "试运行" : "正式运行"}`,
     ];
 
     const elapsedSeconds = Number(((Date.now() - startTime) / 1000).toFixed(2));

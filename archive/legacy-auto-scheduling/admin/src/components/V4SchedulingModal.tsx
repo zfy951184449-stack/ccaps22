@@ -114,7 +114,7 @@ const V4SchedulingModal = ({ visible, batch, onClose, onSuccess }: V4SchedulingM
           includeBaseRoster: true,
           adaptiveParams: true,
           earlyStop: true,
-          monthHourTolerance: 8
+          monthHourTolerance: 4
         } as Partial<FormValues>)
       } else {
         form.setFieldsValue({
@@ -122,7 +122,7 @@ const V4SchedulingModal = ({ visible, batch, onClose, onSuccess }: V4SchedulingM
           includeBaseRoster: true,
           adaptiveParams: true,
           earlyStop: true,
-          monthHourTolerance: 8
+          monthHourTolerance: 4
         } as Partial<FormValues>)
       }
     }

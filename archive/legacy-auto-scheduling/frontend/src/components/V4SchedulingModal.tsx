@@ -288,7 +288,7 @@ const V4SchedulingModal: React.FC<V4SchedulingModalProps> = ({
             dryRun: false,
             adaptiveParams: true,
             earlyStop: false,
-            monthHourTolerance: 8,
+            monthHourTolerance: 4,
           }}
         >
           <Form.Item

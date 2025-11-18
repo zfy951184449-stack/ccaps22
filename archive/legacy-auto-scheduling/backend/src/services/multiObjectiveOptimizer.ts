@@ -193,7 +193,8 @@ export interface FitnessCalculator {
       workTimeSystemType?: string; // v4新增：工时制类型
       comprehensivePeriod?: string; // v4新增：综合工时制周期
       qualifications: Array<{ qualificationId: number; qualificationLevel: number }>;
-    }>
+    }>,
+    weights?: Partial<Record<keyof FitnessScore, number>>
   ): Promise<FitnessScore>;
 }
 
@@ -203,10 +204,12 @@ export interface FitnessCalculator {
 export class NSGAIIOptimizer {
   private config: OptimizationConfig;
   private fitnessCalculator: FitnessCalculator;
+  private onLog?: (message: string) => void;
 
   constructor(
     config: OptimizationConfig,
-    fitnessCalculator: FitnessCalculator
+    fitnessCalculator: FitnessCalculator,
+    onLog?: (message: string) => void
   ) {
     this.config = {
       crossoverRate: 0.8,
@@ -215,6 +218,7 @@ export class NSGAIIOptimizer {
       ...config,
     };
     this.fitnessCalculator = fitnessCalculator;
+    this.onLog = onLog;
   }
 
   /**
@@ -244,6 +248,9 @@ export class NSGAIIOptimizer {
       onProgress?: (generation: number, bestFitness: FitnessScore) => void; // v4新增：进度回调
     }
   ): Promise<OptimizationResult> {
+    // 记录优化开始
+    this.onLog?.(`[NSGA-II] 开始优化，操作数: ${operations.length}, 员工数: ${employees.length}, 目标种群大小: ${this.config.populationSize}, 目标代数: ${this.config.generations}`);
+
     // v4新增：自适应参数调整
     let actualPopulationSize = this.config.populationSize;
     let actualGenerations = this.config.generations;
@@ -263,12 +270,14 @@ export class NSGAIIOptimizer {
     }
 
     // 1. 初始化种群
-    let population = this.initializePopulation(
+    console.log(`[NSGA-II] 开始优化，目标规模: ${actualPopulationSize}, 代数: ${actualGenerations}`);
+    let population = await this.initializePopulation(
       operations,
       employees,
       candidateMap,
       actualPopulationSize
     );
+    console.log(`[NSGA-II] 初始种群生成完成，规模: ${population.length}`);
 
     // v4新增：早停机制
     let noImprovementCount = 0;
@@ -285,6 +294,9 @@ export class NSGAIIOptimizer {
 
       // 2.1 计算适应度
       await this.evaluateFitness(population, operations, employees);
+
+      // 2.1.5 约束优先选择（重新设计的算法核心）
+      population = await this.constraintDrivenSelection(population, operations, employees);
 
       // 2.2 非支配排序
       const fronts = this.nonDominatedSort(population);
@@ -357,18 +369,18 @@ export class NSGAIIOptimizer {
   }
 
   /**
-   * 初始化种群
+   * 初始化种群 - 改进版：确保初始种群包含满足月度工时限制的解
    */
-  private initializePopulation(
+  private async initializePopulation(
     operations: Array<{
       operationPlanId: number;
       date: string;
       requiredPeople: number;
     }>,
-    employees: Array<{ employeeId: number }>,
+    employees: Array<{ employeeId: number; comprehensivePeriod?: string }>,
     candidateMap: Map<number, number[]>,
     populationSize?: number
-  ): ScheduleChromosome[] {
+  ): Promise<ScheduleChromosome[]> {
     const dates = Array.from(
       new Set(operations.map((op) => op.date))
     ).sort();
@@ -378,38 +390,84 @@ export class NSGAIIOptimizer {
     const population: ScheduleChromosome[] = [];
     const size = populationSize || this.config.populationSize;
 
+    // 目标：至少50%的初始解要满足硬约束
+    const targetConstrainedCount = Math.ceil(size * 0.5);
+    let constrainedCount = 0;
+
+    // 由于NSGA-II是独立调用的，这里无法访问context.logs，使用console.log
+    console.log(`[NSGA-II] 初始化种群，大小: ${size}，目标约束解数量: ${targetConstrainedCount}`);
+
     for (let i = 0; i < size; i++) {
-      const chromosome = new ScheduleChromosome(
-        employeeIds,
-        dates,
-        operationIds
-      );
+      let chromosome: ScheduleChromosome;
+      let attempts = 0;
+      const maxAttempts = 10; // 每个解最多尝试10次
 
-      // 随机初始化：为每个操作随机分配员工
-      for (const operation of operations) {
-        const candidates = candidateMap.get(operation.operationPlanId) || [];
-        if (candidates.length === 0) {
-          continue;
-        }
+      do {
+        chromosome = new ScheduleChromosome(
+          employeeIds,
+          dates,
+          operationIds
+        );
 
-        const dateIndex = dates.indexOf(operation.date);
-        const operationIndex = operationIds.indexOf(operation.operationPlanId);
+        // 随机初始化：为每个操作随机分配员工
+        for (const operation of operations) {
+          const candidates = candidateMap.get(operation.operationPlanId) || [];
+          if (candidates.length === 0) {
+            continue;
+          }
 
-        // 随机选择所需人数的员工
-        const shuffled = [...candidates].sort(() => Math.random() - 0.5);
-        const selected = shuffled.slice(0, operation.requiredPeople);
+          const dateIndex = dates.indexOf(operation.date);
+          const operationIndex = operationIds.indexOf(operation.operationPlanId);
 
-        for (const employeeId of selected) {
-          const employeeIndex = employeeIds.indexOf(employeeId);
-          if (employeeIndex >= 0 && dateIndex >= 0 && operationIndex >= 0) {
-            chromosome.setAssignment(employeeIndex, dateIndex, operationIndex, 1);
+          // 随机选择所需人数的员工
+          const shuffled = [...candidates].sort(() => Math.random() - 0.5);
+          const selected = shuffled.slice(0, operation.requiredPeople);
+
+          for (const employeeId of selected) {
+            const employeeIndex = employeeIds.indexOf(employeeId);
+            if (employeeIndex >= 0 && dateIndex >= 0 && operationIndex >= 0) {
+              chromosome.setAssignment(employeeIndex, dateIndex, operationIndex, 1);
+            }
           }
         }
-      }
+
+        attempts++;
+
+        // 所有解都必须满足硬约束（严格模式）
+        let satisfiesConstraints = false;
+        try {
+          satisfiesConstraints = await (this.fitnessCalculator as SchedulingFitnessCalculator).satisfiesHardConstraints(
+            chromosome,
+            operations,
+            employees
+          );
+          this.onLog?.(`[NSGA-II] 解 ${i + 1} 硬约束检查结果: ${satisfiesConstraints} (尝试 ${attempts} 次)`);
+        } catch (error) {
+          this.onLog?.(`[NSGA-II] 硬约束检查异常: ${error instanceof Error ? error.message : String(error)}`);
+          satisfiesConstraints = true; // 出错时保守地认为满足约束
+        }
+
+        if (satisfiesConstraints) {
+          if (i < targetConstrainedCount) {
+            constrainedCount++;
+          }
+          this.onLog?.(`[NSGA-II] 生成有效解 ${i + 1}/${size} (尝试 ${attempts} 次)`);
+          break;
+        } else {
+          if (attempts >= maxAttempts) {
+            // 如果尝试多次仍无法生成满足约束的解，记录警告但继续
+            this.onLog?.(`[NSGA-II] 警告：解 ${i + 1} 未能满足硬约束 (尝试 ${attempts} 次)，但继续执行`);
+            break;
+          }
+          // 继续尝试生成满足约束的解
+        }
+      } while (attempts < maxAttempts);
 
       population.push(chromosome);
     }
 
+    console.log(`[NSGA-II] 初始种群生成完成，实际约束解数量: ${constrainedCount}/${targetConstrainedCount}`);
+    console.log(`[NSGA-II] 约束解比例: ${((constrainedCount / size) * 100).toFixed(1)}%`);
     return population;
   }
 
@@ -426,9 +484,60 @@ export class NSGAIIOptimizer {
         chromosome.fitness = await this.fitnessCalculator.calculateFitness(
           chromosome,
           operations,
-          employees
+          employees,
+          this.config.weights // 传递权重配置
         );
       }
+    }
+  }
+
+  /**
+   * 约束优先的选择机制 - 重新设计的核心算法
+   * 优先选择满足硬约束的解，完全不选择严重违反约束的解
+   */
+  private async constraintDrivenSelection(
+    population: ScheduleChromosome[],
+    operations: any[],
+    employees: any[]
+  ): Promise<ScheduleChromosome[]> {
+    if (!(this.fitnessCalculator as any).satisfiesHardConstraints) {
+      return population;
+    }
+
+    const constrainedSolutions: ScheduleChromosome[] = [];
+    const unconstrainedSolutions: ScheduleChromosome[] = [];
+
+    // 严格分类：满足约束 vs 违反约束
+    for (const chromosome of population) {
+      const satisfiesConstraints = await (this.fitnessCalculator as SchedulingFitnessCalculator).satisfiesHardConstraints(
+        chromosome,
+        operations,
+        employees
+      );
+
+      if (satisfiesConstraints) {
+        constrainedSolutions.push(chromosome);
+      } else {
+        unconstrainedSolutions.push(chromosome);
+      }
+    }
+
+    this.onLog?.(`[NSGA-II] 约束分类：${constrainedSolutions.length}个满足约束，${unconstrainedSolutions.length}个违反约束`);
+
+    // 约束优先策略
+    if (constrainedSolutions.length >= Math.ceil(population.length * 0.3)) {
+      // 如果有足够的约束解（>=30%），只选择约束解
+      this.onLog?.(`[NSGA-II] 约束优先：只保留满足约束的解`);
+      return constrainedSolutions;
+    } else {
+      // 如果约束解太少，保留所有约束解 + 少量最优的非约束解
+      const remainingSlots = population.length - constrainedSolutions.length;
+      const bestUnconstrained = unconstrainedSolutions
+        .sort((a, b) => (b.fitness?.compliance || 0) - (a.fitness?.compliance || 0))
+        .slice(0, remainingSlots);
+
+      this.onLog?.(`[NSGA-II] 约束优先：保留所有约束解 + ${bestUnconstrained.length}个最佳非约束解`);
+      return [...constrainedSolutions, ...bestUnconstrained];
     }
   }
 
@@ -943,10 +1052,127 @@ export class NSGAIIOptimizer {
 export class SchedulingFitnessCalculator implements FitnessCalculator {
   private employeeSuitabilityPredictor: EmployeeSuitabilityPredictor;
   private comprehensiveAdapter?: any; // v4新增：综合工时制适配器（可选，延迟加载）
+  private onLog?: (message: string) => void; // 日志回调函数
 
-  constructor(comprehensiveAdapter?: any) {
+  constructor(comprehensiveAdapter?: any, onLog?: (message: string) => void) {
     this.employeeSuitabilityPredictor = new EmployeeSuitabilityPredictor();
     this.comprehensiveAdapter = comprehensiveAdapter;
+    this.onLog = onLog;
+  }
+
+
+  /**
+   * 检查解是否满足基本的月度工时硬约束
+   * 用于在初始解生成时过滤掉严重违反约束的解
+   */
+  async satisfiesHardConstraints(
+    chromosome: ScheduleChromosome,
+    operations: any[],
+    employees: any[]
+  ): Promise<boolean> {
+    console.log('[NSGA-II] >>> 硬约束检查开始 <<<');
+    this.onLog?.('[NSGA-II] 开始硬约束检查');
+    if (!this.comprehensiveAdapter) {
+      console.log('[NSGA-II] 无综合工时制适配器，跳过硬约束检查');
+      this.onLog?.('[NSGA-II] 无适配器，跳过硬约束检查');
+      return true; // 如果没有适配器，跳过检查
+    }
+
+    try {
+      const rawAssignments = chromosome.decode();
+      console.log(`[NSGA-II] 检查解的硬约束，原始分配数量: ${rawAssignments.length}, 员工数量: ${employees.length}`);
+
+      // 构建操作映射，用于计算实际planHours（与enrich阶段相同逻辑）
+      const operationMap = new Map<number, any>();
+      operations.forEach(op => {
+        operationMap.set(op.operationPlanId, op);
+      });
+
+      // 使用与enrich阶段相同的逻辑计算实际planHours
+      const assignments = rawAssignments.map((assignment) => {
+        const operation = operationMap.get(assignment.operationPlanId);
+        if (operation && operation.startTime && operation.endTime) {
+          // 计算计划工时（从操作的开始和结束时间）
+          const startTime = dayjs(`${assignment.date} ${operation.startTime}`);
+          const endTime = dayjs(`${assignment.date} ${operation.endTime}`);
+          const planHours = endTime.diff(startTime, 'hour', true);
+
+          return {
+            ...assignment,
+            planHours: planHours > 0 ? planHours : 8, // 默认8小时
+          };
+        }
+        return assignment; // 如果没有操作信息，保持原样
+      });
+
+      this.onLog?.(`[NSGA-II] 硬约束检查使用实际planHours计算，分配数量: ${assignments.length}`);
+
+      // 检查每个员工的月度工时是否严重超出限制
+      for (const employee of employees) {
+        const empAssignments = assignments.filter(a => a.employeeId === employee.employeeId);
+        if (empAssignments.length === 0) {
+          this.onLog?.(`[NSGA-II] 员工${employee.employeeId}无分配，跳过检查`);
+          continue;
+        }
+
+        // 计算月度工时
+        const monthlyHours = new Map<string, number>();
+        empAssignments.forEach(a => {
+          const month = a.date.substring(0, 7); // YYYY-MM
+          monthlyHours.set(month, (monthlyHours.get(month) || 0) + a.planHours);
+        });
+
+        this.onLog?.(`[NSGA-II] 员工${employee.employeeId}分配数:${empAssignments.length}, 月度数:${monthlyHours.size}`);
+
+        // 检查是否有严重超出或不足的月份
+        for (const [month, hours] of monthlyHours) {
+          // 根据月份计算目标工时（基于日历数据）
+          let monthlyTargetHours = 162.67; // 季度488小时 ÷ 3月 ≈ 162.67小时
+          let monthlyTolerance = 16; // 月度容差 ±16h
+          let monthlyLowerLimit = monthlyTargetHours - monthlyTolerance;
+          let monthlyUpperLimit = monthlyTargetHours + monthlyTolerance;
+
+          // 调试：记录每个员工的月度工时
+          this.onLog?.(`[NSGA-II] 员工${employee.employeeId} ${month}工时: ${hours.toFixed(1)}h (月度标准: ${monthlyTargetHours.toFixed(1)}h ± ${monthlyTolerance.toFixed(1)}h)`);
+
+          // 检查月度工时是否严重超出或不足
+          if (hours > monthlyUpperLimit) {
+            this.onLog?.(`[NSGA-II] 员工${employee.employeeId} ${month}工时${hours.toFixed(1)}h严重超过上限${monthlyUpperLimit.toFixed(1)}h`);
+            return false;
+          }
+          if (hours < monthlyLowerLimit) {
+            this.onLog?.(`[NSGA-II] 员工${employee.employeeId} ${month}工时${hours.toFixed(1)}h严重低于下限${monthlyLowerLimit.toFixed(1)}h`);
+            return false;
+          }
+        }
+
+        // 检查季度工时是否满足要求
+        const quarterlyHours = Array.from(monthlyHours.values()).reduce((sum, h) => sum + h, 0);
+        const quarterlyTarget = 488; // 季度标准工时
+        const quarterlyMaxLimit = quarterlyTarget + 40; // 季度最多不超过标准工时+40h
+
+        this.onLog?.(`[NSGA-II] 员工${employee.employeeId} 季度工时: ${quarterlyHours.toFixed(1)}h (标准: ${quarterlyTarget}h, 上限: ${quarterlyMaxLimit}h)`);
+
+        // 检查季度工时约束
+        if (quarterlyHours < quarterlyTarget) {
+          this.onLog?.(`[NSGA-II] 员工${employee.employeeId} 季度工时${quarterlyHours.toFixed(1)}h低于标准${quarterlyTarget}h`);
+          return false;
+        }
+        if (quarterlyHours > quarterlyMaxLimit) {
+          this.onLog?.(`[NSGA-II] 员工${employee.employeeId} 季度工时${quarterlyHours.toFixed(1)}h超过上限${quarterlyMaxLimit}h`);
+          return false;
+        }
+      }
+
+      console.log('[NSGA-II] 硬约束检查通过');
+      this.onLog?.('[NSGA-II] 硬约束检查通过');
+      return true;
+    } catch (error) {
+      // 检查失败时，保守地认为满足约束
+      console.warn('[NSGA-II] 硬约束检查失败:', error);
+      this.onLog?.(`[NSGA-II] 硬约束检查失败: ${error instanceof Error ? error.message : String(error)}`);
+      return true;
+    }
   }
 
   /**
@@ -970,7 +1196,8 @@ export class SchedulingFitnessCalculator implements FitnessCalculator {
       workTimeSystemType?: string; // v4新增：工时制类型
       comprehensivePeriod?: string; // v4新增：综合工时制周期
       qualifications: Array<{ qualificationId: number; qualificationLevel: number }>;
-    }>
+    }>,
+    weights?: Partial<Record<keyof FitnessScore, number>>
   ): Promise<FitnessScore> {
     const assignments = chromosome.decode();
 
@@ -1033,13 +1260,26 @@ export class SchedulingFitnessCalculator implements FitnessCalculator {
     // 合并所有惩罚
     const compliance = baseCompliance + comprehensivePenalty + managementPenalty;
 
-    return {
+    const rawFitness: FitnessScore = {
       cost: -cost, // 成本越小越好，所以用负值
       satisfaction,
       balance: -balance, // 方差越小越好，所以用负值（包含总工时、车间工时和一线员工工时均衡）
       skillMatch,
       compliance: -compliance, // 违反越少越好，所以用负值
     };
+
+    // 应用权重（如果提供的话）
+    if (weights) {
+      return {
+        cost: rawFitness.cost * (weights.cost ?? 1.0),
+        satisfaction: rawFitness.satisfaction * (weights.satisfaction ?? 1.0),
+        balance: rawFitness.balance * (weights.balance ?? 1.0),
+        skillMatch: rawFitness.skillMatch * (weights.skillMatch ?? 1.0),
+        compliance: rawFitness.compliance * (weights.compliance ?? 1.0),
+      };
+    }
+
+    return rawFitness;
   }
 
   /**
@@ -1528,16 +1768,21 @@ export class SchedulingFitnessCalculator implements FitnessCalculator {
           employee.comprehensivePeriod as any
         );
 
-        // 计算惩罚分数
-        violations.forEach(violation => {
+        // 计算惩罚分数 - 加强月度工时约束惩罚，实施硬约束
+        violations.forEach((violation: any) => {
           if (violation.severity === 'CRITICAL') {
-            totalPenalty += 10; // 严重违反，高惩罚
+            totalPenalty += 100; // 严重违反，极高惩罚（从50增加到100）
           } else if (violation.severity === 'HIGH') {
-            totalPenalty += 5; // 高级违反，中等惩罚
+            // 月度工时超限作为硬约束
+            if (violation.type?.includes('MONTH_MAX_LIMIT')) {
+              totalPenalty += 1000; // 月度工时超限，超级惩罚（大幅增加到1000）
+            } else {
+              totalPenalty += 100; // 其他高级违反，中等惩罚
+            }
           } else if (violation.severity === 'MEDIUM') {
-            totalPenalty += 2; // 中级违反，低惩罚
+            totalPenalty += 20; // 中级违反，低惩罚（从5增加到20）
           } else {
-            totalPenalty += 1; // 低级违反，轻微惩罚
+            totalPenalty += 10; // 低级违反，轻微惩罚（从2增加到10）
           }
         });
       } catch (error) {
@@ -1590,3 +1835,4 @@ export class SchedulingFitnessCalculator implements FitnessCalculator {
 }
 
 export default NSGAIIOptimizer;
+

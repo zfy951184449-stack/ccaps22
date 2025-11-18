@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Card,
   Space,
   Select,
@@ -109,6 +110,7 @@ interface EmployeeWorkloadMetrics {
   monthStandardHours: number;
   quarterDeviation: number;
   monthDeviation: number;
+  monthToleranceHours?: number;
 }
 
 const CATEGORY_ORDER: Array<ShiftPlan['plan_category']> = ['REST', 'BASE', 'PRODUCTION', 'OVERTIME'];
@@ -145,11 +147,14 @@ const LEGEND_ITEMS: Array<{ key: ShiftPlan['plan_category']; label: string; colo
 
 const FRONTLINE_ROLES = new Set(['FRONTLINE']);
 const LEADER_ROLES = new Set(['SHIFT_LEADER', 'GROUP_LEADER', 'TEAM_LEADER', 'DEPT_MANAGER']);
+const MONTH_TOLERANCE_HOURS = Number(process.env.REACT_APP_MONTH_TOLERANCE_HOURS ?? 8);
 
 interface DaySummary {
   date: string;
   isHoliday: boolean;
   holidayLabel?: string | null;
+  isTripleSalary: boolean;
+  salaryMultiplier: number;
   operationCount: number;
   totalOperationHours: number;
   attendanceFrontline: number;
@@ -216,6 +221,7 @@ const buildEmployeeData = (
   days: DayColumn[],
   renderChip: (plan: ShiftPlanWithRelations) => React.ReactNode | null,
   filterPlan?: (plan: ShiftPlanWithRelations) => boolean,
+  allEmployees: Array<{id: number, name: string, code: string, org_role?: string, primary_role_name?: string, primary_role_code?: string}> = [],
 ) => {
   const employeeMap = new Map<
     number,
@@ -229,6 +235,7 @@ const buildEmployeeData = (
     }
   >();
 
+  // 如果有排班数据，从排班数据构建员工信息
   shiftPlans.forEach((plan) => {
     if (!employeeMap.has(plan.employee_id)) {
       const orgRole = ((plan.employee_org_role ?? '') as string).toUpperCase() || null;
@@ -256,6 +263,23 @@ const buildEmployeeData = (
     }
     employeeData.shifts[plan.plan_date].push(plan);
   });
+
+  // 如果没有排班数据但有员工列表，从员工列表创建空行
+  if (shiftPlans.length === 0 && allEmployees.length > 0) {
+    allEmployees.forEach((emp) => {
+      if (!employeeMap.has(emp.id)) {
+        const orgRole = ((emp.org_role ?? '') as string).toUpperCase() || null;
+        employeeMap.set(emp.id, {
+          employeeName: emp.name,
+          employeeCode: emp.code,
+          orgRole,
+          primaryRoleName: emp.primary_role_name ?? null,
+          primaryRoleCode: emp.primary_role_code ?? null,
+          shifts: {},
+        });
+      }
+    });
+  }
 
   return Array.from(employeeMap.entries()).map(([employeeId, data]) => {
     const baseRow: Record<string, ShiftCell> = {};
@@ -376,8 +400,14 @@ const PersonnelCalendar: React.FC = () => {
   const [showProductionDetails, setShowProductionDetails] = useState(false);
   const [searchValue, setSearchValue] = useState('');
   const [highlightedEmployeeId, setHighlightedEmployeeId] = useState<number | null>(null);
-  const [workdayMap, setWorkdayMap] = useState<Record<string, { isWorkday: boolean; holidayName?: string | null }>>({});
+  const [workdayMap, setWorkdayMap] = useState<Record<string, {
+    isWorkday: boolean;
+    holidayName?: string | null;
+    isTripleSalary?: boolean;
+    salaryMultiplier?: number;
+  }>>({});
   const [gridWidth, setGridWidth] = useState<number>(0);
+  const [allEmployees, setAllEmployees] = useState<Array<{id: number, name: string, code: string, org_role?: string, primary_role_name?: string, primary_role_code?: string}>>([]);
 
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -706,16 +736,21 @@ const PersonnelCalendar: React.FC = () => {
           if (!Number.isFinite(employeeId) || !metricsMap[employeeId]) {
             return;
           }
+          const quarterStandard = Number(item.quarterStandardHours ?? 0);
+          const monthStandard = Number(item.monthStandardHours ?? 0);
+          const quarterHours = Number(item.quarterHours ?? 0);
+          const monthHours = Number(item.monthHours ?? 0);
           metricsMap[employeeId] = {
             employeeId,
-            quarterHours: Number(item.quarterHours ?? 0),
+            quarterHours,
             quarterShopHours: Number(item.quarterShopHours ?? 0),
-            monthHours: Number(item.monthHours ?? 0),
+            monthHours,
             monthShopHours: Number(item.monthShopHours ?? 0),
-            quarterStandardHours: Number(item.quarterStandardHours ?? 0),
-            monthStandardHours: Number(item.monthStandardHours ?? 0),
-            quarterDeviation: Number(item.quarterDeviation ?? 0),
-            monthDeviation: Number(item.monthDeviation ?? 0),
+            quarterStandardHours: quarterStandard,
+            monthStandardHours: monthStandard,
+            quarterDeviation: quarterHours - quarterStandard,
+            monthDeviation: monthHours - monthStandard,
+            monthToleranceHours: MONTH_TOLERANCE_HOURS,
           };
         });
 
@@ -809,12 +844,19 @@ const PersonnelCalendar: React.FC = () => {
         const workdayRecords = Array.isArray(workdayResponse.data)
           ? workdayResponse.data
           : [];
-        const workdayMapPayload: Record<string, { isWorkday: boolean; holidayName?: string | null }> = {};
+        const workdayMapPayload: Record<string, {
+          isWorkday: boolean;
+          holidayName?: string | null;
+          isTripleSalary?: boolean;
+          salaryMultiplier?: number;
+        }> = {};
         workdayRecords.forEach((item: any) => {
           const dateKey = dayjs(item.calendar_date).format('YYYY-MM-DD');
           workdayMapPayload[dateKey] = {
             isWorkday: Number(item.is_workday ?? 1) === 1,
             holidayName: item.holiday_name ?? null,
+            isTripleSalary: Boolean(item.is_triple_salary),
+            salaryMultiplier: Number(item.salary_multiplier || 0),
           };
         });
         setWorkdayMap(workdayMapPayload);
@@ -826,6 +868,28 @@ const PersonnelCalendar: React.FC = () => {
         setLoading(false);
       }
   }, [autoCentered, endOfRange, selectedEmployee, startOfRange]);
+
+  // 加载员工数据
+  useEffect(() => {
+    const loadEmployees = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/employees`);
+        const employeesData = Array.isArray(response.data) ? response.data : [];
+        setAllEmployees(employeesData.map((emp: any) => ({
+          id: emp.id,
+          name: emp.name,
+          code: emp.code,
+          org_role: emp.org_role,
+          primary_role_name: emp.primary_role_name,
+          primary_role_code: emp.primary_role_code,
+        })));
+      } catch (error) {
+        console.error('Error loading employees:', error);
+      }
+    };
+
+    loadEmployees();
+  }, []);
 
   useEffect(() => {
     loadShiftPlans();
@@ -872,8 +936,8 @@ const PersonnelCalendar: React.FC = () => {
   }, [selectedPlan, shiftPlans]);
 
   const employeeData = useMemo(
-    () => buildEmployeeData(shiftPlans, days, renderShiftChip, filterPlanForView),
-    [shiftPlans, days, renderShiftChip, filterPlanForView]
+    () => buildEmployeeData(shiftPlans, days, renderShiftChip, filterPlanForView, allEmployees),
+    [shiftPlans, days, renderShiftChip, filterPlanForView, allEmployees]
   );
 
   const daySummaries = useMemo(() => {
@@ -897,10 +961,15 @@ const PersonnelCalendar: React.FC = () => {
       const isHoliday = workdayInfo
         ? !workdayInfo.isWorkday
         : [0, 6].includes(dayjs(day.date).day());
+      const isTripleSalary = workdayInfo?.isTripleSalary ?? false;
+      const salaryMultiplier = workdayInfo?.salaryMultiplier ?? 0;
+
       summaryMap[day.date] = {
         date: day.date,
         isHoliday,
         holidayLabel: isHoliday ? workdayInfo?.holidayName ?? '节假日' : undefined,
+        isTripleSalary,
+        salaryMultiplier,
         operationCount: 0,
         totalOperationHours: 0,
         attendanceFrontline: 0,
@@ -1049,6 +1118,18 @@ const PersonnelCalendar: React.FC = () => {
           };
           const quarterDiffValue = metrics.quarterDeviation ?? 0;
           const monthDiffValue = metrics.monthDeviation ?? 0;
+          const monthTolerance = metrics.monthToleranceHours ?? MONTH_TOLERANCE_HOURS;
+          const quarterDeficit =
+            metrics.quarterStandardHours > 0 &&
+            (metrics.quarterHours ?? 0) + 0.01 < metrics.quarterStandardHours;
+          const monthOver =
+            metrics.monthStandardHours > 0 &&
+            (metrics.monthHours ?? 0) >
+              metrics.monthStandardHours + monthTolerance;
+          const monthUnder =
+            metrics.monthStandardHours > 0 &&
+            (metrics.monthHours ?? 0) + monthTolerance <
+              metrics.monthStandardHours;
           const diffClass = (value: number) =>
             value > 0.05 ? 'positive' : value < -0.05 ? 'negative' : 'neutral';
           const quarterDiffText = formatDiff(metrics.quarterDeviation);
@@ -1060,6 +1141,27 @@ const PersonnelCalendar: React.FC = () => {
             row.employeePrimaryRoleName ||
             row.employeePrimaryRoleCode ||
             '未标注角色';
+          const complianceTags: React.ReactNode[] = [];
+          if (quarterDeficit) {
+            complianceTags.push(
+              <Tag color="red" key="quarter-deficit">
+                季度工时不足
+              </Tag>,
+            );
+          }
+          if (monthOver) {
+            complianceTags.push(
+              <Tag color="volcano" key="month-over">
+                月度超标
+              </Tag>,
+            );
+          } else if (monthUnder) {
+            complianceTags.push(
+              <Tag color="orange" key="month-under">
+                月度不足
+              </Tag>,
+            );
+          }
 
           return (
             <div className={`employee-cell ${roleClassName}`}>
@@ -1096,7 +1198,12 @@ const PersonnelCalendar: React.FC = () => {
                   <span className={`employee-metrics-diff ${diffClass(monthDiffValue)}`}>
                     差 {monthDiffText}{monthDiffText === '--' ? '' : 'h'}
                   </span>
+                  <span className="employee-metrics-divider">|</span>
+                  <span className="employee-metrics-note">容差 ±{monthTolerance}h</span>
                 </div>
+                {complianceTags.length ? (
+                  <div className="employee-metrics-tags">{complianceTags}</div>
+                ) : null}
               </div>
             </div>
           );
@@ -1112,12 +1219,22 @@ const PersonnelCalendar: React.FC = () => {
 
       return {
         title: (
-          <div className={`day-header${summary?.isHoliday ? ' holiday' : ''}`}>
+          <div className={`day-header${summary?.isHoliday ? ' holiday' : ''}${summary?.isTripleSalary ? ' triple-salary' : ''}`}>
             <div className="day-header-top">
               <span className="day-header-date">{day.dayLabel}</span>
               {summary?.isHoliday ? (
                 <Tag color="red">
                   {summary?.holidayLabel || '休'}
+                </Tag>
+              ) : null}
+              {summary?.isTripleSalary && !summary?.isHoliday ? (
+                <Tag color="gold">
+                  💰{summary.salaryMultiplier}倍
+                </Tag>
+              ) : null}
+              {summary?.isTripleSalary && summary?.isHoliday ? (
+                <Tag color="orange" style={{ marginLeft: 4 }}>
+                  💰{summary.salaryMultiplier}倍
                 </Tag>
               ) : null}
             </div>
@@ -1251,9 +1368,19 @@ const PersonnelCalendar: React.FC = () => {
           value={selectedEmployee}
           onChange={(value) => setSelectedEmployee(value)}
         >
-          {Array.from(new Map(shiftPlans.map((plan) => [plan.employee_id, plan])).values()).map((plan) => (
-            <Option key={plan.employee_id} value={plan.employee_id}>
-              {plan.employee_name} ({plan.employee_code})
+          {(shiftPlans.length > 0
+            ? Array.from(new Map(shiftPlans.map((plan) => [plan.employee_id, {
+                id: plan.employee_id,
+                name: plan.employee_name,
+                code: plan.employee_code,
+                org_role: plan.employee_org_role,
+                primary_role_name: plan.primary_role_name,
+                primary_role_code: plan.primary_role_code,
+              }])).values())
+            : allEmployees
+          ).map((item) => (
+            <Option key={item.id} value={item.id}>
+              {item.name} ({item.code})
             </Option>
           ))}
         </Select>
@@ -1439,6 +1566,14 @@ const PersonnelCalendar: React.FC = () => {
         }
         styles={{ body: { padding: 0 } }}
       >
+        <div className="calendar-principles-alert">
+          <Alert
+            type="info"
+            showIcon
+            message="排班原则提示"
+            description={`季度工时需达到标准值，月度工时默认允许上下浮动 ±${MONTH_TOLERANCE_HOURS} 小时；夜班后优先安排连续两天休息。更多细则见 docs/scheduling_principles.md。`}
+          />
+        </div>
         <div className="calendar-toolbar-container">{renderToolbar()}</div>
         <div className="calendar-legend">
           {LEGEND_ITEMS.map((item) => (
@@ -1452,9 +1587,9 @@ const PersonnelCalendar: React.FC = () => {
           ))}
         </div>
         <Spin spinning={loading}>
-          {shiftPlans.length === 0 ? (
+          {(shiftPlans.length === 0 && allEmployees.length === 0) ? (
             <div className="schedule-empty">
-              <Empty description="所选范围内没有排班数据" />
+              <Empty description="正在加载数据..." />
             </div>
           ) : (
             <div className={`schedule-view ${viewMode}`}>

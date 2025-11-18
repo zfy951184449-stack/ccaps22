@@ -205,6 +205,44 @@ export interface ShiftDefinition {
   updated_at?: string;
 }
 
+export interface BatchPlan {
+  id: number;
+  batch_code: string;
+  batch_name: string;
+  template_id: number;
+  template_name?: string;
+  project_code?: string | null;
+  planned_start_date: string;
+  planned_end_date?: string | null;
+  template_duration_days?: number | null;
+  plan_status: 'DRAFT' | 'PLANNED' | 'APPROVED' | 'ACTIVATED' | 'COMPLETED' | 'CANCELLED';
+  description?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  operation_count?: number | null;
+  total_required_people?: number | null;
+  assigned_people_count?: number | null;
+}
+
+export interface BatchTemplateSummary {
+  id: number;
+  template_code: string;
+  template_name: string;
+  total_days?: number | null;
+  calculated_duration?: number | null;
+  stage_count?: number | null;
+  operation_count?: number | null;
+}
+
+export interface BatchStatistics {
+  total_batches: number;
+  draft_count: number;
+  planned_count: number;
+  approved_count: number;
+  cancelled_count: number;
+}
+
 export type SchedulingRunStage =
   | 'QUEUED'
   | 'PREPARING'
@@ -481,4 +519,27 @@ export interface ComputeSchedulingMetricsPayload {
   departmentIds?: number[];
   includeDetails?: boolean;
   saveSnapshot?: boolean;
+}
+
+export interface HolidayServiceLogEntry {
+  id: number;
+  year: number;
+  source: string;
+  time: string;
+  status: 'SUCCESS' | 'FAILED' | 'PARTIAL';
+  records: number;
+  message?: string | null;
+}
+
+export interface HolidayServiceStatus {
+  keyConfigured: boolean;
+  maskedKey: string | null;
+  coverage: {
+    minDate: string | null;
+    maxDate: string | null;
+    years: number[];
+  };
+  recentLogs: HolidayServiceLogEntry[];
+  lastSuccessTime: string | null;
+  lastFailureTime: string | null;
 }

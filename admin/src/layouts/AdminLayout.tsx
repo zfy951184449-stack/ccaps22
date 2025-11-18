@@ -1,15 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Layout, Menu, Breadcrumb, Avatar, Dropdown, Space, Typography, Button } from 'antd'
 import {
-  CalendarOutlined,
   DashboardOutlined,
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   SettingOutlined,
   TeamOutlined,
-  BranchesOutlined,
-  HeartOutlined
+  BranchesOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -32,25 +30,13 @@ const menuItems: MenuProps['items'] = [
     key: '/personnel',
     icon: <TeamOutlined />,
     label: '人员与资质'
-  },
-  {
-    key: '/scheduling',
-    icon: <CalendarOutlined />,
-    label: '排班校验'
-  },
-  {
-    key: '/scheduling/health',
-    icon: <HeartOutlined />,
-    label: '排班健康'
   }
 ]
 
 const breadcrumbMap: Record<string, string[]> = {
   '/': ['仪表盘'],
   '/templates': ['工艺管理', '工艺模板'],
-  '/personnel': ['人员管理', '人员与资质'],
-  '/scheduling': ['计划管理', '排班校验'],
-  '/scheduling/health': ['计划管理', '排班健康']
+  '/personnel': ['人员管理', '人员与资质']
 }
 
 const AdminLayout = () => {

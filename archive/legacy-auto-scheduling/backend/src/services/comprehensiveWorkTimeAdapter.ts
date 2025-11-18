@@ -826,10 +826,11 @@ export class ComprehensiveWorkTimeAdapter {
             true // 排除法定节假日
           );
 
-          // 月度约束：标准工时 ± 8小时（硬约束）
-          const MONTH_TOLERANCE = 8.0; // 月度浮动8小时
+          // 月度约束：标准工时 ± 指定容差（硬约束）
           const monthMinHours = Math.max(0, monthTargetHours - monthTolerance);
           const monthMaxHours = monthTargetHours + monthTolerance;
+
+          console.log(`[综合工时制] 员工${employeeId} ${monthKey}月检查: 实际${monthHours.toFixed(2)}h, 目标${monthTargetHours.toFixed(2)}h, 容差${monthTolerance.toFixed(2)}h, 上限${monthMaxHours.toFixed(2)}h`);
 
           if (monthHours < monthMinHours) {
             violations.push({
