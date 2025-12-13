@@ -10,6 +10,7 @@ const mapRow = (row: any): ShiftDefinition => ({
   start_time: row.start_time,
   end_time: row.end_time,
   is_cross_day: Boolean(row.is_cross_day),
+  is_night_shift: Boolean(row.is_night_shift),
   nominal_hours: Number(row.nominal_hours),
   max_extension_hours: row.max_extension_hours !== null ? Number(row.max_extension_hours) : undefined,
   description: row.description,
@@ -24,7 +25,7 @@ export const listShiftDefinitions = async (req: Request, res: Response) => {
     const includeInactive = String(req.query.includeInactive ?? '').toLowerCase() === 'true';
     const query = `
       SELECT id, shift_code, shift_name, category, start_time, end_time, is_cross_day,
-             nominal_hours, max_extension_hours, description, is_active, created_by,
+             is_night_shift, nominal_hours, max_extension_hours, description, is_active, created_by,
              created_at, updated_at
         FROM shift_definitions
        ${includeInactive ? '' : 'WHERE is_active = 1'}
@@ -43,7 +44,7 @@ export const getShiftDefinition = async (req: Request, res: Response) => {
     const { id } = req.params;
     const [rows] = await pool.execute(
       `SELECT id, shift_code, shift_name, category, start_time, end_time, is_cross_day,
-              nominal_hours, max_extension_hours, description, is_active, created_by,
+              is_night_shift, nominal_hours, max_extension_hours, description, is_active, created_by,
               created_at, updated_at
          FROM shift_definitions
         WHERE id = ?`,
@@ -67,8 +68,8 @@ export const createShiftDefinition = async (req: Request, res: Response) => {
     const [result] = await pool.execute(
       `INSERT INTO shift_definitions
          (shift_code, shift_name, category, start_time, end_time, is_cross_day,
-          nominal_hours, max_extension_hours, description, is_active, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          is_night_shift, nominal_hours, max_extension_hours, description, is_active, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         payload.shift_code,
         payload.shift_name,
@@ -76,6 +77,7 @@ export const createShiftDefinition = async (req: Request, res: Response) => {
         payload.start_time,
         payload.end_time,
         payload.is_cross_day ? 1 : 0,
+        payload.is_night_shift ? 1 : 0,
         payload.nominal_hours,
         payload.max_extension_hours ?? 0,
         payload.description ?? null,
@@ -111,6 +113,7 @@ export const updateShiftDefinition = async (req: Request, res: Response) => {
               start_time = COALESCE(?, start_time),
               end_time = COALESCE(?, end_time),
               is_cross_day = COALESCE(?, is_cross_day),
+              is_night_shift = COALESCE(?, is_night_shift),
               nominal_hours = COALESCE(?, nominal_hours),
               max_extension_hours = COALESCE(?, max_extension_hours),
               description = COALESCE(?, description),
@@ -123,6 +126,7 @@ export const updateShiftDefinition = async (req: Request, res: Response) => {
         payload.start_time ?? null,
         payload.end_time ?? null,
         payload.is_cross_day !== undefined ? (payload.is_cross_day ? 1 : 0) : null,
+        payload.is_night_shift !== undefined ? (payload.is_night_shift ? 1 : 0) : null,
         payload.nominal_hours ?? null,
         payload.max_extension_hours ?? null,
         payload.description ?? null,

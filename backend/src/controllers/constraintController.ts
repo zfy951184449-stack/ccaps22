@@ -7,7 +7,7 @@ import { runConstraintValidation } from '../services/constraintValidationService
 export const getTemplateConstraints = async (req: Request, res: Response) => {
   try {
     const { templateId } = req.params;
-    
+
     const query = `
       SELECT 
         oc.id AS constraint_id,
@@ -43,7 +43,7 @@ export const getTemplateConstraints = async (req: Request, res: Response) => {
       WHERE ps1.template_id = ?
       ORDER BY ps1.stage_order, sos1.operation_order
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [templateId]);
     res.json(rows);
   } catch (error) {
@@ -56,7 +56,7 @@ export const getTemplateConstraints = async (req: Request, res: Response) => {
 export const getOperationConstraints = async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
-    
+
     // 前置约束（当前操作依赖的）
     const predecessorQuery = `
       SELECT 
@@ -76,7 +76,7 @@ export const getOperationConstraints = async (req: Request, res: Response) => {
       JOIN operations op ON sos.operation_id = op.id
       WHERE oc.schedule_id = ?
     `;
-    
+
     // 后续约束（依赖当前操作的）
     const successorQuery = `
       SELECT 
@@ -96,10 +96,10 @@ export const getOperationConstraints = async (req: Request, res: Response) => {
       JOIN operations op ON sos.operation_id = op.id
       WHERE oc.predecessor_schedule_id = ?
     `;
-    
+
     const [predecessors] = await pool.execute<RowDataPacket[]>(predecessorQuery, [scheduleId]);
     const [successors] = await pool.execute<RowDataPacket[]>(successorQuery, [scheduleId]);
-    
+
     res.json({
       predecessors,
       successors
@@ -113,10 +113,10 @@ export const getOperationConstraints = async (req: Request, res: Response) => {
 // 创建约束
 export const createConstraint = async (req: Request, res: Response) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const {
       from_schedule_id,
       to_schedule_id,
@@ -131,18 +131,18 @@ export const createConstraint = async (req: Request, res: Response) => {
     const normalizedLag = Number.isFinite(Number(lag_time)) ? Number(lag_time) : 0;
     const normalizedLevel = Number.isFinite(Number(constraint_level)) ? Number(constraint_level) : 1;
     const shareFlag = share_personnel ? 1 : 0;
-    
+
     // 检查循环依赖
     const [existing] = await connection.execute<RowDataPacket[]>(
       'SELECT 1 FROM operation_constraints WHERE schedule_id = ? AND predecessor_schedule_id = ?',
       [to_schedule_id, from_schedule_id]
     );
-    
+
     if (existing.length > 0) {
       await connection.rollback();
       return res.status(400).json({ error: 'Would create circular dependency' });
     }
-    
+
     // 插入约束 - 使用现有表结构
     const insertQuery = `
       INSERT INTO operation_constraints (
@@ -167,16 +167,16 @@ export const createConstraint = async (req: Request, res: Response) => {
       constraint_name || null,
       description || null
     ]);
-    
+
     await connection.commit();
-    res.status(201).json({ 
-      id: result.insertId, 
-      message: 'Constraint created successfully' 
+    res.status(201).json({
+      id: result.insertId,
+      message: 'Constraint created successfully'
     });
   } catch (error: any) {
     await connection.rollback();
     console.error('Error creating constraint:', error);
-    
+
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Constraint already exists' });
     } else {
@@ -203,7 +203,7 @@ export const updateConstraint = async (req: Request, res: Response) => {
     const normalizedLag = Number.isFinite(Number(lag_time)) ? Number(lag_time) : 0;
     const normalizedLevel = Number.isFinite(Number(constraint_level)) ? Number(constraint_level) : 1;
     const shareFlag = share_personnel ? 1 : 0;
-    
+
     const updateQuery = `
       UPDATE operation_constraints 
       SET constraint_type = ?,
@@ -214,7 +214,7 @@ export const updateConstraint = async (req: Request, res: Response) => {
           description = ?
       WHERE id = ?
     `;
-    
+
     const [result]: any = await pool.execute(updateQuery, [
       constraint_type,
       normalizedLevel,
@@ -224,11 +224,11 @@ export const updateConstraint = async (req: Request, res: Response) => {
       description || null,
       id
     ]);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Constraint not found' });
     }
-    
+
     res.json({ message: 'Constraint updated successfully' });
   } catch (error) {
     console.error('Error updating constraint:', error);
@@ -240,16 +240,16 @@ export const updateConstraint = async (req: Request, res: Response) => {
 export const deleteConstraint = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const [result]: any = await pool.execute(
       'DELETE FROM operation_constraints WHERE id = ?',
       [id]
     );
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Constraint not found' });
     }
-    
+
     res.json({ message: 'Constraint deleted successfully' });
   } catch (error) {
     console.error('Error deleting constraint:', error);
@@ -261,7 +261,7 @@ export const deleteConstraint = async (req: Request, res: Response) => {
 export const getTemplateConstraintsForGantt = async (req: Request, res: Response) => {
   try {
     const { templateId } = req.params;
-    
+
     const query = `
       SELECT 
         oc.id as constraint_id,
@@ -296,7 +296,7 @@ export const getTemplateConstraintsForGantt = async (req: Request, res: Response
       WHERE ps1.template_id = ? AND ps2.template_id = ?
       ORDER BY ps1.stage_order, sos1.operation_order
     `;
-    
+
     const [constraints] = await pool.execute<RowDataPacket[]>(query, [templateId, templateId]);
     res.json(constraints);
   } catch (error) {
@@ -328,15 +328,15 @@ export const getBatchConstraintsForGantt = async (req: Request, res: Response) =
         boc.description,
         bop_current.template_schedule_id AS current_template_schedule_id,
         bop_predecessor.template_schedule_id AS predecessor_template_schedule_id,
-        ps_current.stage_name AS current_stage_name,
-        ps_predecessor.stage_name AS predecessor_stage_name
+        COALESCE(ps_current.stage_name, '独立操作') AS current_stage_name,
+        COALESCE(ps_predecessor.stage_name, '独立操作') AS predecessor_stage_name
       FROM batch_operation_constraints boc
       JOIN batch_operation_plans bop_current ON boc.batch_operation_plan_id = bop_current.id
       JOIN batch_operation_plans bop_predecessor ON boc.predecessor_batch_operation_plan_id = bop_predecessor.id
-      JOIN stage_operation_schedules sos_current ON bop_current.template_schedule_id = sos_current.id
-      JOIN stage_operation_schedules sos_predecessor ON bop_predecessor.template_schedule_id = sos_predecessor.id
-      JOIN process_stages ps_current ON sos_current.stage_id = ps_current.id
-      JOIN process_stages ps_predecessor ON sos_predecessor.stage_id = ps_predecessor.id
+      LEFT JOIN stage_operation_schedules sos_current ON bop_current.template_schedule_id = sos_current.id
+      LEFT JOIN stage_operation_schedules sos_predecessor ON bop_predecessor.template_schedule_id = sos_predecessor.id
+      LEFT JOIN process_stages ps_current ON sos_current.stage_id = ps_current.id
+      LEFT JOIN process_stages ps_predecessor ON sos_predecessor.stage_id = ps_predecessor.id
       WHERE boc.batch_plan_id = ?
       ORDER BY boc.batch_operation_plan_id, boc.predecessor_batch_operation_plan_id
     `;
@@ -353,7 +353,7 @@ export const getBatchConstraintsForGantt = async (req: Request, res: Response) =
 export const getAvailableOperations = async (req: Request, res: Response) => {
   try {
     const { templateId } = req.params;
-    
+
     const query = `
       SELECT 
         sos.id AS schedule_id,
@@ -371,7 +371,7 @@ export const getAvailableOperations = async (req: Request, res: Response) => {
       WHERE ps.template_id = ?
       ORDER BY ps.stage_order, sos.operation_order
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [templateId]);
     res.json(rows);
   } catch (error) {

@@ -19,13 +19,10 @@ import {
   EditOutlined,
   DeleteOutlined,
   CopyOutlined,
-  ProjectOutlined,
-  CalendarOutlined,
-  DotChartOutlined
+  ProjectOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
-import EnhancedGanttEditor from './EnhancedGanttEditor';
-import ProcessTemplateGanttAligned from './ProcessTemplateGanttAligned';
+import ProcessTemplateGantt from './ProcessTemplateGantt';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -46,7 +43,6 @@ const ProcessTemplate: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [viewMode, setViewMode] = useState<'legacy' | 'aligned'>('legacy');
   const [form] = Form.useForm();
 
   const API_BASE_URL = 'http://localhost:3001/api';
@@ -86,7 +82,7 @@ const ProcessTemplate: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
-      
+
       if (editingTemplate) {
         // 更新模版（不包含total_days）
         const { template_name, description } = values;
@@ -104,7 +100,7 @@ const ProcessTemplate: React.FC = () => {
         });
         message.success('模版创建成功');
       }
-      
+
       setIsModalVisible(false);
       form.resetFields();
       fetchTemplates();
@@ -137,12 +133,6 @@ const ProcessTemplate: React.FC = () => {
   };
 
   const handleManageStages = (template: Template) => {
-    setViewMode('legacy');
-    setSelectedTemplate(template);
-  };
-
-  const handleManageStagesAligned = (template: Template) => {
-    setViewMode('aligned');
     setSelectedTemplate(template);
   };
 
@@ -187,23 +177,14 @@ const ProcessTemplate: React.FC = () => {
       width: 240,
       render: (_: any, record: Template) => (
         <Space size="small">
-          <Tooltip title="管理阶段">
+          <Tooltip title="甘特图编辑">
             <Button
               type="primary"
               size="small"
-              icon={<CalendarOutlined />}
+              icon={<ProjectOutlined />}
               onClick={() => handleManageStages(record)}
             >
-              阶段
-            </Button>
-          </Tooltip>
-          <Tooltip title="新甘特（实验）">
-            <Button
-              size="small"
-              icon={<DotChartOutlined />}
-              onClick={() => handleManageStagesAligned(record)}
-            >
-              新甘特
+              甘特图
             </Button>
           </Tooltip>
           <Tooltip title="编辑">
@@ -244,25 +225,11 @@ const ProcessTemplate: React.FC = () => {
   ];
 
   if (selectedTemplate) {
-    if (viewMode === 'aligned') {
-      return (
-        <ProcessTemplateGanttAligned
-          template={selectedTemplate}
-          onBack={() => {
-            setSelectedTemplate(null);
-            setViewMode('legacy');
-            fetchTemplates();
-          }}
-        />
-      );
-    }
-
     return (
-      <EnhancedGanttEditor
+      <ProcessTemplateGantt
         template={selectedTemplate}
         onBack={() => {
           setSelectedTemplate(null);
-          setViewMode('legacy');
           fetchTemplates();
         }}
       />

@@ -1,0 +1,539 @@
+/* ==============================================
+   自动排班（模块化）界面样式
+   ============================================== */
+
+/* 主容器 */
+.modular-scheduling-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* 步骤卡片 */
+.step-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.step-card .ant-card-head {
+  background: linear-gradient(135deg, #f6f8fc 0%, #fff 100%);
+  border-bottom: 1px solid #e8ecf1;
+}
+
+.step-card .ant-card-head-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* 批次选择器 */
+.batch-selector {
+  padding: 8px 0;
+}
+
+.batch-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.batch-card-grid {
+  margin-top: 8px;
+}
+
+.batch-card {
+  border-radius: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.batch-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.batch-card-selected {
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  box-shadow: 0 4px 16px rgba(24, 144, 255, 0.15);
+}
+
+.batch-card-selected::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #1890ff, #40a9ff);
+}
+
+.batch-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.batch-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.batch-code {
+  font-weight: 600;
+  font-size: 15px;
+  color: #1f2937;
+  flex: 1;
+}
+
+.batch-card-name {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.batch-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.batch-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.batch-info-item .anticon {
+  font-size: 14px;
+  color: #1890ff;
+}
+
+.batch-warning-tag {
+  margin-top: 12px;
+  border-radius: 4px;
+}
+
+/* 求解区间卡片 */
+.scheduling-window-card {
+  border-radius: 12px;
+}
+
+.window-dates {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 20px 0;
+}
+
+.window-date-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.window-date-label {
+  font-size: 12px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.window-date-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1890ff;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+}
+
+.window-date-weekday {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.window-arrow {
+  font-size: 24px;
+  color: #d1d5db;
+}
+
+/* 时间轴 */
+.window-timeline {
+  margin: 24px 0;
+  padding: 0 20px;
+}
+
+.timeline-bar {
+  position: relative;
+  height: 12px;
+  background: linear-gradient(90deg, #f0f5ff 0%, #e6f7ff 50%, #f0f5ff 100%);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.timeline-actual-range {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, #1890ff, #40a9ff);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+}
+
+.timeline-marker {
+  position: absolute;
+  top: -4px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border: 3px solid #1890ff;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 2;
+}
+
+.timeline-marker:hover {
+  transform: translateX(-50%) scale(1.2);
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
+}
+
+.timeline-marker-start {
+  border-color: #52c41a;
+}
+
+.timeline-marker-end {
+  border-color: #ff4d4f;
+}
+
+.timeline-labels {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.timeline-center-label {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.window-months {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.month-tag {
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 16px;
+}
+
+.window-stats {
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.window-stats .ant-statistic-title {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.window-stats .ant-statistic-content {
+  font-size: 20px;
+}
+
+/* 求解摘要卡片 */
+.scheduling-summary-card {
+  border-radius: 12px;
+}
+
+.scheduling-summary-card .ant-statistic-title {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.scheduling-summary-card .ant-statistic-content {
+  font-size: 22px;
+}
+
+.capacity-section {
+  margin: 24px 0;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.capacity-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.constraints-summary {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.constraints-summary .ant-descriptions-header {
+  margin-bottom: 12px;
+}
+
+.constraints-summary .ant-descriptions-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+}
+
+/* 操作按钮区域 */
+.action-section {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.solve-button {
+  height: 48px;
+  padding: 0 32px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+  border: none;
+  box-shadow: 0 4px 14px rgba(24, 144, 255, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.solve-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(24, 144, 255, 0.45);
+}
+
+.solve-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.config-button {
+  height: 48px;
+  padding: 0 24px;
+  font-size: 14px;
+  border-radius: 8px;
+}
+
+/* 空状态提示 */
+.empty-selection-hint {
+  text-align: center;
+  padding: 40px 20px;
+  color: #9ca3af;
+}
+
+.empty-selection-hint .anticon {
+  font-size: 48px;
+  color: #d1d5db;
+  margin-bottom: 16px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .window-dates {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .window-arrow {
+    transform: rotate(90deg);
+  }
+
+  .batch-selector-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .batch-selector-header .ant-input-search {
+    width: 100% !important;
+  }
+
+  .action-section {
+    flex-direction: column;
+  }
+
+  .action-section button {
+    width: 100%;
+  }
+}
+
+/* 加载状态动画 */
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 8%, #e0e0e0 18%, #f0f0f0 33%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* ==============================================
+   求解进度卡片样式
+   ============================================== */
+
+.solve-progress-card {
+  margin-bottom: 24px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fafbfc 0%, #fff 100%);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8ecf1;
+  overflow: hidden;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.solve-progress-card .ant-card-head {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-bottom: none;
+}
+
+.solve-progress-card .ant-card-head-title {
+  color: white;
+}
+
+.solve-progress-card .ant-card-head-title .ant-typography {
+  color: white !important;
+}
+
+.solve-progress-card .ant-card-head-title .ant-typography-secondary {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.solve-progress-card .ant-card-extra button {
+  color: white;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.solve-progress-card .ant-card-extra button:hover {
+  color: white;
+  border-color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.solve-progress-card .ant-progress {
+  margin-bottom: 8px;
+}
+
+.solve-progress-card .ant-progress-inner {
+  border-radius: 8px;
+}
+
+.solve-progress-card .ant-progress-bg {
+  height: 12px !important;
+}
+
+.solve-progress-card .ant-progress-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1890ff;
+}
+
+.solve-progress-card .ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.solve-progress-card .ant-statistic-title {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.solve-progress-card .ant-descriptions-item-label {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.solve-progress-card .ant-descriptions-item-content {
+  color: #374151;
+  font-size: 13px;
+}
+
+/* 求解成功状态样式 */
+.solve-progress-card.success .ant-card-head {
+  background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+}
+
+/* 求解失败状态样式 */
+.solve-progress-card.failed .ant-card-head {
+  background: linear-gradient(135deg, #ff4d4f 0%, #cf1322 100%);
+}
+
+/* 进度脉冲动画 */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.solve-progress-card .ant-tag-processing {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+

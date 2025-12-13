@@ -1,0 +1,121 @@
+.qualification-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.matrix-hero {
+  background: #fffdf5;
+  border: 1px solid #f0ead2;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.matrix-hero__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.matrix-hero__kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.matrix-hero__title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+}
+
+.matrix-hero__subtitle {
+  color: #475569;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.matrix-hero__stats {
+  margin-top: 12px;
+}
+
+.matrix-stat-card {
+  border: 1px solid #e5dec5;
+  border-radius: 12px;
+  background: #fffef9;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.04);
+}
+
+.filter-panel {
+  border: 1px solid #e9e2c9;
+  background: #fdfaf2;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.04);
+  border-radius: 12px;
+}
+
+.filter-panel__title {
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 12px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px 16px;
+  align-items: center;
+}
+
+.filter-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px dashed #e5e7eb;
+  border-radius: 8px;
+}
+
+.filter-toggle__label {
+  color: #111827;
+}
+
+.matrix-table-card {
+  border: 1px solid #e5dec5;
+  border-radius: 12px;
+  background: #fffcf5;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+}
+
+.matrix-table-card .ant-table-thead > tr > th {
+  background: #fffaf0;
+  font-weight: 700;
+  color: #0f172a;
+  border-color: #e8dfc4 !important;
+  box-shadow: inset 0 -1px 0 #e8dfc4;
+}
+
+.matrix-table-card .ant-table-tbody > tr > td {
+  padding: 8px 10px;
+  background: #fffef9;
+  border-color: #efe5cb;
+}
+
+.matrix-table-card .ant-table-container {
+  border-radius: 10px;
+  border: 1px solid #e8dfc4;
+  box-shadow: inset 0 1px 0 #f5f1e3, 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+
+.matrix-table-card .ant-table-content {
+  background: #fffcf5;
+}
+
+.matrix-table-card .ant-table-tbody > tr:hover > td {
+  background: #fff5dd !important;
+}

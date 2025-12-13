@@ -1,6 +1,28 @@
 import { Request, Response } from 'express';
 import pool from '../config/database';
 
+
+// 平铺获取所有操作资质要求
+export const listOperationQualificationRequirements = async (_req: Request, res: Response) => {
+  try {
+    const [rows] = await pool.execute(
+      `SELECT 
+         id,
+         operation_id,
+         position_number,
+         qualification_id,
+         min_level,
+         is_mandatory
+       FROM operation_qualification_requirements
+       ORDER BY operation_id, position_number, qualification_id`,
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing operation qualification requirements:', error);
+    res.status(500).json({ error: 'Failed to list operation qualification requirements' });
+  }
+};
+
 // 获取操作的资质要求（按位置分组）
 export const getOperationQualifications = async (req: Request, res: Response) => {
   try {

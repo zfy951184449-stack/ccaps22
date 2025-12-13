@@ -7,7 +7,7 @@
   min-height: 100vh;
 }
 
-/* Fluent Design 侧边栏样式 */
+/* WuxiBio Sidebar Styling */
 .ant-layout-sider {
   overflow: auto;
   height: 100vh;
@@ -17,44 +17,76 @@
   bottom: 0;
   z-index: 1000;
   transition: all 200ms cubic-bezier(0.8, 0, 0.2, 1);
+  background: #1e293b !important;
+  /* WuxiBio Dark Blue-Gray */
 }
 
-/* Fluent Design 侧边栏菜单项样式 */
+/* Sidebar Group Styling */
+.ant-menu-item-group-title {
+  color: #94a3b8 !important;
+  /* Slate-400 for headers */
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 16px 16px 8px !important;
+  font-weight: 600;
+}
+
+/* Menu Item Styling */
 .fluent-sidebar-menu .ant-menu-item {
-  margin: 4px 12px;
+  margin: 4px 8px !important;
   border-radius: 4px;
   height: 40px;
   line-height: 40px;
-  transition: all 100ms cubic-bezier(0.8, 0, 0.2, 1);
+  color: #e2e8f0 !important;
+  /* Slate-200 for text */
+  transition: all 0.2s ease-out;
 }
 
 .fluent-sidebar-menu .ant-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
+  background-color: #334155 !important;
+  /* Slate-700 for hover */
+  color: #ffffff !important;
 }
 
 .fluent-sidebar-menu .ant-menu-item-selected {
-  background: rgba(0, 120, 212, 0.16) !important;
-  color: #0078D4 !important;
+  background-color: rgba(14, 165, 233, 0.1) !important;
+  /* Sky-500 with opacity */
+  color: #38bdf8 !important;
+  /* Sky-400 for active text */
+  font-weight: 500;
   position: relative;
 }
 
+/* Active Indicator Strip */
 .fluent-sidebar-menu .ant-menu-item-selected::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 0;
-  bottom: 0;
+  top: 6px;
+  bottom: 6px;
   width: 3px;
-  background: #0078D4;
+  background: #0ea5e9;
+  /* Sky-500 */
   border-radius: 0 2px 2px 0;
+}
+
+/* Group Dividers */
+.ant-menu-item-group+.ant-menu-item-group::before {
+  content: '';
+  display: block;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 8px 16px;
 }
 
 .fluent-sidebar-menu .ant-menu-item-icon {
   font-size: 16px;
+  min-width: 16px;
 }
 
 .fluent-sidebar-menu .ant-menu-item-selected .ant-menu-item-icon {
-  color: #0078D4;
+  color: #38bdf8;
 }
 
 /* 主内容区域动态适应侧边栏 */

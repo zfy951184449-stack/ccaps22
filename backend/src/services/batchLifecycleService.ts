@@ -52,8 +52,8 @@ export class BatchLifecycleService {
         throw new BatchLifecycleError('BATCH_NOT_FOUND', '批次不存在或已删除');
       }
 
-      if (batch.plan_status !== 'APPROVED') {
-        throw new BatchLifecycleError('INVALID_STATUS', '只有已批准的批次才能激活');
+      if (batch.plan_status !== 'DRAFT') {
+        throw new BatchLifecycleError('INVALID_STATUS', '只有草稿状态的批次才能激活');
       }
 
       const residuals = await BatchLifecycleService.detectResidualSchedulingData(connection, batchId);
@@ -398,7 +398,7 @@ export class BatchLifecycleService {
   private static async resetActivationState(connection: PoolConnection, batchId: number) {
     await connection.execute(
       `UPDATE production_batch_plans
-          SET plan_status = 'APPROVED',
+          SET plan_status = 'DRAFT',
               activated_at = NULL,
               activated_by = NULL,
               batch_color = NULL,

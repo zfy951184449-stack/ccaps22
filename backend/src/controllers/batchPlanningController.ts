@@ -3,7 +3,8 @@ import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import BatchLifecycleService, { BatchLifecycleError } from '../services/batchLifecycleService';
 
-const MUTABLE_BATCH_STATUSES = new Set(['DRAFT', 'PLANNED', 'APPROVED', 'COMPLETED', 'CANCELLED']);
+// 只有 DRAFT 状态的批次可以通过 API 直接修改，ACTIVATED 需要通过生命周期接口
+const MUTABLE_BATCH_STATUSES = new Set(['DRAFT']);
 
 interface BatchPlan {
   id: number;
@@ -15,7 +16,7 @@ interface BatchPlan {
   planned_start_date: string;
   planned_end_date: string;
   template_duration_days: number;
-  plan_status: 'DRAFT' | 'PLANNED' | 'APPROVED' | 'ACTIVATED' | 'COMPLETED' | 'CANCELLED';
+  plan_status: 'DRAFT' | 'ACTIVATED';
   description?: string;
   notes?: string;
   created_at?: string;
@@ -53,7 +54,7 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
       ORDER BY pbp.created_at DESC
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query);
     res.json(rows);
   } catch (error) {
@@ -85,13 +86,13 @@ export const getBatchPlanById = async (req: Request, res: Response) => {
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
       WHERE pbp.id = ?
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [id]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Batch plan not found' });
     }
-    
+
     res.json(rows[0]);
   } catch (error) {
     console.error('Error fetching batch plan:', error);
@@ -101,10 +102,10 @@ export const getBatchPlanById = async (req: Request, res: Response) => {
 
 export const createBatchPlan = async (req: Request, res: Response) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const {
       batch_code,
       batch_name,
@@ -127,7 +128,7 @@ export const createBatchPlan = async (req: Request, res: Response) => {
         planned_start_date, plan_status, description, notes
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
-    
+
     const [result]: any = await connection.execute(insertQuery, [
       batch_code,
       batch_name,
@@ -138,14 +139,14 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       description || null,
       notes || null
     ]);
-    
+
     const batchPlanId = result.insertId;
-    
+
     // Call stored procedure to generate batch operation plans
     await connection.execute('CALL generate_batch_operation_plans(?)', [batchPlanId]);
-    
+
     await connection.commit();
-    
+
     // Fetch the created batch plan with all calculated fields
     const [newBatch] = await connection.execute<RowDataPacket[]>(
       `SELECT 
@@ -158,12 +159,12 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       WHERE pbp.id = ?`,
       [batchPlanId]
     );
-    
+
     res.status(201).json(newBatch[0]);
   } catch (error: any) {
     await connection.rollback();
     console.error('Error creating batch plan:', error);
-    
+
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Batch code already exists' });
     } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
@@ -178,10 +179,10 @@ export const createBatchPlan = async (req: Request, res: Response) => {
 
 export const updateBatchPlan = async (req: Request, res: Response) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const { id } = req.params;
     const {
       batch_code,
@@ -244,7 +245,7 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
           description = ?, notes = ?
       WHERE id = ?
     `;
-    
+
     const [result]: any = await connection.execute(updateQuery, [
       batch_code,
       batch_name,
@@ -256,18 +257,18 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       notes || null,
       id
     ]);
-    
+
     if (result.affectedRows === 0) {
       await connection.rollback();
       return res.status(404).json({ error: 'Batch plan not found' });
     }
-    
+
     if (templateChanged || plannedStartChanged) {
       await connection.execute('CALL generate_batch_operation_plans(?)', [id]);
     }
 
     await connection.commit();
-    
+
     // Fetch updated batch plan
     const [updatedBatch] = await connection.execute<RowDataPacket[]>(
       `SELECT 
@@ -280,12 +281,12 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       WHERE pbp.id = ?`,
       [id]
     );
-    
+
     res.json(updatedBatch[0]);
   } catch (error: any) {
     await connection.rollback();
     console.error('Error updating batch plan:', error);
-    
+
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Batch code already exists' });
     } else {
@@ -322,18 +323,66 @@ export const deleteBatchPlan = async (req: Request, res: Response) => {
   }
 };
 
+export const activateBatchPlan = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const operatorId = (req as any).user?.id ?? null;
+    const { color } = req.body;
+
+    const result = await BatchLifecycleService.activate(Number(id), {
+      operatorId,
+      color,
+    });
+
+    res.json({
+      message: '批次激活完成',
+      ...result,
+    });
+  } catch (error: any) {
+    console.error('Error activating batch plan:', error);
+    if (error instanceof BatchLifecycleError) {
+      const statusCode = error.code === 'BATCH_NOT_FOUND' ? 404 : 400;
+      res.status(statusCode).json({ error: error.message, code: error.code, details: error.details });
+      return;
+    }
+    res.status(500).json({ error: 'Failed to activate batch plan' });
+  }
+};
+
+export const deactivateBatchPlan = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const operatorId = (req as any).user?.id ?? null;
+
+    const result = await BatchLifecycleService.deactivate(Number(id), {
+      operatorId,
+    });
+
+    res.json({
+      message: '批次撤销激活完成',
+      ...result,
+    });
+  } catch (error: any) {
+    console.error('Error deactivating batch plan:', error);
+    if (error instanceof BatchLifecycleError) {
+      const statusCode = error.code === 'BATCH_NOT_FOUND' ? 404 : 400;
+      res.status(statusCode).json({ error: error.message, code: error.code, details: error.details });
+      return;
+    }
+    res.status(500).json({ error: 'Failed to deactivate batch plan' });
+  }
+};
+
 export const getBatchStatistics = async (req: Request, res: Response) => {
   try {
     const query = `
       SELECT 
         COUNT(*) as total_batches,
         SUM(CASE WHEN plan_status = 'DRAFT' THEN 1 ELSE 0 END) as draft_count,
-        SUM(CASE WHEN plan_status = 'PLANNED' THEN 1 ELSE 0 END) as planned_count,
-        SUM(CASE WHEN plan_status = 'APPROVED' THEN 1 ELSE 0 END) as approved_count,
-        SUM(CASE WHEN plan_status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelled_count
+        SUM(CASE WHEN plan_status = 'ACTIVATED' THEN 1 ELSE 0 END) as activated_count
       FROM production_batch_plans
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query);
     res.json(rows[0]);
   } catch (error) {
@@ -359,7 +408,7 @@ export const getTemplatesForBatch = async (req: Request, res: Response) => {
       GROUP BY pt.id
       ORDER BY pt.template_name
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query);
     res.json(rows);
   } catch (error) {

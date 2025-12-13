@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Layout, Menu, Typography, Button, ConfigProvider } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   SafetyOutlined,
   SettingOutlined,
@@ -13,6 +14,9 @@ import {
   ScheduleOutlined,
   AppstoreOutlined,
   DashboardOutlined,
+  ControlOutlined,
+  BugOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -28,22 +32,57 @@ import OperationConstraintsPage from './pages/OperationConstraintsPage';
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
 import SystemMonitorPage from './pages/SystemMonitorPage';
+import SystemSettingsPage from './pages/SystemSettingsPage';
+import AutoSchedulingDebugPage from './pages/AutoSchedulingDebugPage';
+import AutoSchedulingPage from './pages/AutoSchedulingPage';
+import ModularSchedulingPage from './pages/ModularSchedulingPage';
+import Dashboard from './components/Dashboard';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
 // 路由路径映射到菜单key
 const pathToMenuKey: { [key: string]: string } = {
-  '/': 'organization-workbench',
+  '/': 'dashboard',
+  '/dashboard': 'dashboard',
+  '/organization-workbench': 'organization-workbench',
   '/qualifications': 'qualifications',
   '/qualification-matrix': 'qualification-matrix',
   '/operations': 'operations',
   '/process-templates': 'process-templates',
   '/batch-management': 'batch-management',
   '/personnel-scheduling': 'personnel-scheduling',
+  '/auto-scheduling': 'auto-scheduling',
+  '/modular-scheduling': 'modular-scheduling',
   '/shift-definitions': 'shift-definitions',
   '/operation-constraints': 'operation-constraints',
   '/system-monitor': 'system-monitor',
+  '/system-settings': 'system-settings',
+  '/auto-scheduling-debug': 'auto-scheduling-debug',
+};
+
+const findMenuLabel = (items: MenuProps['items'], key: string): React.ReactNode | undefined => {
+  if (!items) {
+    return undefined;
+  }
+  for (const item of items) {
+    if (!item) {
+      continue;
+    }
+    if ('key' in item && item.key === key) {
+      if ('label' in item) {
+        return item.label as React.ReactNode;
+      }
+      return undefined;
+    }
+    if ('children' in item && item.children) {
+      const childLabel = findMenuLabel(item.children, key);
+      if (childLabel) {
+        return childLabel;
+      }
+    }
+  }
+  return undefined;
 };
 
 const AppLayout: React.FC = () => {
@@ -51,61 +90,117 @@ const AppLayout: React.FC = () => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
 
-  // 根据当前路径确定选中的菜单项
-  const selectedMenu = pathToMenuKey[location.pathname] || 'organization-workbench';
-
-  const menuItems = [
+  const menuItems: MenuProps['items'] = [
     {
-      key: 'qualifications',
-      icon: <SafetyOutlined />,
-      label: '资质管理',
-    },
-    {
-      key: 'qualification-matrix',
-      icon: <TableOutlined />,
-      label: '资质矩阵',
-    },
-    {
-      key: 'operations',
-      icon: <SettingOutlined />,
-      label: '操作管理',
-    },
-    {
-      key: 'process-templates',
-      icon: <ProjectOutlined />,
-      label: '工艺模版',
-    },
-    {
-      key: 'batch-management',
-      icon: <AppstoreOutlined />,
-      label: '批次管理',
-    },
-    {
-      key: 'organization-workbench',
-      icon: <ApartmentOutlined />,
-      label: '组织与人员',
-    },
-    {
-      key: 'personnel-scheduling',
-      icon: <ClockCircleOutlined />,
-      label: '人员排班',
-    },
-    {
-      key: 'shift-definitions',
-      icon: <ScheduleOutlined />,
-      label: '班次定义',
-    },
-    {
-      key: 'operation-constraints',
-      icon: <LinkOutlined />,
-      label: '操作约束',
-    },
-    {
-      key: 'system-monitor',
+      key: 'dashboard',
       icon: <DashboardOutlined />,
-      label: '系统监控',
+      label: '调度中心',
+    },
+    {
+      type: 'group',
+      label: '基础数据',
+      children: [
+        {
+          key: 'qualifications',
+          icon: <SafetyOutlined />,
+          label: '资质管理',
+        },
+        {
+          key: 'qualification-matrix',
+          icon: <TableOutlined />,
+          label: '资质矩阵',
+        },
+        {
+          key: 'operations',
+          icon: <SettingOutlined />,
+          label: '操作管理',
+        },
+      ],
+    },
+    {
+      type: 'group',
+      label: '生产计划',
+      children: [
+        {
+          key: 'process-templates',
+          icon: <ProjectOutlined />,
+          label: '工艺模版',
+        },
+        {
+          key: 'batch-management',
+          icon: <AppstoreOutlined />,
+          label: '批次管理',
+        },
+      ],
+    },
+    {
+      type: 'group',
+      label: '人员管理',
+      children: [
+        {
+          key: 'organization-workbench',
+          icon: <ApartmentOutlined />,
+          label: '组织与人员',
+        },
+        {
+          key: 'personnel-scheduling',
+          icon: <ClockCircleOutlined />,
+          label: '人员排班',
+        },
+        {
+          key: 'auto-scheduling',
+          icon: <RobotOutlined />,
+          label: '自动排班',
+        },
+        {
+          key: 'modular-scheduling',
+          icon: <RobotOutlined />,
+          label: '自动排班（模块化）',
+        },
+        {
+          key: 'shift-definitions',
+          icon: <ScheduleOutlined />,
+          label: '班次定义',
+        },
+      ],
+    },
+    {
+      type: 'group',
+      label: '约束配置',
+      children: [
+        {
+          key: 'operation-constraints',
+          icon: <LinkOutlined />,
+          label: '操作约束',
+        },
+      ],
+    },
+    {
+      type: 'group',
+      label: '系统管理',
+      children: [
+        {
+          key: 'system-monitor',
+          icon: <DashboardOutlined />,
+          label: '系统监控',
+        },
+        {
+          key: 'system-settings',
+          icon: <ControlOutlined />,
+          label: '系统设置',
+        },
+        {
+          key: 'auto-scheduling-debug',
+          icon: <BugOutlined />,
+          label: '排班调试',
+        },
+      ],
     },
   ];
+
+  // 根据当前路径确定选中的菜单项
+  const selectedMenu = pathToMenuKey[location.pathname] || 'organization-workbench';
+  const currentMenuLabel = findMenuLabel(menuItems, selectedMenu) || '仪表盘';
 
   // 处理菜单点击
   const handleMenuClick = ({ key }: { key: string }) => {
@@ -127,47 +222,49 @@ const AppLayout: React.FC = () => {
       }}
     >
       <Layout style={{ minHeight: '100vh', background: fluentDesignTokens.colors.backgroundAlt }}>
-        <Sider 
-          width={250} 
-          theme="dark" 
-          collapsible 
+        <Sider
+          width={250}
+          theme="dark"
+          collapsible
           collapsed={collapsed}
           onCollapse={setCollapsed}
           trigger={null}
           style={{
-            background: 'linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%)',
+            background: '#1e293b',
             boxShadow: fluentDesignTokens.elevation.level3,
           }}
         >
-          <div 
+          <div
             className="fluent-sidebar-header"
-            style={{ 
-              padding: collapsed ? `${fluentDesignTokens.spacing.lg} ${fluentDesignTokens.spacing.sm}` : fluentDesignTokens.spacing.lg, 
-              color: 'white', 
+            style={{
+              padding: collapsed ? `${fluentDesignTokens.spacing.lg} ${fluentDesignTokens.spacing.sm}` : fluentDesignTokens.spacing.lg,
+              color: 'white',
               textAlign: 'center',
               borderBottom: `1px solid rgba(255, 255, 255, 0.1)`,
               transition: `all ${fluentDesignTokens.animation.duration.standard} ${fluentDesignTokens.animation.easing.standard}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {!collapsed && (
-              <Title level={4} style={{ 
-                color: 'white', 
-                margin: 0,
-                fontSize: fluentDesignTokens.typography.fontSize.title,
-                fontWeight: fluentDesignTokens.typography.fontWeight.semibold,
-              }}>
-                APS系统管理
-              </Title>
-            )}
-            {collapsed && (
-              <Title level={4} style={{ 
-                color: 'white', 
-                margin: 0,
-                fontSize: fluentDesignTokens.typography.fontSize.bodyLarge,
-                fontWeight: fluentDesignTokens.typography.fontWeight.bold,
-              }}>
-                APS
-              </Title>
+            {!collapsed ? (
+              <img
+                src="/wuxibio-logo.svg"
+                alt="WuXi Biologics APS"
+                style={{
+                  height: '50px',
+                  width: 'auto',
+                }}
+              />
+            ) : (
+              <img
+                src="/wuxibio-icon.svg"
+                alt="WuXi Biologics"
+                style={{
+                  height: '32px',
+                  width: '32px',
+                }}
+              />
             )}
           </div>
           <Menu
@@ -184,12 +281,12 @@ const AppLayout: React.FC = () => {
             className="fluent-sidebar-menu"
           />
         </Sider>
-        
+
         <Layout className={`main-layout ${collapsed ? 'collapsed' : ''}`}>
-          <Header 
+          <Header
             className="fluent-header"
-            style={{ 
-              padding: `0 ${fluentDesignTokens.spacing.xxl}`, 
+            style={{
+              padding: `0 ${fluentDesignTokens.spacing.xxl}`,
               background: fluentDesignTokens.colors.background,
               borderBottom: `1px solid ${fluentDesignTokens.colors.border}`,
               display: 'flex',
@@ -204,27 +301,27 @@ const AppLayout: React.FC = () => {
                 type="text"
                 icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                 onClick={() => setCollapsed(!collapsed)}
-                style={{ 
+                style={{
                   marginRight: fluentDesignTokens.spacing.lg,
                   borderRadius: fluentDesignTokens.borderRadius.md,
                   transition: `all ${fluentDesignTokens.animation.duration.fast} ${fluentDesignTokens.animation.easing.standard}`,
                 }}
                 className="fluent-button"
               />
-              <Title 
-                level={3} 
-                style={{ 
+              <Title
+                level={3}
+                style={{
                   margin: 0,
                   fontSize: fluentDesignTokens.typography.fontSize.title,
                   fontWeight: fluentDesignTokens.typography.fontWeight.semibold,
                   color: fluentDesignTokens.colors.textPrimary,
                 }}
               >
-                {menuItems.find(item => item.key === selectedMenu)?.label}
+                {currentMenuLabel}
               </Title>
             </div>
           </Header>
-          
+
           <Content
             className="fluent-content"
             style={{
@@ -237,16 +334,22 @@ const AppLayout: React.FC = () => {
             }}
           >
             <Routes>
-              <Route path="/" element={<OrganizationWorkbenchPage />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/organization-workbench" element={<OrganizationWorkbenchPage />} />
               <Route path="/qualifications" element={<QualificationsPage />} />
               <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
               <Route path="/operations" element={<OperationsPage />} />
               <Route path="/process-templates" element={<ProcessTemplatesPage />} />
               <Route path="/batch-management" element={<BatchManagementPage />} />
               <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
+              <Route path="/auto-scheduling" element={<AutoSchedulingPage />} />
+              <Route path="/modular-scheduling" element={<ModularSchedulingPage />} />
               <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
               <Route path="/operation-constraints" element={<OperationConstraintsPage />} />
               <Route path="/system-monitor" element={<SystemMonitorPage />} />
+              <Route path="/system-settings" element={<SystemSettingsPage />} />
+              <Route path="/auto-scheduling-debug" element={<AutoSchedulingDebugPage />} />
             </Routes>
           </Content>
         </Layout>

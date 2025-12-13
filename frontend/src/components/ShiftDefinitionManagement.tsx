@@ -34,6 +34,7 @@ type FormValues = {
   start_time: Dayjs;
   end_time: Dayjs;
   is_cross_day: boolean;
+  is_night_shift: boolean;
   nominal_hours: number;
   max_extension_hours?: number;
   description?: string;
@@ -86,6 +87,7 @@ const ShiftDefinitionManagement: React.FC = () => {
     form.setFieldsValue({
       category: 'STANDARD',
       is_cross_day: false,
+      is_night_shift: false,
       is_active: true,
       start_time: dayjs('08:00', 'HH:mm'),
       end_time: dayjs('17:00', 'HH:mm'),
@@ -109,6 +111,7 @@ const ShiftDefinitionManagement: React.FC = () => {
       start_time: formatTimeValue(record.start_time),
       end_time: formatTimeValue(record.end_time),
       is_cross_day: record.is_cross_day,
+      is_night_shift: record.is_night_shift ?? false,
       nominal_hours: record.nominal_hours,
       max_extension_hours: record.max_extension_hours ?? 0,
       description: record.description ?? '',
@@ -127,6 +130,7 @@ const ShiftDefinitionManagement: React.FC = () => {
         start_time: toTimeString(values.start_time),
         end_time: toTimeString(values.end_time),
         is_cross_day: values.is_cross_day,
+        is_night_shift: values.is_night_shift ?? false,
         nominal_hours: Number(values.nominal_hours),
         max_extension_hours: values.max_extension_hours ?? 0,
         description: values.description ?? '',
@@ -210,6 +214,7 @@ const ShiftDefinitionManagement: React.FC = () => {
           <span>
             {record.start_time} ~ {record.end_time}
             {record.is_cross_day && <Tag color="magenta" style={{ marginLeft: 8 }}>跨日</Tag>}
+            {record.is_night_shift && <Tag color="geekblue" style={{ marginLeft: 8 }}>夜班</Tag>}
           </span>
         ),
       },
@@ -318,6 +323,7 @@ const ShiftDefinitionManagement: React.FC = () => {
           initialValues={{
             category: 'STANDARD',
             is_cross_day: false,
+            is_night_shift: false,
             is_active: true,
             start_time: dayjs('08:00', 'HH:mm'),
             end_time: dayjs('17:00', 'HH:mm'),
@@ -372,9 +378,14 @@ const ShiftDefinitionManagement: React.FC = () => {
             </Form.Item>
           </Space>
 
-          <Form.Item name="is_cross_day" label="跨日班次" valuePropName="checked">
-            <Switch />
-          </Form.Item>
+          <Space size="large">
+            <Form.Item name="is_cross_day" label="跨日班次" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="is_night_shift" label="夜班" valuePropName="checked" tooltip="标记为夜班后，求解器会应用夜班休息约束">
+              <Switch />
+            </Form.Item>
+          </Space>
 
           <Space size="large">
             <Form.Item

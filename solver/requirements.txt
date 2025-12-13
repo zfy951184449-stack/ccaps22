@@ -1,0 +1,13 @@
+# 求解器 Python 依赖
+# 使用: pip install -r requirements.txt
+
+# OR-Tools (CP-SAT 求解器)
+ortools>=9.8.0
+
+# Flask Web 框架
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# 类型检查（可选）
+typing-extensions>=4.9.0
+

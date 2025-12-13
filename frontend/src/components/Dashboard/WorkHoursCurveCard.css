@@ -1,0 +1,86 @@
+/**
+ * WorkHoursCurveCard 样式
+ */
+
+.work-hours-curve-card {
+    width: 100%;
+}
+
+.work-hours-curve-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.work-hours-curve-card .card-title {
+    font-size: 16px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.work-hours-curve-card .card-title .anticon {
+    color: #595959;
+}
+
+.work-hours-curve-card .card-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.work-hours-curve-card .month-navigator {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.work-hours-curve-card .month-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #595959;
+    transition: all 0.2s;
+}
+
+.work-hours-curve-card .month-nav-btn:hover {
+    border-color: #1677ff;
+    color: #1677ff;
+}
+
+.work-hours-curve-card .month-nav-btn:active {
+    background: #f5f5f5;
+}
+
+.work-hours-curve-card .chart-container {
+    height: 280px;
+    margin-bottom: 16px;
+}
+
+.work-hours-curve-card .summary-row {
+    padding-top: 16px;
+    border-top: 1px solid #f5f5f5;
+}
+
+.work-hours-curve-card .summary-row .ant-statistic-title {
+    color: #8c8c8c;
+    font-size: 12px;
+}
+
+.work-hours-curve-card .summary-row .ant-statistic-content {
+    font-size: 20px;
+}
+
+.work-hours-curve-card .summary-row .ant-statistic-content-suffix {
+    font-size: 12px;
+    color: #8c8c8c;
+}

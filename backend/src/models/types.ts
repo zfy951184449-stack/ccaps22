@@ -105,6 +105,7 @@ export interface ShiftDefinition {
   start_time: string;
   end_time: string;
   is_cross_day: boolean;
+  is_night_shift: boolean;
   nominal_hours: number;
   max_extension_hours?: number;
   description?: string | null;
@@ -180,6 +181,11 @@ export interface QuarterlyStandardHours {
   weekend_days: number;
   legal_holiday_days: number;
   makeup_work_days: number;
+  preferNoLeaderNight?: boolean;
+  leaderNightPenaltyWeight?: number;
+  leaderLongDayThresholdHours?: number;
+  leaderLongDayPenaltyWeight?: number;
+  leaderTier1Threshold?: number;
   actual_working_days: number;
   standard_hours: number;
   calculation_details?: string;

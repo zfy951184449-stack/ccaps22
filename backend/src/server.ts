@@ -3,7 +3,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import path from 'path';
+import fs from 'fs';
+import http from 'http';
 import pool from './config/database';
+import solverProgressService from './services/solverProgressService';
 
 dayjs.extend(quarterOfYear);
 import employeeRoutes from './routes/employees';
@@ -12,6 +17,7 @@ import employeeQualificationRoutes from './routes/employeeQualifications';
 import qualificationMatrixRoutes from './routes/qualificationMatrix';
 import operationRoutes from './routes/operations';
 import operationQualificationRoutes from './routes/operationQualifications';
+import operationQualificationRequirementRoutes from './routes/operationQualificationRequirements';
 import processTemplateRoutes from './routes/processTemplates';
 import processStageRoutes from './routes/processStages';
 import stageOperationRoutes from './routes/stageOperations';
@@ -28,12 +34,17 @@ import HolidayScheduler from './scheduler/holidayScheduler';
 import HolidayService from './services/holidayService';
 import SystemSettingsService from './services/systemSettingsService';
 import systemRoutes from './routes/system';
+import schedulingRunRoutes from './routes/schedulingRuns';
+import schedulingV2Routes from './routes/schedulingV2Routes';
+import independentOperationRoutes from './routes/independentOperations';
+import dashboardRoutes from './routes/dashboard';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
+const SOLVER_BASE_URL = process.env.SOLVER_BASE_URL || 'http://localhost:5005';
 
 const allowedOriginsEnv = process.env.CORS_ALLOWED_ORIGINS;
 const allowedOrigins = allowedOriginsEnv
@@ -55,10 +66,23 @@ app.use(
 
       callback(new Error('Not allowed by CORS'));
     },
-    credentials: true
-  })
+    credentials: true,
+  }),
 );
-app.use(express.json());
+
+app.use(
+  '/solver-api',
+  createProxyMiddleware({
+    target: SOLVER_BASE_URL,
+    changeOrigin: true,
+    pathRewrite: {
+      '^/solver-api': '/api',
+    },
+  }),
+);
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 
 // 系统路由放在最前面
@@ -70,11 +94,12 @@ app.use('/api/employee-qualifications', employeeQualificationRoutes);
 app.use('/api/qualification-matrix', qualificationMatrixRoutes);
 app.use('/api/operations', operationRoutes);
 app.use('/api/operation-qualifications', operationQualificationRoutes);
+app.use('/api/operation-qualification-requirements', operationQualificationRequirementRoutes);
 app.use('/api/process-templates', processTemplateRoutes);
 app.use('/api/process-stages', processStageRoutes);
 app.use('/api/stage-operations', stageOperationRoutes);
 app.use('/api/shift-types', shiftTypeRoutes);
-// app.use('/api/personnel-schedules', personnelScheduleRoutes);
+app.use('/api/personnel-schedules', personnelScheduleRoutes);
 app.use('/api/batch-plans', batchPlanningRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/constraints', constraintRoutes);
@@ -82,6 +107,10 @@ app.use('/api/share-groups', shareGroupRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/org-structure', organizationHierarchyRoutes);
 app.use('/api/shift-definitions', shiftDefinitionRoutes);
+app.use('/api/scheduling-runs', schedulingRunRoutes);
+app.use('/api/v2/scheduling', schedulingV2Routes);
+app.use('/api/independent-operations', independentOperationRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'APS Backend API is running' });
@@ -328,9 +357,37 @@ async function calculateWorkingDaysFromCalendar(startDate: string, endDate: stri
   }
 }
 
+const frontendBuildPath = path.resolve(__dirname, '../../frontend/build');
+if (fs.existsSync(frontendBuildPath)) {
+  console.log('Serving frontend build from', frontendBuildPath);
+  app.use(express.static(frontendBuildPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/solver-api')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendBuildPath, 'index.html'));
+  });
+} else {
+  app.use('*', (req, res) => {
+    console.log(`404 Not Found: ${req.method} ${req.originalUrl}`);
+    res.status(404).json({
+      error: 'Route not found',
+      method: req.method,
+      url: req.originalUrl,
+    });
+  });
+}
+
+// Create HTTP server and attach WebSocket
+const server = http.createServer(app);
+
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(Number(PORT), HOST, () => {
+  // Initialize WebSocket service
+  solverProgressService.initialize(server);
+
+  server.listen(Number(PORT), HOST, () => {
     console.log(`Server is running at http://${HOST}:${PORT}`);
+    console.log(`WebSocket available at ws://${HOST}:${PORT}/ws/solver-progress`);
   });
 
   HolidayScheduler.start();
@@ -341,16 +398,7 @@ if (process.env.NODE_ENV !== 'test') {
   }, 60 * 60 * 1000); // 1小时
 
   console.log('节假日API缓存清理定时器已启动');
-
-  // 添加简单的404处理
-  app.use('*', (req, res) => {
-    console.log(`404 Not Found: ${req.method} ${req.originalUrl}`);
-    res.status(404).json({
-      error: 'Route not found',
-      method: req.method,
-      url: req.originalUrl
-    });
-  });
 }
 
+export { server };
 export default app

@@ -36,11 +36,11 @@ interface CalendarOperation {
 export const getDayOperations = async (req: Request, res: Response) => {
   try {
     const { date } = req.query;
-    
+
     if (!date) {
       return res.status(400).json({ error: 'Date parameter is required' });
     }
-    
+
     const query = `
       SELECT 
         co.*,
@@ -56,7 +56,7 @@ export const getDayOperations = async (req: Request, res: Response) => {
       GROUP BY co.operation_plan_id
       ORDER BY co.planned_start_datetime
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [date]);
     res.json(rows);
   } catch (error) {
@@ -69,11 +69,11 @@ export const getDayOperations = async (req: Request, res: Response) => {
 export const getWeekOperations = async (req: Request, res: Response) => {
   try {
     const { startDate, endDate } = req.query;
-    
+
     if (!startDate || !endDate) {
       return res.status(400).json({ error: 'Start and end date parameters are required' });
     }
-    
+
     const query = `
       SELECT 
         DATE(planned_start_datetime) as operation_date,
@@ -91,7 +91,7 @@ export const getWeekOperations = async (req: Request, res: Response) => {
       GROUP BY DATE(planned_start_datetime)
       ORDER BY operation_date
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [startDate, endDate]);
     res.json(rows);
   } catch (error) {
@@ -104,14 +104,14 @@ export const getWeekOperations = async (req: Request, res: Response) => {
 export const getMonthOperations = async (req: Request, res: Response) => {
   try {
     const { year, month } = req.query;
-    
+
     if (!year || !month) {
       return res.status(400).json({ error: 'Year and month parameters are required' });
     }
-    
+
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = dayjs(startDate).endOf('month').format('YYYY-MM-DD');
-    
+
     const query = `
       SELECT 
         DATE(planned_start_datetime) as operation_date,
@@ -124,7 +124,7 @@ export const getMonthOperations = async (req: Request, res: Response) => {
       GROUP BY DATE(planned_start_datetime)
       ORDER BY operation_date
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [startDate, endDate]);
     res.json(rows);
   } catch (error) {
@@ -204,9 +204,39 @@ export const getWorkdayRange = async (req: Request, res: Response) => {
   }
 };
 
-// 获取所有已激活批次的操作计划（用于全局甘特视图）
+// 获取批次的操作计划（用于全局甘特视图）
+// 支持 status 查询参数:
+//   - 不传或 'ACTIVATED': 仅返回激活批次（向后兼容）
+//   - 'all': 返回所有有操作计划的批次
+//   - 逗号分隔的状态列表如 'PLANNED,APPROVED,ACTIVATED': 返回指定状态的批次
 export const getActiveBatchOperations = async (req: Request, res: Response) => {
   try {
+    const { status } = req.query;
+
+    // 解析状态过滤条件 - 仅支持 DRAFT 和 ACTIVATED
+    const validStatuses = ['DRAFT', 'ACTIVATED'];
+    let statusFilter: string;
+    let statusParams: string[] = [];
+
+    if (!status || status === 'ACTIVATED') {
+      // 默认行为：仅激活批次
+      statusFilter = "pbp.plan_status = 'ACTIVATED'";
+    } else if (status === 'all') {
+      // 返回所有有操作的批次
+      statusFilter = '1=1';
+    } else {
+      // 逗号分隔的状态列表
+      const requestedStatuses = String(status).toUpperCase().split(',').map(s => s.trim());
+      const filteredStatuses = requestedStatuses.filter(s => validStatuses.includes(s));
+
+      if (filteredStatuses.length === 0) {
+        return res.status(400).json({ error: `Invalid status. Valid values: ${validStatuses.join(', ')}` });
+      }
+
+      statusParams = filteredStatuses;
+      statusFilter = `pbp.plan_status IN (${filteredStatuses.map(() => '?').join(', ')})`;
+    }
+
     const query = `
       SELECT
         bop.id AS operation_plan_id,
@@ -217,7 +247,7 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
         pbp.plan_status,
         ps.id AS stage_id,
         ps.start_day AS stage_start_day,
-        ps.stage_name,
+        COALESCE(ps.stage_name, '独立操作') AS stage_name,
         o.operation_name,
         bop.planned_start_datetime,
         bop.planned_end_datetime,
@@ -250,6 +280,7 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
         bop.planned_duration,
         bop.required_people,
         bop.is_locked,
+        bop.is_independent,
         IFNULL(ap.assigned_people, 0) AS assigned_people,
         CASE
           WHEN IFNULL(ap.assigned_people, 0) >= bop.required_people THEN 'COMPLETE'
@@ -258,8 +289,8 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
         END AS assignment_status
       FROM production_batch_plans pbp
       JOIN batch_operation_plans bop ON pbp.id = bop.batch_plan_id
-      JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
-      JOIN process_stages ps ON sos.stage_id = ps.id
+      LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+      LEFT JOIN process_stages ps ON sos.stage_id = ps.id
       JOIN operations o ON bop.operation_id = o.id
       LEFT JOIN (
         SELECT batch_operation_plan_id, COUNT(DISTINCT employee_id) AS assigned_people
@@ -267,11 +298,11 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
         WHERE assignment_status IN ('PLANNED', 'CONFIRMED')
         GROUP BY batch_operation_plan_id
       ) ap ON ap.batch_operation_plan_id = bop.id
-      WHERE pbp.plan_status = 'ACTIVATED'
+      WHERE ${statusFilter}
       ORDER BY bop.planned_start_datetime ASC
     `;
 
-    const [rows] = await pool.execute<RowDataPacket[]>(query);
+    const [rows] = await pool.execute<RowDataPacket[]>(query, statusParams);
     res.json(rows);
   } catch (error) {
     console.error('Error fetching active batch operations:', error);
@@ -279,11 +310,12 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
   }
 };
 
+
 // 获取操作详情
 export const getOperationDetail = async (req: Request, res: Response) => {
   try {
     const { operationId } = req.params;
-    
+
     const query = `
       SELECT 
         co.*,
@@ -305,13 +337,13 @@ export const getOperationDetail = async (req: Request, res: Response) => {
       WHERE co.operation_plan_id = ?
       GROUP BY co.operation_plan_id
     `;
-    
+
     const [rows] = await pool.execute<RowDataPacket[]>(query, [operationId]);
-    
+
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Operation not found' });
     }
-    
+
     const operation = rows[0];
     if (operation.assigned_personnel_json) {
       operation.assigned_personnel = JSON.parse(`[${operation.assigned_personnel_json}]`);
@@ -319,7 +351,7 @@ export const getOperationDetail = async (req: Request, res: Response) => {
     } else {
       operation.assigned_personnel = [];
     }
-    
+
     res.json(operation);
   } catch (error) {
     console.error('Error fetching operation detail:', error);
@@ -334,55 +366,117 @@ export const updateOperationSchedule = async (req: Request, res: Response) => {
     const {
       planned_start_datetime: plannedStart,
       planned_end_datetime: plannedEnd,
+      window_start_datetime: windowStart,
+      window_end_datetime: windowEnd,
       required_people: requiredPeopleInput,
     } = req.body || {};
 
-    if (!plannedStart || !plannedEnd) {
-      return res.status(400).json({ error: 'planned_start_datetime and planned_end_datetime are required' });
+    // 检查批次状态：只有 DRAFT 状态的批次可以被修改
+    const [batchStatusRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT pbp.plan_status 
+       FROM batch_operation_plans bop
+       JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+       WHERE bop.id = ?`,
+      [operationId]
+    );
+
+    if (batchStatusRows.length === 0) {
+      return res.status(404).json({ error: 'Operation not found' });
     }
 
-    const start = dayjs(plannedStart);
-    const end = dayjs(plannedEnd);
-
-    if (!start.isValid() || !end.isValid()) {
-      return res.status(400).json({ error: 'Invalid datetime format' });
+    const batchStatus = batchStatusRows[0].plan_status;
+    if (batchStatus === 'ACTIVATED') {
+      return res.status(403).json({ error: '激活状态的批次禁止修改' });
     }
 
-    if (!end.isAfter(start)) {
-      return res.status(400).json({ error: 'planned_end_datetime must be after planned_start_datetime' });
+    // 至少需要计划时间或窗口时间
+    if (!plannedStart && !plannedEnd && !windowStart && !windowEnd) {
+      return res.status(400).json({ error: 'At least planned times or window times are required' });
     }
 
-    let requiredPeople: number | undefined;
+    const params: (string | number | null)[] = [];
+    const setClauses: string[] = [];
+
+    // 处理计划时间
+    if (plannedStart && plannedEnd) {
+      const start = dayjs(plannedStart);
+      const end = dayjs(plannedEnd);
+
+      if (!start.isValid() || !end.isValid()) {
+        return res.status(400).json({ error: 'Invalid datetime format' });
+      }
+
+      if (!end.isAfter(start)) {
+        return res.status(400).json({ error: 'planned_end_datetime must be after planned_start_datetime' });
+      }
+
+      const durationHours = Number((end.diff(start, 'minute') / 60).toFixed(2));
+
+      setClauses.push('planned_start_datetime = ?');
+      params.push(start.format('YYYY-MM-DD HH:mm:ss'));
+      setClauses.push('planned_end_datetime = ?');
+      params.push(end.format('YYYY-MM-DD HH:mm:ss'));
+      setClauses.push('planned_duration = ?');
+      params.push(durationHours);
+    }
+
+    // 处理窗口时间
+    if (windowStart !== undefined) {
+      if (windowStart === null) {
+        setClauses.push('window_start_datetime = NULL');
+      } else {
+        const winStart = dayjs(windowStart);
+        if (!winStart.isValid()) {
+          return res.status(400).json({ error: 'Invalid window_start_datetime format' });
+        }
+        setClauses.push('window_start_datetime = ?');
+        params.push(winStart.format('YYYY-MM-DD HH:mm:ss'));
+      }
+    }
+
+    if (windowEnd !== undefined) {
+      if (windowEnd === null) {
+        setClauses.push('window_end_datetime = NULL');
+      } else {
+        const winEnd = dayjs(windowEnd);
+        if (!winEnd.isValid()) {
+          return res.status(400).json({ error: 'Invalid window_end_datetime format' });
+        }
+        setClauses.push('window_end_datetime = ?');
+        params.push(winEnd.format('YYYY-MM-DD HH:mm:ss'));
+      }
+    }
+
+    // 验证窗口时间顺序（如果两者都提供）
+    if (windowStart && windowEnd) {
+      const winStart = dayjs(windowStart);
+      const winEnd = dayjs(windowEnd);
+      if (winEnd.isBefore(winStart)) {
+        return res.status(400).json({ error: 'Window start time must be before end time' });
+      }
+    }
+
+    // 处理人数
     if (requiredPeopleInput !== undefined && requiredPeopleInput !== null) {
       const parsed = Number(requiredPeopleInput);
       if (!Number.isFinite(parsed) || parsed <= 0) {
         return res.status(400).json({ error: 'required_people must be a positive number' });
       }
-      requiredPeople = Math.round(parsed);
+      setClauses.push('required_people = ?');
+      params.push(Math.round(parsed));
     }
 
-    const durationHours = Number((end.diff(start, 'minute') / 60).toFixed(2));
-
-    const params: (string | number)[] = [
-      start.format('YYYY-MM-DD HH:mm:ss'),
-      end.format('YYYY-MM-DD HH:mm:ss'),
-      durationHours,
-    ];
-
-    let updateSql = `
-      UPDATE batch_operation_plans
-      SET planned_start_datetime = ?,
-          planned_end_datetime = ?,
-          planned_duration = ?
-    `;
-
-    if (requiredPeople !== undefined) {
-      updateSql += ', required_people = ?';
-      params.push(requiredPeople);
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    updateSql += ' WHERE id = ?';
     params.push(Number(operationId));
+
+    const updateSql = `
+      UPDATE batch_operation_plans
+      SET ${setClauses.join(', ')}
+      WHERE id = ?
+    `;
 
     const [result] = await pool.execute<ResultSetHeader>(updateSql, params);
 
@@ -401,7 +495,7 @@ export const updateOperationSchedule = async (req: Request, res: Response) => {
 export const getRecommendedPersonnel = async (req: Request, res: Response) => {
   try {
     const { operationId } = req.params;
-    
+
     // 首先获取操作信息
     const [operationRows] = await pool.execute<RowDataPacket[]>(
       `SELECT 
@@ -414,13 +508,13 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
       WHERE bop.id = ?`,
       [operationId]
     );
-    
+
     if (operationRows.length === 0) {
       return res.status(404).json({ error: 'Operation not found' });
     }
-    
+
     const operation = operationRows[0];
-    
+
     const [requirementCountRows] = await pool.execute<RowDataPacket[]>(
       'SELECT COUNT(*) AS total FROM operation_qualification_requirements WHERE operation_id = ?',
       [operation.operation_id]
@@ -539,17 +633,17 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
       const [rows] = await pool.execute<RowDataPacket[]>(fallbackQuery, baseParams);
       personnelRows = rows;
     }
-    
+
     // 分类推荐等级
     const recommendedPersonnel = personnelRows.map((person: any) => ({
       ...person,
-      recommendation: 
+      recommendation:
         person.conflict_count > 0 ? 'CONFLICT' :
-        person.match_score >= 80 ? 'HIGHLY_RECOMMENDED' :
-        person.match_score >= 50 ? 'RECOMMENDED' : 'POSSIBLE',
+          person.match_score >= 80 ? 'HIGHLY_RECOMMENDED' :
+            person.match_score >= 50 ? 'RECOMMENDED' : 'POSSIBLE',
       has_conflict: person.conflict_count > 0
     }));
-    
+
     res.json(recommendedPersonnel);
   } catch (error) {
     console.error('Error fetching recommended personnel:', error);
@@ -560,23 +654,23 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
 // 分配人员到操作
 export const assignPersonnel = async (req: Request, res: Response) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const { operationId } = req.params;
     const { employeeIds, role = 'OPERATOR' } = req.body;
-    
+
     if (!employeeIds || !Array.isArray(employeeIds) || employeeIds.length === 0) {
       return res.status(400).json({ error: 'Employee IDs are required' });
     }
-    
+
     // 删除现有分配
     await connection.execute(
       'DELETE FROM batch_personnel_assignments WHERE batch_operation_plan_id = ?',
       [operationId]
     );
-    
+
     // 批量插入新分配
     const values = employeeIds.map((employeeId: number, index: number) => [
       operationId,
@@ -585,20 +679,20 @@ export const assignPersonnel = async (req: Request, res: Response) => {
       index === 0, // 第一个设为主要负责人
       'PLANNED'
     ]);
-    
+
     const insertQuery = `
       INSERT INTO batch_personnel_assignments 
       (batch_operation_plan_id, employee_id, role, is_primary, assignment_status)
       VALUES ?
     `;
-    
+
     await connection.query(insertQuery, [values]);
-    
+
     await connection.commit();
-    
-    res.json({ 
+
+    res.json({
       message: 'Personnel assigned successfully',
-      assigned_count: employeeIds.length 
+      assigned_count: employeeIds.length
     });
   } catch (error) {
     await connection.rollback();
@@ -609,15 +703,154 @@ export const assignPersonnel = async (req: Request, res: Response) => {
   }
 };
 
+// 分配人员到操作的指定岗位
+export const assignPositionPersonnel = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const { operationId } = req.params;
+    const { position_number, employee_id } = req.body;
+
+    if (!position_number || !employee_id) {
+      return res.status(400).json({ error: 'position_number and employee_id are required' });
+    }
+
+    // 获取操作信息
+    const [opRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT bop.id, bop.required_people, bop.planned_start_datetime, bop.planned_end_datetime,
+              o.operation_name, pbp.batch_code
+       FROM batch_operation_plans bop
+       JOIN operations o ON bop.operation_id = o.id
+       JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+       WHERE bop.id = ?`,
+      [operationId]
+    );
+
+    if (opRows.length === 0) {
+      return res.status(404).json({ error: 'Operation not found' });
+    }
+
+    const operation = opRows[0];
+
+    // 验证岗位编号
+    if (position_number < 1 || position_number > operation.required_people) {
+      return res.status(400).json({
+        error: `Invalid position number. Must be between 1 and ${operation.required_people}`
+      });
+    }
+
+    // 检查员工是否存在
+    const [empRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT id, employee_name, employee_code FROM employees WHERE id = ? AND employment_status = 'ACTIVE'`,
+      [employee_id]
+    );
+
+    if (empRows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found or not active' });
+    }
+
+    // 检查约束：员工资质
+    const [qualRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT oqr.qualification_id, q.qualification_name, oqr.is_mandatory
+       FROM operation_qualification_requirements oqr
+       JOIN qualifications q ON oqr.qualification_id = q.id
+       WHERE oqr.operation_id = (SELECT operation_id FROM batch_operation_plans WHERE id = ?)
+         AND oqr.position_number = ?
+         AND oqr.is_mandatory = 1`,
+      [operationId, position_number]
+    );
+
+    const warnings: string[] = [];
+
+    if (qualRows.length > 0) {
+      // 检查员工是否具备必须资质
+      const [empQualRows] = await connection.execute<RowDataPacket[]>(
+        `SELECT qualification_id FROM employee_qualifications 
+         WHERE employee_id = ? AND is_valid = 1`,
+        [employee_id]
+      );
+      const empQualIds = new Set(empQualRows.map((r: any) => r.qualification_id));
+
+      for (const qual of qualRows) {
+        if (!empQualIds.has(qual.qualification_id)) {
+          warnings.push(`员工缺少必须资质: ${qual.qualification_name}`);
+        }
+      }
+    }
+
+    // 检查时间冲突
+    const [conflictRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT bop.id, o.operation_name, bop.planned_start_datetime, bop.planned_end_datetime
+       FROM batch_personnel_assignments bpa
+       JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+       JOIN operations o ON bop.operation_id = o.id
+       WHERE bpa.employee_id = ?
+         AND bop.id != ?
+         AND (
+           (bop.planned_start_datetime < ? AND bop.planned_end_datetime > ?)
+           OR (bop.planned_start_datetime >= ? AND bop.planned_start_datetime < ?)
+         )`,
+      [
+        employee_id,
+        operationId,
+        operation.planned_end_datetime,
+        operation.planned_start_datetime,
+        operation.planned_start_datetime,
+        operation.planned_end_datetime
+      ]
+    );
+
+    if (conflictRows.length > 0) {
+      const conflictNames = conflictRows.map((r: any) => r.operation_name).join(', ');
+      warnings.push(`时间冲突: ${conflictNames}`);
+    }
+
+    // 删除该岗位的现有分配（如果有）
+    await connection.execute(
+      `DELETE FROM batch_personnel_assignments 
+       WHERE batch_operation_plan_id = ? AND position_number = ?`,
+      [operationId, position_number]
+    );
+
+    // 插入新分配
+    await connection.execute(
+      `INSERT INTO batch_personnel_assignments 
+       (batch_operation_plan_id, position_number, employee_id, role, is_primary, assignment_status)
+       VALUES (?, ?, ?, 'OPERATOR', ?, 'PLANNED')`,
+      [operationId, position_number, employee_id, position_number === 1]
+    );
+
+    await connection.commit();
+
+    res.json({
+      success: true,
+      message: 'Position assigned successfully',
+      operation_plan_id: Number(operationId),
+      position_number,
+      employee_id,
+      employee_name: empRows[0].employee_name,
+      warnings: warnings.length > 0 ? warnings : undefined
+    });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error assigning position personnel:', error);
+    res.status(500).json({ error: 'Failed to assign position personnel' });
+  } finally {
+    connection.release();
+  }
+};
+
 // 批量自动分配
 export const bulkAutoAssign = async (req: Request, res: Response) => {
   const connection = await pool.getConnection();
-  
+
   try {
     await connection.beginTransaction();
-    
+
     const { batchId } = req.params;
-    
+
     // 获取所有未分配或部分分配的操作
     const [operations] = await connection.execute<RowDataPacket[]>(
       `SELECT 
@@ -638,12 +871,12 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
       HAVING assigned_count < required_people`,
       [batchId]
     );
-    
+
     let totalAssigned = 0;
-    
+
     for (const op of operations) {
       const needed = op.required_people - op.assigned_count;
-      
+
       // 获取推荐人员（排除已分配的）
       const [recommended] = await connection.execute<RowDataPacket[]>(
         `SELECT DISTINCT e.id
@@ -679,7 +912,7 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
           needed
         ]
       );
-      
+
       if (recommended.length > 0) {
         const values = recommended.map((emp: any, index: number) => [
           op.id,
@@ -688,20 +921,20 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
           index === 0 && op.assigned_count === 0, // 第一个设为主要负责人
           'PLANNED'
         ]);
-        
+
         await connection.query(
           `INSERT INTO batch_personnel_assignments 
           (batch_operation_plan_id, employee_id, role, is_primary, assignment_status)
           VALUES ?`,
           [values]
         );
-        
+
         totalAssigned += recommended.length;
       }
     }
-    
+
     await connection.commit();
-    
+
     res.json({
       message: 'Bulk assignment completed',
       operations_processed: operations.length,
@@ -850,3 +1083,112 @@ export const preloadHolidayData = async (req: Request, res: Response) => {
     return res.status(500).json({ error: error?.message || '预加载失败' });
   }
 };
+
+/**
+ * 获取批次操作的可用人员列表（带冲突检测）
+ */
+export const getAvailableEmployees = async (req: Request, res: Response) => {
+  try {
+    const { operationId } = req.params;
+
+    // 获取操作信息
+    const [operationRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT 
+        bop.id,
+        bop.operation_id,
+        bop.planned_start_datetime,
+        bop.planned_end_datetime,
+        o.operation_name
+      FROM batch_operation_plans bop
+      JOIN operations o ON bop.operation_id = o.id
+      WHERE bop.id = ?`,
+      [operationId]
+    );
+
+    if (operationRows.length === 0) {
+      return res.status(404).json({ error: 'Operation not found' });
+    }
+
+    const operation = operationRows[0];
+
+    // 查询所有员工，检测冲突
+    const [employeeRows] = await pool.execute<RowDataPacket[]>(`
+      SELECT 
+        e.id as employee_id,
+        e.employee_name,
+        e.employee_code,
+        e.department,
+        -- 时间冲突检测
+        (
+          SELECT COUNT(*)
+          FROM batch_personnel_assignments bpa
+          JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+          WHERE bpa.employee_id = e.id
+            AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')
+            AND bop.id != ?
+            AND (
+              (bop.planned_start_datetime <= ? AND bop.planned_end_datetime > ?)
+              OR (bop.planned_start_datetime < ? AND bop.planned_end_datetime >= ?)
+              OR (bop.planned_start_datetime >= ? AND bop.planned_end_datetime <= ?)
+            )
+        ) as time_conflict_count,
+        -- 资质检查 (如果操作有资质要求)
+        (
+          SELECT COUNT(*)
+          FROM operation_qualification_requirements oqr
+          WHERE oqr.operation_id = ?
+            AND NOT EXISTS (
+              SELECT 1 FROM employee_qualifications eq
+              WHERE eq.employee_id = e.id
+                AND eq.qualification_id = oqr.qualification_id
+                AND eq.qualification_level >= oqr.required_level
+            )
+        ) as missing_qualifications
+      FROM employees e
+      WHERE e.employment_status = 'ACTIVE'
+      ORDER BY e.employee_code
+    `, [
+      operation.id,
+      operation.planned_start_datetime,
+      operation.planned_start_datetime,
+      operation.planned_end_datetime,
+      operation.planned_end_datetime,
+      operation.planned_start_datetime,
+      operation.planned_end_datetime,
+      operation.operation_id
+    ]);
+
+    // 格式化返回结果
+    const employees = employeeRows.map(emp => {
+      let has_conflict = false;
+      let conflict_type: string | null = null;
+      let conflict_message: string | null = null;
+
+      if (emp.missing_qualifications > 0) {
+        has_conflict = true;
+        conflict_type = 'QUALIFICATION';
+        conflict_message = '缺少所需资质';
+      } else if (emp.time_conflict_count > 0) {
+        has_conflict = true;
+        conflict_type = 'TIME';
+        conflict_message = `同时段已有 ${emp.time_conflict_count} 个其他任务`;
+      }
+
+      return {
+        employee_id: emp.employee_id,
+        employee_name: emp.employee_name,
+        employee_code: emp.employee_code,
+        department: emp.department,
+        has_conflict,
+        conflict_type,
+        conflict_message
+      };
+    });
+
+    res.json(employees);
+  } catch (error) {
+    console.error('Error fetching available employees:', error);
+    res.status(500).json({ error: 'Failed to fetch available employees' });
+  }
+};
+

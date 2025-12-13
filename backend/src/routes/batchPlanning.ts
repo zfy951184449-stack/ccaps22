@@ -6,7 +6,9 @@ import {
   updateBatchPlan,
   deleteBatchPlan,
   getBatchStatistics,
-  getTemplatesForBatch
+  getTemplatesForBatch,
+  activateBatchPlan,
+  deactivateBatchPlan
 } from '../controllers/batchPlanningController';
 
 const router = express.Router();
@@ -23,5 +25,7 @@ router.get('/:id', getBatchPlanById);
 router.post('/', createBatchPlan);
 router.put('/:id', updateBatchPlan);
 router.delete('/:id', deleteBatchPlan);
+router.post('/:id/activate', activateBatchPlan);
+router.post('/:id/deactivate', deactivateBatchPlan);
 
 export default router;

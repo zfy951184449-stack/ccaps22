@@ -10,7 +10,7 @@ import { PersonnelSchedule } from '../models/types';
 export const getPersonnelSchedules = async (req: Request, res: Response) => {
   try {
     const { start_date, end_date, employee_id } = req.query;
-    
+
     let query = `
       SELECT ps.*, st.shift_name, st.start_time, st.end_time, st.work_hours,
              e.employee_name, e.employee_code
@@ -19,26 +19,26 @@ export const getPersonnelSchedules = async (req: Request, res: Response) => {
       JOIN employees e ON ps.employee_id = e.id
       WHERE 1=1
     `;
-    
+
     const params: any[] = [];
-    
+
     if (start_date) {
       query += ' AND ps.schedule_date >= ?';
       params.push(start_date);
     }
-    
+
     if (end_date) {
       query += ' AND ps.schedule_date <= ?';
       params.push(end_date);
     }
-    
+
     if (employee_id) {
       query += ' AND ps.employee_id = ?';
       params.push(employee_id);
     }
-    
+
     query += ' ORDER BY ps.schedule_date, ps.employee_id';
-    
+
     const [rows] = await pool.execute(query, params);
     res.json(rows);
   } catch (error) {
@@ -49,18 +49,36 @@ export const getPersonnelSchedules = async (req: Request, res: Response) => {
 
 export const getShiftCalendarOverview = async (req: Request, res: Response) => {
   try {
-    const { start_date, end_date, employee_id } = req.query;
+    const { start_date, end_date, employee_id, department_id, team_id, leader_id } = req.query;
 
     if (!start_date || !end_date) {
       return res.status(400).json({ error: 'start_date 和 end_date 为必填参数' });
     }
 
     const params: any[] = [start_date, end_date];
-    let employeeFilter = '';
+    const filters: string[] = [];
+
     if (employee_id) {
-      employeeFilter = ' AND esp.employee_id = ?';
+      filters.push('esp.employee_id = ?');
       params.push(employee_id);
     }
+
+    if (department_id) {
+      filters.push('e.department_id = ?');
+      params.push(department_id);
+    }
+
+    if (team_id) {
+      filters.push('e.primary_team_id = ?');
+      params.push(team_id);
+    }
+
+    if (leader_id) {
+      filters.push('EXISTS (SELECT 1 FROM employee_reporting_relations WHERE subordinate_id = e.id AND leader_id = ?)');
+      params.push(leader_id);
+    }
+
+    const employeeFilter = filters.length > 0 ? ' AND ' + filters.join(' AND ') : '';
 
     const [rows] = await pool.execute(
       `SELECT
@@ -72,6 +90,10 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
          er.role_code AS primary_role_code,
          er.role_name AS primary_role_name,
          e.org_role,
+         e.primary_team_id,
+         e.department_id,
+         t.team_name,
+         (SELECT leader_id FROM employee_reporting_relations WHERE subordinate_id = e.id LIMIT 1) AS direct_leader_id,
          esp.plan_date,
          esp.plan_category,
          esp.plan_state,
@@ -102,8 +124,10 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
        FROM employee_shift_plans esp
        JOIN employees e ON esp.employee_id = e.id
        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
+       LEFT JOIN teams t ON e.primary_team_id = t.id
        LEFT JOIN shift_definitions sd ON esp.shift_id = sd.id
-       LEFT JOIN batch_operation_plans bop ON esp.batch_operation_plan_id = bop.id
+       LEFT JOIN batch_personnel_assignments bpa ON esp.id = bpa.shift_plan_id
+       LEFT JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
        LEFT JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
        LEFT JOIN operations o ON bop.operation_id = o.id
        LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
@@ -287,13 +311,13 @@ export const getPersonnelScheduleById = async (req: Request, res: Response) => {
        WHERE ps.id = ?`,
       [id]
     );
-    
+
     const schedules = rows as any[];
-    
+
     if (schedules.length === 0) {
       return res.status(404).json({ error: 'Personnel schedule not found' });
     }
-    
+
     res.json(schedules[0]);
   } catch (error) {
     console.error('Error getting personnel schedule:', error);
@@ -304,16 +328,16 @@ export const getPersonnelScheduleById = async (req: Request, res: Response) => {
 export const createPersonnelSchedule = async (req: Request, res: Response) => {
   try {
     const schedule: PersonnelSchedule = req.body;
-    
+
     // 检查是否存在冲突
     const conflictCheck = await checkScheduleConflicts(schedule);
     if (conflictCheck.length > 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: 'Schedule conflicts detected',
         conflicts: conflictCheck
       });
     }
-    
+
     const [result] = await pool.execute(
       `INSERT INTO personnel_schedules 
        (employee_id, schedule_date, shift_type_id, status, is_overtime, overtime_hours, notes, created_by) 
@@ -329,10 +353,10 @@ export const createPersonnelSchedule = async (req: Request, res: Response) => {
         schedule.created_by
       ]
     );
-    
+
     const insertResult = result as any;
     const newSchedule = { ...schedule, id: insertResult.insertId };
-    
+
     res.status(201).json(newSchedule);
   } catch (error) {
     console.error('Error creating personnel schedule:', error);
@@ -344,7 +368,7 @@ export const updatePersonnelSchedule = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const schedule: Partial<PersonnelSchedule> = req.body;
-    
+
     const [result] = await pool.execute(
       `UPDATE personnel_schedules SET 
        shift_type_id = COALESCE(?, shift_type_id),
@@ -368,13 +392,13 @@ export const updatePersonnelSchedule = async (req: Request, res: Response) => {
         id
       ]
     );
-    
+
     const updateResult = result as any;
-    
+
     if (updateResult.affectedRows === 0) {
       return res.status(404).json({ error: 'Personnel schedule not found' });
     }
-    
+
     res.json({ message: 'Personnel schedule updated successfully' });
   } catch (error) {
     console.error('Error updating personnel schedule:', error);
@@ -385,18 +409,18 @@ export const updatePersonnelSchedule = async (req: Request, res: Response) => {
 export const deletePersonnelSchedule = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const [result] = await pool.execute(
       'DELETE FROM personnel_schedules WHERE id = ?',
       [id]
     );
-    
+
     const deleteResult = result as any;
-    
+
     if (deleteResult.affectedRows === 0) {
       return res.status(404).json({ error: 'Personnel schedule not found' });
     }
-    
+
     res.json({ message: 'Personnel schedule deleted successfully' });
   } catch (error) {
     console.error('Error deleting personnel schedule:', error);
@@ -407,25 +431,25 @@ export const deletePersonnelSchedule = async (req: Request, res: Response) => {
 // 检测排班冲突的辅助函数
 async function checkScheduleConflicts(schedule: PersonnelSchedule): Promise<any[]> {
   const conflicts = [];
-  
+
   try {
     // 检查同一员工同一天是否已有排班
     const [existingSchedules] = await pool.execute(
       'SELECT * FROM personnel_schedules WHERE employee_id = ? AND schedule_date = ? AND status != "CANCELLED"',
       [schedule.employee_id, schedule.schedule_date]
     );
-    
+
     if ((existingSchedules as any[]).length > 0) {
       conflicts.push({
         type: 'DOUBLE_BOOKING',
         description: '员工在同一天已有排班安排'
       });
     }
-    
+
     // 检查夜班后休息规则
     const previousDate = new Date(schedule.schedule_date);
     previousDate.setDate(previousDate.getDate() - 1);
-    
+
     const [previousSchedules] = await pool.execute(
       `SELECT ps.*, st.is_night_shift 
        FROM personnel_schedules ps
@@ -433,25 +457,25 @@ async function checkScheduleConflicts(schedule: PersonnelSchedule): Promise<any[
        WHERE ps.employee_id = ? AND ps.schedule_date = ? AND ps.status != 'CANCELLED'`,
       [schedule.employee_id, previousDate.toISOString().split('T')[0]]
     );
-    
+
     if ((previousSchedules as any[]).length > 0 && (previousSchedules as any[])[0].is_night_shift) {
       conflicts.push({
         type: 'NIGHT_SHIFT_REST_VIOLATION',
         description: '夜班后需要休息，不能安排班次'
       });
     }
-    
+
   } catch (error) {
     console.error('Error checking schedule conflicts:', error);
   }
-  
+
   return conflicts;
 }
 
 export const getAvailableEmployees = async (req: Request, res: Response) => {
   try {
     const { date, shift_type_id } = req.query;
-    
+
     const [rows] = await pool.execute(
       `SELECT e.*, esp.preference_score, esp.is_available
        FROM employees e
@@ -464,7 +488,7 @@ export const getAvailableEmployees = async (req: Request, res: Response) => {
        ORDER BY esp.preference_score DESC NULLS LAST, e.employee_name`,
       [shift_type_id, date]
     );
-    
+
     res.json(rows);
   } catch (error) {
     console.error('Error getting available employees:', error);
@@ -630,3 +654,65 @@ async function calculateWorkingDaysFromCalendar(startDate: string, endDate: stri
     return workingDays;
   }
 }
+
+export const deleteMonthlySchedule = async (req: Request, res: Response) => {
+  try {
+    const { year, month } = req.query;
+
+    if (!year || !month) {
+      return res.status(400).json({ error: 'year and month are required' });
+    }
+
+    const yearNum = Number(year);
+    const monthNum = Number(month);
+
+    if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ error: 'Invalid year or month' });
+    }
+
+    // Calculate month start and end dates
+    const monthStart = dayjs(`${yearNum}-${monthNum.toString().padStart(2, '0')}-01`).startOf('month');
+    const monthEnd = monthStart.endOf('month');
+
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // Delete batch_personnel_assignments for shift plans in this month
+      const [deleteAssignments] = await connection.execute(
+        `DELETE bpa FROM batch_personnel_assignments bpa
+         JOIN employee_shift_plans esp ON bpa.shift_plan_id = esp.id
+         WHERE esp.plan_date BETWEEN ? AND ?`,
+        [monthStart.format('YYYY-MM-DD'), monthEnd.format('YYYY-MM-DD')]
+      );
+
+      // Delete employee_shift_plans for this month
+      const [deleteShiftPlans] = await connection.execute(
+        `DELETE FROM employee_shift_plans
+         WHERE plan_date BETWEEN ? AND ?`,
+        [monthStart.format('YYYY-MM-DD'), monthEnd.format('YYYY-MM-DD')]
+      );
+
+      await connection.commit();
+
+      const deletedAssignments = (deleteAssignments as any).affectedRows || 0;
+      const deletedShiftPlans = (deleteShiftPlans as any).affectedRows || 0;
+
+      res.json({
+        success: true,
+        deletedShiftPlans,
+        deletedAssignments,
+        message: `Deleted ${deletedShiftPlans} shift plans and ${deletedAssignments} assignments for ${year}-${month}`
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error('Error deleting monthly schedule:', error);
+    res.status(500).json({ error: 'Failed to delete monthly schedule' });
+  }
+};

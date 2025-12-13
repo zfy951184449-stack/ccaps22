@@ -196,6 +196,7 @@ export interface ShiftDefinition {
   start_time: string;
   end_time: string;
   is_cross_day: boolean;
+  is_night_shift: boolean;
   nominal_hours: number;
   max_extension_hours?: number;
   description?: string | null;
@@ -215,7 +216,7 @@ export interface BatchPlan {
   planned_start_date: string;
   planned_end_date?: string | null;
   template_duration_days?: number | null;
-  plan_status: 'DRAFT' | 'PLANNED' | 'APPROVED' | 'ACTIVATED' | 'COMPLETED' | 'CANCELLED';
+  plan_status: 'DRAFT' | 'ACTIVATED';
   description?: string | null;
   notes?: string | null;
   created_at?: string;
@@ -238,9 +239,7 @@ export interface BatchTemplateSummary {
 export interface BatchStatistics {
   total_batches: number;
   draft_count: number;
-  planned_count: number;
-  approved_count: number;
-  cancelled_count: number;
+  activated_count: number;
 }
 
 export type SchedulingRunStage =
@@ -369,6 +368,11 @@ export interface EmployeeUnavailability {
   created_at?: string;
   updated_at?: string;
   employeeName?: string;
+  employeeId?: number;
+  startDatetime?: string;
+  endDatetime?: string;
+  reasonCode?: string;
+  reasonLabel?: string;
 }
 
 export type ConstraintSeverity = 'CRITICAL' | 'WARNING' | 'INFO';
@@ -542,4 +546,56 @@ export interface HolidayServiceStatus {
   recentLogs: HolidayServiceLogEntry[];
   lastSuccessTime: string | null;
   lastFailureTime: string | null;
+}
+
+export interface SchedulingSettings {
+  // 基础约束
+  monthlyToleranceHours: number;
+  monthlyMinHours?: number;
+  monthlyMaxHours?: number;
+  maxConsecutiveWorkdays?: number;
+  enforceMonthlyHours: boolean;
+  enforceQuarterHours: boolean;
+  enforceConsecutiveLimit: boolean;
+  enforceEmployeeUnavailability?: boolean;
+
+  // 夜班约束
+  nightShiftPreferredRestDays: number;
+  nightShiftMinimumRestDays: number;
+  enforceNightRest: boolean;
+  enforceNightFairness?: boolean;
+  maxConsecutiveNightShifts?: number;
+  nightShiftWindowDays?: number;
+  maxNightShiftsPerWindow?: number;
+  nightShiftMinGapDays?: number;
+  nightShiftFairnessWeight?: number;
+
+  // 主管约束
+  preferNoLeaderNight?: boolean;
+  leaderNightPenaltyWeight?: number;
+  leaderLongDayThresholdHours?: number;
+  leaderLongDayPenaltyWeight?: number;
+  leaderTier1Threshold?: number;
+  leaderTier2Threshold?: number;
+  leaderTier3Threshold?: number;
+
+  // 公平性约束
+  preferFrontlineEmployees: boolean;
+  enableWorkshopFairness: boolean;
+  workshopFairnessToleranceHours: number;
+  workshopFairnessWeight: number;
+  nightShiftFrontlineFairnessWeight?: number;
+
+  // 休息约束
+  maxConsecutiveRestDays?: number;
+  consecutiveRestPenaltyWeight?: number;
+
+  // 节假日约束
+  minimizeTripleHolidayHeadcount: boolean;
+  tripleHolidayPenaltyWeight: number;
+
+  // 求解器配置
+  solverTimeLimit?: number;
+  solverImprovementTimeoutSeconds?: number;
+  shiftMatchingTolerance?: number;
 }

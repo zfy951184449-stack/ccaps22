@@ -17,7 +17,6 @@ import {
   Tag,
   Typography,
   message,
-  Segmented,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -29,6 +28,8 @@ import {
   ProjectOutlined,
   BarChartOutlined,
   TeamOutlined,
+  PlayCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type {
@@ -37,8 +38,7 @@ import type {
   BatchTemplateSummary,
 } from '../types';
 import { batchPlanApi } from '../services/api';
-import ActivatedBatchGantt from './ActivatedBatchGantt';
-import ActivatedBatchGanttAligned from './ActivatedBatchGanttAligned';
+import BatchGanttAdapter from './BatchGanttAdapter';
 
 const { Text } = Typography;
 
@@ -55,25 +55,15 @@ type BatchPlanFormValues = {
 
 const STATUS_COLORS: Record<BatchPlan['plan_status'], string> = {
   DRAFT: 'default',
-  PLANNED: 'blue',
-  APPROVED: 'gold',
   ACTIVATED: 'green',
-  COMPLETED: 'purple',
-  CANCELLED: 'red',
 };
 
 const DEFAULT_STATS: BatchStatistics = {
   total_batches: 0,
   draft_count: 0,
-  planned_count: 0,
-  approved_count: 0,
-  cancelled_count: 0,
+  activated_count: 0,
 };
 
-const GANTT_VIEW_OPTIONS = [
-  { label: '对齐视图', value: 'aligned' },
-  { label: '标准视图', value: 'standard' },
-];
 
 const BatchManagement: React.FC = () => {
   const [batches, setBatches] = useState<BatchPlan[]>([]);
@@ -83,8 +73,6 @@ const BatchManagement: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingBatch, setEditingBatch] = useState<BatchPlan | null>(null);
   const [form] = Form.useForm<BatchPlanFormValues>();
-  const [ganttVisible, setGanttVisible] = useState(false);
-  const [ganttMode, setGanttMode] = useState<'aligned' | 'standard'>('aligned');
   const [error, setError] = useState<string | null>(null);
 
   const statusFilters = useMemo(
@@ -213,6 +201,30 @@ const BatchManagement: React.FC = () => {
     }
   };
 
+  const handleActivate = async (batch: BatchPlan) => {
+    try {
+      await batchPlanApi.activate(batch.id);
+      message.success('批次已激活');
+      loadBatches();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error ?? err?.message ?? '激活批次失败';
+      message.error(msg);
+    }
+  };
+
+  const handleDeactivate = async (batch: BatchPlan) => {
+    try {
+      await batchPlanApi.deactivate(batch.id);
+      message.success('批次已撤销激活');
+      loadBatches();
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.error ?? err?.message ?? '撤销激活失败';
+      message.error(msg);
+    }
+  };
+
   const columns: ColumnsType<BatchPlan> = [
     {
       title: '批次编码',
@@ -252,7 +264,7 @@ const BatchManagement: React.FC = () => {
           <Text>{record.planned_start_date || '-'}</Text>
           <Text type="secondary">
             {record.planned_end_date
-              ? `~ ${record.planned_end_date}`
+              ? `~${record.planned_end_date} `
               : '待生成'}
           </Text>
         </Space>
@@ -289,15 +301,30 @@ const BatchManagement: React.FC = () => {
       key: 'actions',
       render: (_, record) => (
         <Space size="middle">
-          <Button
-            size="small"
-            icon={<CalendarOutlined />}
-            onClick={() => {
-              setGanttVisible(true);
-            }}
-          >
-            甘特图
-          </Button>
+          {record.plan_status === 'DRAFT' && (
+            <Popconfirm
+              title="激活批次"
+              description="确定要激活该批次吗？激活后将禁止拖拽调整。"
+              onConfirm={() => handleActivate(record)}
+            >
+              <Button size="small" type="text" style={{ color: '#52c41a' }} icon={<PlayCircleOutlined />}>
+                激活
+              </Button>
+            </Popconfirm>
+          )}
+          {record.plan_status === 'ACTIVATED' && (
+            <Popconfirm
+              title="撤销激活"
+              description="确定要撤销激活该批次吗？撤销后状态将恢复为草稿。"
+              onConfirm={() => handleDeactivate(record)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button size="small" type="text" style={{ color: '#faad14' }} icon={<StopOutlined />}>
+                撤销激活
+              </Button>
+            </Popconfirm>
+          )}
           <Button
             size="small"
             icon={<EditOutlined />}
@@ -320,7 +347,7 @@ const BatchManagement: React.FC = () => {
   ];
 
   const templateOptions = templates.map((tpl) => ({
-    label: `${tpl.template_name}（${tpl.calculated_duration ?? tpl.total_days ?? '-'}天）`,
+    label: `${tpl.template_name}（${tpl.calculated_duration ?? tpl.total_days ?? '-'} 天）`,
     value: tpl.id,
   }));
 
@@ -339,13 +366,6 @@ const BatchManagement: React.FC = () => {
             批次管理
           </Typography.Title>
           <Space>
-            <Segmented
-              options={GANTT_VIEW_OPTIONS}
-              value={ganttMode}
-              onChange={(val) =>
-                setGanttMode(val as 'aligned' | 'standard')
-              }
-            />
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -357,7 +377,7 @@ const BatchManagement: React.FC = () => {
         </Space>
 
         <Row gutter={16}>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8}>
             <Card>
               <Statistic
                 title="批次总数"
@@ -366,127 +386,108 @@ const BatchManagement: React.FC = () => {
               />
             </Card>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8}>
             <Card>
               <Statistic title="草稿" value={stats.draft_count} />
             </Card>
           </Col>
-          <Col xs={24} md={6}>
+          <Col xs={24} md={8}>
             <Card>
-              <Statistic title="已排期" value={stats.planned_count} />
-            </Card>
-          </Col>
-          <Col xs={24} md={6}>
-            <Card>
-              <Statistic title="已审批" value={stats.approved_count} />
+              <Statistic title="已激活" value={stats.activated_count} />
             </Card>
           </Col>
         </Row>
 
         {error && <Alert type="error" message={error} />}
 
-        <Card>
+        <Card title="批次列表" style={{ marginBottom: 16 }}>
           <Table
             rowKey="id"
             loading={loading}
             dataSource={batches}
             columns={columns}
-            pagination={{ pageSize: 10 }}
+            pagination={{ pageSize: 5 }}
+            size="small"
           />
         </Card>
-      </Space>
 
-      <Modal
-        open={modalVisible}
-        title={editingBatch ? '编辑批次' : '新建批次'}
-        onCancel={() => {
-          setModalVisible(false);
-          setEditingBatch(null);
-        }}
-        onOk={handleModalOk}
-        destroyOnClose
-        width={520}
-      >
-        <Form
-          form={form}
-          layout="vertical"
-          initialValues={{
-            plan_status: 'DRAFT',
-            planned_start_date: dayjs(),
+        <Card title="批次甘特图" style={{ padding: 0 }} bodyStyle={{ padding: 0 }}>
+          <div style={{ minHeight: 500 }}>
+            <BatchGanttAdapter showAllBatches />
+          </div>
+        </Card>
+
+        <Modal
+          open={modalVisible}
+          title={editingBatch ? '编辑批次' : '新建批次'}
+          onCancel={() => {
+            setModalVisible(false);
+            setEditingBatch(null);
+            form.resetFields();
           }}
+          onOk={handleModalOk}
+          destroyOnClose
+          width={520}
         >
-          <Form.Item
-            label="批次编码"
-            name="batch_code"
-            rules={[{ required: true, message: '请输入批次编码' }]}
+          <Form
+            form={form}
+            layout="vertical"
+            initialValues={{
+              status: 'DRAFT',
+            }}
           >
-            <Input maxLength={32} />
-          </Form.Item>
-          <Form.Item
-            label="批次名称"
-            name="batch_name"
-            rules={[{ required: true, message: '请输入批次名称' }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="关联模板"
-            name="template_id"
-            rules={[{ required: true, message: '请选择模板' }]}
-          >
-            <Select
-              placeholder="请选择模板"
-              options={templateOptions}
-              showSearch
-              optionFilterProp="label"
-            />
-          </Form.Item>
-          <Form.Item label="项目编号" name="project_code">
-            <Input />
-          </Form.Item>
-          <Form.Item
-            label="计划开始日期"
-            name="planned_start_date"
-            rules={[{ required: true, message: '请选择开始日期' }]}
-          >
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            label="状态"
-            name="plan_status"
-            rules={[{ required: true, message: '请选择状态' }]}
-          >
-            <Select>
-              {Object.keys(STATUS_COLORS).map((status) => (
-                <Select.Option key={status} value={status}>
-                  {status}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="简介" name="description">
-            <Input.TextArea rows={2} />
-          </Form.Item>
-          <Form.Item label="备注" name="notes">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <ActivatedBatchGanttAligned
-        visible={ganttVisible && ganttMode === 'aligned'}
-        onClose={() => {
-          setGanttVisible(false);
-        }}
-        actionRequest={null}
-      />
-      <ActivatedBatchGantt
-        visible={ganttVisible && ganttMode === 'standard'}
-        onClose={() => {
-          setGanttVisible(false);
-        }}
-        actionRequest={null}
-      />
+            <Form.Item
+              label="批次代码"
+              name="batch_code"
+              rules={[{ required: true, message: '请输入批次代码' }]}
+            >
+              <Input placeholder="如: CHO-2024-001" />
+            </Form.Item>
+            <Form.Item
+              label="批次名称"
+              name="batch_name"
+              rules={[{ required: true, message: '请输入批次名称' }]}
+            >
+              <Input placeholder="如: CHO抗体批次001" />
+            </Form.Item>
+            <Form.Item
+              label="工艺模板"
+              name="template_id"
+              rules={[{ required: true, message: '请选择工艺模板' }]}
+            >
+              <Select placeholder="选择工艺模板">
+                {templates.map((t) => (
+                  <Select.Option key={t.id} value={t.id}>
+                    {t.template_code} - {t.template_name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item
+              label="计划开始日期"
+              name="planned_start_date"
+              rules={[{ required: true, message: '请选择计划开始日期' }]}
+            >
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item label="状态" name="plan_status">
+              <Select>
+                {Object.keys(STATUS_COLORS).map((status) => (
+                  <Select.Option key={status} value={status}>
+                    {status}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item label="简介" name="description">
+              <Input.TextArea rows={2} />
+            </Form.Item>
+            <Form.Item label="备注" name="notes">
+              <Input.TextArea rows={3} />
+            </Form.Item>
+          </Form>
+        </Modal>
+      </Space>
     </div>
   );
 };

@@ -23,6 +23,7 @@ import {
   BatchTemplateSummary,
   BatchStatistics,
   HolidayServiceStatus,
+  SchedulingSettings,
 } from '../types';
 
 const api = axios.create({
@@ -152,6 +153,10 @@ export const batchPlanApi = {
         params: options?.force ? { force: true } : undefined,
       })
       .then((res) => res.data),
+  activate: (id: number, options?: { color?: string }) =>
+    api.post(`/batch-plans/${id}/activate`, options).then((res) => res.data),
+  deactivate: (id: number) =>
+    api.post(`/batch-plans/${id}/deactivate`).then((res) => res.data),
 };
 
 export const shiftTypeApi = {
@@ -233,4 +238,103 @@ export const systemMonitorApi = {
     api.patch<{ keyConfigured: boolean; maskedKey: string | null }>('/system/holiday/key', payload).then((res) => res.data),
   importHolidayYear: (payload: { year: number }) =>
     api.post('/system/holiday/import', payload).then((res) => res.data),
+};
+
+export const systemSettingsApi = {
+  getHolidayStatus: () => api.get<HolidayServiceStatus>('/system/holiday/status').then((res) => res.data),
+  updateHolidayKey: (payload: { apiKey: string }) =>
+    api.patch<{ keyConfigured: boolean; maskedKey: string | null }>('/system/holiday/key', payload).then((res) => res.data),
+  importHolidayYear: (payload: { year: number }) =>
+    api.post('/system/holiday/import', payload).then((res) => res.data),
+  getSchedulingSettings: () => api.get<SchedulingSettings>('/system/scheduling/settings').then((res) => res.data),
+  updateSchedulingSettings: (data: SchedulingSettings) =>
+    api.put<SchedulingSettings>('/system/scheduling/settings', data).then((res) => res.data),
+};
+
+export const calendarApi = {
+  getActiveOperations: () => api.get('/calendar/operations/active').then((res) => res.data),
+  getOperationDetail: (operationPlanId: number) =>
+    api.get(`/calendar/operations/${operationPlanId}`).then((res) => res.data),
+  getWorkdayRange: (startDate: string, endDate: string) =>
+    api
+      .get('/calendar/workdays', {
+        params: {
+          start_date: startDate,
+          end_date: endDate,
+        },
+      })
+      .then((res) => res.data),
+};
+
+const solverClient = axios.create({
+  baseURL: '/solver-api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+export const solverApi = {
+  solve: (payload: any) => solverClient.post('/solve', payload).then((res) => res.data),
+};
+
+// Scheduling Run API - 排班任务管理
+export interface CreateSchedulingRunPayload {
+  periodStart: string;
+  periodEnd: string;
+  batchIds: number[];
+  options?: Record<string, any>;
+  triggerType?: 'AUTO_PLAN' | 'RETRY' | 'MANUAL';
+}
+
+export interface SchedulingRunCreateResponse {
+  runId: number;
+  runKey: string;
+  message: string;
+}
+
+export interface SchedulingRunSolveResponse {
+  runId: number;
+  status: string;
+  summary: string;
+  assignmentsCount: number;
+  shiftPlansCount: number;
+  skippedCount: number;
+}
+
+export interface SchedulingRunApplyResponse {
+  runId: number;
+  message: string;
+  assignmentsInserted: number;
+  shiftPlansInserted: number;
+  warnings: string[];
+}
+
+export const schedulingRunApi = {
+  // 创建排班任务
+  create: (payload: CreateSchedulingRunPayload): Promise<SchedulingRunCreateResponse> =>
+    api.post('/scheduling-runs', payload).then((res) => res.data),
+
+  // 获取排班任务详情
+  getById: (runId: number) =>
+    api.get(`/scheduling-runs/${runId}`).then((res) => res.data),
+
+  // 触发求解
+  solve: (runId: number, solverPayload: any): Promise<SchedulingRunSolveResponse> =>
+    api.post(`/scheduling-runs/${runId}/solve`, solverPayload).then((res) => res.data),
+
+  // 获取排班结果
+  getResult: (runId: number) =>
+    api.get(`/scheduling-runs/${runId}/result`).then((res) => res.data),
+
+  // 应用排班结果到生产表
+  apply: (runId: number): Promise<SchedulingRunApplyResponse> =>
+    api.post(`/scheduling-runs/${runId}/apply`).then((res) => res.data),
+
+  // 获取排班任务列表
+  list: (limit?: number) =>
+    api.get('/scheduling-runs', { params: limit ? { limit } : undefined }).then((res) => res.data),
+
+  // 获取排班任务事件
+  getEvents: (runId: number) =>
+    api.get(`/scheduling-runs/${runId}/events`).then((res) => res.data),
 };

@@ -1,0 +1,149 @@
+/**
+ * ManpowerCurveCard Styles
+ * 
+ * 扁平化高级设计风格
+ */
+
+.manpower-curve-card {
+    border: 1px solid #f0f0f0;
+    border-radius: 2px;
+}
+
+.manpower-curve-card .ant-card-head {
+    border-bottom: 1px solid #f0f0f0;
+    padding: 12px 16px;
+    min-height: auto;
+}
+
+.manpower-curve-card .ant-card-head-title {
+    padding: 0;
+}
+
+.manpower-curve-card .ant-card-body {
+    padding: 16px;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.card-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #262626;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-title .anticon {
+    color: #595959;
+}
+
+.card-filters {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.month-navigator {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.month-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #595959;
+    transition: all 0.2s;
+}
+
+.month-nav-btn:hover {
+    border-color: #1677ff;
+    color: #1677ff;
+}
+
+.month-nav-btn:active {
+    background: #f5f5f5;
+}
+
+.chart-container {
+    height: 280px;
+    margin-bottom: 16px;
+}
+
+.chart-legend-hint {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #8c8c8c;
+}
+
+.chart-legend-hint .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.chart-legend-hint .legend-color {
+    width: 16px;
+    height: 10px;
+    border-radius: 2px;
+    border: 1px solid #e8e8e8;
+}
+
+.summary-row {
+    padding-top: 16px;
+    border-top: 1px solid #f5f5f5;
+}
+
+.summary-row .ant-statistic-title {
+    font-size: 12px;
+    color: #8c8c8c;
+    margin-bottom: 4px;
+}
+
+.summary-row .ant-statistic-content {
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.summary-row .ant-statistic-content-suffix {
+    font-size: 12px;
+    color: #8c8c8c;
+    margin-left: 4px;
+}
+
+.summary-row .ant-statistic-content-prefix {
+    margin-right: 4px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .card-filters {
+        flex-wrap: wrap;
+    }
+
+    .summary-row .ant-col {
+        margin-bottom: 16px;
+    }
+}

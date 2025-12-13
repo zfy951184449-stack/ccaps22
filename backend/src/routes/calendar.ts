@@ -7,7 +7,9 @@ import {
   getOperationDetail,
   updateOperationSchedule,
   getRecommendedPersonnel,
+  getAvailableEmployees,
   assignPersonnel,
+  assignPositionPersonnel,
   bulkAutoAssign,
   activateBatch,
   deactivateBatch,
@@ -34,7 +36,9 @@ router.get('/workdays', getWorkdayRange);
 router.get('/operations/:operationId', getOperationDetail);
 router.put('/operations/:operationId/schedule', updateOperationSchedule);
 router.get('/operations/:operationId/recommended-personnel', getRecommendedPersonnel);
+router.get('/operations/:operationId/available-employees', getAvailableEmployees);
 router.post('/operations/:operationId/assign', assignPersonnel);
+router.post('/operations/:operationId/assign-position', assignPositionPersonnel);
 router.post('/operations/:operationId/lock', lockOperationPlan);
 router.delete('/operations/:operationId/lock', unlockOperationPlan);
 // 批量操作
