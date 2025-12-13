@@ -251,6 +251,41 @@ export const systemSettingsApi = {
     api.put<SchedulingSettings>('/system/scheduling/settings', data).then((res) => res.data),
 };
 
+// Database Backup API
+export interface BackupInfo {
+  filename: string;
+  filepath: string;
+  size: number;
+  sizeFormatted: string;
+  createdAt: string;
+}
+
+export interface BackupStatusResponse {
+  hasBackup: boolean;
+  latestBackup: BackupInfo | null;
+  backupDir: string;
+  totalBackups?: number;
+}
+
+export interface BackupListResponse {
+  backups: BackupInfo[];
+  total: number;
+  backupDir: string;
+}
+
+export interface BackupExportResponse {
+  success: boolean;
+  message: string;
+  backup: BackupInfo;
+}
+
+export const databaseApi = {
+  exportDatabase: () => api.post<BackupExportResponse>('/database/export').then((res) => res.data),
+  getBackupStatus: () => api.get<BackupStatusResponse>('/database/status').then((res) => res.data),
+  listBackups: () => api.get<BackupListResponse>('/database/list').then((res) => res.data),
+  deleteBackup: (filename: string) => api.delete(`/database/backup/${filename}`).then((res) => res.data),
+};
+
 export const calendarApi = {
   getActiveOperations: () => api.get('/calendar/operations/active').then((res) => res.data),
   getOperationDetail: (operationPlanId: number) =>

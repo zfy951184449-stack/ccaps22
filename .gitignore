@@ -44,3 +44,6 @@ database/aps_system/
 .env.local
 .vscode/
 .DS_Store
+
+# Database backup files (too large for GitHub)
+database/backups/*.sql

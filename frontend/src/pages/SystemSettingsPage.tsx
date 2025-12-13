@@ -19,9 +19,9 @@ import {
   Switch,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ReloadOutlined, KeyOutlined, CloudDownloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, KeyOutlined, CloudDownloadOutlined, DatabaseOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { systemSettingsApi } from '../services/api';
+import { systemSettingsApi, databaseApi, BackupInfo, BackupStatusResponse } from '../services/api';
 import { HolidayServiceLogEntry, HolidayServiceStatus, SchedulingSettings } from '../types';
 
 const { Text } = Typography;
@@ -55,6 +55,11 @@ const SystemSettingsPage: React.FC = () => {
   const watchedConfig = Form.useWatch([], configForm) as SchedulingSettings | undefined;
   const configOverview = watchedConfig || configForm.getFieldsValue();
 
+  // Database backup states
+  const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     try {
@@ -79,10 +84,36 @@ const SystemSettingsPage: React.FC = () => {
     }
   }, [configForm]);
 
+  const loadBackupStatus = useCallback(async () => {
+    setBackupLoading(true);
+    try {
+      const response = await databaseApi.getBackupStatus();
+      setBackupStatus(response);
+    } catch (error: any) {
+      console.error('Failed to load backup status:', error);
+    } finally {
+      setBackupLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchStatus();
     loadSchedulingSettings();
-  }, [fetchStatus, loadSchedulingSettings]);
+    loadBackupStatus();
+  }, [fetchStatus, loadSchedulingSettings, loadBackupStatus]);
+
+  const handleExportDatabase = async () => {
+    setExporting(true);
+    try {
+      const result = await databaseApi.exportDatabase();
+      message.success(`数据库已导出到 ${result.backup.filename} (${result.backup.sizeFormatted})`);
+      await loadBackupStatus();
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '导出数据库失败');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleSaveKey = async () => {
     if (!apiKey.trim()) {
@@ -97,10 +128,10 @@ const SystemSettingsPage: React.FC = () => {
       setStatus((prev) =>
         prev
           ? {
-              ...prev,
-              keyConfigured: true,
-              maskedKey: data.maskedKey ?? prev.maskedKey,
-            }
+            ...prev,
+            keyConfigured: true,
+            maskedKey: data.maskedKey ?? prev.maskedKey,
+          }
           : prev,
       );
     } catch (error: any) {
@@ -387,6 +418,59 @@ const SystemSettingsPage: React.FC = () => {
             </Card>
           </Col>
         </Row>
+
+        <Card
+          title={
+            <Space>
+              <DatabaseOutlined />
+              数据库备份
+            </Space>
+          }
+          extra={
+            <Button icon={<ReloadOutlined />} onClick={loadBackupStatus} loading={backupLoading}>
+              刷新
+            </Button>
+          }
+        >
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Descriptions column={2} size="small" bordered>
+              <Descriptions.Item label="最新备份">
+                {backupStatus?.latestBackup ? (
+                  <Space>
+                    <Text code>{backupStatus.latestBackup.filename}</Text>
+                    <Text type="secondary">({backupStatus.latestBackup.sizeFormatted})</Text>
+                  </Space>
+                ) : (
+                  <Text type="secondary">暂无备份</Text>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="备份时间">
+                {backupStatus?.latestBackup
+                  ? dayjs(backupStatus.latestBackup.createdAt).format('YYYY-MM-DD HH:mm:ss')
+                  : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label="备份数量">
+                {backupStatus?.totalBackups ?? 0} 个
+              </Descriptions.Item>
+              <Descriptions.Item label="备份目录">
+                <Text code style={{ fontSize: 12 }}>
+                  {backupStatus?.backupDir ?? 'database/backups/'}
+                </Text>
+              </Descriptions.Item>
+            </Descriptions>
+            <Space>
+              <Button
+                type="primary"
+                icon={<DatabaseOutlined />}
+                onClick={handleExportDatabase}
+                loading={exporting}
+              >
+                立即导出
+              </Button>
+              <Text type="secondary">备份文件将保存到项目的 database/backups/ 目录，可通过 Git 同步到其他设备。</Text>
+            </Space>
+          </Space>
+        </Card>
 
         <Card
           title="排班参数设置"
