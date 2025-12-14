@@ -1,6 +1,7 @@
 import React from 'react';
 import ManpowerCurveCard from './Dashboard/ManpowerCurveCard';
 import WorkHoursCurveCard from './Dashboard/WorkHoursCurveCard';
+import DailyAssignmentsPanel from './Dashboard/DailyAssignmentsPanel';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
@@ -8,6 +9,7 @@ const Dashboard: React.FC = () => {
         <div className="dashboard-page">
             <ManpowerCurveCard />
             <WorkHoursCurveCard />
+            <DailyAssignmentsPanel />
         </div>
     );
 };

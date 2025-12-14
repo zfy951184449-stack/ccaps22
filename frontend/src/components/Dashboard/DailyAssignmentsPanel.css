@@ -1,0 +1,233 @@
+/**
+ * DailyAssignmentsPanel Styles
+ */
+
+.daily-assignments-panel {
+    margin-top: 16px;
+}
+
+.daily-assignments-panel .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.daily-assignments-panel .panel-title {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.daily-assignments-panel .panel-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.daily-assignments-panel .date-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.daily-assignments-panel .date-nav .ant-picker {
+    width: 130px;
+}
+
+/* 批次卡片区域 */
+.daily-assignments-panel .batch-cards-wrapper {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+}
+
+.daily-assignments-panel .scroll-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    height: 60px;
+    width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #d9d9d9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.daily-assignments-panel .scroll-btn:hover {
+    background: #fff;
+    border-color: #1890ff;
+    color: #1890ff;
+}
+
+.daily-assignments-panel .scroll-btn-left {
+    left: 0;
+    border-radius: 0 6px 6px 0;
+}
+
+.daily-assignments-panel .scroll-btn-right {
+    right: 0;
+    border-radius: 6px 0 0 6px;
+}
+
+.daily-assignments-panel .batch-cards-container {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 8px 40px;
+    scroll-behavior: smooth;
+    flex: 1;
+}
+
+.daily-assignments-panel .batch-cards-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.daily-assignments-panel .batch-cards-container::-webkit-scrollbar-thumb {
+    background: #d9d9d9;
+    border-radius: 3px;
+}
+
+/* 单个批次卡片 */
+.daily-assignments-panel .batch-card {
+    min-width: 320px;
+    width: fit-content;
+    max-width: 500px;
+    background: #fafafa;
+    border-radius: 8px;
+    border-top: 4px solid #1890ff;
+    padding: 12px;
+    flex-shrink: 0;
+}
+
+.daily-assignments-panel .batch-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.daily-assignments-panel .operation-count {
+    font-size: 12px;
+    color: #8c8c8c;
+}
+
+/* 操作列表 */
+.daily-assignments-panel .operations-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.daily-assignments-panel .operation-item {
+    background: #fff;
+    border-radius: 6px;
+    padding: 10px;
+    border: 1px solid #e8e8e8;
+}
+
+.daily-assignments-panel .operation-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.daily-assignments-panel .operation-time {
+    color: #1890ff;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.daily-assignments-panel .operation-name {
+    flex: 1;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.daily-assignments-panel .operation-people {
+    color: #8c8c8c;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* 人员分配行 */
+.daily-assignments-panel .assignments-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.daily-assignments-panel .assignment-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: default;
+}
+
+.daily-assignments-panel .assignment-tag.assigned {
+    background: #e6f7ff;
+    color: #1890ff;
+    border: 1px solid #91d5ff;
+}
+
+.daily-assignments-panel .assignment-tag.unassigned {
+    background: #fff7e6;
+    color: #fa8c16;
+    border: 1px solid #ffd591;
+}
+
+/* 阶段分组样式 */
+.daily-assignments-panel .stages-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.daily-assignments-panel .stage-section {
+    background: #fff;
+    border-radius: 6px;
+    border: 1px solid #e8e8e8;
+    overflow: hidden;
+}
+
+.daily-assignments-panel .stage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: linear-gradient(90deg, #f0f5ff 0%, #fff 100%);
+    border-bottom: 1px solid #e8e8e8;
+    font-size: 13px;
+}
+
+.daily-assignments-panel .stage-name {
+    font-weight: 600;
+    color: #1890ff;
+}
+
+.daily-assignments-panel .stage-op-count {
+    font-size: 11px;
+    color: #8c8c8c;
+    background: #f0f0f0;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.daily-assignments-panel .stage-section .operations-list {
+    padding: 8px;
+    max-height: none;
+}
