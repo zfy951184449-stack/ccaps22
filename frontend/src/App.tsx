@@ -37,6 +37,7 @@ import AutoSchedulingDebugPage from './pages/AutoSchedulingDebugPage';
 import AutoSchedulingPage from './pages/AutoSchedulingPage';
 import ModularSchedulingPage from './pages/ModularSchedulingPage';
 import Dashboard from './components/Dashboard';
+import OperationTypesPage from './pages/OperationTypesPage';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -49,6 +50,7 @@ const pathToMenuKey: { [key: string]: string } = {
   '/qualifications': 'qualifications',
   '/qualification-matrix': 'qualification-matrix',
   '/operations': 'operations',
+  '/operation-types': 'operation-types',
   '/process-templates': 'process-templates',
   '/batch-management': 'batch-management',
   '/personnel-scheduling': 'personnel-scheduling',
@@ -114,6 +116,11 @@ const AppLayout: React.FC = () => {
           key: 'operations',
           icon: <SettingOutlined />,
           label: '操作管理',
+        },
+        {
+          key: 'operation-types',
+          icon: <AppstoreOutlined />,
+          label: '操作类型',
         },
       ],
     },
@@ -340,6 +347,7 @@ const AppLayout: React.FC = () => {
               <Route path="/qualifications" element={<QualificationsPage />} />
               <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
               <Route path="/operations" element={<OperationsPage />} />
+              <Route path="/operation-types" element={<OperationTypesPage />} />
               <Route path="/process-templates" element={<ProcessTemplatesPage />} />
               <Route path="/batch-management" element={<BatchManagementPage />} />
               <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />

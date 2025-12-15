@@ -144,10 +144,13 @@ class SharedPreference:
     """共享偏好（共享组）
     
     定义可以共享人员的操作组。
-    同一共享组内的操作可以由同一人同时执行。
+    share_mode 控制人员分配行为:
+    - SAME_TEAM: 组内操作由同一组人执行（默认）
+    - DIFFERENT: 组内操作必须由不同人执行
     """
     share_group_id: str                     # 共享组ID
     share_group_name: Optional[str] = None  # 共享组名称
+    share_mode: str = 'SAME_TEAM'           # 共享模式: SAME_TEAM 或 DIFFERENT
     members: List[SharedPreferenceMember] = field(default_factory=list)  # 成员操作列表
 
 

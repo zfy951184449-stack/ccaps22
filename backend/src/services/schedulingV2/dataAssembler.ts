@@ -415,9 +415,10 @@ export class DataAssembler {
   /**
    * 获取共享组配置
    * 
-   * 支持两种共享配置方式：
-   * 1. operation_share_group_relations + personnel_share_groups（模板级别）
-   * 2. batch_operation_constraints.share_personnel = 1（批次级别，更常用）
+   * 支持三种共享配置方式（按优先级）：
+   * 1. batch_share_groups + batch_share_group_members（批次级别，新版，最高优先级）
+   * 2. operation_share_group_relations + personnel_share_groups（模板级别）
+   * 3. batch_operation_constraints.share_personnel = 1（批次级别，旧版兼容）
    */
   static async fetchSharedPreferences(batchIds: number[]): Promise<SharedPreference[]> {
     if (batchIds.length === 0) return [];
@@ -425,26 +426,73 @@ export class DataAssembler {
     const placeholders = batchIds.map(() => '?').join(',');
     const result: SharedPreference[] = [];
 
-    // ===== 方式1: 从 operation_share_group_relations 和 personnel_share_groups 获取 =====
-    const [rows1] = await pool.execute<RowDataPacket[]>(
+    // ===== 方式1: 从 batch_share_groups + batch_share_group_members 获取（新版，最高优先级） =====
+    const [rows0] = await pool.execute<RowDataPacket[]>(
       `SELECT
-        bop.id AS operation_plan_id,
-        bop.required_people,
-        osgr.share_group_id,
-        psg.group_code,
-        psg.group_name
-       FROM batch_operation_plans bop
-       JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
-       JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
-       LEFT JOIN operation_share_group_relations osgr ON sos.id = osgr.schedule_id
-       LEFT JOIN personnel_share_groups psg ON osgr.share_group_id = psg.id
-       WHERE pbp.id IN (${placeholders})
-         AND osgr.share_group_id IS NOT NULL`,
+        bsg.id AS group_id,
+        bsg.group_code,
+        bsg.group_name,
+        bsg.share_mode,
+        bsgm.batch_operation_plan_id,
+        bop.required_people
+       FROM batch_share_groups bsg
+       JOIN batch_share_group_members bsgm ON bsg.id = bsgm.group_id
+       JOIN batch_operation_plans bop ON bsgm.batch_operation_plan_id = bop.id
+       WHERE bsg.batch_plan_id IN (${placeholders})`,
       batchIds
     );
 
     // 按共享组分组（方式1）
-    const groupMap1 = new Map<number, { name: string; members: SharedPreferenceMember[] }>();
+    const groupMap0 = new Map<number, { name: string; mode: string; members: SharedPreferenceMember[] }>();
+    for (const row of rows0) {
+      const groupId = row.group_id;
+      if (!groupMap0.has(groupId)) {
+        groupMap0.set(groupId, {
+          name: row.group_name || row.group_code || `Group-${groupId}`,
+          mode: row.share_mode || 'SAME_TEAM',
+          members: [],
+        });
+      }
+      groupMap0.get(groupId)!.members.push({
+        operation_plan_id: Number(row.batch_operation_plan_id),
+        required_people: Number(row.required_people) || 1,
+      });
+    }
+
+    for (const [groupId, data] of groupMap0.entries()) {
+      if (data.members.length >= 2) {
+        result.push({
+          share_group_id: `batch-${groupId}`,
+          share_group_name: data.name,
+          share_mode: data.mode as 'SAME_TEAM' | 'DIFFERENT',
+          members: data.members,
+        });
+      }
+    }
+
+    console.log(`[DataAssembler] 从 batch_share_groups 读取到 ${groupMap0.size} 个共享组`);
+
+    // ===== 方式2: 从 personnel_share_group_members 和 personnel_share_groups 获取（新版） =====
+    const [rows1] = await pool.execute<RowDataPacket[]>(
+      `SELECT
+        bop.id AS operation_plan_id,
+        bop.required_people,
+        psgm.group_id AS share_group_id,
+        psg.group_code,
+        psg.group_name,
+        psg.share_mode
+       FROM batch_operation_plans bop
+       JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+       JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+       LEFT JOIN personnel_share_group_members psgm ON sos.id = psgm.schedule_id
+       LEFT JOIN personnel_share_groups psg ON psgm.group_id = psg.id
+       WHERE pbp.id IN (${placeholders})
+         AND psgm.group_id IS NOT NULL`,
+      batchIds
+    );
+
+    // 按共享组分组（方式2）
+    const groupMap1 = new Map<number, { name: string; mode: string; members: SharedPreferenceMember[] }>();
     for (const row of rows1) {
       const groupId = row.share_group_id;
       if (!groupId) continue;
@@ -452,6 +500,7 @@ export class DataAssembler {
       if (!groupMap1.has(groupId)) {
         groupMap1.set(groupId, {
           name: row.group_name || row.group_code || `Group-${groupId}`,
+          mode: row.share_mode || 'SAME_TEAM',
           members: [],
         });
       }
@@ -466,12 +515,13 @@ export class DataAssembler {
         result.push({
           share_group_id: `template-${groupId}`,
           share_group_name: data.name,
+          share_mode: data.mode as 'SAME_TEAM' | 'DIFFERENT',
           members: data.members,
         });
       }
     }
 
-    // ===== 方式2: 从 batch_operation_constraints.share_personnel 获取 =====
+    // ===== 方式3: 从 batch_operation_constraints.share_personnel 获取（旧版兼容） =====
     const [rows2] = await pool.execute<RowDataPacket[]>(
       `SELECT
         boc.batch_operation_plan_id AS op1_id,
@@ -546,6 +596,7 @@ export class DataAssembler {
           result.push({
             share_group_id: `constraint-${root}`,
             share_group_name: `共享组-${++groupIdx}`,
+            share_mode: 'SAME_TEAM',  // 旧版默认 SAME_TEAM
             members: members.map(opId => ({
               operation_plan_id: opId,
               required_people: peopleMap.get(opId) || 1,
@@ -554,7 +605,7 @@ export class DataAssembler {
         }
       });
 
-      console.log(`[DataAssembler] 从 batch_operation_constraints 读取到 ${result.length - groupMap1.size} 个共享组`);
+      console.log(`[DataAssembler] 从 batch_operation_constraints 读取到 ${result.length - groupMap0.size - groupMap1.size} 个共享组`);
     }
 
     console.log(`[DataAssembler] 共享组总数: ${result.length}`);

@@ -42,6 +42,11 @@ interface GanttBarsProps {
     ) => void;
     // 只读操作集合（ACTIVATED 状态的批次操作禁止拖拽）
     readOnlyOperations?: Set<string>;
+    // 绘制共享关系模式
+    isDrawingShareMode?: boolean;
+    onShareDrawClick?: (scheduleId: number, e: React.MouseEvent) => void;
+    // 绘制模式下已选中的第一个操作
+    drawingSelectedScheduleId?: number | null;
 }
 
 export const GanttBars: React.FC<GanttBarsProps> = ({
@@ -63,7 +68,10 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
     setHoveredRowId,
     expandedDay = null,
     onDragStart,
-    readOnlyOperations
+    readOnlyOperations,
+    isDrawingShareMode = false,
+    onShareDrawClick,
+    drawingSelectedScheduleId
 }) => {
     const totalDays = endDay - startDay + 1;
     const totalWidth = totalDays * 24 * hourWidth;
@@ -155,7 +163,10 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                 let borderStyle = '1px solid rgba(255,255,255,0.4)';
                 let boxShadow = '0 1px 4px rgba(0,0,0,0.18)';
                 let blockOpacity = 1;
-                let blockCursor: React.CSSProperties['cursor'] = isReadOnly ? 'not-allowed' : 'move';
+                // 绘制共享模式下使用十字光标
+                let blockCursor: React.CSSProperties['cursor'] = isDrawingShareMode
+                    ? 'crosshair'
+                    : (isReadOnly ? 'not-allowed' : 'move');
                 let textColor = '#fff';
                 let borderRadius = 6;
 
@@ -197,6 +208,14 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                 if (isHighlightedOperation && !isTimeWindowBlock) {
                     borderStyle = '2px solid #ff4d4f';
                     boxShadow = '0 0 0 2px rgba(255,77,79,0.45)';
+                    blockOpacity = 1;
+                }
+
+                // 绘制模式下已选中的操作高亮（蓝色光晕）
+                const isDrawingSelected = isDrawingShareMode && scheduleId && scheduleId === drawingSelectedScheduleId;
+                if (isDrawingSelected && !isTimeWindowBlock && !isStageBlock) {
+                    borderStyle = '2px solid #1890ff';
+                    boxShadow = '0 0 0 3px rgba(24,144,255,0.5), 0 0 12px rgba(24,144,255,0.4)';
                     blockOpacity = 1;
                 }
 
@@ -264,8 +283,14 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                                 overflow: 'hidden'
                             }}
                             onDoubleClick={() => {
-                                if (node) {
+                                if (node && !isDrawingShareMode) {
                                     onEditNode(node);
+                                }
+                            }}
+                            onClick={(e) => {
+                                // 绘制共享模式下，点击操作条触发连线
+                                if (isDrawingShareMode && onShareDrawClick && scheduleId) {
+                                    onShareDrawClick(scheduleId, e);
                                 }
                             }}
                             onMouseDown={(e) => {

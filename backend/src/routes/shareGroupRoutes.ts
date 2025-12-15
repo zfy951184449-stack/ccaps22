@@ -1,13 +1,12 @@
 import { Router } from 'express';
 import {
-  getTemplateShareGroups,
-  createShareGroup,
-  updateShareGroup,
-  deleteShareGroup,
-  assignOperationToGroup,
-  removeOperationFromGroup,
-  getOperationShareGroups,
-  calculatePersonnelOptimization
+    getTemplateShareGroups,
+    getShareGroup,
+    createShareGroup,
+    updateShareGroup,
+    deleteShareGroup,
+    getBatchShareGroups,
+    getShareGroupsForGantt
 } from '../controllers/shareGroupController';
 
 const router = Router();
@@ -15,25 +14,22 @@ const router = Router();
 // 获取模板的所有共享组
 router.get('/template/:templateId', getTemplateShareGroups);
 
-// 计算模板的人员优化
-router.get('/template/:templateId/optimization', calculatePersonnelOptimization);
+// 获取模板共享组（用于甘特图显示）
+router.get('/template/:templateId/gantt', getShareGroupsForGantt);
 
-// 获取操作的共享组
-router.get('/operation/:scheduleId', getOperationShareGroups);
+// 获取批次的所有共享组
+router.get('/batch/:batchPlanId', getBatchShareGroups);
+
+// 获取单个共享组详情
+router.get('/:id', getShareGroup);
 
 // 创建共享组
-router.post('/', createShareGroup);
+router.post('/template/:templateId', createShareGroup);
 
 // 更新共享组
 router.put('/:id', updateShareGroup);
 
 // 删除共享组
 router.delete('/:id', deleteShareGroup);
-
-// 分配操作到共享组
-router.post('/assign', assignOperationToGroup);
-
-// 从共享组移除操作
-router.delete('/operation/:scheduleId/group/:groupId', removeOperationFromGroup);
 
 export default router;

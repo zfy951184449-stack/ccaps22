@@ -544,7 +544,7 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
                 to_operation_code: '',
                 constraint_type: row.constraint_type || 1,
                 lag_time: row.time_lag || 0,
-                share_personnel: row.share_personnel,
+                share_mode: row.share_mode,
                 constraint_level: row.constraint_level,
                 constraint_name: row.constraint_name,
                 from_stage_name: row.predecessor_stage_name || fromOp.stage_name,

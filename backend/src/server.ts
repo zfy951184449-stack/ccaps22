@@ -39,6 +39,7 @@ import schedulingV2Routes from './routes/schedulingV2Routes';
 import independentOperationRoutes from './routes/independentOperations';
 import dashboardRoutes from './routes/dashboard';
 import databaseRoutes from './routes/database';
+import operationTypesRoutes from './routes/operationTypes';
 
 dotenv.config();
 
@@ -113,6 +114,7 @@ app.use('/api/v2/scheduling', schedulingV2Routes);
 app.use('/api/independent-operations', independentOperationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/database', databaseRoutes);
+app.use('/api/operation-types', operationTypesRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'APS Backend API is running' });

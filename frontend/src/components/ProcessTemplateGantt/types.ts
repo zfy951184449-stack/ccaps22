@@ -52,21 +52,34 @@ export interface Constraint {
     related_operation_code: string;
     constraint_type: number;
     lag_time: number;
-    share_personnel: boolean;
+    lag_type?: 'ASAP' | 'FIXED' | 'WINDOW' | 'NEXT_DAY' | 'NEXT_SHIFT' | 'COOLING' | 'BATCH_END';
+    lag_min?: number;
+    lag_max?: number | null;
+    share_mode?: 'NONE' | 'SAME_TEAM' | 'DIFFERENT';
     constraint_name?: string;
     constraint_level?: number;
     description?: string;
     relation_type: 'predecessor' | 'successor';
 }
 
+export interface ShareGroupMember {
+    id: number;
+    schedule_id: number;
+    operation_name: string;
+    required_people: number;
+    stage_name: string;
+}
+
 export interface ShareGroup {
     id: number;
     group_code: string;
     group_name: string;
+    share_mode: 'SAME_TEAM' | 'DIFFERENT';
     description?: string;
-    color: string;
+    color?: string;
     operation_count?: number;
     priority?: number;
+    members?: ShareGroupMember[];
 }
 
 export interface GanttConstraint {
@@ -81,7 +94,7 @@ export interface GanttConstraint {
     to_operation_code: string;
     constraint_type: number;
     lag_time: number;
-    share_personnel?: boolean;
+    share_mode?: 'NONE' | 'SAME_TEAM' | 'DIFFERENT';
     constraint_level?: number;
     constraint_name?: string;
     from_stage_name: string;

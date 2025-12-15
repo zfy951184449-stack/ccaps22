@@ -2,262 +2,279 @@ import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 
-// 获取模板的所有共享组
+/**
+ * 获取模板的所有共享组
+ */
 export const getTemplateShareGroups = async (req: Request, res: Response) => {
-  try {
-    const { templateId } = req.params;
-    
-    const query = `
-      SELECT 
-        psg.id,
-        psg.template_id,
-        psg.group_code,
-        psg.group_name,
-        psg.description,
-        psg.color,
-        COUNT(DISTINCT osgr.schedule_id) AS operation_count,
-        GROUP_CONCAT(DISTINCT op.operation_name ORDER BY osgr.priority) AS operations_list,
-        MAX(op.required_people) AS max_required_people,
-        SUM(op.required_people) AS total_if_independent
-      FROM personnel_share_groups psg
-      LEFT JOIN operation_share_group_relations osgr ON psg.id = osgr.share_group_id
-      LEFT JOIN stage_operation_schedules sos ON osgr.schedule_id = sos.id
-      LEFT JOIN operations op ON sos.operation_id = op.id
-      WHERE psg.template_id = ?
-      GROUP BY psg.id, psg.template_id, psg.group_code, 
-               psg.group_name, psg.description, psg.color
-      ORDER BY psg.group_code
-    `;
-    
-    const [rows] = await pool.execute<RowDataPacket[]>(query, [templateId]);
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching share groups:', error);
-    res.status(500).json({ error: 'Failed to fetch share groups' });
-  }
+    try {
+        const { templateId } = req.params;
+
+        const [groups] = await pool.execute<RowDataPacket[]>(`
+            SELECT 
+                psg.id,
+                psg.template_id,
+                psg.group_code,
+                psg.group_name,
+                psg.share_mode,
+                psg.created_at,
+                COUNT(psgm.id) as member_count
+            FROM personnel_share_groups psg
+            LEFT JOIN personnel_share_group_members psgm ON psg.id = psgm.group_id
+            WHERE psg.template_id = ?
+            GROUP BY psg.id
+            ORDER BY psg.created_at DESC
+        `, [templateId]);
+
+        // 获取每个共享组的成员
+        for (const group of groups) {
+            const [members] = await pool.execute<RowDataPacket[]>(`
+                SELECT 
+                    psgm.id,
+                    psgm.schedule_id,
+                    o.operation_name,
+                    1 as required_people,
+                    ps.stage_name
+                FROM personnel_share_group_members psgm
+                JOIN stage_operation_schedules sos ON psgm.schedule_id = sos.id
+                JOIN operations o ON sos.operation_id = o.id
+                JOIN process_stages ps ON sos.stage_id = ps.id
+                WHERE psgm.group_id = ?
+            `, [group.id]);
+            group.members = members;
+        }
+
+        res.json(groups);
+    } catch (error) {
+        console.error('Error fetching share groups:', error);
+        res.status(500).json({ error: 'Failed to fetch share groups' });
+    }
 };
 
-// 创建共享组
+/**
+ * 获取单个共享组详情
+ */
+export const getShareGroup = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+
+        const [groups] = await pool.execute<RowDataPacket[]>(`
+            SELECT * FROM personnel_share_groups WHERE id = ?
+        `, [id]);
+
+        if (groups.length === 0) {
+            return res.status(404).json({ error: 'Share group not found' });
+        }
+
+        const group = groups[0];
+
+        const [members] = await pool.execute<RowDataPacket[]>(`
+            SELECT 
+                psgm.id,
+                psgm.schedule_id,
+                o.operation_name,
+                1 as required_people,
+                ps.stage_name
+            FROM personnel_share_group_members psgm
+            JOIN stage_operation_schedules sos ON psgm.schedule_id = sos.id
+            JOIN operations o ON sos.operation_id = o.id
+            JOIN process_stages ps ON sos.stage_id = ps.id
+            WHERE psgm.group_id = ?
+        `, [id]);
+
+        group.members = members;
+        res.json(group);
+    } catch (error) {
+        console.error('Error fetching share group:', error);
+        res.status(500).json({ error: 'Failed to fetch share group' });
+    }
+};
+
+/**
+ * 创建共享组
+ */
 export const createShareGroup = async (req: Request, res: Response) => {
-  try {
-    const {
-      template_id,
-      group_code,
-      group_name,
-      description,
-      color = '#1890ff'
-    } = req.body;
-    
-    const insertQuery = `
-      INSERT INTO personnel_share_groups (
-        template_id, group_code, group_name, description, color
-      ) VALUES (?, ?, ?, ?, ?)
-    `;
-    
-    const [result]: any = await pool.execute(insertQuery, [
-      template_id,
-      group_code,
-      group_name,
-      description || null,
-      color
-    ]);
-    
-    res.status(201).json({ 
-      id: result.insertId, 
-      message: 'Share group created successfully' 
-    });
-  } catch (error: any) {
-    console.error('Error creating share group:', error);
-    
-    if (error.code === 'ER_DUP_ENTRY') {
-      res.status(400).json({ error: 'Group code already exists for this template' });
-    } else {
-      res.status(500).json({ error: 'Failed to create share group' });
+    try {
+        const { templateId } = req.params;
+        const { group_name, share_mode, member_ids } = req.body;
+
+        if (!group_name || !member_ids || member_ids.length < 2) {
+            return res.status(400).json({
+                error: 'group_name is required and at least 2 members must be selected'
+            });
+        }
+
+        // 生成唯一的 group_code
+        const groupCode = `SG_${Date.now()}`;
+
+        // 创建共享组
+        const [result] = await pool.execute<any>(`
+            INSERT INTO personnel_share_groups (template_id, group_code, group_name, share_mode)
+            VALUES (?, ?, ?, ?)
+        `, [templateId, groupCode, group_name, share_mode || 'SAME_TEAM']);
+
+        const groupId = result.insertId;
+
+        // 添加成员
+        for (const scheduleId of member_ids) {
+            await pool.execute(`
+                INSERT INTO personnel_share_group_members (group_id, schedule_id)
+                VALUES (?, ?)
+            `, [groupId, scheduleId]);
+        }
+
+        res.status(201).json({
+            id: groupId,
+            group_code: groupCode,
+            message: 'Share group created successfully'
+        });
+    } catch (error) {
+        console.error('Error creating share group:', error);
+        res.status(500).json({ error: 'Failed to create share group' });
     }
-  }
 };
 
-// 更新共享组
+/**
+ * 更新共享组
+ */
 export const updateShareGroup = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const {
-      group_code,
-      group_name,
-      description,
-      color
-    } = req.body;
-    
-    const updateQuery = `
-      UPDATE personnel_share_groups 
-      SET group_code = ?, group_name = ?, description = ?, color = ?
-      WHERE id = ?
-    `;
-    
-    const [result]: any = await pool.execute(updateQuery, [
-      group_code,
-      group_name,
-      description || null,
-      color,
-      id
-    ]);
-    
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Share group not found' });
+    try {
+        const { id } = req.params;
+        const { group_name, share_mode, member_ids } = req.body;
+
+        const updates: string[] = [];
+        const params: any[] = [];
+
+        if (group_name !== undefined) {
+            updates.push('group_name = ?');
+            params.push(group_name);
+        }
+        if (share_mode !== undefined) {
+            updates.push('share_mode = ?');
+            params.push(share_mode);
+        }
+
+        if (updates.length > 0) {
+            params.push(id);
+            await pool.execute(`
+                UPDATE personnel_share_groups SET ${updates.join(', ')} WHERE id = ?
+            `, params);
+        }
+
+        // 更新成员列表
+        if (member_ids && Array.isArray(member_ids)) {
+            // 删除现有成员
+            await pool.execute('DELETE FROM personnel_share_group_members WHERE group_id = ?', [id]);
+            // 添加新成员
+            for (const scheduleId of member_ids) {
+                await pool.execute(`
+                    INSERT INTO personnel_share_group_members (group_id, schedule_id)
+                    VALUES (?, ?)
+                `, [id, scheduleId]);
+            }
+        }
+
+        res.json({ message: 'Share group updated successfully' });
+    } catch (error) {
+        console.error('Error updating share group:', error);
+        res.status(500).json({ error: 'Failed to update share group' });
     }
-    
-    res.json({ message: 'Share group updated successfully' });
-  } catch (error) {
-    console.error('Error updating share group:', error);
-    res.status(500).json({ error: 'Failed to update share group' });
-  }
 };
 
-// 删除共享组
+/**
+ * 删除共享组
+ */
 export const deleteShareGroup = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    
-    const [result]: any = await pool.execute(
-      'DELETE FROM personnel_share_groups WHERE id = ?',
-      [id]
-    );
-    
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Share group not found' });
+    try {
+        const { id } = req.params;
+
+        // 成员会因为 CASCADE 自动删除
+        await pool.execute('DELETE FROM personnel_share_groups WHERE id = ?', [id]);
+
+        res.json({ message: 'Share group deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting share group:', error);
+        res.status(500).json({ error: 'Failed to delete share group' });
     }
-    
-    res.json({ message: 'Share group deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting share group:', error);
-    res.status(500).json({ error: 'Failed to delete share group' });
-  }
 };
 
-// 为操作分配共享组
-export const assignOperationToGroup = async (req: Request, res: Response) => {
-  try {
-    const {
-      schedule_id,
-      share_group_id,
-      priority = 1
-    } = req.body;
-    
-    const insertQuery = `
-      INSERT INTO operation_share_group_relations (
-        schedule_id, share_group_id, priority
-      ) VALUES (?, ?, ?)
-      ON DUPLICATE KEY UPDATE priority = VALUES(priority)
-    `;
-    
-    await pool.execute(insertQuery, [
-      schedule_id,
-      share_group_id,
-      priority
-    ]);
-    
-    res.json({ message: 'Operation assigned to group successfully' });
-  } catch (error) {
-    console.error('Error assigning operation to group:', error);
-    res.status(500).json({ error: 'Failed to assign operation to group' });
-  }
-};
+/**
+ * 获取批次的所有共享组
+ */
+export const getBatchShareGroups = async (req: Request, res: Response) => {
+    try {
+        const { batchPlanId } = req.params;
 
-// 从共享组移除操作
-export const removeOperationFromGroup = async (req: Request, res: Response) => {
-  try {
-    const { scheduleId, groupId } = req.params;
-    
-    const [result]: any = await pool.execute(
-      'DELETE FROM operation_share_group_relations WHERE schedule_id = ? AND share_group_id = ?',
-      [scheduleId, groupId]
-    );
-    
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Relation not found' });
+        const [groups] = await pool.execute<RowDataPacket[]>(`
+            SELECT 
+                bsg.id,
+                bsg.batch_plan_id,
+                bsg.template_group_id,
+                bsg.group_code,
+                bsg.group_name,
+                bsg.share_mode,
+                bsg.created_at,
+                COUNT(bsgm.id) as member_count
+            FROM batch_share_groups bsg
+            LEFT JOIN batch_share_group_members bsgm ON bsg.id = bsgm.group_id
+            WHERE bsg.batch_plan_id = ?
+            GROUP BY bsg.id
+            ORDER BY bsg.created_at DESC
+        `, [batchPlanId]);
+
+        // 获取每个共享组的成员
+        for (const group of groups) {
+            const [members] = await pool.execute<RowDataPacket[]>(`
+                SELECT 
+                    bsgm.id,
+                    bsgm.batch_operation_plan_id,
+                    bop.operation_name,
+                    bop.required_people
+                FROM batch_share_group_members bsgm
+                JOIN batch_operation_plans bop ON bsgm.batch_operation_plan_id = bop.id
+                WHERE bsgm.group_id = ?
+            `, [group.id]);
+            group.members = members;
+        }
+
+        res.json(groups);
+    } catch (error) {
+        console.error('Error fetching batch share groups:', error);
+        res.status(500).json({ error: 'Failed to fetch batch share groups' });
     }
-    
-    res.json({ message: 'Operation removed from group successfully' });
-  } catch (error) {
-    console.error('Error removing operation from group:', error);
-    res.status(500).json({ error: 'Failed to remove operation from group' });
-  }
 };
 
-// 获取操作的共享组
-export const getOperationShareGroups = async (req: Request, res: Response) => {
-  try {
-    const { scheduleId } = req.params;
-    
-    const query = `
-      SELECT 
-        psg.id,
-        psg.group_code,
-        psg.group_name,
-        psg.description,
-        psg.color,
-        osgr.priority
-      FROM operation_share_group_relations osgr
-      JOIN personnel_share_groups psg ON osgr.share_group_id = psg.id
-      WHERE osgr.schedule_id = ?
-      ORDER BY osgr.priority
-    `;
-    
-    const [rows] = await pool.execute<RowDataPacket[]>(query, [scheduleId]);
-    res.json(rows);
-  } catch (error) {
-    console.error('Error fetching operation share groups:', error);
-    res.status(500).json({ error: 'Failed to fetch operation share groups' });
-  }
-};
+/**
+ * 获取用于甘特图显示的共享组连线
+ */
+export const getShareGroupsForGantt = async (req: Request, res: Response) => {
+    try {
+        const { templateId } = req.params;
 
-// 计算模板的人员需求优化
-export const calculatePersonnelOptimization = async (req: Request, res: Response) => {
-  try {
-    const { templateId } = req.params;
-    
-    // 获取独立人员需求（没有共享）
-    const independentQuery = `
-      SELECT 
-        SUM(op.required_people) AS total_independent,
-        MAX(op.required_people) AS peak_independent
-      FROM stage_operation_schedules sos
-      JOIN operations op ON sos.operation_id = op.id
-      JOIN process_stages ps ON sos.stage_id = ps.id
-      WHERE ps.template_id = ?
-    `;
-    
-    // 获取共享后的人员需求
-    const sharedQuery = `
-      SELECT 
-        psg.group_name,
-        MAX(op.required_people) AS group_requirement,
-        COUNT(DISTINCT osgr.schedule_id) AS operation_count
-      FROM personnel_share_groups psg
-      JOIN operation_share_group_relations osgr ON psg.id = osgr.share_group_id
-      JOIN stage_operation_schedules sos ON osgr.schedule_id = sos.id
-      JOIN operations op ON sos.operation_id = op.id
-      WHERE psg.template_id = ?
-      GROUP BY psg.id, psg.group_name
-    `;
-    
-    const [independent] = await pool.execute<RowDataPacket[]>(independentQuery, [templateId]);
-    const [shared] = await pool.execute<RowDataPacket[]>(sharedQuery, [templateId]);
-    
-    const totalShared = shared.reduce((sum, group) => sum + group.group_requirement, 0);
-    const totalIndependent = independent[0].total_independent || 0;
-    const savings = totalIndependent - totalShared;
-    const savingsPercent = totalIndependent > 0 ? (savings / totalIndependent * 100).toFixed(1) : 0;
-    
-    res.json({
-      total_independent: totalIndependent,
-      total_with_sharing: totalShared,
-      savings: savings,
-      savings_percent: savingsPercent,
-      share_groups: shared
-    });
-  } catch (error) {
-    console.error('Error calculating personnel optimization:', error);
-    res.status(500).json({ error: 'Failed to calculate optimization' });
-  }
+        const [groups] = await pool.execute<RowDataPacket[]>(`
+            SELECT 
+                psg.id,
+                psg.group_code,
+                psg.group_name,
+                psg.share_mode,
+                GROUP_CONCAT(psgm.schedule_id) as member_schedule_ids
+            FROM personnel_share_groups psg
+            JOIN personnel_share_group_members psgm ON psg.id = psgm.group_id
+            WHERE psg.template_id = ?
+            GROUP BY psg.id
+        `, [templateId]);
+
+        // 转换为前端需要的格式
+        const result = groups.map((g: any) => ({
+            id: g.id,
+            group_code: g.group_code,
+            group_name: g.group_name,
+            share_mode: g.share_mode,
+            member_ids: g.member_schedule_ids ? g.member_schedule_ids.split(',').map(Number) : []
+        }));
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching share groups for gantt:', error);
+        res.status(500).json({ error: 'Failed to fetch share groups for gantt' });
+    }
 };

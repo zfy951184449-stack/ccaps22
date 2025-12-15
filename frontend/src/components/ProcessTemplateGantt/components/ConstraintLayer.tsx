@@ -142,7 +142,7 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                 const baseStyle = getBaseStyle(constraint.constraint_type);
 
                 const isSoft = constraint.constraint_level && constraint.constraint_level !== 1;
-                const isShared = Boolean(constraint.share_personnel);
+                const isShared = Boolean(constraint.share_mode && constraint.share_mode !== 'NONE');
                 const isConflictConstraint = conflictConstraintSet.has(constraint.constraint_id);
                 const isActiveConstraint = activeConstraintSet.has(constraint.constraint_id);
 
@@ -175,7 +175,7 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                         : 'rgba(0,0,0,0.65)';
 
                 // 判断是否为纯人员共享约束（没有实际时间依赖）
-                // 条件：share_personnel=1 且 lag_time 为 0
+                // 条件：share_mode 不为 NONE 且 lag_time 为 0
                 const isPureSharePersonnel = isShared && (!constraint.lag_time || constraint.lag_time === 0);
 
                 const arrowSize = 9;

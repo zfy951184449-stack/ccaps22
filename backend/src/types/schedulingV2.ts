@@ -144,6 +144,7 @@ export interface SharedPreferenceMember {
 export interface SharedPreference {
   share_group_id: string;
   share_group_name?: string | null;
+  share_mode: 'SAME_TEAM' | 'DIFFERENT';  // 共享模式
   members: SharedPreferenceMember[];
 }
 

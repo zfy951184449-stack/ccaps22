@@ -64,6 +64,7 @@ class SolverContext:
     share_groups: Dict[str, List[int]] = field(default_factory=dict)  # 共享组ID -> 操作ID列表
     operation_share_group: Dict[int, str] = field(default_factory=dict)  # 操作ID -> 共享组ID
     share_anchor: Dict[str, int] = field(default_factory=dict)  # 共享组ID -> 锚点操作ID
+    share_group_mode: Dict[str, str] = field(default_factory=dict)  # 共享组ID -> 模式 (SAME_TEAM/DIFFERENT)
     
     # ==================== 锁定信息 ====================
     locked_operations: Dict[int, Set[int]] = field(default_factory=dict)  # 操作ID -> 锁定的员工ID集合
@@ -252,6 +253,7 @@ class SolverContext:
             member_ops = [m.operation_plan_id for m in sp.members]
             
             self.share_groups[group_id] = member_ops
+            self.share_group_mode[group_id] = sp.share_mode  # 记录共享模式
             
             # 记录每个操作所属的共享组
             for op_id in member_ops:

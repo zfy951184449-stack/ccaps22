@@ -15,8 +15,10 @@ import { GanttSidebar } from './components/GanttSidebar';
 import { GanttTimeline } from './components/GanttTimeline';
 import { GanttBars } from './components/GanttBars';
 import { ConstraintLayer } from './components/ConstraintLayer';
+import { ShareLinkLayer } from './components/ShareLinkLayer';
 import { GanttModals } from './components/GanttModals';
 import { GanttAxis } from './components/GanttAxis';
+import { useShareLinkDraw } from './hooks/useShareLinkDraw';
 import { TOKENS, LEFT_PANEL_WIDTH, TITLE_BAR_HEIGHT, HEADER_HEIGHT, CONTENT_GAP, STAGE_COLORS } from './constants';
 
 const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
@@ -93,6 +95,60 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
 
     // 日期展开功能状态
     const [expandedDay, setExpandedDay] = useState<number | null>(null);
+
+    // 绘制共享关系 hook
+    const shareLinkDraw = useShareLinkDraw({
+        operationBlockMap,
+        onConstraintCreated: refreshData,
+        containerRef: ganttContentRef as React.RefObject<HTMLElement>,
+        hourWidth,
+        rowIndexMap
+    });
+
+    // 从约束中提取共享关系 + 从共享组表提取共享关系
+    const shareLinks = useMemo(() => {
+        const links: Array<{
+            constraint_id: number;
+            from_schedule_id: number;
+            to_schedule_id: number;
+            share_mode: 'SAME_TEAM' | 'DIFFERENT';
+        }> = [];
+
+        // 1. 从约束中提取 (原有逻辑)
+        const constraints = externalConstraints ?? interaction.ganttConstraints;
+        constraints
+            .filter(c => c.share_mode && c.share_mode !== 'NONE')
+            .forEach(c => {
+                links.push({
+                    constraint_id: c.constraint_id || 0,
+                    from_schedule_id: c.from_schedule_id,
+                    to_schedule_id: c.to_schedule_id,
+                    share_mode: c.share_mode as 'SAME_TEAM' | 'DIFFERENT'
+                });
+            });
+
+        // 2. 从共享组表提取 (新增逻辑)
+        // 每个共享组内的成员两两相连显示
+        if (!isExternalMode && interaction.shareGroups) {
+            interaction.shareGroups.forEach(group => {
+                const members = group.members || [];
+                if (members.length >= 2) {
+                    // 生成相邻成员之间的连线
+                    for (let i = 0; i < members.length - 1; i++) {
+                        // 使用负数ID区分共享组连线和约束连线
+                        links.push({
+                            constraint_id: -(group.id * 1000 + i),
+                            from_schedule_id: members[i].schedule_id,
+                            to_schedule_id: members[i + 1].schedule_id,
+                            share_mode: group.share_mode || 'SAME_TEAM'
+                        });
+                    }
+                }
+            });
+        }
+
+        return links;
+    }, [externalConstraints, interaction.ganttConstraints, interaction.shareGroups, isExternalMode]);
 
     const handleDayDoubleClick = useCallback((dayNumber: number) => {
         setExpandedDay(prev => prev === dayNumber ? null : dayNumber);
@@ -286,6 +342,8 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                 handleSaveTemplate={onExternalSave ?? interaction.handleSaveTemplate}
                 handleAutoSchedule={interaction.handleAutoSchedule}
                 scheduling={interaction.scheduling}
+                isDrawingShareMode={!isExternalMode && shareLinkDraw.isDrawingMode}
+                onToggleDrawMode={!isExternalMode ? shareLinkDraw.toggleDrawMode : undefined}
             />
 
             <div style={{ flex: 1, background: TOKENS.background, overflow: 'visible' }}>
@@ -382,9 +440,20 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                     <div
                         ref={ganttContentRef}
                         className="gantt-scroll-container"
-                        style={{ gridColumn: '2 / 3', gridRow: '2 / 3', background: TOKENS.background, overflow: 'auto', position: 'relative', cursor: isPanningRef.current ? 'grabbing' : 'grab' }}
+                        style={{
+                            gridColumn: '2 / 3',
+                            gridRow: '2 / 3',
+                            background: TOKENS.background,
+                            overflow: 'auto',
+                            position: 'relative',
+                            cursor: shareLinkDraw.isDrawingMode
+                                ? 'crosshair'
+                                : (isPanningRef.current ? 'grabbing' : 'grab')
+                        }}
                         onScroll={handleScroll}
                         onMouseDown={handleGanttMouseDown}
+                        onMouseMove={shareLinkDraw.isDrawingMode ? shareLinkDraw.handleMouseMove : undefined}
+                        onClick={shareLinkDraw.isDrawingMode ? shareLinkDraw.handleCanvasClick : undefined}
                     >
                         {!flattenedRows.length || timeBlocks.length === 0 ? (
                             <div style={{ padding: 40, textAlign: 'center' }}>
@@ -429,6 +498,9 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                     expandedDay={expandedDay}
                                     onDragStart={handleDragStart}
                                     readOnlyOperations={readOnlyOperations}
+                                    isDrawingShareMode={!isExternalMode && shareLinkDraw.isDrawingMode}
+                                    onShareDrawClick={!isExternalMode ? shareLinkDraw.handleOperationClick : undefined}
+                                    drawingSelectedScheduleId={!isExternalMode ? shareLinkDraw.selectedScheduleId : null}
                                 />
                                 <ConstraintLayer
                                     ganttConstraints={externalConstraints ?? interaction.ganttConstraints}
@@ -443,6 +515,22 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                     conflictConstraintSet={conflictConstraintSet}
                                     activeConstraintSet={activeConstraintSet}
                                 />
+                                {/* 共享关系连线层 */}
+                                {!isExternalMode && (
+                                    <ShareLinkLayer
+                                        shareLinks={shareLinks}
+                                        operationBlockMap={operationBlockMap}
+                                        containerWidth={headerWidth}
+                                        containerHeight={totalHeight}
+                                        scrollLeft={0}
+                                        scrollTop={0}
+                                        hourWidth={effectiveHourWidth}
+                                        rowIndexMap={effectiveRowIndexMap}
+                                        startDay={effectiveStartDay}
+                                        isDrawingMode={shareLinkDraw.isDrawingMode}
+                                        drawingLine={shareLinkDraw.drawingLine}
+                                    />
+                                )}
                             </div>
                         )}
                     </div>

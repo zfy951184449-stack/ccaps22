@@ -603,12 +603,13 @@ export const getDailyAssignments = async (req: Request, res: Response) => {
         const dateStr = queryDate.format('YYYY-MM-DD');
 
         // 查询指定日期有操作的批次及其人员分配（包含阶段信息）
+        // 使用 LEFT JOIN 以包含独立操作（template_schedule_id 为 NULL）
         const [rows] = await pool.execute<RowDataPacket[]>(
             `SELECT 
                 pbp.id as batch_id,
                 pbp.batch_code,
-                ps.id as stage_id,
-                ps.stage_name,
+                COALESCE(ps.id, 0) as stage_id,
+                COALESCE(ps.stage_name, '独立操作') as stage_name,
                 bop.id as operation_plan_id,
                 o.operation_name,
                 TIME_FORMAT(bop.planned_start_datetime, '%H:%i') as start_time,
@@ -619,8 +620,8 @@ export const getDailyAssignments = async (req: Request, res: Response) => {
              FROM batch_operation_plans bop
              JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
              JOIN operations o ON bop.operation_id = o.id
-             JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
-             JOIN process_stages ps ON sos.stage_id = ps.id
+             LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+             LEFT JOIN process_stages ps ON sos.stage_id = ps.id
              LEFT JOIN batch_personnel_assignments bpa ON bop.id = bpa.batch_operation_plan_id
              LEFT JOIN employees e ON bpa.employee_id = e.id
              WHERE pbp.plan_status = 'ACTIVATED'

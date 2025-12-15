@@ -6,7 +6,8 @@ import {
     CompressOutlined,
     ZoomInOutlined,
     SaveOutlined,
-    SafetyOutlined
+    SafetyOutlined,
+    TeamOutlined
 } from '@ant-design/icons';
 import { ProcessTemplate } from '../types';
 import { TOKENS, TITLE_BAR_HEIGHT } from '../constants';
@@ -25,6 +26,9 @@ interface GanttHeaderProps {
     handleSaveTemplate: () => void;
     handleAutoSchedule: () => void;
     scheduling: boolean;
+    // 绘制共享模式
+    isDrawingShareMode?: boolean;
+    onToggleDrawMode?: () => void;
 }
 
 export const GanttHeader: React.FC<GanttHeaderProps> = ({
@@ -38,7 +42,9 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
     isDirty,
     handleSaveTemplate,
     handleAutoSchedule,
-    scheduling
+    scheduling,
+    isDrawingShareMode = false,
+    onToggleDrawMode
 }) => {
     return (
         <div
@@ -73,6 +79,24 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
             </div>
 
             <Space size={16} align="center">
+                {/* 绘制共享按钮 */}
+                {onToggleDrawMode && (
+                    <Tooltip title={isDrawingShareMode ? '退出绘制模式' : '绘制人员共享关系'}>
+                        <Button
+                            type={isDrawingShareMode ? 'primary' : 'default'}
+                            icon={<TeamOutlined />}
+                            onClick={onToggleDrawMode}
+                            style={{
+                                borderRadius: 8,
+                                borderColor: isDrawingShareMode ? undefined : '#1890ff',
+                                color: isDrawingShareMode ? undefined : '#1890ff'
+                            }}
+                        >
+                            {isDrawingShareMode ? '退出绘制' : '绘制共享'}
+                        </Button>
+                    </Tooltip>
+                )}
+
                 <Space.Compact>
                     <Tooltip title="缩小">
                         <Button

@@ -1,0 +1,80 @@
+.share-group-panel {
+    .ant-card-body {
+        padding: 12px;
+    }
+
+    .share-group-item {
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+
+        &:last-child {
+            border-bottom: none;
+        }
+
+        .group-name {
+            font-weight: 500;
+            color: #262626;
+        }
+
+        .group-members {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+
+            .member-tag {
+                margin: 0;
+                font-size: 12px;
+                background: #fafafa;
+                border-color: #d9d9d9;
+
+                .separator {
+                    margin-left: 4px;
+                    color: #999;
+                }
+            }
+        }
+    }
+
+    .ant-empty {
+        padding: 24px 0;
+    }
+}
+
+/* 共享组连线样式 */
+.share-group-connector {
+    position: absolute;
+    pointer-events: none;
+    z-index: 100;
+
+    &.mode-same-team {
+        .connector-line {
+            stroke: #1890ff;
+            stroke-width: 2;
+            stroke-dasharray: 6 4;
+            fill: none;
+        }
+
+        .connector-dot {
+            fill: #1890ff;
+        }
+    }
+
+    &.mode-different {
+        .connector-line {
+            stroke: #fa8c16;
+            stroke-width: 2;
+            stroke-dasharray: 3 3;
+            fill: none;
+        }
+
+        .connector-dot {
+            fill: #fa8c16;
+        }
+    }
+
+    .connector-label {
+        font-size: 10px;
+        fill: #666;
+    }
+}

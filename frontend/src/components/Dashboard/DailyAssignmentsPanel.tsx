@@ -65,6 +65,42 @@ const DailyAssignmentsPanel: React.FC = () => {
     const [selectedBatches, setSelectedBatches] = useState<number[]>([]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
+    // 滚动状态：是否可以向左/右滚动
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    // 检查滚动状态
+    const updateScrollState = React.useCallback(() => {
+        const container = scrollContainerRef.current;
+        if (!container) {
+            setCanScrollLeft(false);
+            setCanScrollRight(false);
+            return;
+        }
+        const { scrollLeft, scrollWidth, clientWidth } = container;
+        setCanScrollLeft(scrollLeft > 0);
+        setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1); // -1 for float precision
+    }, []);
+
+    // 监听滚动事件和窗口大小变化
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        // 初始检查
+        updateScrollState();
+
+        // 监听滚动
+        container.addEventListener('scroll', updateScrollState);
+        // 监听窗口大小变化
+        window.addEventListener('resize', updateScrollState);
+
+        return () => {
+            container.removeEventListener('scroll', updateScrollState);
+            window.removeEventListener('resize', updateScrollState);
+        };
+    }, [updateScrollState, data, selectedBatches]);
+
     // 批次颜色映射
     const batchColorMap = React.useMemo(() => {
         const map: Record<number, string> = {};
@@ -116,16 +152,18 @@ const DailyAssignmentsPanel: React.FC = () => {
         selectedBatches.includes(b.batch_id)
     ) || [];
 
-    // 左右滚动卡片区域
+    // 左右滚动卡片区域（滚动距离 = 卡片最小宽度 320px + 间距 16px = 336px）
+    const SCROLL_DISTANCE = 340;
+
     const scrollLeft = () => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+            scrollContainerRef.current.scrollBy({ left: -SCROLL_DISTANCE, behavior: 'smooth' });
         }
     };
 
     const scrollRight = () => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+            scrollContainerRef.current.scrollBy({ left: SCROLL_DISTANCE, behavior: 'smooth' });
         }
     };
 
@@ -178,6 +216,7 @@ const DailyAssignmentsPanel: React.FC = () => {
                             className="scroll-btn scroll-btn-left"
                             icon={<LeftOutlined />}
                             onClick={scrollLeft}
+                            disabled={!canScrollLeft}
                         />
                         <div className="batch-cards-container" ref={scrollContainerRef}>
                             {filteredBatches.map(batch => {
@@ -242,6 +281,7 @@ const DailyAssignmentsPanel: React.FC = () => {
                             className="scroll-btn scroll-btn-right"
                             icon={<RightOutlined />}
                             onClick={scrollRight}
+                            disabled={!canScrollRight}
                         />
                     </div>
                 ) : (

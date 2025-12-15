@@ -58,10 +58,18 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-.daily-assignments-panel .scroll-btn:hover {
+.daily-assignments-panel .scroll-btn:hover:not(:disabled) {
     background: #fff;
     border-color: #1890ff;
     color: #1890ff;
+}
+
+.daily-assignments-panel .scroll-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    background: #f5f5f5;
+    border-color: #d9d9d9;
+    color: #bfbfbf;
 }
 
 .daily-assignments-panel .scroll-btn-left {

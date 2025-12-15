@@ -6,7 +6,8 @@ import {
   updateOperation,
   deleteOperation,
   getNextOperationCode,
-  getOperationStatistics
+  getOperationStatistics,
+  getQualifiedPersonnelByOperation
 } from '../controllers/operationController';
 
 const router = express.Router();
@@ -16,6 +17,9 @@ router.get('/statistics', getOperationStatistics);
 
 // 获取下一个操作编码预览
 router.get('/next-code', getNextOperationCode);
+
+// 获取各操作按位置的合格人数
+router.get('/qualified-personnel', getQualifiedPersonnelByOperation);
 
 // CRUD路由
 router.get('/', getAllOperations);

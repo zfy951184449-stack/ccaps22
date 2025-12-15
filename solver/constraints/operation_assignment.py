@@ -687,12 +687,13 @@ class OperationAssignmentConstraint(BaseConstraint):
         
         🚀 优化: 使用预计算的 _overlapping_pairs 而不是 O(n²) 循环
         
-        注意：
-        - 共享组内的操作如果时间重叠但可以被同一班次覆盖，允许同一人执行
-        - 共享组内的操作如果时间重叠且无法被同一班次覆盖，仍需禁止
+        share_mode 行为:
+        - SAME_TEAM: 共享组内允许同一人执行重叠操作（如果班次可覆盖）
+        - DIFFERENT: 共享组内强制不同人执行（添加互斥约束）
         """
         constraint_count = 0
         skipped_share_group = 0
+        different_mode_count = 0
         
         # 🚀 优化: 直接遍历预计算的重叠对，而不是 O(n²) 循环
         for op_id_a, op_id_b in self._overlapping_pairs:
@@ -702,15 +703,24 @@ class OperationAssignmentConstraint(BaseConstraint):
             is_same_share_group = group_a and group_a == group_b
             
             if is_same_share_group:
-                # 共享组内，需要额外检查是否能被同一班次覆盖
-                key = (min(op_id_a, op_id_b), max(op_id_a, op_id_b))
-                if key in self._shift_coverage_mutex:
-                    # 无法被同一班次覆盖，仍需添加互斥约束
+                # 检查共享组模式
+                group_mode = self.context.share_group_mode.get(group_a, 'SAME_TEAM')
+                
+                if group_mode == 'DIFFERENT':
+                    # DIFFERENT 模式：必须不同人执行，强制添加互斥约束
                     added = self._add_conflict_constraint(op_id_a, op_id_b)
                     constraint_count += added
+                    different_mode_count += 1
                 else:
-                    # 共享组内允许同一人执行
-                    skipped_share_group += 1
+                    # SAME_TEAM 模式：需要额外检查是否能被同一班次覆盖
+                    key = (min(op_id_a, op_id_b), max(op_id_a, op_id_b))
+                    if key in self._shift_coverage_mutex:
+                        # 无法被同一班次覆盖，仍需添加互斥约束
+                        added = self._add_conflict_constraint(op_id_a, op_id_b)
+                        constraint_count += added
+                    else:
+                        # 共享组内允许同一人执行
+                        skipped_share_group += 1
             else:
                 # 非共享组，时间冲突则禁止
                 added = self._add_conflict_constraint(op_id_a, op_id_b)
@@ -718,7 +728,8 @@ class OperationAssignmentConstraint(BaseConstraint):
         
         logger.info(
             f"[{self.name}] 🚀 时间冲突检测: {len(self._overlapping_pairs)} 对重叠操作, "
-            f"添加 {constraint_count} 条互斥约束, 共享组跳过 {skipped_share_group} 对"
+            f"添加 {constraint_count} 条互斥约束, 共享组跳过 {skipped_share_group} 对, "
+            f"DIFFERENT模式互斥 {different_mode_count} 对"
         )
     
     def _check_time_overlap(self, op_id_a: int, op_id_b: int) -> bool:

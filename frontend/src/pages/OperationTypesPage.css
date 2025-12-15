@@ -1,0 +1,30 @@
+.operation-types-page {
+    padding: 24px;
+}
+
+.operation-types-page .type-code {
+    background: #f5f5f5;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Consolas, monospace;
+    font-size: 12px;
+    color: #1890ff;
+}
+
+.operation-types-page .ant-card {
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.operation-types-page .ant-tabs-nav {
+    margin-bottom: 0 !important;
+}
+
+.operation-types-page .ant-table {
+    border-radius: 8px;
+}
+
+.operation-types-page .ant-table-thead>tr>th {
+    background: #fafafa;
+    font-weight: 600;
+}

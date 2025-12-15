@@ -5,7 +5,7 @@
  * 拖拽操作时会自动重新计算
  * 
  * 考虑人员共享：
- * - 有 share_personnel=true 约束的操作视为共享同一组人员
+ * - 有 share_mode='SAME_TEAM' 约束的操作视为共享同一组人员
  * - 同组内并发操作取 max(required_people)
  * - 不同组间求和
  */
@@ -89,10 +89,10 @@ export const usePeakPersonnel = ({
         };
         collectNodes(ganttNodes);
 
-        // 构建共享组：使用并查集将 share_personnel=true 的操作分组
+        // 构建共享组：使用并查集将 share_mode='SAME_TEAM' 的操作分组
         const uf = createUnionFind();
         for (const c of constraints) {
-            if (c.share_personnel) {
+            if (c.share_mode === 'SAME_TEAM') {
                 const nodeIdA = `operation_${c.from_schedule_id}`;
                 const nodeIdB = `operation_${c.to_schedule_id}`;
                 uf.union(nodeIdA, nodeIdB);

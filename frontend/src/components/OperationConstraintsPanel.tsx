@@ -14,7 +14,8 @@ import {
   message,
   Empty,
   Tooltip,
-  Typography
+  Typography,
+  Radio
 } from 'antd';
 import {
   PlusOutlined,
@@ -35,7 +36,10 @@ interface Constraint {
   related_operation_code: string;
   constraint_type: number;
   lag_time: number;
-  share_personnel: boolean;
+  lag_type?: 'ASAP' | 'FIXED' | 'WINDOW' | 'NEXT_DAY' | 'NEXT_SHIFT' | 'COOLING' | 'BATCH_END';
+  lag_min?: number;
+  lag_max?: number | null;
+  share_mode?: 'NONE' | 'SAME_TEAM' | 'DIFFERENT';
   constraint_name?: string;
   constraint_level?: number;
   description?: string;
@@ -76,15 +80,25 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
     { value: 4, label: 'SF (开始-完成)', color: 'purple', description: '前置操作开始后，当前操作才能完成' }
   ];
 
+  const lagTypeOptions = [
+    { value: 'ASAP', label: '尽早开始', color: 'green', description: '尽快开始，无延迟' },
+    { value: 'FIXED', label: '固定延迟', color: 'blue', description: '固定时间间隔' },
+    { value: 'WINDOW', label: '时间窗口', color: 'cyan', description: '在时间范围内开始' },
+    { value: 'NEXT_DAY', label: '次日开始', color: 'gold', description: '第二天开始' },
+    { value: 'NEXT_SHIFT', label: '下一班次', color: 'orange', description: '下一个班次开始' },
+    { value: 'COOLING', label: '冷却/培养', color: 'purple', description: '需要冷却或培养时间' },
+    { value: 'BATCH_END', label: '批次结束后', color: 'magenta', description: '批次结束后执行' }
+  ];
+
   const getConstraintTypeTag = (type: number, detailed: boolean = false) => {
     const option = constraintTypeOptions.find(o => o.value === type);
     if (!option) {
       return <Tag>未知</Tag>;
     }
-    
+
     const shortLabel = option.label.split(' ')[0];
     const fullLabel = option.label;
-    
+
     return (
       <Tooltip title={option.description}>
         <Tag color={option.color}>
@@ -102,6 +116,18 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
       return <Tag color="gold">软</Tag>;
     }
     return <Tag>建议</Tag>;
+  };
+
+  const getLagTypeTag = (lagType?: string) => {
+    const option = lagTypeOptions.find(o => o.value === lagType);
+    if (!option) {
+      return null;
+    }
+    return (
+      <Tooltip title={option.description}>
+        <Tag color={option.color}>{option.label}</Tag>
+      </Tooltip>
+    );
   };
 
   const handleAddConstraint = () => {
@@ -124,7 +150,10 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
         constraint_type: values.constraint_type,
         constraint_level: values.constraint_level ?? 1,
         lag_time: values.lag_time || 0,
-        share_personnel: values.share_personnel || false,
+        lag_type: values.lag_type || 'FIXED',
+        lag_min: values.lag_min || 0,
+        lag_max: values.lag_max || null,
+        share_mode: values.share_mode || 'NONE',
         constraint_name: values.constraint_name || null,
         description: values.description || null
       };
@@ -164,13 +193,16 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
     });
   };
 
-  const handleToggleSharePersonnel = async (constraint: Constraint) => {
+  const handleToggleShareMode = async (constraint: Constraint, newMode: 'NONE' | 'SAME_TEAM' | 'DIFFERENT') => {
     try {
       await axios.put(`${API_BASE_URL}/constraints/${constraint.constraint_id}`, {
         constraint_type: constraint.constraint_type,
         constraint_level: constraint.constraint_level ?? 1,
         lag_time: constraint.lag_time,
-        share_personnel: !constraint.share_personnel,
+        lag_type: constraint.lag_type || 'FIXED',
+        lag_min: constraint.lag_min || 0,
+        lag_max: constraint.lag_max || null,
+        share_mode: newMode,
         constraint_name: constraint.constraint_name || null,
         description: constraint.description || null
       });
@@ -194,14 +226,20 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
         renderItem={(item) => (
           <List.Item
             actions={[
-              <Tooltip title={item.share_personnel ? '共享人员' : '独立人员'}>
-                <Switch
+              <Tooltip title={
+                item.share_mode === 'SAME_TEAM' ? '同组执行' :
+                  item.share_mode === 'DIFFERENT' ? '不同人员' : '无共享'
+              }>
+                <Select
                   size="small"
-                  checked={item.share_personnel}
-                  checkedChildren={<TeamOutlined />}
-                  unCheckedChildren={<TeamOutlined />}
-                  onChange={() => handleToggleSharePersonnel(item)}
-                />
+                  value={item.share_mode || 'NONE'}
+                  onChange={(val) => handleToggleShareMode(item, val)}
+                  style={{ width: 90 }}
+                >
+                  <Select.Option value="NONE">无</Select.Option>
+                  <Select.Option value="SAME_TEAM">同组</Select.Option>
+                  <Select.Option value="DIFFERENT">不同</Select.Option>
+                </Select>
               </Tooltip>,
               <Button
                 type="text"
@@ -216,13 +254,21 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                 {getConstraintTypeTag(item.constraint_type, true)}
                 {item.constraint_level !== undefined && getConstraintLevelTag(item.constraint_level)}
-                {!!item.lag_time && (
+                {item.lag_type && getLagTypeTag(item.lag_type)}
+                {(item.lag_type === 'FIXED' || item.lag_type === 'COOLING') && !!item.lag_min && (
                   <Tag icon={<ClockCircleOutlined />} color="blue">
-                    偏移{item.lag_time}h
+                    {item.lag_min}h
                   </Tag>
                 )}
-                {item.share_personnel && (
-                  <Tag color="green">共享人员</Tag>
+                {item.lag_type === 'WINDOW' && item.lag_min !== undefined && (
+                  <Tag icon={<ClockCircleOutlined />} color="cyan">
+                    {item.lag_min}h - {item.lag_max || '∞'}h
+                  </Tag>
+                )}
+                {item.share_mode && item.share_mode !== 'NONE' && (
+                  <Tag color={item.share_mode === 'SAME_TEAM' ? 'blue' : 'orange'}>
+                    {item.share_mode === 'SAME_TEAM' ? '同组执行' : '不同人员'}
+                  </Tag>
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', fontSize: '13px', color: '#666' }}>
@@ -333,7 +379,7 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
                 if (!input) return true;
                 const searchTerm = input.toLowerCase();
                 const label = option?.label as string || '';
-                
+
                 // 搜索操作名称、阶段名称、操作代码
                 return label.toLowerCase().includes(searchTerm);
               }}
@@ -341,8 +387,8 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
               {availableOperations
                 .filter(op => op.schedule_id !== scheduleId)
                 .map(op => (
-                  <Option 
-                    key={op.schedule_id} 
+                  <Option
+                    key={op.schedule_id}
                     value={op.schedule_id}
                     label={`${op.stage_name} - ${op.operation_name} (${op.operation_code})`}
                   >
@@ -359,12 +405,12 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
             </Select>
           </Form.Item>
 
-          <div style={{ 
-            background: '#f6f8fa', 
-            padding: '12px', 
-            borderRadius: '6px', 
+          <div style={{
+            background: '#f6f8fa',
+            padding: '12px',
+            borderRadius: '6px',
             marginBottom: '16px',
-            border: '1px solid #e8e8e8' 
+            border: '1px solid #e8e8e8'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
               <InfoCircleOutlined style={{ color: '#1890ff', marginRight: '6px' }} />
@@ -413,20 +459,62 @@ const OperationConstraintsPanel: React.FC<OperationConstraintsPanelProps> = ({
           </Form.Item>
 
           <Form.Item
-            name="lag_time"
-            label="延迟时间（小时）"
-            initialValue={0}
+            name="lag_type"
+            label="延迟类型"
+            initialValue="FIXED"
           >
-            <InputNumber min={0} max={999} step={0.5} style={{ width: '100%' }} />
+            <Select placeholder="请选择延迟类型">
+              {lagTypeOptions.map(option => (
+                <Option key={option.value} value={option.value}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Tag color={option.color} style={{ marginRight: 8 }}>{option.label}</Tag>
+                    <span style={{ fontSize: '12px', color: '#666' }}>{option.description}</span>
+                  </div>
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+
+          <Form.Item noStyle shouldUpdate={(prev, curr) => prev.lag_type !== curr.lag_type}>
+            {({ getFieldValue }) => {
+              const lagType = getFieldValue('lag_type');
+              const showLagMin = ['FIXED', 'WINDOW', 'COOLING'].includes(lagType);
+              const showLagMax = lagType === 'WINDOW';
+
+              return (
+                <>
+                  {showLagMin && (
+                    <Form.Item
+                      name="lag_min"
+                      label={lagType === 'WINDOW' ? '最小延迟（小时）' : '延迟时间（小时）'}
+                      initialValue={0}
+                    >
+                      <InputNumber min={0} max={999} step={0.5} style={{ width: '100%' }} />
+                    </Form.Item>
+                  )}
+                  {showLagMax && (
+                    <Form.Item
+                      name="lag_max"
+                      label="最大延迟（小时）"
+                    >
+                      <InputNumber min={0} max={999} step={0.5} style={{ width: '100%' }} placeholder="可选，不填表示无上限" />
+                    </Form.Item>
+                  )}
+                </>
+              );
+            }}
           </Form.Item>
 
           <Form.Item
-            name="share_personnel"
+            name="share_mode"
             label="人员共享"
-            valuePropName="checked"
-            initialValue={false}
+            initialValue="NONE"
           >
-            <Switch checkedChildren="共享人员" unCheckedChildren="独立人员" />
+            <Radio.Group>
+              <Radio value="NONE">无</Radio>
+              <Radio value="SAME_TEAM">同组执行</Radio>
+              <Radio value="DIFFERENT">不同人员</Radio>
+            </Radio.Group>
           </Form.Item>
 
           <Form.Item

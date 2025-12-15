@@ -130,7 +130,8 @@ interface BatchConstraintEdge {
 
 type NodeType = 'batch' | 'stage' | 'lane';
 
-type LaneType = 'PREP' | 'PROCESS' | 'MONITOR';
+// 支持动态操作类型（兼容旧版 PREP/PROCESS/MONITOR 和新版操作类型）
+type LaneType = string;
 
 interface LaneData {
   laneType: LaneType;

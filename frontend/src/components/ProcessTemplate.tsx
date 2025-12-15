@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Card,
   Button,
@@ -6,13 +6,16 @@ import {
   Modal,
   Form,
   Input,
+  Select,
   message,
   Space,
   Tooltip,
   Popconfirm,
   Typography,
   Row,
-  Col
+  Col,
+  Tabs,
+  Tag
 } from 'antd';
 import {
   PlusOutlined,
@@ -27,10 +30,19 @@ import ProcessTemplateGantt from './ProcessTemplateGantt';
 const { Title } = Typography;
 const { TextArea } = Input;
 
+interface Team {
+  id: number;
+  unit_code: string;
+  unit_name: string;
+}
+
 interface Template {
   id: number;
   template_code: string;
   template_name: string;
+  team_id: number | null;
+  team_code: string | null;
+  team_name: string | null;
   description: string;
   total_days: number;
   created_at: string;
@@ -39,22 +51,30 @@ interface Template {
 
 const ProcessTemplate: React.FC = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [activeTeamId, setActiveTeamId] = useState<string>('all');
   const [form] = Form.useForm();
 
   const API_BASE_URL = 'http://localhost:3001/api';
 
-  useEffect(() => {
-    fetchTemplates();
+  const fetchTeams = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/organization/teams`);
+      setTeams(response.data);
+    } catch (error) {
+      console.error('Error fetching teams:', error);
+    }
   }, []);
 
-  const fetchTemplates = async () => {
+  const fetchTemplates = useCallback(async (teamId?: string) => {
     setLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/process-templates`);
+      const params = teamId && teamId !== 'all' ? { team_id: teamId } : {};
+      const response = await axios.get(`${API_BASE_URL}/process-templates`, { params });
       setTemplates(response.data);
     } catch (error) {
       message.error('获取工艺模版失败');
@@ -62,11 +82,24 @@ const ProcessTemplate: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchTeams();
+    fetchTemplates();
+  }, [fetchTeams, fetchTemplates]);
+
+  useEffect(() => {
+    fetchTemplates(activeTeamId);
+  }, [activeTeamId, fetchTemplates]);
 
   const handleCreate = () => {
     setEditingTemplate(null);
     form.resetFields();
+    // 如果选中了特定 team，自动填充
+    if (activeTeamId !== 'all') {
+      form.setFieldValue('team_id', parseInt(activeTeamId));
+    }
     setIsModalVisible(true);
   };
 
@@ -74,6 +107,7 @@ const ProcessTemplate: React.FC = () => {
     setEditingTemplate(record);
     form.setFieldsValue({
       template_name: record.template_name,
+      team_id: record.team_id,
       description: record.description
     });
     setIsModalVisible(true);
@@ -84,18 +118,20 @@ const ProcessTemplate: React.FC = () => {
       const values = await form.validateFields();
 
       if (editingTemplate) {
-        // 更新模版（不包含total_days）
-        const { template_name, description } = values;
+        // 更新模版
+        const { template_name, description, team_id } = values;
         await axios.put(`${API_BASE_URL}/process-templates/${editingTemplate.id}`, {
           template_name,
+          team_id,
           description
         });
         message.success('模版更新成功');
       } else {
-        // 创建新模版（不包含total_days）
-        const { template_name, description } = values;
+        // 创建新模版
+        const { template_name, description, team_id } = values;
         await axios.post(`${API_BASE_URL}/process-templates`, {
           template_name,
+          team_id,
           description
         });
         message.success('模版创建成功');
@@ -103,7 +139,7 @@ const ProcessTemplate: React.FC = () => {
 
       setIsModalVisible(false);
       form.resetFields();
-      fetchTemplates();
+      fetchTemplates(activeTeamId);
     } catch (error) {
       message.error('操作失败');
       console.error('Error saving template:', error);
@@ -114,7 +150,7 @@ const ProcessTemplate: React.FC = () => {
     try {
       await axios.delete(`${API_BASE_URL}/process-templates/${id}`);
       message.success('模版删除成功');
-      fetchTemplates();
+      fetchTemplates(activeTeamId);
     } catch (error) {
       message.error('删除失败');
       console.error('Error deleting template:', error);
@@ -125,7 +161,7 @@ const ProcessTemplate: React.FC = () => {
     try {
       await axios.post(`${API_BASE_URL}/process-templates/${id}/copy`);
       message.success('模版复制成功');
-      fetchTemplates();
+      fetchTemplates(activeTeamId);
     } catch (error) {
       message.error('复制失败');
       console.error('Error copying template:', error);
@@ -135,6 +171,14 @@ const ProcessTemplate: React.FC = () => {
   const handleManageStages = (template: Template) => {
     setSelectedTemplate(template);
   };
+
+  const tabItems = useMemo(() => [
+    { key: 'all', label: `全部 (${templates.length})` },
+    ...teams.map(t => {
+      // 当筛选特定 team 时，计数需要重新计算
+      return { key: t.id.toString(), label: t.unit_name };
+    })
+  ], [teams, templates.length]);
 
   const columns = [
     {
@@ -150,6 +194,18 @@ const ProcessTemplate: React.FC = () => {
       title: '模版名称',
       dataIndex: 'template_name',
       key: 'template_name',
+    },
+    {
+      title: '所属Team',
+      dataIndex: 'team_name',
+      key: 'team_name',
+      width: 120,
+      render: (text: string, record: Template) =>
+        record.team_code ? (
+          <Tag color="blue">{record.team_code}</Tag>
+        ) : (
+          <Tag color="default">未分配</Tag>
+        )
     },
     {
       title: '描述',
@@ -230,7 +286,7 @@ const ProcessTemplate: React.FC = () => {
         template={selectedTemplate}
         onBack={() => {
           setSelectedTemplate(null);
-          fetchTemplates();
+          fetchTemplates(activeTeamId);
         }}
       />
     );
@@ -255,6 +311,13 @@ const ProcessTemplate: React.FC = () => {
             </Button>
           </Col>
         </Row>
+
+        <Tabs
+          activeKey={activeTeamId}
+          onChange={setActiveTeamId}
+          items={tabItems}
+          style={{ marginBottom: 16 }}
+        />
 
         <Table
           columns={columns}
@@ -293,6 +356,17 @@ const ProcessTemplate: React.FC = () => {
           </Form.Item>
 
           <Form.Item
+            name="team_id"
+            label="所属Team"
+            rules={[{ required: true, message: '请选择所属Team' }]}
+          >
+            <Select
+              placeholder="请选择所属Team"
+              options={teams.map(t => ({ value: t.id, label: `${t.unit_code} - ${t.unit_name}` }))}
+            />
+          </Form.Item>
+
+          <Form.Item
             name="description"
             label="描述"
           >
@@ -308,3 +382,4 @@ const ProcessTemplate: React.FC = () => {
 };
 
 export default ProcessTemplate;
+

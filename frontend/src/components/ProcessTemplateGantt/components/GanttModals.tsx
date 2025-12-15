@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Button, Space, Tabs, Table, Drawer, Alert, Typography, Tag } from 'antd';
+import { Modal, Form, Input, InputNumber, Select, Button, Space, Tabs, Table, Drawer, Alert, Typography, Tag, Radio } from 'antd';
 import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd';
 import { GanttNode, Operation, Constraint, ShareGroup, ConstraintValidationResult } from '../types';
@@ -18,6 +18,22 @@ const CONSTRAINT_TYPE_OPTIONS = [
     { value: 2, label: 'SS (Start-to-Start)' },
     { value: 3, label: 'FF (Finish-to-Finish)' },
     { value: 4, label: 'SF (Start-to-Finish)' }
+];
+
+const LAG_TYPE_OPTIONS = [
+    { value: 'ASAP', label: '尽早开始', color: 'green' },
+    { value: 'FIXED', label: '固定延迟', color: 'blue' },
+    { value: 'WINDOW', label: '时间窗口', color: 'cyan' },
+    { value: 'NEXT_DAY', label: '次日开始', color: 'gold' },
+    { value: 'NEXT_SHIFT', label: '下一班次', color: 'orange' },
+    { value: 'COOLING', label: '冷却/培养', color: 'purple' },
+    { value: 'BATCH_END', label: '批次结束后', color: 'magenta' }
+];
+
+const SHARE_MODE_OPTIONS = [
+    { value: 'NONE', label: '无', color: 'default' },
+    { value: 'SAME_TEAM', label: '同组执行', color: 'blue' },
+    { value: 'DIFFERENT', label: '不同人员', color: 'orange' }
 ];
 
 interface GanttModalsProps {
@@ -362,13 +378,44 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                                                 ))}
                                             </Select>
                                         </Form.Item>
-                                        <Form.Item name="lag_time" label="滞后时间(小时)" initialValue={0}>
-                                            <InputNumber style={{ width: '100%' }} />
+                                        <Form.Item name="lag_type" label="延迟类型" initialValue="FIXED">
+                                            <Select>
+                                                {LAG_TYPE_OPTIONS.map(opt => (
+                                                    <Option key={opt.value} value={opt.value}>
+                                                        <Tag color={opt.color}>{opt.label}</Tag>
+                                                    </Option>
+                                                ))}
+                                            </Select>
                                         </Form.Item>
-                                        <Form.Item name="share_personnel" valuePropName="checked" initialValue={false}>
-                                            <label>
-                                                <input type="checkbox" /> 共享人员
-                                            </label>
+                                        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.lag_type !== curr.lag_type}>
+                                            {({ getFieldValue }) => {
+                                                const lagType = getFieldValue('lag_type');
+                                                const showLagMin = ['FIXED', 'WINDOW', 'COOLING'].includes(lagType);
+                                                const showLagMax = lagType === 'WINDOW';
+                                                return (
+                                                    <>
+                                                        {showLagMin && (
+                                                            <Form.Item name="lag_min" label={lagType === 'WINDOW' ? '最小延迟(小时)' : '延迟时间(小时)'} initialValue={0}>
+                                                                <InputNumber style={{ width: '100%' }} min={0} />
+                                                            </Form.Item>
+                                                        )}
+                                                        {showLagMax && (
+                                                            <Form.Item name="lag_max" label="最大延迟(小时)">
+                                                                <InputNumber style={{ width: '100%' }} min={0} placeholder="可选" />
+                                                            </Form.Item>
+                                                        )}
+                                                    </>
+                                                );
+                                            }}
+                                        </Form.Item>
+                                        <Form.Item name="share_mode" label="人员共享" initialValue="NONE">
+                                            <Radio.Group>
+                                                {SHARE_MODE_OPTIONS.map(opt => (
+                                                    <Radio key={opt.value} value={opt.value}>
+                                                        <Tag color={opt.color}>{opt.label}</Tag>
+                                                    </Radio>
+                                                ))}
+                                            </Radio.Group>
                                         </Form.Item>
                                         <Form.Item>
                                             <Button type="primary" htmlType="submit" block>
@@ -384,9 +431,11 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                                                 <div>
                                                     <div><strong>{c.related_operation_name}</strong></div>
                                                     <div style={{ fontSize: 12, color: '#666' }}>
-                                                        类型: {CONSTRAINT_TYPE_OPTIONS.find(o => o.value === c.constraint_type)?.label || 'FS'} |
-                                                        滞后: {c.lag_time}h
-                                                        {c.share_personnel && <Tag color="blue" style={{ marginLeft: 8 }}>共享</Tag>}
+                                                        类型: {CONSTRAINT_TYPE_OPTIONS.find(o => o.value === c.constraint_type)?.label || 'FS'}
+                                                        {c.lag_type && <Tag color={LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.color} style={{ marginLeft: 8 }}>{LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.label}</Tag>}
+                                                        {(c.lag_type === 'FIXED' || c.lag_type === 'COOLING') && c.lag_min ? <span style={{ marginLeft: 8 }}>{c.lag_min}h</span> : null}
+                                                        {c.lag_type === 'WINDOW' && <span style={{ marginLeft: 8 }}>{c.lag_min || 0}h - {c.lag_max || '∞'}h</span>}
+                                                        {c.share_mode && c.share_mode !== 'NONE' && <Tag color={SHARE_MODE_OPTIONS.find(o => o.value === c.share_mode)?.color} style={{ marginLeft: 8 }}>{SHARE_MODE_OPTIONS.find(o => o.value === c.share_mode)?.label}</Tag>}
                                                     </div>
                                                 </div>
                                                 {c.constraint_id && (
@@ -444,13 +493,44 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                                                 ))}
                                             </Select>
                                         </Form.Item>
-                                        <Form.Item name="lag_time" label="滞后时间(小时)" initialValue={0}>
-                                            <InputNumber style={{ width: '100%' }} />
+                                        <Form.Item name="lag_type" label="延迟类型" initialValue="FIXED">
+                                            <Select>
+                                                {LAG_TYPE_OPTIONS.map(opt => (
+                                                    <Option key={opt.value} value={opt.value}>
+                                                        <Tag color={opt.color}>{opt.label}</Tag>
+                                                    </Option>
+                                                ))}
+                                            </Select>
                                         </Form.Item>
-                                        <Form.Item name="share_personnel" valuePropName="checked" initialValue={false}>
-                                            <label>
-                                                <input type="checkbox" /> 共享人员
-                                            </label>
+                                        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.lag_type !== curr.lag_type}>
+                                            {({ getFieldValue }) => {
+                                                const lagType = getFieldValue('lag_type');
+                                                const showLagMin = ['FIXED', 'WINDOW', 'COOLING'].includes(lagType);
+                                                const showLagMax = lagType === 'WINDOW';
+                                                return (
+                                                    <>
+                                                        {showLagMin && (
+                                                            <Form.Item name="lag_min" label={lagType === 'WINDOW' ? '最小延迟(小时)' : '延迟时间(小时)'} initialValue={0}>
+                                                                <InputNumber style={{ width: '100%' }} min={0} />
+                                                            </Form.Item>
+                                                        )}
+                                                        {showLagMax && (
+                                                            <Form.Item name="lag_max" label="最大延迟(小时)">
+                                                                <InputNumber style={{ width: '100%' }} min={0} placeholder="可选" />
+                                                            </Form.Item>
+                                                        )}
+                                                    </>
+                                                );
+                                            }}
+                                        </Form.Item>
+                                        <Form.Item name="share_mode" label="人员共享" initialValue="NONE">
+                                            <Radio.Group>
+                                                {SHARE_MODE_OPTIONS.map(opt => (
+                                                    <Radio key={opt.value} value={opt.value}>
+                                                        <Tag color={opt.color}>{opt.label}</Tag>
+                                                    </Radio>
+                                                ))}
+                                            </Radio.Group>
                                         </Form.Item>
                                         <Form.Item>
                                             <Button type="primary" htmlType="submit" block>
@@ -466,9 +546,11 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                                                 <div>
                                                     <div><strong>{c.related_operation_name}</strong></div>
                                                     <div style={{ fontSize: 12, color: '#666' }}>
-                                                        类型: {CONSTRAINT_TYPE_OPTIONS.find(o => o.value === c.constraint_type)?.label || 'FS'} |
-                                                        滞后: {c.lag_time}h
-                                                        {c.share_personnel && <Tag color="blue" style={{ marginLeft: 8 }}>共享</Tag>}
+                                                        类型: {CONSTRAINT_TYPE_OPTIONS.find(o => o.value === c.constraint_type)?.label || 'FS'}
+                                                        {c.lag_type && <Tag color={LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.color} style={{ marginLeft: 8 }}>{LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.label}</Tag>}
+                                                        {(c.lag_type === 'FIXED' || c.lag_type === 'COOLING') && c.lag_min ? <span style={{ marginLeft: 8 }}>{c.lag_min}h</span> : null}
+                                                        {c.lag_type === 'WINDOW' && <span style={{ marginLeft: 8 }}>{c.lag_min || 0}h - {c.lag_max || '∞'}h</span>}
+                                                        {c.share_mode && c.share_mode !== 'NONE' && <Tag color={SHARE_MODE_OPTIONS.find(o => o.value === c.share_mode)?.color} style={{ marginLeft: 8 }}>{SHARE_MODE_OPTIONS.find(o => o.value === c.share_mode)?.label}</Tag>}
                                                     </div>
                                                 </div>
                                                 {c.constraint_id && (
@@ -491,38 +573,111 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
 
                             {/* Tab 4: 共享组 */}
                             <TabPane tab={`共享组 (${operationShareGroups.length})`} key="4">
+                                {/* 当前操作所属的共享组列表 */}
                                 <div style={{ marginBottom: 16 }}>
-                                    {operationShareGroups.map(group => (
-                                        <Tag
-                                            key={group.id}
-                                            closable
-                                            onClose={() => handleRemoveShareGroup(group.id)}
-                                            color="blue"
-                                            style={{ marginBottom: 8 }}
-                                        >
-                                            {group.group_name}
-                                        </Tag>
-                                    ))}
+                                    <Text strong style={{ display: 'block', marginBottom: 8 }}>当前操作所属共享组：</Text>
+                                    {operationShareGroups.length === 0 ? (
+                                        <div style={{ color: '#999', fontSize: 13 }}>该操作未加入任何共享组</div>
+                                    ) : (
+                                        operationShareGroups.map(group => (
+                                            <div key={group.id} style={{
+                                                padding: '8px 12px',
+                                                border: '1px solid #d9d9d9',
+                                                borderRadius: 6,
+                                                marginBottom: 8,
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center'
+                                            }}>
+                                                <div>
+                                                    <span style={{ fontWeight: 500 }}>{group.group_name}</span>
+                                                    <Tag
+                                                        color={(group as any).share_mode === 'SAME_TEAM' ? 'blue' : 'orange'}
+                                                        style={{ marginLeft: 8 }}
+                                                    >
+                                                        {(group as any).share_mode === 'SAME_TEAM' ? '同组执行' : '不同人员'}
+                                                    </Tag>
+                                                </div>
+                                                <Button
+                                                    type="text"
+                                                    danger
+                                                    size="small"
+                                                    icon={<DeleteOutlined />}
+                                                    onClick={() => handleRemoveShareGroup(group.id)}
+                                                >
+                                                    退出
+                                                </Button>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
 
-                                <Form form={assignGroupForm} layout="inline" onFinish={handleAssignShareGroup} style={{ marginTop: 16 }}>
-                                    <Form.Item name="share_group_id" rules={[{ required: true, message: '请选择共享组' }]}>
-                                        <Select placeholder="选择共享组" style={{ width: 200 }}>
-                                            {shareGroups.map(g => (
-                                                <Option key={g.id} value={g.id}>{g.group_name}</Option>
-                                            ))}
-                                        </Select>
-                                    </Form.Item>
-                                    <Form.Item name="priority" initialValue={1}>
-                                        <InputNumber placeholder="优先级" min={1} />
-                                    </Form.Item>
-                                    <Form.Item>
-                                        <Button type="primary" htmlType="submit" loading={assigningGroup}>加入</Button>
-                                    </Form.Item>
-                                    <Form.Item>
-                                        <Button onClick={() => setShareGroupModalVisible(true)}>新建共享组</Button>
-                                    </Form.Item>
-                                </Form>
+                                {/* 加入现有共享组 */}
+                                <div style={{
+                                    background: '#f6f8fa',
+                                    padding: 12,
+                                    borderRadius: 6,
+                                    marginBottom: 16
+                                }}>
+                                    <Text strong style={{ display: 'block', marginBottom: 8 }}>加入现有共享组：</Text>
+                                    <Form form={assignGroupForm} layout="inline" onFinish={handleAssignShareGroup}>
+                                        <Form.Item name="share_group_id" rules={[{ required: true, message: '请选择' }]}>
+                                            <Select placeholder="选择共享组" style={{ width: 180 }}>
+                                                {shareGroups
+                                                    .filter(g => !operationShareGroups.some(og => og.id === g.id))
+                                                    .map(g => (
+                                                        <Option key={g.id} value={g.id}>
+                                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                                <span>{g.group_name}</span>
+                                                                {(g as any).share_mode && (
+                                                                    <Tag
+                                                                        color={(g as any).share_mode === 'SAME_TEAM' ? 'blue' : 'orange'}
+                                                                        style={{ marginLeft: 8, fontSize: 11 }}
+                                                                    >
+                                                                        {(g as any).share_mode === 'SAME_TEAM' ? '同组' : '不同'}
+                                                                    </Tag>
+                                                                )}
+                                                            </div>
+                                                        </Option>
+                                                    ))}
+                                            </Select>
+                                        </Form.Item>
+                                        <Form.Item>
+                                            <Button type="primary" htmlType="submit" loading={assigningGroup}>
+                                                加入
+                                            </Button>
+                                        </Form.Item>
+                                    </Form>
+                                </div>
+
+                                {/* 创建新共享组入口 */}
+                                <Button
+                                    type="dashed"
+                                    block
+                                    icon={<PlusOutlined />}
+                                    onClick={() => setShareGroupModalVisible(true)}
+                                >
+                                    绑定新操作组
+                                </Button>
+
+                                {/* 共享模式说明 */}
+                                <div style={{
+                                    marginTop: 16,
+                                    padding: 12,
+                                    background: '#f0f7ff',
+                                    borderRadius: 6,
+                                    border: '1px solid #d6e4ff',
+                                    fontSize: 12,
+                                    color: '#1f1f1f'
+                                }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 6, color: '#1890ff' }}>💡 共享模式说明</div>
+                                    <div style={{ marginBottom: 4 }}>
+                                        • <Tag color="blue" style={{ fontSize: 11 }}>同组执行</Tag> 组内操作由同一组人员执行（团队槽位模式）
+                                    </div>
+                                    <div>
+                                        • <Tag color="orange" style={{ fontSize: 11 }}>不同人员</Tag> 组内操作必须由不同人员执行（互斥模式）
+                                    </div>
+                                </div>
                             </TabPane>
 
                             {/* Tab 5: 校验 */}
@@ -603,44 +758,110 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                 </Form>
             </Modal>
 
-            {/* Create Share Group Modal */}
+            {/* Create Share Group Modal - Simplified */}
             <Modal
-                title="新建共享组"
+                title="绑定共享操作"
                 open={shareGroupModalVisible}
                 onCancel={() => {
                     setShareGroupModalVisible(false);
                     shareGroupForm.resetFields();
                 }}
                 footer={null}
+                width={500}
             >
-                <Form form={shareGroupForm} layout="vertical" onFinish={handleCreateShareGroup}>
+                <Form
+                    form={shareGroupForm}
+                    layout="vertical"
+                    onFinish={(values) => {
+                        // 自动生成 group_code 和 group_name
+                        const autoCode = `SG_${Date.now()}`;
+                        const selectedOps = values.selected_operations || [];
+                        const autoName = selectedOps.length > 0
+                            ? `共享组 (${selectedOps.length}个操作)`
+                            : `共享组 ${autoCode}`;
+                        handleCreateShareGroup({
+                            ...values,
+                            group_code: autoCode,
+                            group_name: autoName,
+                            selected_operations: selectedOps
+                        });
+                    }}
+                >
+                    {/* 共享模式选择 */}
                     <Form.Item
-                        name="group_code"
-                        label="共享组编码"
-                        rules={[{ required: true, message: '请输入共享组编码' }]}
+                        name="share_mode"
+                        label="共享模式"
+                        rules={[{ required: true, message: '请选择共享模式' }]}
+                        initialValue="SAME_TEAM"
                     >
-                        <Input placeholder="例如：SG-01" maxLength={20} />
+                        <Select size="large">
+                            <Option value="SAME_TEAM">
+                                <div style={{ padding: '4px 0' }}>
+                                    <Tag color="blue" style={{ fontSize: 13 }}>同组执行</Tag>
+                                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>组内操作由同一组人员执行</div>
+                                </div>
+                            </Option>
+                            <Option value="DIFFERENT">
+                                <div style={{ padding: '4px 0' }}>
+                                    <Tag color="orange" style={{ fontSize: 13 }}>不同人员</Tag>
+                                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>组内操作必须由不同人员执行</div>
+                                </div>
+                            </Option>
+                        </Select>
                     </Form.Item>
 
+                    {/* 选择要绑定的操作 */}
                     <Form.Item
-                        name="group_name"
-                        label="共享组名称"
-                        rules={[{ required: true, message: '请输入共享组名称' }]}
+                        name="selected_operations"
+                        label="选择要绑定的操作"
+                        rules={[{
+                            required: true,
+                            message: '请至少选择2个操作',
+                            validator: (_, value) => {
+                                if (!value || value.length < 2) {
+                                    return Promise.reject('请至少选择2个操作');
+                                }
+                                return Promise.resolve();
+                            }
+                        }]}
+                        initialValue={editingNode?.data?.id ? [editingNode.data.id] : []}
                     >
-                        <Input placeholder="请输入共享组名称" maxLength={50} />
+                        <Select
+                            mode="multiple"
+                            placeholder="选择操作（至少2个）"
+                            style={{ width: '100%' }}
+                            maxTagCount={3}
+                            optionFilterProp="label"
+                        >
+                            {availableOperationsForConstraints.map((op: any) => (
+                                <Option
+                                    key={op.id}
+                                    value={op.id}
+                                    label={`${op.stage_name} - ${op.operation_name}`}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                        <span>{op.operation_name}</span>
+                                        <span style={{ color: '#999', fontSize: 12 }}>{op.stage_name}</span>
+                                    </div>
+                                </Option>
+                            ))}
+                        </Select>
                     </Form.Item>
 
-                    <Form.Item name="description" label="描述">
-                        <TextArea rows={3} placeholder="共享组说明（可选）" />
-                    </Form.Item>
-
-                    <Form.Item name="color" label="标识颜色">
-                        <Input type="color" style={{ width: 80, padding: 0 }} />
-                    </Form.Item>
+                    <div style={{
+                        background: '#f6f8fa',
+                        padding: 12,
+                        borderRadius: 6,
+                        marginBottom: 16,
+                        fontSize: 12,
+                        color: '#666'
+                    }}>
+                        💡 选择的操作将自动绑定为一个共享组，在排班时会根据选择的模式处理人员分配。
+                    </div>
 
                     <Space>
                         <Button type="primary" loading={creatingGroup} htmlType="submit">
-                            创建
+                            绑定
                         </Button>
                         <Button onClick={() => {
                             setShareGroupModalVisible(false);

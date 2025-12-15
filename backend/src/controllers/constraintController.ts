@@ -28,7 +28,10 @@ export const getTemplateConstraints = async (req: Request, res: Response) => {
         END AS constraint_type_name,
         oc.constraint_level,
         oc.time_lag AS lag_time,
-        oc.share_personnel,
+        oc.lag_type,
+        oc.lag_min,
+        oc.lag_max,
+        oc.share_mode,
         oc.constraint_name,
         oc.description,
         ps1.stage_name AS from_stage,
@@ -66,7 +69,7 @@ export const getOperationConstraints = async (req: Request, res: Response) => {
         op.operation_code AS related_operation_code,
         oc.constraint_type,
         oc.time_lag AS lag_time,
-        oc.share_personnel,
+        oc.share_mode,
         oc.constraint_level,
         oc.constraint_name,
         oc.description,
@@ -86,7 +89,7 @@ export const getOperationConstraints = async (req: Request, res: Response) => {
         op.operation_code AS related_operation_code,
         oc.constraint_type,
         oc.time_lag AS lag_time,
-        oc.share_personnel,
+        oc.share_mode,
         oc.constraint_level,
         oc.constraint_name,
         oc.description,
@@ -123,14 +126,19 @@ export const createConstraint = async (req: Request, res: Response) => {
       constraint_type,
       constraint_level = 1,
       lag_time = 0,
-      share_personnel = false,
+      lag_type = 'FIXED',
+      lag_min = 0,
+      lag_max = null,
+      share_mode = 'NONE',
       constraint_name,
       description
     } = req.body;
 
     const normalizedLag = Number.isFinite(Number(lag_time)) ? Number(lag_time) : 0;
     const normalizedLevel = Number.isFinite(Number(constraint_level)) ? Number(constraint_level) : 1;
-    const shareFlag = share_personnel ? 1 : 0;
+    const normalizedLagMin = Number.isFinite(Number(lag_min)) ? Number(lag_min) : 0;
+    const normalizedLagMax = lag_max !== null && Number.isFinite(Number(lag_max)) ? Number(lag_max) : null;
+    const validShareMode = ['NONE', 'SAME_TEAM', 'DIFFERENT'].includes(share_mode) ? share_mode : 'NONE';
 
     // 检查循环依赖
     const [existing] = await connection.execute<RowDataPacket[]>(
@@ -143,7 +151,7 @@ export const createConstraint = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Would create circular dependency' });
     }
 
-    // 插入约束 - 使用现有表结构
+    // 插入约束 - 包含新的 lag_type 字段
     const insertQuery = `
       INSERT INTO operation_constraints (
         schedule_id,
@@ -151,10 +159,13 @@ export const createConstraint = async (req: Request, res: Response) => {
         constraint_type,
         constraint_level,
         time_lag,
-        share_personnel,
+        lag_type,
+        lag_min,
+        lag_max,
+        share_mode,
         constraint_name,
         description
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result]: any = await connection.execute(insertQuery, [
@@ -163,7 +174,10 @@ export const createConstraint = async (req: Request, res: Response) => {
       constraint_type,
       normalizedLevel,
       normalizedLag,
-      shareFlag,
+      lag_type,
+      normalizedLagMin,
+      normalizedLagMax,
+      validShareMode,
       constraint_name || null,
       description || null
     ]);
@@ -195,21 +209,29 @@ export const updateConstraint = async (req: Request, res: Response) => {
       constraint_type,
       constraint_level,
       lag_time,
-      share_personnel,
+      lag_type,
+      lag_min,
+      lag_max,
+      share_mode = 'NONE',
       constraint_name,
       description
     } = req.body;
 
     const normalizedLag = Number.isFinite(Number(lag_time)) ? Number(lag_time) : 0;
     const normalizedLevel = Number.isFinite(Number(constraint_level)) ? Number(constraint_level) : 1;
-    const shareFlag = share_personnel ? 1 : 0;
+    const normalizedLagMin = Number.isFinite(Number(lag_min)) ? Number(lag_min) : 0;
+    const normalizedLagMax = lag_max !== null && lag_max !== undefined && Number.isFinite(Number(lag_max)) ? Number(lag_max) : null;
+    const validShareMode = ['NONE', 'SAME_TEAM', 'DIFFERENT'].includes(share_mode) ? share_mode : 'NONE';
 
     const updateQuery = `
       UPDATE operation_constraints 
       SET constraint_type = ?,
           constraint_level = ?,
           time_lag = ?,
-          share_personnel = ?,
+          lag_type = ?,
+          lag_min = ?,
+          lag_max = ?,
+          share_mode = ?,
           constraint_name = ?,
           description = ?
       WHERE id = ?
@@ -219,7 +241,10 @@ export const updateConstraint = async (req: Request, res: Response) => {
       constraint_type,
       normalizedLevel,
       normalizedLag,
-      shareFlag,
+      lag_type || 'FIXED',
+      normalizedLagMin,
+      normalizedLagMax,
+      validShareMode,
       constraint_name || null,
       description || null,
       id
@@ -275,7 +300,7 @@ export const getTemplateConstraintsForGantt = async (req: Request, res: Response
         op2.operation_code as to_operation_code,
         oc.constraint_type,
         oc.time_lag as lag_time,
-        oc.share_personnel,
+        oc.share_mode,
         oc.constraint_level,
         oc.constraint_name,
         ps1.stage_name as from_stage_name,
@@ -323,7 +348,7 @@ export const getBatchConstraintsForGantt = async (req: Request, res: Response) =
         boc.constraint_type,
         boc.time_lag,
         boc.constraint_level,
-        boc.share_personnel,
+        boc.share_mode,
         boc.constraint_name,
         boc.description,
         bop_current.template_schedule_id AS current_template_schedule_id,
