@@ -41,7 +41,7 @@ backend/over_allocation_report.txt
 database/aps_system/
 
 # Environment and local settings
-.env
+# .env
 .env.local
 .vscode/
 .DS_Store
