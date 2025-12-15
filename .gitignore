@@ -27,6 +27,7 @@ frontend-dev.log
 
 # Local databases
 database.sqlite
+database/backups/*.sql
 
 # Backup and legacy artifacts
 *.backup
