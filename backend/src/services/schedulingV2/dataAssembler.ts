@@ -415,10 +415,9 @@ export class DataAssembler {
   /**
    * 获取共享组配置
    * 
-   * 支持三种共享配置方式（按优先级）：
+   * 支持两种共享配置方式（按优先级）：
    * 1. batch_share_groups + batch_share_group_members（批次级别，新版，最高优先级）
    * 2. operation_share_group_relations + personnel_share_groups（模板级别）
-   * 3. batch_operation_constraints.share_personnel = 1（批次级别，旧版兼容）
    */
   static async fetchSharedPreferences(batchIds: number[]): Promise<SharedPreference[]> {
     if (batchIds.length === 0) return [];
@@ -522,91 +521,7 @@ export class DataAssembler {
     }
 
     // ===== 方式3: 从 batch_operation_constraints.share_personnel 获取（旧版兼容） =====
-    const [rows2] = await pool.execute<RowDataPacket[]>(
-      `SELECT
-        boc.batch_operation_plan_id AS op1_id,
-        boc.predecessor_batch_operation_plan_id AS op2_id,
-        bop1.required_people AS op1_people,
-        bop2.required_people AS op2_people
-       FROM batch_operation_constraints boc
-       JOIN batch_operation_plans bop1 ON boc.batch_operation_plan_id = bop1.id
-       JOIN batch_operation_plans bop2 ON boc.predecessor_batch_operation_plan_id = bop2.id
-       WHERE boc.batch_plan_id IN (${placeholders})
-         AND boc.share_personnel = 1`,
-      batchIds
-    );
-
-    if (rows2.length > 0) {
-      // 使用 Union-Find 算法将有传递关系的操作合并成组
-      const parent = new Map<number, number>();
-      const rank = new Map<number, number>();
-      const peopleMap = new Map<number, number>();
-
-      const find = (x: number): number => {
-        if (!parent.has(x)) {
-          parent.set(x, x);
-          rank.set(x, 0);
-        }
-        if (parent.get(x) !== x) {
-          parent.set(x, find(parent.get(x)!));
-        }
-        return parent.get(x)!;
-      };
-
-      const union = (x: number, y: number): void => {
-        const px = find(x);
-        const py = find(y);
-        if (px === py) return;
-
-        const rx = rank.get(px) || 0;
-        const ry = rank.get(py) || 0;
-        if (rx < ry) {
-          parent.set(px, py);
-        } else if (rx > ry) {
-          parent.set(py, px);
-        } else {
-          parent.set(py, px);
-          rank.set(px, rx + 1);
-        }
-      };
-
-      // 合并共享人员的操作对
-      for (const row of rows2) {
-        const op1 = Number(row.op1_id);
-        const op2 = Number(row.op2_id);
-        peopleMap.set(op1, Number(row.op1_people) || 1);
-        peopleMap.set(op2, Number(row.op2_people) || 1);
-        union(op1, op2);
-      }
-
-      // 按根节点分组
-      const groupMap2 = new Map<number, number[]>();
-      Array.from(peopleMap.keys()).forEach(opId => {
-        const root = find(opId);
-        if (!groupMap2.has(root)) {
-          groupMap2.set(root, []);
-        }
-        groupMap2.get(root)!.push(opId);
-      });
-
-      // 生成共享组
-      let groupIdx = 0;
-      Array.from(groupMap2.entries()).forEach(([root, members]) => {
-        if (members.length >= 2) {
-          result.push({
-            share_group_id: `constraint-${root}`,
-            share_group_name: `共享组-${++groupIdx}`,
-            share_mode: 'SAME_TEAM',  // 旧版默认 SAME_TEAM
-            members: members.map(opId => ({
-              operation_plan_id: opId,
-              required_people: peopleMap.get(opId) || 1,
-            })),
-          });
-        }
-      });
-
-      console.log(`[DataAssembler] 从 batch_operation_constraints 读取到 ${result.length - groupMap0.size - groupMap1.size} 个共享组`);
-    }
+    // 已废弃：不再支持旧版 share_personnel 字段，所有数据应迁移至 personnel_share_groups
 
     console.log(`[DataAssembler] 共享组总数: ${result.length}`);
     return result;

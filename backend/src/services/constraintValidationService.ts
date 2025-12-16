@@ -104,7 +104,7 @@ const buildConstraintEdges = (rows: RowDataPacket[]): ConstraintEdge[] => {
     type: Number(row.constraint_type) || 1,
     lag: toNumber(row.time_lag, 0),
     level: row.constraint_level !== undefined ? Number(row.constraint_level) : undefined,
-    sharePersonnel: row.share_personnel === null ? undefined : Boolean(row.share_personnel),
+    // sharePersonnel: row.share_personnel === null ? undefined : Boolean(row.share_personnel), (Removed)
     name: row.constraint_name || undefined,
   }));
 };
@@ -181,7 +181,7 @@ export const runConstraintValidation = async (templateId: number): Promise<Const
        oc.constraint_type,
        oc.time_lag,
        oc.constraint_level,
-       oc.share_personnel,
+       // oc.share_personnel, (Removed)
        oc.constraint_name
      FROM operation_constraints oc
      JOIN stage_operation_schedules sos ON oc.schedule_id = sos.id

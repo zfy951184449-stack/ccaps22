@@ -26,9 +26,9 @@ interface GanttHeaderProps {
     handleSaveTemplate: () => void;
     handleAutoSchedule: () => void;
     scheduling: boolean;
-    // 绘制共享模式
-    isDrawingShareMode?: boolean;
-    onToggleDrawMode?: () => void;
+    // 共享组面板控制
+    onToggleSharePanel?: () => void;
+    shareGroupCount?: number;
 }
 
 export const GanttHeader: React.FC<GanttHeaderProps> = ({
@@ -43,8 +43,8 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
     handleSaveTemplate,
     handleAutoSchedule,
     scheduling,
-    isDrawingShareMode = false,
-    onToggleDrawMode
+    onToggleSharePanel,
+    shareGroupCount = 0
 }) => {
     return (
         <div
@@ -79,20 +79,19 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
             </div>
 
             <Space size={16} align="center">
-                {/* 绘制共享按钮 */}
-                {onToggleDrawMode && (
-                    <Tooltip title={isDrawingShareMode ? '退出绘制模式' : '绘制人员共享关系'}>
+                {/* 共享组面板按钮 */}
+                {onToggleSharePanel && (
+                    <Tooltip title="管理人员共享组">
                         <Button
-                            type={isDrawingShareMode ? 'primary' : 'default'}
                             icon={<TeamOutlined />}
-                            onClick={onToggleDrawMode}
+                            onClick={onToggleSharePanel}
                             style={{
                                 borderRadius: 8,
-                                borderColor: isDrawingShareMode ? undefined : '#1890ff',
-                                color: isDrawingShareMode ? undefined : '#1890ff'
+                                borderColor: '#1890ff',
+                                color: '#1890ff'
                             }}
                         >
-                            {isDrawingShareMode ? '退出绘制' : '绘制共享'}
+                            共享组 {shareGroupCount > 0 && <Tag color="blue" style={{ marginLeft: 4, marginRight: 0 }}>{shareGroupCount}</Tag>}
                         </Button>
                     </Tooltip>
                 )}

@@ -278,3 +278,107 @@ export const getShareGroupsForGantt = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to fetch share groups for gantt' });
     }
 };
+/**
+ * 根据操作ID获取所属共享组
+ */
+export const getShareGroupsByOperationId = async (req: Request, res: Response) => {
+    try {
+        const { scheduleId } = req.params;
+
+        // 1. 查找包含该操作的共享组
+        const [groups] = await pool.execute<RowDataPacket[]>(`
+            SELECT 
+                psg.id,
+                psg.template_id,
+                psg.group_code,
+                psg.group_name,
+                psg.share_mode,
+                psg.created_at
+            FROM personnel_share_groups psg
+            JOIN personnel_share_group_members psgm ON psg.id = psgm.group_id
+            WHERE psgm.schedule_id = ?
+        `, [scheduleId]);
+
+        // 2. 获取每个共享组的所有成员
+        for (const group of groups) {
+            const [members] = await pool.execute<RowDataPacket[]>(`
+                SELECT 
+                    psgm.id,
+                    psgm.schedule_id,
+                    o.operation_name,
+                    1 as required_people,
+                    ps.stage_name
+                FROM personnel_share_group_members psgm
+                JOIN stage_operation_schedules sos ON psgm.schedule_id = sos.id
+                JOIN operations o ON sos.operation_id = o.id
+                JOIN process_stages ps ON sos.stage_id = ps.id
+                WHERE psgm.group_id = ?
+                ORDER BY sos.stage_id, sos.operation_order
+            `, [group.id]);
+            group.members = members;
+        }
+
+        res.json(groups);
+    } catch (error) {
+        console.error('Error fetching share groups by operation:', error);
+        res.status(500).json({ error: 'Failed to fetch share groups by operation' });
+    }
+};
+
+/**
+ * 将操作加入共享组
+ */
+export const assignOperationToShareGroup = async (req: Request, res: Response) => {
+    try {
+        const { schedule_id, share_group_id } = req.body;
+
+        if (!schedule_id || !share_group_id) {
+            return res.status(400).json({ error: 'schedule_id and share_group_id are required' });
+        }
+
+        // 检查是否已在该共享组中
+        const [existing] = await pool.execute<RowDataPacket[]>(`
+            SELECT id FROM personnel_share_group_members 
+            WHERE group_id = ? AND schedule_id = ?
+        `, [share_group_id, schedule_id]);
+
+        if (existing.length > 0) {
+            return res.status(400).json({ error: '该操作已在共享组中' });
+        }
+
+        // 添加到共享组
+        await pool.execute(`
+            INSERT INTO personnel_share_group_members (group_id, schedule_id)
+            VALUES (?, ?)
+        `, [share_group_id, schedule_id]);
+
+        res.status(201).json({ message: '已成功加入共享组' });
+    } catch (error) {
+        console.error('Error assigning operation to share group:', error);
+        res.status(500).json({ error: 'Failed to assign operation to share group' });
+    }
+};
+
+/**
+ * 从共享组移除操作
+ */
+export const removeOperationFromShareGroup = async (req: Request, res: Response) => {
+    try {
+        const { scheduleId, groupId } = req.params;
+
+        // 删除成员记录
+        const [result] = await pool.execute<any>(`
+            DELETE FROM personnel_share_group_members 
+            WHERE group_id = ? AND schedule_id = ?
+        `, [groupId, scheduleId]);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: '未找到该成员记录' });
+        }
+
+        res.json({ message: '已成功退出共享组' });
+    } catch (error) {
+        console.error('Error removing operation from share group:', error);
+        res.status(500).json({ error: 'Failed to remove operation from share group' });
+    }
+};

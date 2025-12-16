@@ -142,22 +142,22 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                 const baseStyle = getBaseStyle(constraint.constraint_type);
 
                 const isSoft = constraint.constraint_level && constraint.constraint_level !== 1;
-                const isShared = Boolean(constraint.share_mode && constraint.share_mode !== 'NONE');
+                const isShared = false; // (Legacy Share Mode Disabled)
                 const isConflictConstraint = conflictConstraintSet.has(constraint.constraint_id);
                 const isActiveConstraint = activeConstraintSet.has(constraint.constraint_id);
 
                 let strokeColor = baseStyle.color;
-                let strokeWidth = isShared ? 3.5 : 2.5;
+                let strokeWidth = 2.5;
                 const dashArray = baseStyle.dashArray || (isSoft ? '5,4' : 'none');
 
                 if (isConflictConstraint) {
                     strokeColor = '#fa8c16';
-                    strokeWidth = isShared ? 3.8 : 3;
+                    strokeWidth = 3;
                 }
 
                 if (isActiveConstraint) {
                     strokeColor = '#ff4d4f';
-                    strokeWidth = isShared ? 4 : 3.6;
+                    strokeWidth = 3.6;
                 }
 
                 const sameRow = predecessorRowIndex === successorRowIndex;
@@ -167,52 +167,23 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                 const label = typeLabels[constraint.constraint_type] || 'FS';
                 const lagText = constraint.lag_time ? `${constraint.lag_time > 0 ? '+' : ''}${constraint.lag_time}h` : '';
                 const strokeOpacity = isActiveConstraint ? 1 : (isConflictConstraint ? 0.95 : (isSoft ? 0.65 : 0.9));
-                const highlightFilter = isActiveConstraint || isShared ? 'url(#constraint-glow)' : undefined;
+                const highlightFilter = isActiveConstraint ? 'url(#constraint-glow)' : undefined;
                 const labelBackgroundColor = isActiveConstraint
                     ? 'rgba(255,77,79,0.88)'
                     : isConflictConstraint
                         ? 'rgba(250,140,22,0.88)'
                         : 'rgba(0,0,0,0.65)';
 
-                // 判断是否为纯人员共享约束（没有实际时间依赖）
-                // 条件：share_mode 不为 NONE 且 lag_time 为 0
-                const isPureSharePersonnel = isShared && (!constraint.lag_time || constraint.lag_time === 0);
+                // (Legacy: Removed isPureSharePersonnel logic)
+                const isPureSharePersonnel = false;
 
                 const arrowSize = 9;
                 let arrowPoints = '';
-                let arrowPoints2 = ''; // 双向箭头的第二个箭头
+                let arrowPoints2 = '';
                 let pathD = '';
 
-                if (isPureSharePersonnel) {
-                    // 纯人员共享：中心到中心的连接线
-                    const fromCenterX = (predecessorBlock.start_hour + predecessorBlock.duration_hours / 2 - startDay * 24) * hourWidth;
-                    const toCenterX = (successorBlock.start_hour + successorBlock.duration_hours / 2 - startDay * 24) * hourWidth;
-
-                    if (sameRow) {
-                        // 同一行：水平虚线
-                        const offsetY = fromY - ROW_HEIGHT * 0.15;
-                        pathD = `M ${fromCenterX} ${offsetY} L ${toCenterX} ${offsetY}`;
-                        // 双向箭头
-                        arrowPoints = fromCenterX < toCenterX
-                            ? `${toCenterX},${offsetY} ${toCenterX - arrowSize},${offsetY - arrowSize / 2} ${toCenterX - arrowSize},${offsetY + arrowSize / 2}`
-                            : `${toCenterX},${offsetY} ${toCenterX + arrowSize},${offsetY - arrowSize / 2} ${toCenterX + arrowSize},${offsetY + arrowSize / 2}`;
-                        arrowPoints2 = fromCenterX < toCenterX
-                            ? `${fromCenterX},${offsetY} ${fromCenterX + arrowSize},${offsetY - arrowSize / 2} ${fromCenterX + arrowSize},${offsetY + arrowSize / 2}`
-                            : `${fromCenterX},${offsetY} ${fromCenterX - arrowSize},${offsetY - arrowSize / 2} ${fromCenterX - arrowSize},${offsetY + arrowSize / 2}`;
-                    } else {
-                        // 不同行：直接中心连接
-                        pathD = `M ${fromCenterX} ${fromY} L ${toCenterX} ${toY}`;
-                        // 双向箭头
-                        const angle = Math.atan2(toY - fromY, toCenterX - fromCenterX);
-                        const cosA = Math.cos(angle);
-                        const sinA = Math.sin(angle);
-                        const cosAPerp = Math.cos(angle + Math.PI / 2);
-                        const sinAPerp = Math.sin(angle + Math.PI / 2);
-
-                        arrowPoints = `${toCenterX},${toY} ${toCenterX - arrowSize * cosA + arrowSize / 2 * cosAPerp},${toY - arrowSize * sinA + arrowSize / 2 * sinAPerp} ${toCenterX - arrowSize * cosA - arrowSize / 2 * cosAPerp},${toY - arrowSize * sinA - arrowSize / 2 * sinAPerp}`;
-                        arrowPoints2 = `${fromCenterX},${fromY} ${fromCenterX + arrowSize * cosA + arrowSize / 2 * cosAPerp},${fromY + arrowSize * sinA + arrowSize / 2 * sinAPerp} ${fromCenterX + arrowSize * cosA - arrowSize / 2 * cosAPerp},${fromY + arrowSize * sinA - arrowSize / 2 * sinAPerp}`;
-                    }
-                } else if (sameRow) {
+                // (Standard drawing logic only)
+                if (sameRow) {
                     const horizontalDirection = toX >= fromX ? 1 : -1;
                     const offsetY = fromY + (horizontalDirection > 0 ? ROW_HEIGHT * 0.25 : -ROW_HEIGHT * 0.25);
                     pathD = `M ${fromX} ${offsetY} L ${toX} ${offsetY}`;
@@ -232,17 +203,16 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                     ? fromY + (toX >= fromX ? ROW_HEIGHT * 0.25 : -ROW_HEIGHT * 0.25)
                     : toY + (fromY < toY ? -ROW_HEIGHT * 0.25 : ROW_HEIGHT * 0.25);
 
-                // 纯人员共享使用特殊样式
-                const finalStrokeColor = isPureSharePersonnel ? '#722ed1' : strokeColor;
-                const finalDashArray = isPureSharePersonnel ? '6,4' : dashArray;
-                const finalLabel = isPureSharePersonnel ? '共享' : (typeLabels[constraint.constraint_type] || 'FS');
+                const finalStrokeColor = strokeColor;
+                const finalDashArray = dashArray;
+                const finalLabel = (typeLabels[constraint.constraint_type] || 'FS');
 
-                const baseLabelWidth = isPureSharePersonnel ? 36 : 44;
-                const labelBackgroundWidth = baseLabelWidth + (lagText ? 30 : 0) + (!isPureSharePersonnel && isShared ? 36 : 0);
+                const baseLabelWidth = 44;
+                const labelBackgroundWidth = baseLabelWidth + (lagText ? 30 : 0);
                 const labelHeight = 18;
-                const labelXOffset = isPureSharePersonnel ? 8 : 12;
+                const labelXOffset = 12;
                 const lagXOffset = labelXOffset + 24;
-                const shareXOffset = lagXOffset + (lagText ? 32 : 0);
+                const shareXOffset = 0; // Unused
 
                 return (
                     <g key={`constraint-${constraint.constraint_id}`}>
@@ -302,16 +272,7 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                                     {lagText}
                                 </text>
                             )}
-                            {isShared && !isPureSharePersonnel && (
-                                <text
-                                    x={shareXOffset}
-                                    y={labelHeight / 2 + 3}
-                                    fontSize="10"
-                                    fill={isActiveConstraint ? '#fff3cd' : '#FFD666'}
-                                >
-                                    共享
-                                </text>
-                            )}
+                            {/* (Share Badge Removed) */}
                         </g>
 
                         {constraint.constraint_name && (

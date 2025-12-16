@@ -640,6 +640,7 @@ export const useGanttInteraction = (
         clearActiveHighlight,
         loadOperationConstraints,
         loadOperationShareGroups,
+        loadShareGroups, // Expose this
         handleOperationDragEnd,
         refreshData,
         hoveredRowId,

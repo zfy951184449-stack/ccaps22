@@ -3,7 +3,7 @@
  */
 
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
-import { Empty } from 'antd';
+import { Empty, Drawer } from 'antd';
 import { ProcessTemplateGanttProps, StageOperation } from './types';
 import { useGanttData } from './hooks/useGanttData';
 import { useGanttViewport } from './hooks/useGanttViewport';
@@ -18,7 +18,7 @@ import { ConstraintLayer } from './components/ConstraintLayer';
 import { ShareLinkLayer } from './components/ShareLinkLayer';
 import { GanttModals } from './components/GanttModals';
 import { GanttAxis } from './components/GanttAxis';
-import { useShareLinkDraw } from './hooks/useShareLinkDraw';
+import ShareGroupPanel from './components/ShareGroupPanel';
 import { TOKENS, LEFT_PANEL_WIDTH, TITLE_BAR_HEIGHT, HEADER_HEIGHT, CONTENT_GAP, STAGE_COLORS } from './constants';
 
 const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
@@ -31,7 +31,8 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
     readOnlyOperations,
     externalIsDirty,
     onExternalSave,
-    externalConstraints
+    externalConstraints,
+    externalShareGroups
 }) => {
     const {
         stages,
@@ -96,14 +97,11 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
     // 日期展开功能状态
     const [expandedDay, setExpandedDay] = useState<number | null>(null);
 
+    // 共享组面板状态
+    const [shareGroupPanelVisible, setShareGroupPanelVisible] = useState(false);
     // 绘制共享关系 hook
-    const shareLinkDraw = useShareLinkDraw({
-        operationBlockMap,
-        onConstraintCreated: refreshData,
-        containerRef: ganttContentRef as React.RefObject<HTMLElement>,
-        hourWidth,
-        rowIndexMap
-    });
+    // 绘制共享关系 hook (Removed)
+    // const shareLinkDraw = ...
 
     // 从约束中提取共享关系 + 从共享组表提取共享关系
     const shareLinks = useMemo(() => {
@@ -114,23 +112,11 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
             share_mode: 'SAME_TEAM' | 'DIFFERENT';
         }> = [];
 
-        // 1. 从约束中提取 (原有逻辑)
-        const constraints = externalConstraints ?? interaction.ganttConstraints;
-        constraints
-            .filter(c => c.share_mode && c.share_mode !== 'NONE')
-            .forEach(c => {
-                links.push({
-                    constraint_id: c.constraint_id || 0,
-                    from_schedule_id: c.from_schedule_id,
-                    to_schedule_id: c.to_schedule_id,
-                    share_mode: c.share_mode as 'SAME_TEAM' | 'DIFFERENT'
-                });
-            });
+        // 使用外部共享组（批次模式）或内部共享组（模板模式）
+        const shareGroupsData = isExternalMode ? externalShareGroups : interaction.shareGroups;
 
-        // 2. 从共享组表提取 (新增逻辑)
-        // 每个共享组内的成员两两相连显示
-        if (!isExternalMode && interaction.shareGroups) {
-            interaction.shareGroups.forEach(group => {
+        if (shareGroupsData) {
+            shareGroupsData.forEach(group => {
                 const members = group.members || [];
                 if (members.length >= 2) {
                     // 生成相邻成员之间的连线
@@ -148,7 +134,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
         }
 
         return links;
-    }, [externalConstraints, interaction.ganttConstraints, interaction.shareGroups, isExternalMode]);
+    }, [externalConstraints, interaction.ganttConstraints, interaction.shareGroups, isExternalMode, externalShareGroups]);
 
     const handleDayDoubleClick = useCallback((dayNumber: number) => {
         setExpandedDay(prev => prev === dayNumber ? null : dayNumber);
@@ -342,8 +328,8 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                 handleSaveTemplate={onExternalSave ?? interaction.handleSaveTemplate}
                 handleAutoSchedule={interaction.handleAutoSchedule}
                 scheduling={interaction.scheduling}
-                isDrawingShareMode={!isExternalMode && shareLinkDraw.isDrawingMode}
-                onToggleDrawMode={!isExternalMode ? shareLinkDraw.toggleDrawMode : undefined}
+                onToggleSharePanel={() => setShareGroupPanelVisible(true)}
+                shareGroupCount={interaction.shareGroups?.length || 0}
             />
 
             <div style={{ flex: 1, background: TOKENS.background, overflow: 'visible' }}>
@@ -446,14 +432,12 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                             background: TOKENS.background,
                             overflow: 'auto',
                             position: 'relative',
-                            cursor: shareLinkDraw.isDrawingMode
-                                ? 'crosshair'
-                                : (isPanningRef.current ? 'grabbing' : 'grab')
+                            cursor: isPanningRef.current ? 'grabbing' : 'grab'
                         }}
                         onScroll={handleScroll}
                         onMouseDown={handleGanttMouseDown}
-                        onMouseMove={shareLinkDraw.isDrawingMode ? shareLinkDraw.handleMouseMove : undefined}
-                        onClick={shareLinkDraw.isDrawingMode ? shareLinkDraw.handleCanvasClick : undefined}
+                    // onMouseMove={...} (Removed)
+                    // onClick={...} (Removed)
                     >
                         {!flattenedRows.length || timeBlocks.length === 0 ? (
                             <div style={{ padding: 40, textAlign: 'center' }}>
@@ -498,9 +482,9 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                     expandedDay={expandedDay}
                                     onDragStart={handleDragStart}
                                     readOnlyOperations={readOnlyOperations}
-                                    isDrawingShareMode={!isExternalMode && shareLinkDraw.isDrawingMode}
-                                    onShareDrawClick={!isExternalMode ? shareLinkDraw.handleOperationClick : undefined}
-                                    drawingSelectedScheduleId={!isExternalMode ? shareLinkDraw.selectedScheduleId : null}
+                                // isDrawingShareMode={...} (Removed)
+                                // onShareDrawClick={...} (Removed)
+                                // drawingSelectedScheduleId={...} (Removed)
                                 />
                                 <ConstraintLayer
                                     ganttConstraints={externalConstraints ?? interaction.ganttConstraints}
@@ -516,21 +500,19 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                     activeConstraintSet={activeConstraintSet}
                                 />
                                 {/* 共享关系连线层 */}
-                                {!isExternalMode && (
-                                    <ShareLinkLayer
-                                        shareLinks={shareLinks}
-                                        operationBlockMap={operationBlockMap}
-                                        containerWidth={headerWidth}
-                                        containerHeight={totalHeight}
-                                        scrollLeft={0}
-                                        scrollTop={0}
-                                        hourWidth={effectiveHourWidth}
-                                        rowIndexMap={effectiveRowIndexMap}
-                                        startDay={effectiveStartDay}
-                                        isDrawingMode={shareLinkDraw.isDrawingMode}
-                                        drawingLine={shareLinkDraw.drawingLine}
-                                    />
-                                )}
+                                <ShareLinkLayer
+                                    shareLinks={shareLinks}
+                                    operationBlockMap={operationBlockMap}
+                                    containerWidth={headerWidth}
+                                    containerHeight={totalHeight}
+                                    scrollLeft={0}
+                                    scrollTop={0}
+                                    hourWidth={effectiveHourWidth}
+                                    rowIndexMap={effectiveRowIndexMap}
+                                    startDay={effectiveStartDay}
+                                    isDrawingMode={false}
+                                    drawingLine={null}
+                                />
                             </div>
                         )}
                     </div>
@@ -574,7 +556,38 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                 operationForm={interaction.operationForm}
                 handleOperationSubmit={interaction.handleOperationSubmit}
                 operationSubmitting={interaction.operationSubmitting}
+                templateId={template.id} // [New] Pass templateId
+                loadShareGroups={interaction.loadShareGroups}
             />
+
+            {/* 共享组管理抽屉 */}
+            <Drawer
+                title="共享组管理"
+                placement="right"
+                width={400}
+                open={shareGroupPanelVisible}
+                onClose={() => setShareGroupPanelVisible(false)}
+                styles={{ body: { padding: 0 } }}
+            >
+                <ShareGroupPanel
+                    templateId={template.id}
+                    onGroupChange={() => {
+                        interaction.loadShareGroups();
+                    }}
+                    operations={flattenedRows
+                        .filter(row => row.node.type === 'operation' && row.node.data)
+                        .map(row => {
+                            const op = row.node.data as StageOperation;
+                            return {
+                                scheduleId: op.id,
+                                operationName: op.operation_name,
+                                stageName: row.node.title,
+                                requiredPeople: op.required_people || 1
+                            };
+                        })
+                    }
+                />
+            </Drawer>
 
             <style>{`
         .gantt-scroll-container::-webkit-scrollbar {

@@ -72,6 +72,7 @@ export interface ShareGroupMember {
 
 export interface ShareGroup {
     id: number;
+    template_id: number; // [New] Added template_id
     group_code: string;
     group_name: string;
     share_mode: 'SAME_TEAM' | 'DIFFERENT';
@@ -148,6 +149,9 @@ export interface ProcessTemplateGanttProps {
 
     // 批次模式：外部约束数据
     externalConstraints?: GanttConstraint[];
+
+    // 批次模式：外部共享组数据
+    externalShareGroups?: ShareGroup[];
 }
 
 export interface GanttNode {

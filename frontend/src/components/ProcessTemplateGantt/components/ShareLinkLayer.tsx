@@ -49,7 +49,10 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
 }) => {
     // 计算连线路径
     const linkPaths = useMemo(() => {
-        return shareLinks.map(link => {
+        // 统计同一行的连线数量，用于偏移计算
+        const rowLinkCount = new Map<number, number>();
+
+        return shareLinks.map((link, linkIndex) => {
             const fromBlock = operationBlockMap.get(link.from_schedule_id);
             const toBlock = operationBlockMap.get(link.to_schedule_id);
 
@@ -77,8 +80,13 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
             const arrowSize = 9;
 
             if (sameRow) {
-                // 同一行：水平虚线，略微偏移以避免与操作块重叠
-                const offsetY = fromY - ROW_HEIGHT * 0.15;
+                // 同一行：水平虚线，使用索引偏移避免重叠
+                const currentCount = rowLinkCount.get(fromRowIndex) || 0;
+                rowLinkCount.set(fromRowIndex, currentCount + 1);
+                // 交替使用上下偏移
+                const baseOffset = ROW_HEIGHT * 0.2;
+                const offsetY = fromY - baseOffset - (currentCount * 6);
+
                 path = `M ${fromCenterX} ${offsetY} L ${toCenterX} ${offsetY}`;
                 // 双向箭头
                 arrowPoints = fromCenterX < toCenterX
@@ -88,8 +96,9 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
                     ? `${fromCenterX},${offsetY} ${fromCenterX + arrowSize},${offsetY - arrowSize / 2} ${fromCenterX + arrowSize},${offsetY + arrowSize / 2}`
                     : `${fromCenterX},${offsetY} ${fromCenterX - arrowSize},${offsetY - arrowSize / 2} ${fromCenterX - arrowSize},${offsetY + arrowSize / 2}`;
             } else {
-                // 不同行：直角折线连接
-                const midX = fromCenterX + (toCenterX - fromCenterX) / 2;
+                // 不同行：直角折线连接，添加基于索引的X偏移避免重叠
+                const xOffset = (linkIndex % 5) * 8; // 每条连线偏移一点
+                const midX = fromCenterX + (toCenterX - fromCenterX) / 2 + xOffset;
                 path = `M ${fromCenterX} ${fromY} L ${midX} ${fromY} L ${midX} ${toY} L ${toCenterX} ${toY}`;
                 // 双向箭头
                 arrowPoints = toCenterX >= midX
@@ -114,7 +123,7 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
                 sameRow
             };
         }).filter(Boolean);
-    }, [shareLinks, operationBlockMap, hourWidth, rowIndexMap]);
+    }, [shareLinks, operationBlockMap, hourWidth, rowIndexMap, startDay]);
 
     if (shareLinks.length === 0 && !isDrawingMode) return null;
 

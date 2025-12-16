@@ -249,6 +249,12 @@ export const systemSettingsApi = {
   getSchedulingSettings: () => api.get<SchedulingSettings>('/system/scheduling/settings').then((res) => res.data),
   updateSchedulingSettings: (data: SchedulingSettings) =>
     api.put<SchedulingSettings>('/system/scheduling/settings', data).then((res) => res.data),
+
+  // DB Config
+  getDbConfig: () => api.get<{ mode: 'cloud' | 'local'; host: string }>('/system/db-config').then((res) => res.data),
+  updateDbConfig: (mode: 'cloud' | 'local') => api.post('/system/db-config', { mode }).then((res) => res.data),
+  syncDb: (payload: { direction: 'up' | 'down'; force?: boolean }) =>
+    api.post<{ message: string; error?: string; sourceTime?: string; targetTime?: string }>('/system/sync-db', payload).then((res) => res.data),
 };
 
 // Database Backup API

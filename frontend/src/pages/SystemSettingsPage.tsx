@@ -17,9 +17,20 @@ import {
   Spin,
   Form,
   Switch,
+  Modal,
+  Badge,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { ReloadOutlined, KeyOutlined, CloudDownloadOutlined, DatabaseOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  ReloadOutlined,
+  KeyOutlined,
+  CloudDownloadOutlined,
+  DatabaseOutlined,
+  DeleteOutlined,
+  CloudSyncOutlined,
+  CloudUploadOutlined,
+  ExclamationCircleOutlined
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { systemSettingsApi, databaseApi, BackupInfo, BackupStatusResponse } from '../services/api';
 import { HolidayServiceLogEntry, HolidayServiceStatus, SchedulingSettings } from '../types';
@@ -59,6 +70,12 @@ const SystemSettingsPage: React.FC = () => {
   const [backupStatus, setBackupStatus] = useState<BackupStatusResponse | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+
+  // DB Config State
+  const [dbConfig, setDbConfig] = useState<{ mode: 'cloud' | 'local'; host: string } | null>(null);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [switchingDb, setSwitchingDb] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     setLoading(true);
@@ -100,7 +117,111 @@ const SystemSettingsPage: React.FC = () => {
     fetchStatus();
     loadSchedulingSettings();
     loadBackupStatus();
+    loadDbConfig();
   }, [fetchStatus, loadSchedulingSettings, loadBackupStatus]);
+
+  const loadDbConfig = async () => {
+    setDbLoading(true);
+    try {
+      const data = await systemSettingsApi.getDbConfig();
+      setDbConfig(data);
+    } catch (e) {
+      console.error(e);
+      // message.error('无法获取数据库配置'); // Silent fail/retry better?
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
+  const handleSwitchDb = async (checked: boolean) => {
+    const newMode = checked ? 'cloud' : 'local';
+    const label = newMode === 'cloud' ? '云端 (Cloud)' : '本地 (Local)';
+
+    Modal.confirm({
+      title: '切换数据库环境',
+      icon: <ExclamationCircleOutlined />,
+      content: `确定要切换到 ${label} 吗？后端服务将自动重启，界面将在几秒后刷新。`,
+      onOk: async () => {
+        setSwitchingDb(true);
+        try {
+          await systemSettingsApi.updateDbConfig(newMode);
+          message.info('服务正在重启，请稍候...');
+
+          // Poll for recovery
+          let retries = 0;
+          const poll = setInterval(async () => {
+            retries++;
+            try {
+              await systemSettingsApi.getDbConfig(); // Simple ping
+              clearInterval(poll);
+              message.success('连接已恢复');
+              window.location.reload();
+            } catch (e) {
+              if (retries > 20) {
+                clearInterval(poll);
+                message.error('重连超时，请手动刷新页面');
+                setSwitchingDb(false);
+              }
+            }
+          }, 2000);
+
+        } catch (error: any) {
+          message.error(error.message || '切换失败');
+          setSwitchingDb(false);
+        }
+      }
+    });
+  };
+
+  const handleSyncDb = async (direction: 'up' | 'down') => {
+    const label = direction === 'up' ? '本地 -> 云端 (覆盖)' : '云端 -> 本地 (覆盖)';
+    const confirmMsg = direction === 'up'
+      ? '确定要将本地数据库上传并覆盖云端吗？此操作不可逆！'
+      : '确定要将云端数据库下载并覆盖本地吗？您的本地未保存更改将丢失。';
+
+    const executeSync = async (force: boolean) => {
+      setSyncing(true);
+      try {
+        const res = await systemSettingsApi.syncDb({ direction, force });
+        message.success(res.message);
+        // Refresh config just in case
+        loadDbConfig();
+      } catch (error: any) {
+        if (error.response?.status === 409) {
+          // Timestamp conflict
+          const { sourceTime, targetTime } = error.response.data;
+          Modal.confirm({
+            title: '存在数据冲突',
+            icon: <ExclamationCircleOutlined style={{ color: 'red' }} />,
+            width: 500,
+            content: (
+              <div>
+                <p>目标数据库似乎比源数据库更新！</p>
+                <p><strong>源数据时间:</strong> {sourceTime}</p>
+                <p><strong>目标数据时间:</strong> {targetTime}</p>
+                <p style={{ color: 'red', marginTop: 10 }}>强制覆盖可能会导致新数据丢失。是否仍要继续？</p>
+              </div>
+            ),
+            okText: '强制覆盖',
+            okType: 'danger',
+            onOk: () => executeSync(true) // Recursive call with force
+          });
+        } else {
+          message.error(error.response?.data?.error || '同步失败');
+        }
+      } finally {
+        setSyncing(false);
+      }
+    };
+
+    Modal.confirm({
+      title: `确认${label}`,
+      icon: <ExclamationCircleOutlined />,
+      content: confirmMsg,
+      okType: 'danger',
+      onOk: () => executeSync(false)
+    });
+  };
 
   const handleExportDatabase = async () => {
     setExporting(true);
@@ -339,6 +460,65 @@ const SystemSettingsPage: React.FC = () => {
             showIcon
           />
         )}
+
+        {/* Database Config Card */}
+        <Card
+          title="数据库环境配置"
+          extra={
+            <Space>
+              <Tag color={dbConfig?.mode === 'cloud' ? 'green' : 'blue'}>
+                {dbConfig?.mode === 'cloud' ? '当前: 阿里云 (Cloud)' : '当前: 本地 (Local)'}
+              </Tag>
+              <Button icon={<ReloadOutlined />} onClick={loadDbConfig} loading={dbLoading} />
+            </Space>
+          }
+        >
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Row gutter={24} align="middle">
+              <Col span={12}>
+                <Space>
+                  <Text strong>环境切换:</Text>
+                  <Switch
+                    checked={dbConfig?.mode === 'cloud'}
+                    checkedChildren="Cloud"
+                    unCheckedChildren="Local"
+                    onChange={handleSwitchDb}
+                    loading={switchingDb || dbLoading}
+                  />
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    (切换将重启后端服务)
+                  </Text>
+                </Space>
+                <div style={{ marginTop: 8 }}>
+                  <Text type="secondary">Host: {dbConfig?.host}</Text>
+                </div>
+              </Col>
+              <Col span={12}>
+                <Card size="small" title="数据同步 (Sync)" type="inner">
+                  <Space split="|">
+                    <Button
+                      type="dashed"
+                      icon={<CloudUploadOutlined />}
+                      onClick={() => handleSyncDb('up')}
+                      disabled={syncing}
+                    >
+                      同步至云端 (Loc → Cloud)
+                    </Button>
+                    <Button
+                      type="dashed"
+                      icon={<CloudDownloadOutlined />}
+                      onClick={() => handleSyncDb('down')}
+                      disabled={syncing}
+                    >
+                      同步至本地 (Cloud → Loc)
+                    </Button>
+                  </Space>
+                  {syncing && <Spin size="small" style={{ marginLeft: 10 }} />}
+                </Card>
+              </Col>
+            </Row>
+          </Space>
+        </Card>
 
         <Card
           title="天行API密钥"

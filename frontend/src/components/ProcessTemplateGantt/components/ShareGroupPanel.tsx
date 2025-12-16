@@ -33,7 +33,7 @@ export interface ShareGroup {
     group_code: string;
     group_name: string;
     share_mode: 'SAME_TEAM' | 'DIFFERENT';
-    members: ShareGroupMember[];
+    members?: ShareGroupMember[];
     member_count?: number;
 }
 
@@ -184,7 +184,7 @@ const ShareGroupPanel: React.FC<ShareGroupPanelProps> = ({
                                             >
                                                 <Tag className="member-tag">
                                                     {member.operation_name}
-                                                    {idx < group.members.length - 1 && <span className="separator">→</span>}
+                                                    {idx < (group.members?.length || 0) - 1 && <span className="separator">→</span>}
                                                 </Tag>
                                             </Tooltip>
                                         ))}
