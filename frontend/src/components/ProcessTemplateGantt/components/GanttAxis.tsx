@@ -70,21 +70,18 @@ export const GanttAxis: React.FC<GanttAxisProps> = ({
                             borderRight: `1px solid ${TOKENS.border}`
                         }}
                     >
-                        {/* Peak Color Bar */}
-                        {dailyPeaks && (() => {
-                            const peakData = dailyPeaks.get(dayNumber);
-                            return peakData && peakData.peak > 0 ? (
-                                <div
-                                    style={{
-                                        height: 4,
-                                        background: peakData.color,
-                                        transition: 'background 0.3s ease'
-                                    }}
-                                />
-                            ) : (
-                                <div style={{ height: 4, background: 'transparent' }} />
-                            );
-                        })()}
+                        {/* Peak Color Bar - P2 #6: 移除 IIFE，使用直接条件渲染 */}
+                        {dailyPeaks?.get(dayNumber)?.peak ? (
+                            <div
+                                style={{
+                                    height: 4,
+                                    background: dailyPeaks.get(dayNumber)!.color
+                                    // P2 #7: 移除 transition 减少重绘
+                                }}
+                            />
+                        ) : (
+                            <div style={{ height: 4, background: 'transparent' }} />
+                        )}
                         {/* Day Header */}
                         <div
                             onDoubleClick={() => onDayDoubleClick?.(dayNumber)}
@@ -105,23 +102,24 @@ export const GanttAxis: React.FC<GanttAxisProps> = ({
                                 userSelect: 'none'
                             }}
                         >
+                            {/* P1 #5: 图标按钮 + Tooltip 替代文字按钮 */}
                             {isExpanded && (
-                                <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<LeftOutlined />}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onCollapseDay?.();
-                                    }}
-                                    style={{
-                                        color: TOKENS.primary,
-                                        fontSize: 12,
-                                        padding: '0 4px'
-                                    }}
-                                >
-                                    返回
-                                </Button>
+                                <Tooltip title="返回总览">
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<LeftOutlined />}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onCollapseDay?.();
+                                        }}
+                                        style={{
+                                            color: TOKENS.primary,
+                                            fontSize: 12,
+                                            padding: '0 4px'
+                                        }}
+                                    />
+                                </Tooltip>
                             )}
                             {isExpanded && canGoPrev && (
                                 <Button
@@ -142,31 +140,28 @@ export const GanttAxis: React.FC<GanttAxisProps> = ({
                                     : `Day ${dayNumber}`
                                 }
                             </span>
-                            {/* Peak Badge */}
-                            {dailyPeaks && (() => {
-                                const peakData = dailyPeaks.get(dayNumber);
-                                return peakData && peakData.peak > 0 ? (
-                                    <Tooltip title={`峰值人数: ${peakData.peak} (${peakData.peakHour}:00)`}>
-                                        <span
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 2,
-                                                fontSize: 10,
-                                                padding: '1px 4px',
-                                                borderRadius: 4,
-                                                background: peakData.color,
-                                                color: '#333',
-                                                fontWeight: 600,
-                                                transition: 'background 0.3s ease'
-                                            }}
-                                        >
-                                            <TeamOutlined style={{ fontSize: 9 }} />
-                                            {peakData.peak}
-                                        </span>
-                                    </Tooltip>
-                                ) : null;
-                            })()}
+                            {/* Peak Badge - P2 #6: 移除 IIFE */}
+                            {dailyPeaks?.get(dayNumber)?.peak ? (
+                                <Tooltip title={`峰值人数: ${dailyPeaks.get(dayNumber)!.peak} (${dailyPeaks.get(dayNumber)!.peakHour}:00)`}>
+                                    <span
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 2,
+                                            fontSize: 10,
+                                            padding: '1px 4px',
+                                            borderRadius: 4,
+                                            background: dailyPeaks.get(dayNumber)!.color,
+                                            color: '#333',
+                                            fontWeight: 600
+                                            // P2 #7: 移除 transition
+                                        }}
+                                    >
+                                        <TeamOutlined style={{ fontSize: 9 }} />
+                                        {dailyPeaks.get(dayNumber)!.peak}
+                                    </span>
+                                </Tooltip>
+                            ) : null}
                             {isExpanded && <span style={{ fontSize: 11, opacity: 0.7 }}>(展开视图)</span>}
                             {isExpanded && canGoNext && (
                                 <Button
@@ -187,8 +182,17 @@ export const GanttAxis: React.FC<GanttAxisProps> = ({
                         <div style={{ display: 'flex', height: 18 }}>
                             {Array.from({ length: 24 }, (_, h) => {
                                 const isWorkHour = h >= 9 && h < 17;
-                                // 展开模式下显示更多小时标签
-                                const showLabel = isExpanded || (hourWidth > 16 && (h % 2 === 0 || hourWidth > 30));
+                                // P1: 智能标签密度 - 根据 hourWidth 决定显示间隔
+                                // 展开模式: 全部显示
+                                // hourWidth > 30: 全部显示
+                                // hourWidth 20-30: 每2小时
+                                // hourWidth 10-20: 每3小时
+                                // hourWidth < 10: 每6小时 (只显示 0, 6, 12, 18)
+                                const labelInterval = isExpanded ? 1 :
+                                    hourWidth > 30 ? 1 :
+                                        hourWidth > 20 ? 2 :
+                                            hourWidth > 10 ? 3 : 6;
+                                const showLabel = h % labelInterval === 0;
 
                                 return (
                                     <div
@@ -207,7 +211,7 @@ export const GanttAxis: React.FC<GanttAxisProps> = ({
                                             fontWeight: isExpanded ? 500 : 400
                                         }}
                                     >
-                                        {showLabel ? `${h}:00` : ''}
+                                        {showLabel ? h : ''}
                                     </div>
                                 );
                             })}

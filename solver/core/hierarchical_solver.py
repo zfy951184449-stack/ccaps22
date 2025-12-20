@@ -44,9 +44,33 @@ class HierarchicalSolver:
         self.phase1_unassigned: int = 0
         self.phase2_fairness_penalty: int = 0
         
-        # 配置
-        self.phase1_timeout = context.config.hierarchical_phase1_timeout
-        self.phase2_timeout = context.config.hierarchical_phase2_timeout
+        # 配置：智能分配超时时间
+        # 如果用户设置了总超时时间，按比例分配给各阶段
+        total_timeout = context.config.solver_time_limit_seconds
+        phase1_config = context.config.hierarchical_phase1_timeout
+        phase2_config = context.config.hierarchical_phase2_timeout
+        
+        # 计算默认阶段超时总和
+        default_total = 180 + 240  # 默认阶段1=180s, 阶段2=240s
+        
+        if total_timeout > default_total:
+            # 用户设置的总超时大于默认值，按比例放大各阶段
+            ratio = total_timeout / default_total
+            self.phase1_timeout = int(phase1_config * ratio)
+            self.phase2_timeout = int(phase2_config * ratio)
+            logger.info(
+                f"[HierarchicalSolver] 超时配置: 总限制={total_timeout}s, "
+                f"阶段1={self.phase1_timeout}s, 阶段2={self.phase2_timeout}s (按比例放大)"
+            )
+        else:
+            # 使用配置值
+            self.phase1_timeout = phase1_config
+            self.phase2_timeout = phase2_config
+            logger.info(
+                f"[HierarchicalSolver] 超时配置: "
+                f"阶段1={self.phase1_timeout}s, 阶段2={self.phase2_timeout}s"
+            )
+        
         self.enable_phase3 = context.config.hierarchical_enable_phase3
     
     def solve(

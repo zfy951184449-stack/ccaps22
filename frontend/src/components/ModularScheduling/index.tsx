@@ -59,7 +59,6 @@ const DEFAULT_CONFIG: SolverConfig = {
   sharingViolationPenalty: 1000,
 
   // 班次一致性模块
-  enableShiftConsistency: true,
   shiftMatchingToleranceMinutes: 30,
   workdayRestPenalty: 10,
   nonWorkdayWorkPenalty: 1000,
@@ -361,7 +360,7 @@ const ModularScheduling: React.FC = () => {
       unassignedOperations,
       constraintsSummary: {
         maxConsecutiveWorkdays: config.maxConsecutiveWorkdays,
-        monthlyHoursRange: `标准工时 -${config.monthlyHoursLowerBound}h / +${config.monthlyHoursUpperBound}h`,
+        monthlyHoursRange: `标准工时 -${config.monthlyHoursLowerOffset}h / +${config.monthlyHoursUpperOffset}h`,
         nightShiftRest: `必须休息 ${config.nightRestHardDays} 天, 建议休息 ${config.nightRestSoftDays} 天`,
       },
     };
@@ -561,7 +560,7 @@ const ModularScheduling: React.FC = () => {
     if (result.success) {
       message.info('任务已重新开始');
       setSolving(true);
-      
+
       // 使用 WebSocket 订阅实时进度
       pollCancelRef.current = subscribeToSolveProgress(
         currentRun.id,
@@ -803,14 +802,7 @@ const ModularScheduling: React.FC = () => {
           </Form.Item>
 
           {/* ==================== 班次一致性模块 ==================== */}
-          <Divider orientation="left">
-            <Space>
-              班次一致性模块
-              <Form.Item name="enableShiftConsistency" valuePropName="checked" noStyle>
-                <Switch size="small" />
-              </Form.Item>
-            </Space>
-          </Divider>
+          <Divider orientation="left">班次一致性模块</Divider>
 
           <Form.Item
             name="shiftMatchingToleranceMinutes"

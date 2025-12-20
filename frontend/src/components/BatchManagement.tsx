@@ -7,6 +7,7 @@ import {
   DatePicker,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Row,
@@ -30,6 +31,7 @@ import {
   TeamOutlined,
   PlayCircleOutlined,
   StopOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type {
@@ -41,6 +43,7 @@ import { batchPlanApi } from '../services/api';
 import BatchGanttAdapter from './BatchGanttAdapter';
 
 const { Text } = Typography;
+const { RangePicker } = DatePicker;
 
 type BatchPlanFormValues = {
   batch_code: string;
@@ -49,6 +52,16 @@ type BatchPlanFormValues = {
   project_code?: string;
   planned_start_date: dayjs.Dayjs;
   plan_status: BatchPlan['plan_status'];
+  description?: string;
+  notes?: string;
+};
+
+type BulkCreateFormValues = {
+  template_id: number;
+  date_range: [dayjs.Dayjs, dayjs.Dayjs];
+  interval_days: number;
+  batch_prefix: string;
+  start_number: number;
   description?: string;
   notes?: string;
 };
@@ -75,6 +88,18 @@ const BatchManagement: React.FC = () => {
   const [form] = Form.useForm<BatchPlanFormValues>();
   const [error, setError] = useState<string | null>(null);
 
+  // Day0 offset state
+  const [day0Offset, setDay0Offset] = useState<{ offset: number; has_pre_day0: boolean; pre_day0_count: number } | null>(null);
+  const [loadingOffset, setLoadingOffset] = useState(false);
+
+  // Bulk creation state
+  const [bulkModalVisible, setBulkModalVisible] = useState(false);
+  const [bulkForm] = Form.useForm<BulkCreateFormValues>();
+  const [bulkDay0Offset, setBulkDay0Offset] = useState<{ offset: number; has_pre_day0: boolean; pre_day0_count: number } | null>(null);
+  const [loadingBulkOffset, setLoadingBulkOffset] = useState(false);
+  const [bulkPreview, setBulkPreview] = useState<{ count: number; dates: string[]; codes: string[] }>({ count: 0, dates: [], codes: [] });
+  const [bulkCreating, setBulkCreating] = useState(false);
+
   const statusFilters = useMemo(
     () =>
       Object.keys(STATUS_COLORS).map((status) => ({
@@ -98,7 +123,7 @@ const BatchManagement: React.FC = () => {
       const msg =
         err?.response?.data?.error ??
         err?.message ??
-        '加载批次数据失败，请稍后重试';
+        '加载批次数据失败，请稀后重试';
       setError(msg);
       message.error(msg);
     } finally {
@@ -120,7 +145,61 @@ const BatchManagement: React.FC = () => {
     loadTemplates();
   }, []);
 
+  // Load day0 offset when template changes in single creation modal
+  const handleTemplateChange = async (templateId: number) => {
+    setLoadingOffset(true);
+    setDay0Offset(null);
+    try {
+      const data = await batchPlanApi.getTemplateDay0Offset(templateId);
+      setDay0Offset(data);
+    } catch (err) {
+      console.warn('Failed to load template day0 offset', err);
+    } finally {
+      setLoadingOffset(false);
+    }
+  };
+
+  // Load day0 offset when template changes in bulk creation modal
+  const handleBulkTemplateChange = async (templateId: number) => {
+    setLoadingBulkOffset(true);
+    setBulkDay0Offset(null);
+    try {
+      const data = await batchPlanApi.getTemplateDay0Offset(templateId);
+      setBulkDay0Offset(data);
+    } catch (err) {
+      console.warn('Failed to load template day0 offset', err);
+    } finally {
+      setLoadingBulkOffset(false);
+    }
+  };
+
+  // Update bulk preview when form values change
+  const updateBulkPreview = () => {
+    const values = bulkForm.getFieldsValue();
+    if (!values.date_range || !values.interval_days || !values.batch_prefix || values.start_number === undefined) {
+      setBulkPreview({ count: 0, dates: [], codes: [] });
+      return;
+    }
+
+    const [startDate, endDate] = values.date_range;
+    const dates: string[] = [];
+    const codes: string[] = [];
+
+    let current = startDate.clone();
+    let index = 0;
+    while (current.isBefore(endDate) || current.isSame(endDate, 'day')) {
+      dates.push(current.format('MM/DD'));
+      codes.push(`${values.batch_prefix}${values.start_number + index}`);
+      current = current.add(values.interval_days, 'day');
+      index++;
+      if (index > 100) break; // Prevent infinite loop
+    }
+
+    setBulkPreview({ count: dates.length, dates: dates.slice(0, 5), codes: codes.slice(0, 5) });
+  };
+
   const resetForm = (batch?: BatchPlan | null) => {
+    setDay0Offset(null);
     if (batch) {
       form.setFieldsValue({
         batch_code: batch.batch_code,
@@ -132,6 +211,10 @@ const BatchManagement: React.FC = () => {
         description: batch.description ?? undefined,
         notes: batch.notes ?? undefined,
       });
+      // Load offset for existing batch
+      if (batch.template_id) {
+        handleTemplateChange(batch.template_id);
+      }
     } else {
       form.resetFields();
       form.setFieldsValue({
@@ -153,15 +236,34 @@ const BatchManagement: React.FC = () => {
     setModalVisible(true);
   };
 
+  const openBulkModal = () => {
+    bulkForm.resetFields();
+    bulkForm.setFieldsValue({
+      interval_days: 5,
+      start_number: 1,
+    });
+    setBulkDay0Offset(null);
+    setBulkPreview({ count: 0, dates: [], codes: [] });
+    setBulkModalVisible(true);
+  };
+
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+
+      // Calculate actual start date based on day0 offset
+      let actualStartDate = values.planned_start_date;
+      if (day0Offset && day0Offset.offset < 0) {
+        // If there are day-x operations, add the offset to get actual start
+        actualStartDate = values.planned_start_date.add(day0Offset.offset, 'day');
+      }
+
       const payload = {
         batch_code: values.batch_code.trim(),
         batch_name: values.batch_name.trim(),
         template_id: values.template_id,
         project_code: values.project_code?.trim() || null,
-        planned_start_date: values.planned_start_date.format('YYYY-MM-DD'),
+        planned_start_date: actualStartDate.format('YYYY-MM-DD'),
         plan_status: values.plan_status,
         description: values.description?.trim() || null,
         notes: values.notes?.trim() || null,
@@ -186,6 +288,40 @@ const BatchManagement: React.FC = () => {
         err?.message ??
         (editingBatch ? '更新批次失败' : '创建批次失败');
       message.error(msg);
+    }
+  };
+
+  const handleBulkCreate = async () => {
+    try {
+      const values = await bulkForm.validateFields();
+
+      if (bulkPreview.count === 0) {
+        message.error('请先配置有效的日期范围和间隔');
+        return;
+      }
+
+      setBulkCreating(true);
+
+      const payload = {
+        template_id: values.template_id,
+        day0_start_date: values.date_range[0].format('YYYY-MM-DD'),
+        day0_end_date: values.date_range[1].format('YYYY-MM-DD'),
+        interval_days: values.interval_days,
+        batch_prefix: values.batch_prefix.trim(),
+        start_number: values.start_number,
+        description: values.description?.trim() || null,
+        notes: values.notes?.trim() || null,
+      };
+
+      const result = await batchPlanApi.createBulk(payload);
+      message.success(result.message);
+      setBulkModalVisible(false);
+      loadBatches();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err?.message ?? '批量创建失败';
+      message.error(msg);
+    } finally {
+      setBulkCreating(false);
     }
   };
 
@@ -367,6 +503,12 @@ const BatchManagement: React.FC = () => {
           </Typography.Title>
           <Space>
             <Button
+              icon={<CopyOutlined />}
+              onClick={openBulkModal}
+            >
+              批量创建
+            </Button>
+            <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={openCreateModal}
@@ -417,6 +559,7 @@ const BatchManagement: React.FC = () => {
           </div>
         </Card>
 
+        {/* 单个创建/编辑弹窗 */}
         <Modal
           open={modalVisible}
           title={editingBatch ? '编辑批次' : '新建批次'}
@@ -424,6 +567,7 @@ const BatchManagement: React.FC = () => {
             setModalVisible(false);
             setEditingBatch(null);
             form.resetFields();
+            setDay0Offset(null);
           }}
           onOk={handleModalOk}
           destroyOnClose
@@ -437,25 +581,15 @@ const BatchManagement: React.FC = () => {
             }}
           >
             <Form.Item
-              label="批次代码"
-              name="batch_code"
-              rules={[{ required: true, message: '请输入批次代码' }]}
-            >
-              <Input placeholder="如: CHO-2024-001" />
-            </Form.Item>
-            <Form.Item
-              label="批次名称"
-              name="batch_name"
-              rules={[{ required: true, message: '请输入批次名称' }]}
-            >
-              <Input placeholder="如: CHO抗体批次001" />
-            </Form.Item>
-            <Form.Item
               label="工艺模板"
               name="template_id"
               rules={[{ required: true, message: '请选择工艺模板' }]}
             >
-              <Select placeholder="选择工艺模板">
+              <Select
+                placeholder="选择工艺模板"
+                onChange={handleTemplateChange}
+                loading={loadingOffset}
+              >
                 {templates.map((t) => (
                   <Select.Option key={t.id} value={t.id}>
                     {t.template_code} - {t.template_name}
@@ -463,12 +597,41 @@ const BatchManagement: React.FC = () => {
                 ))}
               </Select>
             </Form.Item>
+
+            {day0Offset && day0Offset.has_pre_day0 && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={`该模版包含 day${day0Offset.offset} 操作，实际开始日期将比Day0提前 ${day0Offset.pre_day0_count} 天`}
+              />
+            )}
+
             <Form.Item
-              label="计划开始日期"
+              label="Day0日期（接种日）"
               name="planned_start_date"
-              rules={[{ required: true, message: '请选择计划开始日期' }]}
+              rules={[{ required: true, message: '请选择Day0日期' }]}
+              extra={day0Offset && day0Offset.has_pre_day0 ?
+                `实际开始日期：${form.getFieldValue('planned_start_date')?.add(day0Offset.offset, 'day')?.format('YYYY-MM-DD') || '-'}`
+                : undefined
+              }
             >
               <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Form.Item
+              label="批次代码"
+              name="batch_code"
+              rules={[{ required: true, message: '请输入批次代码' }]}
+            >
+              <Input placeholder="如: GMP1" />
+            </Form.Item>
+            <Form.Item
+              label="批次名称"
+              name="batch_name"
+              rules={[{ required: true, message: '请输入批次名称' }]}
+            >
+              <Input placeholder="如: GMP1" />
             </Form.Item>
             <Form.Item label="状态" name="plan_status">
               <Select>
@@ -483,7 +646,118 @@ const BatchManagement: React.FC = () => {
               <Input.TextArea rows={2} />
             </Form.Item>
             <Form.Item label="备注" name="notes">
-              <Input.TextArea rows={3} />
+              <Input.TextArea rows={2} />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 批量创建弹窗 */}
+        <Modal
+          open={bulkModalVisible}
+          title="批量创建批次"
+          onCancel={() => {
+            setBulkModalVisible(false);
+            bulkForm.resetFields();
+            setBulkDay0Offset(null);
+            setBulkPreview({ count: 0, dates: [], codes: [] });
+          }}
+          onOk={handleBulkCreate}
+          okText="创建"
+          okButtonProps={{ loading: bulkCreating, disabled: bulkPreview.count === 0 }}
+          destroyOnClose
+          width={600}
+        >
+          <Form
+            form={bulkForm}
+            layout="vertical"
+            onValuesChange={updateBulkPreview}
+          >
+            <Form.Item
+              label="工艺模板"
+              name="template_id"
+              rules={[{ required: true, message: '请选择工艺模板' }]}
+            >
+              <Select
+                placeholder="选择工艺模板"
+                onChange={handleBulkTemplateChange}
+                loading={loadingBulkOffset}
+              >
+                {templates.map((t) => (
+                  <Select.Option key={t.id} value={t.id}>
+                    {t.template_code} - {t.template_name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            {bulkDay0Offset && bulkDay0Offset.has_pre_day0 && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={`该模版包含 day${bulkDay0Offset.offset} 操作，每个批次的实际开始日期将比Day0提前 ${bulkDay0Offset.pre_day0_count} 天`}
+              />
+            )}
+
+            <Form.Item
+              label="Day0日期范围"
+              name="date_range"
+              rules={[{ required: true, message: '请选择Day0日期范围' }]}
+            >
+              <RangePicker style={{ width: '100%' }} />
+            </Form.Item>
+
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item
+                  label="间隔天数"
+                  name="interval_days"
+                  rules={[{ required: true, message: '请输入间隔天数' }]}
+                >
+                  <InputNumber min={1} max={365} style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  label="批次编码前缀"
+                  name="batch_prefix"
+                  rules={[{ required: true, message: '请输入前缀' }]}
+                >
+                  <Input placeholder="如: GMP" />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  label="起始序号"
+                  name="start_number"
+                  rules={[{ required: true, message: '请输入起始序号' }]}
+                >
+                  <InputNumber min={0} style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {bulkPreview.count > 0 && (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={
+                  <div>
+                    <div>将创建 <strong>{bulkPreview.count}</strong> 个批次</div>
+                    <div style={{ marginTop: 4, fontSize: 12, color: '#666' }}>
+                      Day0: {bulkPreview.dates.join(', ')}{bulkPreview.count > 5 ? '...' : ''}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#666' }}>
+                      编码: {bulkPreview.codes.join(', ')}{bulkPreview.count > 5 ? '...' : ''}
+                    </div>
+                  </div>
+                }
+              />
+            )}
+
+            <Form.Item label="批次描述" name="description">
+              <Input.TextArea rows={2} placeholder="可选，所有批次共用" />
             </Form.Item>
           </Form>
         </Modal>
@@ -493,3 +767,4 @@ const BatchManagement: React.FC = () => {
 };
 
 export default BatchManagement;
+

@@ -214,6 +214,7 @@ const ShareGroupModal: React.FC<ShareGroupModalProps> = ({
             width={800}
             destroyOnClose
             maskClosable={false}
+            centered
             className="share-group-modal"
         >
             <Form form={form} layout="vertical">

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gantt Styles V2 - Ultra Modern</title>
+    <style>
+        :root {
+            --bg-color: #0d1117;
+            /* Dark theme for modern look, can be light */
+            --grid-line: rgba(255, 255, 255, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            /* Deep black for contrast */
+            padding: 40px;
+            color: white;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 500;
+            margin-bottom: 40px;
+            letter-spacing: -0.5px;
+            background: linear-gradient(90deg, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .grid-bg {
+            /* Simulate Gantt Grid */
+            background-image: linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+            background-size: 40px 100%;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .gantt-row {
+            height: 48px;
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+
+        .bar {
+            height: 28px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            letter-spacing: 0.3px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* --- Style 1: Vision Glass (Spatial UI) --- */
+        /* Inspriation: visionOS. Deep glass, inner light, specular highlight */
+        .style-vision .bar {
+            border-radius: 30px;
+            /* Pill shape */
+            background: rgba(255, 255, 255, 0.1);
+            /* Very subtle fill */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow:
+                0 4px 24px -1px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.4),
+                /* Top specular */
+                inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+            /* Bottom lip */
+            color: rgba(255, 255, 255, 0.95);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .style-vision .bar::after {
+            /* Hover glow effect simulated */
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 30px;
+            background: radial-gradient(80% 50% at 50% 0%, rgba(255, 255, 255, 0.15) 0%, transparent 100%);
+            opacity: 0.5;
+        }
+
+        .style-vision .bar-blue {
+            background: rgba(37, 99, 235, 0.25);
+            border-color: rgba(59, 130, 246, 0.4);
+            width: 220px;
+        }
+
+        .style-vision .bar-teal {
+            background: rgba(13, 148, 136, 0.25);
+            border-color: rgba(20, 184, 166, 0.4);
+            width: 160px;
+            margin-left: 40px;
+        }
+
+        .style-vision .bar-orange {
+            background: rgba(234, 88, 12, 0.25);
+            border-color: rgba(249, 115, 22, 0.4);
+            width: 140px;
+            margin-left: 80px;
+        }
+
+
+        /* --- Style 2: Luminous Gradient (Linear-esque) --- */
+        /* Subtle glow, gradient border, dark aesthetic */
+        .style-luminous .bar {
+            border-radius: 6px;
+            /* Gradient background + Mask padding for border gradient trick */
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow:
+                0 2px 10px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Inner top shine */
+        .style-luminous .bar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            opacity: 0.7;
+        }
+
+        .style-luminous .bar-blue {
+            background: linear-gradient(180deg, rgba(37, 99, 235, 0.8), rgba(29, 78, 216, 0.9));
+            box-shadow: 0 0 20px rgba(37, 99, 235, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border: 0;
+            width: 220px;
+        }
+
+        .style-luminous .bar-teal {
+            background: linear-gradient(180deg, rgba(13, 148, 136, 0.8), rgba(15, 118, 110, 0.9));
+            box-shadow: 0 0 20px rgba(13, 148, 136, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            border: 0;
+            width: 160px;
+            margin-left: 40px;
+        }
+
+        /* --- Style 3: Kinetic/Liquid (Fluid) --- */
+        /* Vibrant, smooth, almost liquid-like gradients */
+        .style-fluid .bar {
+            border-radius: 8px;
+            border: none;
+            color: white;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.2);
+        }
+
+        .style-fluid .bar-blue {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6, #2563eb);
+            background-size: 200% 200%;
+            width: 220px;
+        }
+
+        .style-fluid .bar-teal {
+            background: linear-gradient(135deg, #2dd4bf, #14b8a6, #0f766e);
+            width: 160px;
+            margin-left: 40px;
+        }
+
+        .style-fluid .bar-orange {
+            background: linear-gradient(135deg, #fb923c, #f97316, #ea580c);
+            width: 140px;
+            margin-left: 80px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Next-Gen Gantt Visuals</h1>
+
+    <div class="grid-bg">
+        <div class="section-title">1. Vision Glass (Spatial UI)</div>
+        <div class="gantt-row">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-row">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+        <div class="gantt-row">
+            <div class="bar bar-orange">Validation</div>
+        </div>
+    </div>
+
+    <div class="grid-bg">
+        <div class="section-title">2. Luminous (High-End SaaS)</div>
+        <div class="gantt-row">
+            <div class="style-luminous bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-row">
+            <div class="style-luminous bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+    <div class="grid-bg">
+        <div class="section-title">3. Fluid (Vibrant)</div>
+        <div class="gantt-row">
+            <div class="style-fluid bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-row">
+            <div class="style-fluid bar bar-teal">Processing Data</div>
+        </div>
+        <div class="gantt-row">
+            <div class="style-fluid bar bar-orange">Validation</div>
+        </div>
+    </div>
+</body>
+
+</html>

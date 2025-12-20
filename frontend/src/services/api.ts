@@ -157,6 +157,22 @@ export const batchPlanApi = {
     api.post(`/batch-plans/${id}/activate`, options).then((res) => res.data),
   deactivate: (id: number) =>
     api.post(`/batch-plans/${id}/deactivate`).then((res) => res.data),
+  // 新增：获取模版的day0偏移量
+  getTemplateDay0Offset: (templateId: number) =>
+    api.get<{ offset: number; min_day: number; has_pre_day0: boolean; pre_day0_count: number }>(
+      `/batch-plans/templates/${templateId}/day0-offset`
+    ).then((res) => res.data),
+  // 新增：批量创建批次
+  createBulk: (payload: {
+    template_id: number;
+    day0_start_date: string;
+    day0_end_date: string;
+    interval_days: number;
+    batch_prefix: string;
+    start_number: number;
+    description?: string | null;
+    notes?: string | null;
+  }) => api.post<{ message: string; batches: any[] }>('/batch-plans/bulk', payload).then((res) => res.data),
 };
 
 export const shiftTypeApi = {

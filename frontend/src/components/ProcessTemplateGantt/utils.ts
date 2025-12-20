@@ -230,16 +230,6 @@ export const generateTimeBlocks = (nodes: GanttNode[], stages: ProcessStage[]): 
             const windowStartHour = (node.start_day || 0) * 24 + windowStartDayOffset * 24 + windowStartTime;
             const windowEndHour = (node.start_day || 0) * 24 + windowEndDayOffset * 24 + windowEndTime;
 
-            console.log('[TimeWindow]', node.title, {
-                'node.start_day': node.start_day,
-                'operationData.operation_day': operationData?.operation_day,
-                windowStartDayOffset,
-                windowEndDayOffset,
-                windowStartTime,
-                windowEndTime,
-                windowStartHour,
-                windowEndHour
-            });
 
             if (!isNaN(windowStartHour) && !isNaN(windowEndHour) && windowEndHour > windowStartHour) {
                 const windowBlock: TimeBlock = {

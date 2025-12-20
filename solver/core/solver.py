@@ -30,6 +30,7 @@ from constraints.decision_strategy import DecisionStrategyBuilder
 from .result_builder import ResultBuilder
 from .conflict_detector import ConflictDetector
 from .hierarchical_solver import HierarchicalSolver
+from .hint_generator import HintGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,10 @@ class Solver:
             logger.info("[Solver] 构建目标函数...")
             self._build_objective()
             
+            # 3.5 生成并注入初始解 Hint
+            logger.info("[Solver] 生成初始解 Hint...")
+            self._inject_solution_hints()
+            
             # 4. 构建决策策略
             logger.info("[Solver] 构建决策策略...")
             self._build_decision_strategy()
@@ -312,6 +317,34 @@ class Solver:
         """构建自适应决策策略"""
         strategy = DecisionStrategyBuilder(self.model, self.context, self.variables)
         strategy.build()
+    
+    def _inject_solution_hints(self) -> None:
+        """生成并注入初始解 Hint
+        
+        使用贪心算法生成初始解，通过 AddHint 注入到模型中，
+        加速找到第一个可行解。
+        """
+        try:
+            generator = HintGenerator(self.context, self.variables)
+            hints = generator.generate()
+            
+            if not hints:
+                logger.info("[Solver] 无 Hint 可注入")
+                return
+            
+            # 注入 Hint
+            hint_count = 0
+            for (op_id, emp_id), value in hints.items():
+                var = self.variables.assignment_vars.get((op_id, emp_id))
+                if var is not None:
+                    self.model.AddHint(var, value)
+                    hint_count += 1
+            
+            logger.info(f"[Solver] 注入 {hint_count} 个初始解 Hint")
+            
+        except Exception as e:
+            # Hint 生成失败不影响求解
+            logger.warning(f"[Solver] Hint 生成失败，继续无 Hint 求解: {e}")
     
     def _run_solver(self, progress_callback=None) -> tuple:
         """运行 CP-SAT 求解器"""

@@ -416,3 +416,170 @@ export const getTemplatesForBatch = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to fetch templates' });
   }
 };
+
+// 获取模版的day0偏移量（即模版最早操作的天数，可能为负）
+export const getTemplateDay0Offset = async (req: Request, res: Response) => {
+  try {
+    const { templateId } = req.params;
+
+    // 查询模版中所有操作的最小天数（相对于day0）
+    const query = `
+      SELECT 
+        COALESCE(MIN(ps.start_day + sos.operation_day), 0) as min_day
+      FROM process_stages ps
+      JOIN stage_operation_schedules sos ON ps.id = sos.stage_id
+      WHERE ps.template_id = ?
+    `;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, [templateId]);
+
+    if (rows.length === 0) {
+      return res.json({ offset: 0, min_day: 0 });
+    }
+
+    const minDay = Number(rows[0].min_day) || 0;
+    // offset是负数表示有day-x操作，0表示从day0开始
+    // 如果min_day=0，表示从day0开始，offset=0
+    // 如果min_day=-1，表示有day-1操作，offset=-1
+    // 如果min_day=1，表示从day1开始（没有day0操作），offset=1
+    res.json({
+      offset: minDay,
+      min_day: minDay,
+      has_pre_day0: minDay < 0,
+      pre_day0_count: minDay < 0 ? Math.abs(minDay) : 0
+    });
+  } catch (error) {
+    console.error('Error fetching template day0 offset:', error);
+    res.status(500).json({ error: 'Failed to fetch template day0 offset' });
+  }
+};
+
+// 批量创建批次
+export const createBatchPlansInBulk = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const {
+      template_id,
+      day0_start_date,      // Day0开始日期
+      day0_end_date,        // Day0结束日期
+      interval_days,        // 间隔天数
+      batch_prefix,         // 批次编码前缀
+      start_number,         // 起始序号
+      description,
+      notes
+    } = req.body;
+
+    // 参数验证
+    if (!template_id || !day0_start_date || !day0_end_date || !interval_days || !batch_prefix || start_number === undefined) {
+      await connection.rollback();
+      return res.status(400).json({ error: '缺少必要参数' });
+    }
+
+    // 获取模版的day0偏移量
+    const [offsetRows] = await connection.execute<RowDataPacket[]>(`
+      SELECT COALESCE(MIN(ps.start_day + sos.operation_day), 0) as min_day
+      FROM process_stages ps
+      JOIN stage_operation_schedules sos ON ps.id = sos.stage_id
+      WHERE ps.template_id = ?
+    `, [template_id]);
+
+    const minDay = Number(offsetRows[0]?.min_day) || 0;
+
+    // 计算所有Day0日期
+    const startDate = new Date(day0_start_date);
+    const endDate = new Date(day0_end_date);
+    const day0Dates: Date[] = [];
+
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      day0Dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + interval_days);
+    }
+
+    if (day0Dates.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ error: '日期范围或间隔设置不正确，无法生成批次' });
+    }
+
+    const createdBatches: any[] = [];
+
+    for (let i = 0; i < day0Dates.length; i++) {
+      const day0Date = day0Dates[i];
+      // 计算实际开始日期 = Day0日期 + offset（offset可能为负）
+      const actualStartDate = new Date(day0Date);
+      actualStartDate.setDate(actualStartDate.getDate() + minDay);
+
+      const batchNumber = start_number + i;
+      const batchCode = `${batch_prefix}${batchNumber}`;
+      const batchName = `${batch_prefix}${batchNumber}`;
+
+      // 格式化日期为 YYYY-MM-DD
+      const formattedStartDate = actualStartDate.toISOString().split('T')[0];
+
+      // 检查批次编码是否已存在
+      const [existingRows] = await connection.execute<RowDataPacket[]>(
+        'SELECT id FROM production_batch_plans WHERE batch_code = ?',
+        [batchCode]
+      );
+
+      if (existingRows.length > 0) {
+        await connection.rollback();
+        return res.status(400).json({ error: `批次编码 ${batchCode} 已存在` });
+      }
+
+      // 创建批次
+      const insertQuery = `
+        INSERT INTO production_batch_plans (
+          batch_code, batch_name, template_id, project_code,
+          planned_start_date, plan_status, description, notes
+        ) VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?)
+      `;
+
+      const [result]: any = await connection.execute(insertQuery, [
+        batchCode,
+        batchName,
+        template_id,
+        null,
+        formattedStartDate,
+        description || null,
+        notes || null
+      ]);
+
+      const batchPlanId = result.insertId;
+
+      // 生成批次操作计划
+      await connection.execute('CALL generate_batch_operation_plans(?)', [batchPlanId]);
+
+      createdBatches.push({
+        id: batchPlanId,
+        batch_code: batchCode,
+        batch_name: batchName,
+        day0_date: day0Date.toISOString().split('T')[0],
+        planned_start_date: formattedStartDate
+      });
+    }
+
+    await connection.commit();
+
+    res.status(201).json({
+      message: `成功创建 ${createdBatches.length} 个批次`,
+      batches: createdBatches
+    });
+  } catch (error: any) {
+    await connection.rollback();
+    console.error('Error creating batch plans in bulk:', error);
+
+    if (error.code === 'ER_DUP_ENTRY') {
+      res.status(400).json({ error: '批次编码已存在' });
+    } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
+      res.status(400).json({ error: '无效的模版ID' });
+    } else {
+      res.status(500).json({ error: '批量创建批次失败' });
+    }
+  } finally {
+    connection.release();
+  }
+};

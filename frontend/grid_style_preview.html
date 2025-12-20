@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>甘特图网格与背景风格预览</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #F8FAFC;
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: #111827;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 14px;
+            color: #374151;
+            margin-bottom: 12px;
+            padding: 8px 12px;
+            background: #E5E7EB;
+            border-radius: 6px;
+        }
+
+        .preview-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .preview-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-card.recommended {
+            border: 2px solid #2563EB;
+        }
+
+        .preview-card.recommended h2::after {
+            content: ' ⭐ 推荐';
+            color: #2563EB;
+        }
+
+        .gantt-preview {
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 240px;
+            position: relative;
+        }
+
+        .axis-row {
+            height: 32px;
+            display: flex;
+            background: white;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .axis-cell {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748B;
+            border-right: 1px solid #E5E7EB;
+        }
+
+        .axis-cell.day0 {
+            background: rgba(37, 99, 235, 0.08);
+            color: #2563EB;
+            font-weight: 700;
+        }
+
+        .content-area {
+            position: relative;
+            height: calc(100% - 32px);
+        }
+
+        /* Row backgrounds */
+        .row {
+            height: 32px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding-left: 8px;
+            font-size: 11px;
+            color: #374151;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .row-label {
+            position: absolute;
+            left: 8px;
+            font-size: 10px;
+            color: #64748B;
+            z-index: 10;
+        }
+
+        /* Operation bars (Deep Space style) */
+        .operation-bar {
+            position: absolute;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .bar-blue {
+            background: #2563EB;
+        }
+
+        .bar-teal {
+            background: #0F766E;
+        }
+
+        .bar-orange {
+            background: #D97706;
+        }
+
+        /* Grid lines */
+        .grid-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        /* ========== STYLE A: 当前风格 ========== */
+        .style-a .row.even {
+            background: #F1F5F9;
+        }
+
+        .style-a .row.odd {
+            background: #FFFFFF;
+        }
+
+        .style-a .row.stage {
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .style-a .row.op-blue {
+            background: rgba(37, 99, 235, 0.04);
+        }
+
+        .style-a .row.op-teal {
+            background: rgba(15, 118, 110, 0.04);
+        }
+
+        .style-a .grid-line.day {
+            width: 1px;
+            background: #E5E7EB;
+        }
+
+        .style-a .grid-line.h6 {
+            width: 1px;
+            background: #CBD5E8;
+        }
+
+        .style-a .grid-line.day0 {
+            width: 2px;
+            background: #2563EB;
+        }
+
+        /* ========== STYLE B: 斑马纹+阶段色叠加 ========== */
+        .style-b .row.even {
+            background: #F1F5F9;
+        }
+
+        .style-b .row.odd {
+            background: #FFFFFF;
+        }
+
+        .style-b .row.stage.even {
+            background: rgba(37, 99, 235, 0.12);
+        }
+
+        .style-b .row.stage.odd {
+            background: rgba(37, 99, 235, 0.06);
+        }
+
+        .style-b .row.op-blue.even {
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        .style-b .row.op-blue.odd {
+            background: rgba(37, 99, 235, 0.04);
+        }
+
+        .style-b .row.op-teal.even {
+            background: rgba(15, 118, 110, 0.08);
+        }
+
+        .style-b .row.op-teal.odd {
+            background: rgba(15, 118, 110, 0.04);
+        }
+
+        .style-b .grid-line.day {
+            width: 1.5px;
+            background: #94A3B8;
+        }
+
+        .style-b .grid-line.h6 {
+            width: 1px;
+            background: #E2E8F0;
+        }
+
+        .style-b .grid-line.day0 {
+            width: 2px;
+            background: #2563EB;
+        }
+
+        /* ========== STYLE C: 纯斑马纹 + 增强网格 ========== */
+        .style-c .row.even {
+            background: #F1F5F9;
+        }
+
+        .style-c .row.odd {
+            background: #FFFFFF;
+        }
+
+        .style-c .grid-line.day {
+            width: 2px;
+            background: #94A3B8;
+        }
+
+        .style-c .grid-line.h6 {
+            width: 1px;
+            background: #CBD5E8;
+        }
+
+        .style-c .grid-line.h1 {
+            width: 1px;
+            background: #F1F5F9;
+            border-left: 1px dashed #E2E8F0;
+        }
+
+        .style-c .grid-line.day0 {
+            width: 2px;
+            background: #2563EB;
+        }
+
+        /* ========== STYLE D: 极简白底 + 强网格 ========== */
+        .style-d .row {
+            background: #FFFFFF;
+        }
+
+        .style-d .row:hover {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .style-d .grid-line.day {
+            width: 2px;
+            background: #64748B;
+        }
+
+        .style-d .grid-line.h6 {
+            width: 1px;
+            background: #94A3B8;
+        }
+
+        .style-d .grid-line.h1 {
+            width: 1px;
+            border-left: 1px dashed #CBD5E8;
+        }
+
+        .style-d .grid-line.day0 {
+            width: 3px;
+            background: #2563EB;
+        }
+
+        .description {
+            margin-top: 12px;
+            font-size: 12px;
+            color: #64748B;
+            line-height: 1.6;
+        }
+
+        .description strong {
+            color: #374151;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎨 甘特图网格与背景风格对比</h1>
+
+    <div class="preview-container">
+        <!-- Style A: 当前风格 -->
+        <div class="preview-card">
+            <h2>风格 A: 当前实现</h2>
+            <div class="gantt-preview style-a">
+                <div class="axis-row">
+                    <div class="axis-cell">Day -2</div>
+                    <div class="axis-cell day0">Day 0</div>
+                    <div class="axis-cell">Day 1</div>
+                    <div class="axis-cell">Day 2</div>
+                </div>
+                <div class="content-area">
+                    <div class="row stage even"><span class="row-label">📁 TF-stage</span></div>
+                    <div class="row op-blue odd"><span class="row-label">└ 操作 1</span>
+                        <div class="operation-bar bar-blue" style="left: 60%; width: 25%; top: 4px;">操作 1</div>
+                    </div>
+                    <div class="row op-blue even"><span class="row-label">└ 操作 2</span>
+                        <div class="operation-bar bar-blue" style="left: 35%; width: 20%; top: 4px;">操作 2</div>
+                    </div>
+                    <div class="row op-blue odd"><span class="row-label">└ 操作 3</span>
+                        <div class="operation-bar bar-blue" style="left: 70%; width: 18%; top: 4px;">操作 3</div>
+                    </div>
+                    <div class="row stage even"><span class="row-label">📁 Wave-stage</span></div>
+                    <div class="row op-teal odd"><span class="row-label">└ 操作 A</span>
+                        <div class="operation-bar bar-teal" style="left: 45%; width: 22%; top: 4px;">操作 A</div>
+                    </div>
+                    <!-- Grid lines -->
+                    <div class="grid-line day" style="left: 25%;"></div>
+                    <div class="grid-line day0" style="left: 50%;"></div>
+                    <div class="grid-line day" style="left: 75%;"></div>
+                    <div class="grid-line h6" style="left: 12.5%;"></div>
+                    <div class="grid-line h6" style="left: 37.5%;"></div>
+                    <div class="grid-line h6" style="left: 62.5%;"></div>
+                    <div class="grid-line h6" style="left: 87.5%;"></div>
+                </div>
+            </div>
+            <div class="description">
+                <strong>特点:</strong> 阶段色覆盖斑马纹<br>
+                <strong>问题:</strong> 同阶段行无交替效果，网格线不够突出
+            </div>
+        </div>
+
+        <!-- Style B: 斑马纹+阶段色叠加 -->
+        <div class="preview-card recommended">
+            <h2>风格 B: 斑马纹 + 阶段色叠加</h2>
+            <div class="gantt-preview style-b">
+                <div class="axis-row">
+                    <div class="axis-cell">Day -2</div>
+                    <div class="axis-cell day0">Day 0</div>
+                    <div class="axis-cell">Day 1</div>
+                    <div class="axis-cell">Day 2</div>
+                </div>
+                <div class="content-area">
+                    <div class="row stage even"><span class="row-label">📁 TF-stage</span></div>
+                    <div class="row op-blue odd"><span class="row-label">└ 操作 1</span>
+                        <div class="operation-bar bar-blue" style="left: 60%; width: 25%; top: 4px;">操作 1</div>
+                    </div>
+                    <div class="row op-blue even"><span class="row-label">└ 操作 2</span>
+                        <div class="operation-bar bar-blue" style="left: 35%; width: 20%; top: 4px;">操作 2</div>
+                    </div>
+                    <div class="row op-blue odd"><span class="row-label">└ 操作 3</span>
+                        <div class="operation-bar bar-blue" style="left: 70%; width: 18%; top: 4px;">操作 3</div>
+                    </div>
+                    <div class="row stage even"><span class="row-label">📁 Wave-stage</span></div>
+                    <div class="row op-teal odd"><span class="row-label">└ 操作 A</span>
+                        <div class="operation-bar bar-teal" style="left: 45%; width: 22%; top: 4px;">操作 A</div>
+                    </div>
+                    <!-- Grid lines -->
+                    <div class="grid-line day" style="left: 25%;"></div>
+                    <div class="grid-line day0" style="left: 50%;"></div>
+                    <div class="grid-line day" style="left: 75%;"></div>
+                    <div class="grid-line h6" style="left: 12.5%;"></div>
+                    <div class="grid-line h6" style="left: 37.5%;"></div>
+                    <div class="grid-line h6" style="left: 62.5%;"></div>
+                    <div class="grid-line h6" style="left: 87.5%;"></div>
+                </div>
+            </div>
+            <div class="description">
+                <strong>特点:</strong> 保留斑马纹交替 + 阶段色叠加，日线加粗<br>
+                <strong>优势:</strong> 兼顾可读性与阶段归属感，与 Deep Space 风格统一
+            </div>
+        </div>
+
+        <!-- Style C: 纯斑马纹 + 小时网格 -->
+        <div class="preview-card">
+            <h2>风格 C: 纯斑马纹 + 小时网格</h2>
+            <div class="gantt-preview style-c">
+                <div class="axis-row">
+                    <div class="axis-cell">Day -2</div>
+                    <div class="axis-cell day0">Day 0</div>
+                    <div class="axis-cell">Day 1</div>
+                    <div class="axis-cell">Day 2</div>
+                </div>
+                <div class="content-area">
+                    <div class="row even"><span class="row-label">📁 TF-stage</span></div>
+                    <div class="row odd"><span class="row-label">└ 操作 1</span>
+                        <div class="operation-bar bar-blue" style="left: 60%; width: 25%; top: 4px;">操作 1</div>
+                    </div>
+                    <div class="row even"><span class="row-label">└ 操作 2</span>
+                        <div class="operation-bar bar-blue" style="left: 35%; width: 20%; top: 4px;">操作 2</div>
+                    </div>
+                    <div class="row odd"><span class="row-label">└ 操作 3</span>
+                        <div class="operation-bar bar-blue" style="left: 70%; width: 18%; top: 4px;">操作 3</div>
+                    </div>
+                    <div class="row even"><span class="row-label">📁 Wave-stage</span></div>
+                    <div class="row odd"><span class="row-label">└ 操作 A</span>
+                        <div class="operation-bar bar-teal" style="left: 45%; width: 22%; top: 4px;">操作 A</div>
+                    </div>
+                    <!-- Grid lines -->
+                    <div class="grid-line day" style="left: 25%;"></div>
+                    <div class="grid-line day0" style="left: 50%;"></div>
+                    <div class="grid-line day" style="left: 75%;"></div>
+                    <div class="grid-line h6" style="left: 12.5%;"></div>
+                    <div class="grid-line h6" style="left: 37.5%;"></div>
+                    <div class="grid-line h6" style="left: 62.5%;"></div>
+                    <div class="grid-line h6" style="left: 87.5%;"></div>
+                    <!-- Hour lines (dashed) -->
+                    <div class="grid-line h1" style="left: 6.25%;"></div>
+                    <div class="grid-line h1" style="left: 18.75%;"></div>
+                    <div class="grid-line h1" style="left: 31.25%;"></div>
+                    <div class="grid-line h1" style="left: 43.75%;"></div>
+                    <div class="grid-line h1" style="left: 56.25%;"></div>
+                    <div class="grid-line h1" style="left: 68.75%;"></div>
+                    <div class="grid-line h1" style="left: 81.25%;"></div>
+                    <div class="grid-line h1" style="left: 93.75%;"></div>
+                </div>
+            </div>
+            <div class="description">
+                <strong>特点:</strong> 无阶段着色，纯斑马纹 + 小时级虚线网格<br>
+                <strong>适用:</strong> 需要精确时间定位的复杂排程场景
+            </div>
+        </div>
+
+        <!-- Style D: 极简白底 -->
+        <div class="preview-card">
+            <h2>风格 D: 极简白底 + 强网格</h2>
+            <div class="gantt-preview style-d">
+                <div class="axis-row">
+                    <div class="axis-cell">Day -2</div>
+                    <div class="axis-cell day0">Day 0</div>
+                    <div class="axis-cell">Day 1</div>
+                    <div class="axis-cell">Day 2</div>
+                </div>
+                <div class="content-area">
+                    <div class="row"><span class="row-label">📁 TF-stage</span></div>
+                    <div class="row"><span class="row-label">└ 操作 1</span>
+                        <div class="operation-bar bar-blue" style="left: 60%; width: 25%; top: 4px;">操作 1</div>
+                    </div>
+                    <div class="row"><span class="row-label">└ 操作 2</span>
+                        <div class="operation-bar bar-blue" style="left: 35%; width: 20%; top: 4px;">操作 2</div>
+                    </div>
+                    <div class="row"><span class="row-label">└ 操作 3</span>
+                        <div class="operation-bar bar-blue" style="left: 70%; width: 18%; top: 4px;">操作 3</div>
+                    </div>
+                    <div class="row"><span class="row-label">📁 Wave-stage</span></div>
+                    <div class="row"><span class="row-label">└ 操作 A</span>
+                        <div class="operation-bar bar-teal" style="left: 45%; width: 22%; top: 4px;">操作 A</div>
+                    </div>
+                    <!-- Grid lines -->
+                    <div class="grid-line day" style="left: 25%;"></div>
+                    <div class="grid-line day0" style="left: 50%;"></div>
+                    <div class="grid-line day" style="left: 75%;"></div>
+                    <div class="grid-line h6" style="left: 12.5%;"></div>
+                    <div class="grid-line h6" style="left: 37.5%;"></div>
+                    <div class="grid-line h6" style="left: 62.5%;"></div>
+                    <div class="grid-line h6" style="left: 87.5%;"></div>
+                    <!-- Hour lines -->
+                    <div class="grid-line h1" style="left: 6.25%;"></div>
+                    <div class="grid-line h1" style="left: 18.75%;"></div>
+                </div>
+            </div>
+            <div class="description">
+                <strong>特点:</strong> 纯白背景，依赖强网格线划分区域<br>
+                <strong>风格:</strong> 类似 Microsoft Project，工程感强
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

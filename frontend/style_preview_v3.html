@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gantt Styles V3 - Modern Light</title>
+    <style>
+        :root {
+            --bg-body: #f5f7fa;
+            --bg-card: #ffffff;
+            --text-primary: #1f2937;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-body);
+            padding: 40px;
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 32px;
+            color: #111827;
+        }
+
+        .style-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 32px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.03);
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #4b5563;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-badge {
+            background: #e5e7eb;
+            color: #4b5563;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+            text-transform: uppercase;
+        }
+
+        .gantt-track {
+            height: 44px;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            border: 1px dashed #e2e8f0;
+        }
+
+        .bar {
+            height: 28px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: transform 0.2s;
+            position: relative;
+            color: white;
+        }
+
+        .bar:hover {
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        /* --- Style 1: Modern Crisp (Linear Style) --- */
+        /* High contrast, subtle gradient, inner border for sharpness */
+        .style-crisp .bar {
+            border-radius: 6px;
+            box-shadow:
+                0 1px 2px rgba(0, 0, 0, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.25);
+            /* Top Highlight */
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+        }
+
+        .style-crisp .bar-blue {
+            background: linear-gradient(180deg, #3b82f6, #2563eb);
+            border: 1px solid #1d4ed8;
+            width: 200px;
+        }
+
+        .style-crisp .bar-teal {
+            background: linear-gradient(180deg, #14b8a6, #0f766e);
+            border: 1px solid #0f766e;
+            width: 150px;
+            margin-left: 20px;
+        }
+
+        .style-crisp .bar-orange {
+            background: linear-gradient(180deg, #f59e0b, #d97706);
+            border: 1px solid #b45309;
+            width: 120px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style 2: Soft Dimensional (Apple Style) --- */
+        /* Softer shadows, no border, very subtle gradient */
+        .style-soft .bar {
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
+            /* Elevated look */
+        }
+
+        .style-soft .bar-blue {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            width: 200px;
+        }
+
+        .style-soft .bar-teal {
+            background: linear-gradient(135deg, #2dd4bf, #14b8a6);
+            width: 150px;
+            margin-left: 20px;
+        }
+
+        .style-soft .bar-orange {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            width: 120px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style 3: Vivid Glass (Glassmorphism Light) --- */
+        /* Saturated colors, blurred background context (simulated), inner glow */
+        .style-glass .bar {
+            border-radius: 6px;
+            /* In a real app we'd use backdrop-filter, here we simulate the look */
+            background: rgba(37, 99, 235, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow:
+                0 4px 6px rgba(37, 99, 235, 0.15),
+                inset 0 0 12px rgba(255, 255, 255, 0.3);
+        }
+
+        .style-glass .bar-blue {
+            background: linear-gradient(90deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+            width: 200px;
+        }
+
+        .style-glass .bar-teal {
+            background: linear-gradient(90deg, rgba(20, 184, 166, 0.9), rgba(13, 148, 136, 0.9));
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 4px 6px rgba(13, 148, 136, 0.15), inset 0 0 12px rgba(255, 255, 255, 0.3);
+            width: 150px;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🌟 Modern Light Gantt Styles</h1>
+
+    <div class="style-card style-crisp">
+        <div class="section-title">1. Modern Crisp <span class="section-badge">Linear Style</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-orange">Review</div>
+        </div>
+    </div>
+
+    <div class="style-card style-soft">
+        <div class="section-title">2. Soft Dimensional <span class="section-badge">Apple Style</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-orange">Review</div>
+        </div>
+    </div>
+
+    <div class="style-card style-glass">
+        <div class="section-title">3. Vivid Glass <span class="section-badge">Modern UI</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+</body>
+
+</html>

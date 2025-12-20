@@ -1,9 +1,18 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Tooltip } from 'antd';
 import { DragOutlined } from '@ant-design/icons';
 import { TimeBlock, GanttNode, ProcessStage, StageOperation } from '../types';
 import { ROW_HEIGHT, STAGE_COLORS } from '../constants';
 import { toRgba, findNodeById } from '../utils';
+
+// Tooltip state for singleton pattern
+interface TooltipState {
+    visible: boolean;
+    content: React.ReactNode;
+    x: number;
+    y: number;
+}
+
 
 interface GanttBarsProps {
     timeBlocks: TimeBlock[];
@@ -20,8 +29,8 @@ interface GanttBarsProps {
     conflictOperationSet: Set<string>;
     scheduleConflicts: Record<number, string>;
     onEditNode: (node: GanttNode) => void;
-    hoveredRowId: string | null;
-    setHoveredRowId: (id: string | null) => void;
+    // Imperative hover
+    setHoveredRow: (id: string | null) => void;
     expandedDay?: number | null;
     onDragStart?: (
         e: React.MouseEvent,
@@ -64,8 +73,8 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
     conflictOperationSet,
     scheduleConflicts,
     onEditNode,
-    hoveredRowId,
-    setHoveredRowId,
+
+    setHoveredRow,
     expandedDay = null,
     onDragStart,
     readOnlyOperations,
@@ -75,6 +84,14 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
 }) => {
     const totalDays = endDay - startDay + 1;
     const totalWidth = totalDays * 24 * hourWidth;
+
+    // Singleton tooltip state
+    const [tooltipState, setTooltipState] = useState<TooltipState>({
+        visible: false,
+        content: null,
+        x: 0,
+        y: 0
+    });
 
     const getStageColorByNode = (node: GanttNode): string => {
         if (node.type === 'stage' && node.data) {
@@ -88,6 +105,31 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
         }
         return STAGE_COLORS.DEFAULT;
     };
+
+    // Build tooltip content helper
+    const buildTooltipContent = useCallback((block: TimeBlock, absoluteStartHour: number) => {
+        const blockStartDay = Math.floor(absoluteStartHour / 24);
+        const startHourOfDay = Math.floor(absoluteStartHour % 24);
+        const startMinute = Math.round((absoluteStartHour % 1) * 60);
+        const endHour = absoluteStartHour + block.duration_hours;
+        const endDayNum = Math.floor(endHour / 24);
+        const endHourOfDay = Math.floor(endHour % 24);
+        const endMinute = Math.round((endHour % 1) * 60);
+
+        return (
+            <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>{block.title}</div>
+                <div>开始: Day {blockStartDay} {startHourOfDay.toString().padStart(2, '0')}:{startMinute.toString().padStart(2, '0')}</div>
+                <div>结束: Day {endDayNum} {endHourOfDay.toString().padStart(2, '0')}:{endMinute.toString().padStart(2, '0')}</div>
+                <div>时长: {block.duration_hours.toFixed(1)} 小时</div>
+            </div>
+        );
+    }, []);
+
+    const hideTooltip = useCallback(() => {
+        setTooltipState(prev => ({ ...prev, visible: false }));
+    }, []);
+
 
     return (
         <>
@@ -159,29 +201,53 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                 // 检查是否为只读操作（ACTIVATED 批次的操作不允许拖拽）
                 const isReadOnly = readOnlyOperations?.has(block.node_id) ?? false;
 
-                // Determine styles
-                let borderStyle = '1px solid rgba(255,255,255,0.4)';
-                let boxShadow = '0 1px 4px rgba(0,0,0,0.18)';
+                // Determine styles - P0-1 Visual Hierarchy Improvements (Deep Space Style)
+                // Operation: Deep Space Floating (Strong shadow + inset highlight)
+                // Stage: dashed border + glass fill + narrower
+                // TimeWindow: diagonal stripe pattern with border
+                let borderStyle: string;
+                let boxShadow: string;
                 let blockOpacity = 1;
-                // 绘制共享模式下使用十字光标
                 let blockCursor: React.CSSProperties['cursor'] = isDrawingShareMode
                     ? 'crosshair'
                     : (isReadOnly ? 'not-allowed' : 'move');
                 let textColor = '#fff';
                 let borderRadius = 6;
+                let backgroundStyle: string | undefined = undefined;
+                let backdropFilter: string | undefined = undefined;
 
                 if (isStageBlock) {
-                    borderStyle = '1px dashed #CBD5E1';
+                    // Stage: dashed border, glass fill, narrower
+                    borderStyle = `1.5px dashed ${stageColor}`;
                     boxShadow = 'none';
                     blockCursor = 'pointer';
-                    textColor = '#1f2937';
-                    borderRadius = 16;
+                    textColor = stageColor;
+                    borderRadius = 4;
+                    backdropFilter = 'blur(4px)'; // Slight blur for stages
                 } else if (isTimeWindowBlock) {
-                    borderStyle = '1px dashed rgba(24,144,255,0.45)';
+                    // TimeWindow: diagonal stripe pattern with visible border
+                    // IMPORTANT: Always use stageColor (solid) instead of block.color (pre-transparent)
+                    // because block.color from utils.ts already has 15% alpha, causing double transparency
+                    const effectiveColor = stageColor; // Use solid color, not block.color
+                    borderStyle = `1.5px dashed ${toRgba(effectiveColor, 0.6)}`;
                     boxShadow = 'none';
-                    blockOpacity = 0.5;
+                    blockOpacity = 1;
                     blockCursor = 'default';
+                    // Diagonal stripe pattern - Enhanced visibility
+                    backgroundStyle = `repeating-linear-gradient(
+                        45deg,
+                        ${toRgba(effectiveColor, 0.15)},
+                        ${toRgba(effectiveColor, 0.15)} 4px,
+                        ${toRgba(effectiveColor, 0.30)} 4px,
+                        ${toRgba(effectiveColor, 0.30)} 8px
+                    )`;
+                } else {
+                    // Operation: Deep Space Style
+                    // Stronger shadow offset for floating effect + inset highlight
+                    borderStyle = '1px solid rgba(0,0,0,0.05)';
+                    boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255,255,255,0.3)';
                 }
+
 
                 // Handle conflicts
                 const scheduleId = block.node_id.startsWith('operation_')
@@ -220,16 +286,21 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                 }
 
                 const blockWidth = Math.min(width, totalWidth - Math.max(0, left));
+                // P0-1: Stage narrower (20px), Operation standard (24px)
                 const blockHeight = isStageBlock
-                    ? Math.max(ROW_HEIGHT * 0.65, ROW_HEIGHT - 18)
-                    : ROW_HEIGHT - 12;
+                    ? 20  // Stage: narrower height
+                    : ROW_HEIGHT - 8;  // Operation & TimeWindow: 24px (32 - 8)
                 const blockTop = rowIndex * ROW_HEIGHT + (ROW_HEIGHT - blockHeight) / 2;
                 const blockLeft = Math.max(0, left);
-                const backgroundColor = isStageBlock
-                    ? toRgba(stageColor, 0.12)
-                    : isTimeWindowBlock
-                        ? block.color  // 使用 generateTimeBlocks 中设置的透明色
-                        : stageColor;
+                // P0-1: Use stripe pattern for time window, transparent for stage
+                // Calculate background color
+                // Priority: TimeWindow pattern -> Stage transparent -> Block specific color -> Stage color
+                const backgroundColor = isTimeWindowBlock
+                    ? backgroundStyle
+                    : isStageBlock
+                        ? toRgba(stageColor, 0.08)
+                        : (block.color || stageColor);  // Solid color for operations
+
 
                 // 构建 tooltip 内容
                 const blockStartDay = Math.floor(absoluteStartHour / 24);
@@ -254,9 +325,12 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                         key={block.id}
                         title={tooltipContent}
                         placement="top"
-                        mouseEnterDelay={0.1}
+                        mouseEnterDelay={0.2}
                         mouseLeaveDelay={0}
+                        destroyTooltipOnHide
+                        fresh
                     >
+
                         <div
                             data-node-id={block.node_id}
                             data-schedule-id={node?.data ? (node.data as StageOperation).id : undefined}
@@ -280,7 +354,9 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                                 paddingRight: 4,
                                 zIndex: isStageBlock ? 4 : isTimeWindowBlock ? 7 : 10,
                                 opacity: blockOpacity,
-                                overflow: 'hidden'
+                                overflow: 'hidden',
+                                backdropFilter,
+                                WebkitBackdropFilter: backdropFilter
                             }}
                             onDoubleClick={() => {
                                 if (node && !isDrawingShareMode) {
@@ -320,8 +396,8 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                                     );
                                 }
                             }}
-                            onMouseEnter={() => setHoveredRowId(block.node_id)}
-                            onMouseLeave={() => setHoveredRowId(null)}
+                            onMouseEnter={() => setHoveredRow(block.node_id)}
+                            onMouseLeave={() => setHoveredRow(null)}
                         >
                             {/* 时间窗口左侧 resize handle - 只读操作不显示 */}
                             {isTimeWindowBlock && !isReadOnly && onDragStart && node?.data && (

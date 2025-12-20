@@ -1,37 +1,19 @@
-import React, { useMemo } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Button, Space, Tabs, Table, Drawer, Alert, Typography, Tag, Radio, List } from 'antd';
-import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, EditOutlined } from '@ant-design/icons';
+/**
+ * GanttModals - B+ 增强版
+ * 使用新的 OperationEditModal 替换原有的操作编辑逻辑
+ */
+
+import React from 'react';
 import type { FormInstance } from 'antd';
 import { GanttNode, Operation, Constraint, ShareGroup, ConstraintValidationResult } from '../types';
-import { TOKENS } from '../constants';
-import { fuzzyMatch } from '../utils';
 import { OperationSelectionModal } from '../../OperationSelectionModal';
-import ShareGroupModal from './ShareGroupModal'; // [Fixed] Default import
-
-const { Option } = Select;
-const { TextArea } = Input;
-const { TabPane } = Tabs;
-const { Text } = Typography;
-
-const CONSTRAINT_TYPE_OPTIONS = [
-    // { value: 0, label: '仅人员共享 (无时间依赖)' }, (Removed)
-    { value: 1, label: 'FS (Finish-to-Start)' },
-    { value: 2, label: 'SS (Start-to-Start)' },
-    { value: 3, label: 'FF (Finish-to-Finish)' },
-    { value: 4, label: 'SF (Start-to-Finish)' }
-];
-
-const LAG_TYPE_OPTIONS = [
-    { value: 'ASAP', label: '尽早开始', color: 'green' },
-    { value: 'FIXED', label: '固定延迟', color: 'blue' },
-    { value: 'WINDOW', label: '时间窗口', color: 'cyan' },
-    { value: 'NEXT_DAY', label: '次日开始', color: 'gold' },
-    { value: 'NEXT_SHIFT', label: '下一班次', color: 'orange' },
-    { value: 'COOLING', label: '冷却/培养', color: 'purple' },
-    { value: 'BATCH_END', label: '批次结束后', color: 'magenta' }
-];
-
-// (Removed SHARE_MODE_OPTIONS as it's no longer used in Constraints)
+import ShareGroupModal from './ShareGroupModal';
+import {
+    ValidationDrawer,
+    CreateOperationModal,
+    OperationEditModal,
+    AddConstraintModal
+} from './modals';
 
 interface GanttModalsProps {
     // Edit Node Modal
@@ -50,6 +32,8 @@ interface GanttModalsProps {
     availableOperationsForConstraints: any[];
     handleSaveConstraint: (values: any, relation: 'predecessor' | 'successor') => Promise<void>;
     handleDeleteConstraint: (constraintId: number) => Promise<void>;
+    handleEditConstraint?: (constraintId: number, updates: Partial<Constraint>) => Promise<void>;
+
     // Share Groups
     shareGroups: ShareGroup[];
     operationShareGroups: ShareGroup[];
@@ -78,8 +62,8 @@ interface GanttModalsProps {
     operationForm: FormInstance;
     handleOperationSubmit: () => Promise<void>;
     operationSubmitting: boolean;
-    templateId: number; // [New]
-    loadShareGroups: () => Promise<void>; // [New]
+    templateId: number;
+    loadShareGroups: () => Promise<void>;
 }
 
 export const GanttModals: React.FC<GanttModalsProps> = ({
@@ -96,6 +80,7 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
     availableOperationsForConstraints,
     handleSaveConstraint,
     handleDeleteConstraint,
+    handleEditConstraint,
     shareGroups,
     operationShareGroups,
     assignGroupForm,
@@ -119,656 +104,113 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
     operationForm,
     handleOperationSubmit,
     operationSubmitting,
-    templateId, // [New] Destructured
-    loadShareGroups // [New] Destructured
+    templateId,
+    loadShareGroups
 }) => {
-    const [predecessorModalVisible, setPredecessorModalVisible] = React.useState(false);
-    const [successorModalVisible, setSuccessorModalVisible] = React.useState(false);
-    const [selectedOperationForConstraint, setSelectedOperationForConstraint] = React.useState<number | null>(null);
-    const [editingShareGroup, setEditingShareGroup] = React.useState<ShareGroup | null>(null); // [New] State for editing share group
+    // State for operation selection modals
+    const [predecessorSelectVisible, setPredecessorSelectVisible] = React.useState(false);
+    const [successorSelectVisible, setSuccessorSelectVisible] = React.useState(false);
 
-    // Build search index for operations
-    const operationSearchIndex = useMemo(() => {
-        const map = new Map<number, string>();
-        availableOperations.forEach(op => {
-            map.set(op.id, `${op.operation_code} ${op.operation_name}`.toLowerCase());
-        });
-        return map;
-    }, [availableOperations]);
+    // State for constraint configuration modal
+    const [addConstraintVisible, setAddConstraintVisible] = React.useState(false);
+    const [constraintType, setConstraintType] = React.useState<'predecessor' | 'successor'>('predecessor');
+    const [selectedOperationId, setSelectedOperationId] = React.useState<number | null>(null);
+    const [constraintSaving, setConstraintSaving] = React.useState(false);
+
+    // State for share group editing
+    const [editingShareGroup, setEditingShareGroup] = React.useState<ShareGroup | null>(null);
+
+    // Get selected operation name for display
+    const selectedOperationName = React.useMemo(() => {
+        if (!selectedOperationId) return null;
+        const op = availableOperationsForConstraints.find(o => o.id === selectedOperationId);
+        return op ? `${op.operation_code} - ${op.operation_name}` : null;
+    }, [selectedOperationId, availableOperationsForConstraints]);
+
+    // Handle closing edit modal
+    const handleCloseEditModal = () => {
+        setEditModalVisible(false);
+        setEditingNode(null);
+        form.resetFields();
+    };
+
+    // Handle operation selected for constraint
+    const handleOperationSelected = (scheduleId: number, type: 'predecessor' | 'successor') => {
+        setSelectedOperationId(scheduleId);
+        setConstraintType(type);
+        setAddConstraintVisible(true);
+        // Close selection modal
+        if (type === 'predecessor') {
+            setPredecessorSelectVisible(false);
+        } else {
+            setSuccessorSelectVisible(false);
+        }
+    };
+
+    // Handle constraint configuration submitted
+    const handleConstraintSubmit = async () => {
+        if (!selectedOperationId) return;
+        setConstraintSaving(true);
+        try {
+            const values = constraintForm.getFieldsValue();
+            await handleSaveConstraint(
+                { ...values, related_schedule_id: selectedOperationId },
+                constraintType
+            );
+            setAddConstraintVisible(false);
+            setSelectedOperationId(null);
+            constraintForm.resetFields();
+        } finally {
+            setConstraintSaving(false);
+        }
+    };
 
     return (
         <>
-            {/* Edit Node Modal */}
-            <Modal
-                title={editingNode?.type === 'stage' ? '编辑阶段' : '编辑操作'}
-                open={editModalVisible}
-                onCancel={() => {
-                    setEditModalVisible(false);
-                    setEditingNode(null);
-                    form.resetFields();
+            {/* B+ Edit Modal - New Design */}
+            <OperationEditModal
+                visible={editModalVisible}
+                editingNode={editingNode}
+                form={form}
+                onSave={handleSaveNode}
+                onCancel={handleCloseEditModal}
+                availableOperations={availableOperations}
+                onOpenOperationModal={openOperationModal}
+                operationConstraints={operationConstraints}
+                onAddPredecessor={() => setPredecessorSelectVisible(true)}
+                onAddSuccessor={() => setSuccessorSelectVisible(true)}
+                onDeleteConstraint={handleDeleteConstraint}
+                onEditConstraint={handleEditConstraint}
+                operationShareGroups={operationShareGroups}
+                onEditShareGroup={(group) => {
+                    setEditingShareGroup(group);
+                    setShareGroupModalVisible(true);
                 }}
-                footer={null}
-                width={600}
-            >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={handleSaveNode}
-                >
-                    {editingNode?.type === 'stage' && (
-                        <>
-                            <Form.Item
-                                name="stage_name"
-                                label="阶段名称"
-                                rules={[{ required: true, message: '请输入阶段名称' }]}
-                            >
-                                <Input placeholder="请输入阶段名称" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="stage_code"
-                                label="阶段代码"
-                                rules={[{ required: true, message: '请输入阶段代码' }]}
-                            >
-                                <Input placeholder="如：STAGE1, STAGE2" />
-                            </Form.Item>
-
-                            <Form.Item
-                                name="start_day"
-                                label="阶段原点位置（Day0在总轴上的位置）"
-                                tooltip="定义此阶段的Day0在模板总轴上的位置，支持负值"
-                                rules={[
-                                    { required: true, message: '请输入阶段原点位置' },
-                                    { type: 'number', min: -50, max: 200, message: '必须在-50到200之间' }
-                                ]}
-                            >
-                                <InputNumber
-                                    min={-50}
-                                    max={200}
-                                    style={{ width: '100%' }}
-                                    placeholder="阶段Day0在总轴的位置"
-                                    addonBefore="Day"
-                                />
-                            </Form.Item>
-
-                            <Form.Item name="description" label="阶段描述">
-                                <TextArea rows={3} placeholder="请输入阶段描述（可选）" />
-                            </Form.Item>
-
-                            <div style={{
-                                background: '#f0f7ff',
-                                padding: '12px',
-                                borderRadius: '6px',
-                                border: '1px solid #d6e4ff',
-                                marginBottom: '16px'
-                            }}>
-                                <Text strong style={{ color: '#1890ff' }}>💡 时间锚定说明：</Text>
-                                <div style={{ marginTop: '8px', color: '#1f1f1f', fontSize: '12px' }}>
-                                    • 阶段原点：定义该阶段Day0在模板总轴上的位置<br />
-                                    • 操作定位：阶段内操作相对于阶段Day0进行定位<br />
-                                    • 绝对位置：操作绝对位置 = 阶段原点 + 操作相对位置
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {editingNode?.type === 'operation' && (
-                        <Tabs defaultActiveKey="1">
-                            {/* Tab 1: 基本信息 */}
-                            <TabPane tab="基本信息" key="1">
-                                <Form.Item
-                                    name="operation_id"
-                                    label="选择操作"
-                                    rules={[{ required: true, message: '请选择操作' }]}
-                                >
-                                    <Select
-                                        placeholder="请选择操作"
-                                        disabled={!!editingNode.data}
-                                        showSearch
-                                        filterOption={(input, option) => {
-                                            if (!input) return true;
-                                            const rawValue = option?.value;
-                                            const optionValue = typeof rawValue === 'number' ? rawValue : Number(rawValue);
-                                            if (Number.isNaN(optionValue)) return false;
-                                            const searchTarget = operationSearchIndex.get(optionValue);
-                                            if (!searchTarget) return false;
-                                            return fuzzyMatch(input, searchTarget);
-                                        }}
-                                        dropdownRender={(menu) => (
-                                            <>
-                                                {menu}
-                                                {!editingNode.data && (
-                                                    <div style={{ padding: 8, borderTop: `1px solid ${TOKENS.border}` }}>
-                                                        <Button
-                                                            type="link"
-                                                            icon={<PlusOutlined />}
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                                openOperationModal();
-                                                            }}
-                                                            block
-                                                        >
-                                                            新建操作
-                                                        </Button>
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
-                                    >
-                                        {availableOperations.map(op => (
-                                            <Option key={op.id} value={op.id}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                                    <span>{op.operation_code} - {op.operation_name}</span>
-                                                    <span style={{ color: '#8c8c8c' }}>({op.standard_time}h)</span>
-                                                </div>
-                                            </Option>
-                                        ))}
-                                    </Select>
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="operation_day"
-                                    label="操作位置（相对于阶段原点）"
-                                    tooltip="操作在阶段时间轴上的天数位置，相对于阶段Day0"
-                                    rules={[
-                                        { required: true, message: '请输入操作位置' },
-                                        { type: 'number', min: -30, max: 30, message: '必须在-30到30之间' }
-                                    ]}
-                                >
-                                    <InputNumber
-                                        min={-30}
-                                        max={30}
-                                        style={{ width: '100%' }}
-                                        placeholder="相对于阶段Day0的位置"
-                                        addonBefore="阶段Day"
-                                    />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="recommended_time"
-                                    label="推荐开始时间（当天内）"
-                                    tooltip="推荐的操作开始时间，24小时制"
-                                    initialValue={9}
-                                    rules={[{ required: true, message: '请输入推荐时间' }]}
-                                >
-                                    <InputNumber
-                                        min={0}
-                                        max={23.9}
-                                        step={0.5}
-                                        style={{ width: '100%' }}
-                                        placeholder="默认 9:00"
-                                        addonAfter="时"
-                                    />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="recommended_day_offset"
-                                    label="推荐开始偏移（天）"
-                                    initialValue={0}
-                                >
-                                    <InputNumber min={-7} max={7} style={{ width: '100%' }} />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="window_start_time"
-                                    label="时间窗口-开始时间"
-                                    initialValue={9}
-                                >
-                                    <InputNumber min={0} max={23.9} step={0.5} style={{ width: '100%' }} addonAfter="时" />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="window_start_day_offset"
-                                    label="窗口开始偏移（天）"
-                                    initialValue={0}
-                                >
-                                    <InputNumber min={-7} max={7} style={{ width: '100%' }} />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="window_end_time"
-                                    label="时间窗口-结束时间"
-                                    initialValue={17}
-                                >
-                                    <InputNumber min={0} max={23.9} step={0.5} style={{ width: '100%' }} addonAfter="时" />
-                                </Form.Item>
-
-                                <Form.Item
-                                    name="window_end_day_offset"
-                                    label="窗口结束偏移（天）"
-                                    initialValue={0}
-                                >
-                                    <InputNumber min={-7} max={7} style={{ width: '100%' }} />
-                                </Form.Item>
-                            </TabPane>
-
-                            {/* Tab 2: 前置约束 */}
-                            <TabPane tab={`前置约束 (${operationConstraints.predecessors.length})`} key="2">
-                                <div style={{ marginBottom: 16 }}>
-                                    <Form form={constraintForm} layout="vertical" onFinish={(values) => {
-                                        handleSaveConstraint({ ...values, related_schedule_id: selectedOperationForConstraint }, 'predecessor');
-                                        setSelectedOperationForConstraint(null);
-                                    }}>
-                                        <Form.Item label="前置操作" required>
-                                            <Button
-                                                block
-                                                onClick={() => setPredecessorModalVisible(true)}
-                                                style={{ textAlign: 'left', height: 'auto', padding: '8px 12px' }}
-                                            >
-                                                {selectedOperationForConstraint ? (
-                                                    (() => {
-                                                        const op = availableOperationsForConstraints.find((o: any) => o.id === selectedOperationForConstraint);
-                                                        return op ? (
-                                                            <div>
-                                                                <div><strong>{op.operation_code}</strong> - {op.operation_name}</div>
-                                                                <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                                                    {op.stage_name} · Day {op.operation_day || 0}
-                                                                </div>
-                                                            </div>
-                                                        ) : '选择前置操作';
-                                                    })()
-                                                ) : (
-                                                    <span style={{ color: '#bfbfbf' }}>点击选择前置操作...</span>
-                                                )}
-                                            </Button>
-                                        </Form.Item>
-                                        <Form.Item name="constraint_type" label="约束类型" initialValue={1}>
-                                            <Select>
-                                                {CONSTRAINT_TYPE_OPTIONS.map(opt => (
-                                                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                                                ))}
-                                            </Select>
-                                        </Form.Item>
-                                        <Form.Item name="lag_type" label="延迟类型" initialValue="FIXED">
-                                            <Select>
-                                                {LAG_TYPE_OPTIONS.map(opt => (
-                                                    <Option key={opt.value} value={opt.value}>
-                                                        <Tag color={opt.color}>{opt.label}</Tag>
-                                                    </Option>
-                                                ))}
-                                            </Select>
-                                        </Form.Item>
-                                        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.lag_type !== curr.lag_type}>
-                                            {({ getFieldValue }) => {
-                                                const lagType = getFieldValue('lag_type');
-                                                const showLagMin = ['FIXED', 'WINDOW', 'COOLING'].includes(lagType);
-                                                const showLagMax = lagType === 'WINDOW';
-                                                return (
-                                                    <>
-                                                        {showLagMin && (
-                                                            <Form.Item name="lag_min" label={lagType === 'WINDOW' ? '最小延迟(小时)' : '延迟时间(小时)'} initialValue={0}>
-                                                                <InputNumber style={{ width: '100%' }} min={0} />
-                                                            </Form.Item>
-                                                        )}
-                                                        {showLagMax && (
-                                                            <Form.Item name="lag_max" label="最大延迟(小时)">
-                                                                <InputNumber style={{ width: '100%' }} min={0} placeholder="可选" />
-                                                            </Form.Item>
-                                                        )}
-                                                    </>
-                                                );
-                                            }}
-                                        </Form.Item>
-                                        {/* (Share Mode Config Removed) */}
-                                        <Form.Item>
-                                            <Button type="primary" htmlType="submit" block>
-                                                添加前置约束
-                                            </Button>
-                                        </Form.Item>
-                                    </Form>
-                                </div>
-                                <div style={{ maxHeight: 300, overflow: 'auto' }}>
-                                    {operationConstraints.predecessors.map((c) => (
-                                        <div key={c.constraint_id} style={{ padding: 8, border: '1px solid #d9d9d9', marginBottom: 8, borderRadius: 4 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div>
-                                                    <div><strong>{c.related_operation_name}</strong></div>
-                                                    <div style={{ fontSize: 12, color: '#666' }}>
-                                                        类型: {CONSTRAINT_TYPE_OPTIONS.find(o => o.value === c.constraint_type)?.label || 'FS'}
-                                                        {c.lag_type && <Tag color={LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.color} style={{ marginLeft: 8 }}>{LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.label}</Tag>}
-                                                        {(c.lag_type === 'FIXED' || c.lag_type === 'COOLING') && c.lag_min ? <span style={{ marginLeft: 8 }}>{c.lag_min}h</span> : null}
-                                                        {c.lag_type === 'WINDOW' && <span style={{ marginLeft: 8 }}>{c.lag_min || 0}h - {c.lag_max || '∞'}h</span>}
-                                                        {/* (Share Mode Tag Removed) */}
-                                                    </div>
-                                                </div>
-                                                {c.constraint_id && (
-                                                    <Button
-                                                        type="text"
-                                                        danger
-                                                        size="small"
-                                                        icon={<DeleteOutlined />}
-                                                        onClick={() => handleDeleteConstraint(c.constraint_id!)}
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {operationConstraints.predecessors.length === 0 && (
-                                        <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>暂无前置约束</div>
-                                    )}
-                                </div>
-                            </TabPane>
-
-                            {/* Tab 3: 后续约束 */}
-                            <TabPane tab={`后续约束 (${operationConstraints.successors.length})`} key="3">
-                                <div style={{ marginBottom: 16 }}>
-                                    <Form form={constraintForm} layout="vertical" onFinish={(values) => {
-                                        handleSaveConstraint({ ...values, related_schedule_id: selectedOperationForConstraint }, 'successor');
-                                        setSelectedOperationForConstraint(null);
-                                    }}>
-                                        <Form.Item label="后续操作" required>
-                                            <Button
-                                                block
-                                                onClick={() => setSuccessorModalVisible(true)}
-                                                style={{ textAlign: 'left', height: 'auto', padding: '8px 12px' }}
-                                            >
-                                                {selectedOperationForConstraint ? (
-                                                    (() => {
-                                                        const op = availableOperationsForConstraints.find((o: any) => o.id === selectedOperationForConstraint);
-                                                        return op ? (
-                                                            <div>
-                                                                <div><strong>{op.operation_code}</strong> - {op.operation_name}</div>
-                                                                <div style={{ fontSize: 12, color: '#8c8c8c' }}>
-                                                                    {op.stage_name} · Day {op.operation_day || 0}
-                                                                </div>
-                                                            </div>
-                                                        ) : '选择后续操作';
-                                                    })()
-                                                ) : (
-                                                    <span style={{ color: '#bfbfbf' }}>点击选择后续操作...</span>
-                                                )}
-                                            </Button>
-                                        </Form.Item>
-                                        <Form.Item name="constraint_type" label="约束类型" initialValue={1}>
-                                            <Select>
-                                                {CONSTRAINT_TYPE_OPTIONS.map(opt => (
-                                                    <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                                                ))}
-                                            </Select>
-                                        </Form.Item>
-                                        <Form.Item name="lag_type" label="延迟类型" initialValue="FIXED">
-                                            <Select>
-                                                {LAG_TYPE_OPTIONS.map(opt => (
-                                                    <Option key={opt.value} value={opt.value}>
-                                                        <Tag color={opt.color}>{opt.label}</Tag>
-                                                    </Option>
-                                                ))}
-                                            </Select>
-                                        </Form.Item>
-                                        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.lag_type !== curr.lag_type}>
-                                            {({ getFieldValue }) => {
-                                                const lagType = getFieldValue('lag_type');
-                                                const showLagMin = ['FIXED', 'WINDOW', 'COOLING'].includes(lagType);
-                                                const showLagMax = lagType === 'WINDOW';
-                                                return (
-                                                    <>
-                                                        {showLagMin && (
-                                                            <Form.Item name="lag_min" label={lagType === 'WINDOW' ? '最小延迟(小时)' : '延迟时间(小时)'} initialValue={0}>
-                                                                <InputNumber style={{ width: '100%' }} min={0} />
-                                                            </Form.Item>
-                                                        )}
-                                                        {showLagMax && (
-                                                            <Form.Item name="lag_max" label="最大延迟(小时)">
-                                                                <InputNumber style={{ width: '100%' }} min={0} placeholder="可选" />
-                                                            </Form.Item>
-                                                        )}
-                                                    </>
-                                                );
-                                            }}
-                                        </Form.Item>
-                                        {/* (Share Mode Config Removed) */}
-                                        <Form.Item>
-                                            <Button type="primary" htmlType="submit" block>
-                                                添加后续约束
-                                            </Button>
-                                        </Form.Item>
-                                    </Form>
-                                </div>
-                                <div style={{ maxHeight: 300, overflow: 'auto' }}>
-                                    {operationConstraints.successors.map((c) => (
-                                        <div key={c.constraint_id} style={{ padding: 8, border: '1px solid #d9d9d9', marginBottom: 8, borderRadius: 4 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <div>
-                                                    <div><strong>{c.related_operation_name}</strong></div>
-                                                    <div style={{ fontSize: 12, color: '#666' }}>
-                                                        类型: {CONSTRAINT_TYPE_OPTIONS.find(o => o.value === c.constraint_type)?.label || 'FS'}
-                                                        {c.lag_type && <Tag color={LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.color} style={{ marginLeft: 8 }}>{LAG_TYPE_OPTIONS.find(o => o.value === c.lag_type)?.label}</Tag>}
-                                                        {(c.lag_type === 'FIXED' || c.lag_type === 'COOLING') && c.lag_min ? <span style={{ marginLeft: 8 }}>{c.lag_min}h</span> : null}
-                                                        {c.lag_type === 'WINDOW' && <span style={{ marginLeft: 8 }}>{c.lag_min || 0}h - {c.lag_max || '∞'}h</span>}
-                                                        {/* (Share Mode Tag Removed) */}
-                                                    </div>
-                                                </div>
-                                                {c.constraint_id && (
-                                                    <Button
-                                                        type="text"
-                                                        danger
-                                                        size="small"
-                                                        icon={<DeleteOutlined />}
-                                                        onClick={() => handleDeleteConstraint(c.constraint_id!)}
-                                                    />
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {operationConstraints.successors.length === 0 && (
-                                        <div style={{ textAlign: 'center', padding: 20, color: '#999' }}>暂无后续约束</div>
-                                    )}
-                                </div>
-                            </TabPane>
-
-                            {/* Tab 4: 共享组 */}
-                            <TabPane tab={`共享组 (${operationShareGroups.length})`} key="4">
-                                {/* 当前操作所属的共享组列表 */}
-                                <div style={{ marginBottom: 16 }}>
-                                    <Text strong style={{ display: 'block', marginBottom: 8 }}>当前操作所属共享组：</Text>
-                                    <List
-                                        size="small"
-                                        bordered
-                                        dataSource={operationShareGroups}
-                                        locale={{ emptyText: '该操作未加入任何共享组' }}
-                                        renderItem={group => (
-                                            <List.Item
-                                                actions={[
-                                                    <Button
-                                                        type="text"
-                                                        size="small"
-                                                        icon={<EditOutlined />}
-                                                        onClick={() => {
-                                                            setEditingShareGroup(group);
-                                                            setShareGroupModalVisible(true);
-                                                        }}
-                                                    >
-                                                        编辑
-                                                    </Button>,
-                                                    <Button
-                                                        type="text"
-                                                        danger
-                                                        size="small"
-                                                        icon={<DeleteOutlined />}
-                                                        onClick={() => handleRemoveShareGroup(group.id)}
-                                                    >
-                                                        退出
-                                                    </Button>
-                                                ]}
-                                            >
-                                                <List.Item.Meta
-                                                    title={
-                                                        <Space>
-                                                            <span>{group.group_name}</span>
-                                                            <Tag color={(group as any).share_mode === 'SAME_TEAM' ? 'blue' : 'orange'}>
-                                                                {(group as any).share_mode === 'SAME_TEAM' ? '同组执行' : '不同人员'}
-                                                            </Tag>
-                                                        </Space>
-                                                    }
-                                                />
-                                            </List.Item>
-                                        )}
-                                    />
-                                </div>
-
-                                {/* 加入现有共享组 */}
-                                <div style={{
-                                    background: '#f6f8fa',
-                                    padding: 12,
-                                    borderRadius: 6,
-                                    marginBottom: 16
-                                }}>
-                                    <Text strong style={{ display: 'block', marginBottom: 8 }}>加入现有共享组：</Text>
-                                    <Form form={assignGroupForm} layout="inline" onFinish={handleAssignShareGroup}>
-                                        <Form.Item name="share_group_id" rules={[{ required: true, message: '请选择' }]}>
-                                            <Select
-                                                placeholder="搜索并选择共享组"
-                                                style={{ width: 200 }}
-                                                showSearch
-                                                optionFilterProp="children"
-                                                filterOption={(input, option) =>
-                                                    (option?.label as unknown as string).toLowerCase().includes(input.toLowerCase())
-                                                }
-                                            >
-                                                {shareGroups
-                                                    .filter(g => !operationShareGroups.some(og => og.id === g.id))
-                                                    .map(g => (
-                                                        <Option key={g.id} value={g.id} label={g.group_name}>
-                                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                <span>{g.group_name}</span>
-                                                                {(g as any).share_mode && (
-                                                                    <Tag
-                                                                        color={(g as any).share_mode === 'SAME_TEAM' ? 'blue' : 'orange'}
-                                                                        style={{ marginLeft: 8, fontSize: 10, lineHeight: '16px' }}
-                                                                    >
-                                                                        {(g as any).share_mode === 'SAME_TEAM' ? '同组' : '不同'}
-                                                                    </Tag>
-                                                                )}
-                                                            </div>
-                                                        </Option>
-                                                    ))}
-                                            </Select>
-                                        </Form.Item>
-                                        <Form.Item>
-                                            <Button type="primary" htmlType="submit" loading={assigningGroup}>
-                                                加入
-                                            </Button>
-                                        </Form.Item>
-                                    </Form>
-                                </div>
-
-                                {/* 创建新共享组入口 */}
-                                <Button
-                                    type="dashed"
-                                    block
-                                    icon={<PlusOutlined />}
-                                    onClick={() => {
-                                        setEditingShareGroup(null); // Ensure Create mode
-                                        setShareGroupModalVisible(true);
-                                    }}
-                                >
-                                    新建并加入共享组
-                                </Button>
-
-                                {/* 共享模式说明 */}
-                                <div style={{
-                                    marginTop: 16,
-                                    padding: 12,
-                                    background: '#f0f7ff',
-                                    borderRadius: 6,
-                                    border: '1px solid #d6e4ff',
-                                    fontSize: 12,
-                                    color: '#1f1f1f'
-                                }}>
-                                    <div style={{ fontWeight: 600, marginBottom: 6, color: '#1890ff' }}>💡 共享模式说明</div>
-                                    <div style={{ marginBottom: 4 }}>
-                                        • <Tag color="blue" style={{ fontSize: 11 }}>同组执行</Tag> 组内操作由同一组人员执行（团队槽位模式）
-                                    </div>
-                                    <div>
-                                        • <Tag color="orange" style={{ fontSize: 11 }}>不同人员</Tag> 组内操作必须由不同人员执行（互斥模式）
-                                    </div>
-                                </div>
-                            </TabPane>
-
-                            {/* Tab 5: 校验 */}
-                            <TabPane tab="校验" key="5">
-                                <Button type="primary" onClick={handleValidateConstraints} loading={validationLoading} block>
-                                    验证约束
-                                </Button>
-                                {validationResult && (
-                                    <div style={{ marginTop: 16 }}>
-                                        <Alert
-                                            message={validationResult.hasConflicts ? '发现冲突' : '无冲突'}
-                                            type={validationResult.hasConflicts ? 'warning' : 'success'}
-                                            showIcon
-                                        />
-                                    </div>
-                                )}
-                            </TabPane>
-                        </Tabs>
-                    )}
-
-                    <Form.Item>
-                        <Space>
-                            <Button type="primary" htmlType="submit">保存</Button>
-                            <Button onClick={() => {
-                                setEditModalVisible(false);
-                                setEditingNode(null);
-                                form.resetFields();
-                            }}>
-                                取消
-                            </Button>
-                        </Space>
-                    </Form.Item>
-                </Form>
-            </Modal >
+                onRemoveShareGroup={handleRemoveShareGroup}
+                onAddOrCreateShareGroup={() => {
+                    setEditingShareGroup(null);
+                    setShareGroupModalVisible(true);
+                }}
+                validationLoading={validationLoading}
+                validationResult={validationResult}
+                onValidate={handleValidateConstraints}
+                onConflictClick={handleConflictHighlight}
+            />
 
             {/* Create Operation Modal */}
-            < Modal
-                title="新建操作"
-                open={operationModalVisible}
+            <CreateOperationModal
+                visible={operationModalVisible}
                 onCancel={() => setOperationModalVisible(false)}
                 onOk={handleOperationSubmit}
-                confirmLoading={operationSubmitting}
-                okText="保存"
-                cancelText="取消"
-            >
-                <Form form={operationForm} layout="vertical">
-                    <Form.Item
-                        label="操作编码"
-                        name="operation_code"
-                        rules={[{ required: true, message: '请输入操作编码' }]}
-                    >
-                        <Input placeholder="自动生成" maxLength={50} disabled />
-                    </Form.Item>
-                    <Form.Item
-                        label="操作名称"
-                        name="operation_name"
-                        rules={[{ required: true, message: '请输入操作名称' }]}
-                    >
-                        <Input placeholder="请输入操作名称" maxLength={100} />
-                    </Form.Item>
-                    <Form.Item
-                        label="标准时长 (小时)"
-                        name="standard_time"
-                        rules={[{ required: true, message: '请输入标准时长' }]}
-                    >
-                        <InputNumber min={0.1} max={72} step={0.1} style={{ width: '100%' }} placeholder="例如 2.5" />
-                    </Form.Item>
-                    <Form.Item
-                        label="需要人数"
-                        name="required_people"
-                        rules={[{ required: true, message: '请输入需要人数' }]}
-                    >
-                        <InputNumber min={1} max={50} step={1} style={{ width: '100%' }} placeholder="例如 3" />
-                    </Form.Item>
-                    <Form.Item label="操作描述" name="description">
-                        <TextArea rows={3} placeholder="可选，补充说明" />
-                    </Form.Item>
-                </Form>
-            </Modal >
+                form={operationForm}
+                loading={operationSubmitting}
+            />
 
-            {/* Create Share Group Modal - Proper Component */}
+            {/* Share Group Modal */}
             <ShareGroupModal
                 visible={shareGroupModalVisible}
                 templateId={templateId}
-                group={editingShareGroup} // Pass the editing group (null for create mode)
+                group={editingShareGroup}
                 operations={
                     availableOperationsForConstraints.map(op => ({
                         scheduleId: op.id,
@@ -779,77 +221,60 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                 }
                 onCancel={() => {
                     setShareGroupModalVisible(false);
-                    setEditingShareGroup(null); // Reset editing state
+                    setEditingShareGroup(null);
                 }}
                 onSave={() => {
                     setShareGroupModalVisible(false);
-                    setEditingShareGroup(null); // Reset editing state
-                    loadShareGroups(); // Refresh list
-                    if (editingNode?.data?.id) {
-                        // Optional: Reload specific data if needed
-                    }
+                    setEditingShareGroup(null);
+                    loadShareGroups();
                 }}
                 initialSelectedOperations={editingNode?.data?.id ? [Number(editingNode.data.id)] : []}
             />
 
             {/* Validation Drawer */}
-            < Drawer
-                title="约束校验结果"
-                placement="right"
-                width={500}
-                open={validationDrawerVisible}
+            <ValidationDrawer
+                visible={validationDrawerVisible}
                 onClose={() => {
                     setValidationDrawerVisible(false);
                     clearActiveHighlight();
                 }}
-            >
-                {validationLoading && <div style={{ textAlign: 'center' }}>加载中...</div>}
-                {
-                    validationResult && !validationLoading && (
-                        <div>
-                            <Alert
-                                message={validationResult.hasConflicts ? `发现 ${validationResult.conflicts?.length || 0} 个冲突` : '无冲突'}
-                                type={validationResult.hasConflicts ? 'error' : 'success'}
-                                showIcon
-                                style={{ marginBottom: 16 }}
-                            />
-                            {validationResult.conflicts?.map((conflict, idx) => (
-                                <div
-                                    key={idx}
-                                    style={{
-                                        padding: 12,
-                                        border: '1px solid #ffccc7',
-                                        borderRadius: 4,
-                                        marginBottom: 8,
-                                        cursor: 'pointer'
-                                    }}
-                                    onClick={() => handleConflictHighlight(conflict)}
-                                >
-                                    <div><ExclamationCircleOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />{conflict.type}</div>
-                                    <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>{conflict.message}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )
-                }
-            </Drawer >
+                loading={validationLoading}
+                result={validationResult}
+                onConflictClick={handleConflictHighlight}
+            />
 
+            {/* Step 1: Operation Selection - Predecessor */}
             <OperationSelectionModal
-                visible={predecessorModalVisible}
-                onClose={() => setPredecessorModalVisible(false)}
-                onSelect={(scheduleId) => setSelectedOperationForConstraint(scheduleId)}
+                visible={predecessorSelectVisible}
+                onClose={() => setPredecessorSelectVisible(false)}
+                onSelect={(scheduleId) => handleOperationSelected(scheduleId, 'predecessor')}
                 operations={availableOperationsForConstraints}
                 currentOperationId={editingNode?.data?.id}
                 title="选择前置操作"
             />
 
+            {/* Step 1: Operation Selection - Successor */}
             <OperationSelectionModal
-                visible={successorModalVisible}
-                onClose={() => setSuccessorModalVisible(false)}
-                onSelect={(scheduleId) => setSelectedOperationForConstraint(scheduleId)}
+                visible={successorSelectVisible}
+                onClose={() => setSuccessorSelectVisible(false)}
+                onSelect={(scheduleId) => handleOperationSelected(scheduleId, 'successor')}
                 operations={availableOperationsForConstraints}
                 currentOperationId={editingNode?.data?.id}
                 title="选择后续操作"
+            />
+
+            {/* Step 2: Constraint Configuration */}
+            <AddConstraintModal
+                visible={addConstraintVisible}
+                type={constraintType}
+                selectedOperationName={selectedOperationName}
+                form={constraintForm}
+                onCancel={() => {
+                    setAddConstraintVisible(false);
+                    setSelectedOperationId(null);
+                }}
+                onSubmit={handleConstraintSubmit}
+                loading={constraintSaving}
             />
         </>
     );

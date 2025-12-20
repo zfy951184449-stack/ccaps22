@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GanttModals 整改方案对比</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-weight: 600;
+        }
+
+        .container {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .design-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            width: 500px;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-header.bad {
+            background: #fff2f0;
+            color: #cf1322;
+            border-bottom: 2px solid #ffa39e;
+        }
+
+        .card-header.good {
+            background: #f6ffed;
+            color: #389e0d;
+            border-bottom: 2px solid #b7eb8f;
+        }
+
+        .modal-preview {
+            padding: 0;
+            background: #f5f5f5;
+        }
+
+        /* Modal Styles */
+        .modal {
+            background: white;
+            margin: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e8e8e8;
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .close-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            border: none;
+            background: #f0f0f0;
+            cursor: pointer;
+            font-size: 16px;
+            color: #999;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #e8e8e8;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #fafafa;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e8e8e8;
+            margin-bottom: 16px;
+        }
+
+        .tab {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .tab.active {
+            color: #1890ff;
+            border-bottom-color: #1890ff;
+            font-weight: 500;
+        }
+
+        .tab .count {
+            background: #f0f0f0;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            margin-left: 4px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #333;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #1890ff;
+            color: white;
+        }
+
+        .btn-default {
+            background: white;
+            border: 1px solid #d9d9d9;
+            color: #333;
+        }
+
+        .btn-link {
+            background: transparent;
+            color: #1890ff;
+            padding: 8px 12px;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: #f0f7ff;
+            border: 1px solid #d6e4ff;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 12px;
+            margin-bottom: 16px;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            color: #1890ff;
+            margin-bottom: 6px;
+        }
+
+        /* Nested Form Warning */
+        .nested-form {
+            border: 2px dashed #ff4d4f;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            background: #fff2f0;
+        }
+
+        .nested-form-label {
+            color: #ff4d4f;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        /* Constraint List */
+        .constraint-item {
+            background: #fafafa;
+            border: 1px solid #e8e8e8;
+            border-radius: 6px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .constraint-name {
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .constraint-meta {
+            font-size: 11px;
+            color: #999;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .tag-blue {
+            background: #e6f7ff;
+            color: #1890ff;
+        }
+
+        .tag-orange {
+            background: #fff7e6;
+            color: #fa8c16;
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0 16px;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e8e8e8;
+        }
+
+        .divider span {
+            padding: 0 12px;
+        }
+
+        /* Field Group */
+        .field-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .field-row .form-group {
+            flex: 1;
+        }
+
+        /* Issues indicator */
+        .issue-marker {
+            position: absolute;
+            right: 8px;
+            top: 8px;
+            background: #ff4d4f;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .issue-box {
+            border: 2px dashed #ff4d4f;
+            padding: 8px;
+            margin: 8px 0;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        /* Solution Tabs */
+        .solution-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .solution-tab {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .solution-tab.active {
+            background: white;
+            color: #764ba2;
+            font-weight: 600;
+        }
+
+        .solution-content {
+            display: none;
+        }
+
+        .solution-content.active {
+            display: flex;
+        }
+
+        /* Section Title */
+        .section-title {
+            color: white;
+            font-size: 18px;
+            margin: 40px 0 20px;
+            text-align: center;
+        }
+
+        /* Comparison annotations */
+        .annotation {
+            background: #ff4d4f;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            position: absolute;
+            z-index: 10;
+        }
+
+        .has-issues {
+            position: relative;
+        }
+
+        /* Footer inside form bad pattern */
+        .footer-in-form {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px dashed #ffa39e;
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Good pattern - footer outside */
+        .modal-footer-proper {
+            background: linear-gradient(to right, #f6ffed, #ffffff);
+            border-top: 1px solid #b7eb8f;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🍎 GanttModals 整改方案对比</h1>
+
+    <div class="solution-tabs">
+        <button class="solution-tab active" onclick="showSolution('current')">当前设计 ❌</button>
+        <button class="solution-tab" onclick="showSolution('proposed')">改进方案 A</button>
+        <button class="solution-tab" onclick="showSolution('proposed2')">改进方案 B</button>
+    </div>
+
+    <!-- 当前设计 -->
+    <div id="solution-current" class="solution-content active container">
+        <div class="design-card">
+            <div class="card-header bad">❌ 当前设计 - 问题汇总</div>
+            <div class="modal-preview">
+                <div class="modal">
+                    <div class="modal-header">
+                        编辑操作
+                        <button class="close-btn">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tabs">
+                            <div class="tab active">基本信息</div>
+                            <div class="tab">前置约束 <span class="count">2</span></div>
+                            <div class="tab">后续约束 <span class="count">1</span></div>
+                            <div class="tab">共享组 <span class="count">0</span></div>
+                            <div class="tab">校验</div>
+                        </div>
+
+                        <!-- 问题1: 字段过多无分组 -->
+                        <div style="position: relative;">
+                            <div class="annotation" style="top: -8px; right: 0;">问题: 8字段无分组</div>
+                            <div class="form-group">
+                                <label class="form-label">选择操作</label>
+                                <select class="form-select">
+                                    <option>OP001 - 清洗操作</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">操作位置（相对阶段原点）</label>
+                                <input class="form-input" value="Day 0" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">推荐开始时间</label>
+                                <input class="form-input" value="9:00" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">推荐开始偏移</label>
+                                <input class="form-input" value="0" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">时间窗口-开始时间</label>
+                                <input class="form-input" value="9:00" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">窗口开始偏移</label>
+                                <input class="form-input" value="0" />
+                            </div>
+                        </div>
+
+                        <!-- 问题2: 按钮在 Form 内 -->
+                        <div class="footer-in-form">
+                            <div class="annotation" style="top: 4px; left: 4px;">问题: 按钮不在 Footer</div>
+                            <button class="btn btn-primary">保存</button>
+                            <button class="btn btn-default">取消</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="design-card">
+            <div class="card-header bad">❌ 约束 Tab - 嵌套 Form 问题</div>
+            <div class="modal-preview">
+                <div class="modal">
+                    <div class="modal-header">
+                        编辑操作 - 前置约束
+                    </div>
+                    <div class="modal-body">
+                        <!-- 问题3: 嵌套 Form -->
+                        <div class="nested-form">
+                            <div class="nested-form-label">⚠️ 嵌套 Form (反模式)</div>
+                            <div class="form-group">
+                                <label class="form-label">前置操作</label>
+                                <button class="btn btn-default btn-block" style="text-align: left; color: #bfbfbf;">
+                                    点击选择前置操作...
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">约束类型</label>
+                                <select class="form-select">
+                                    <option>完成-开始 (FS)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">延迟类型</label>
+                                <select class="form-select">
+                                    <option>固定</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary btn-block">添加前置约束</button>
+                        </div>
+
+                        <div class="constraint-item">
+                            <div>
+                                <div class="constraint-name">OP002 - 配料操作</div>
+                                <div class="constraint-meta">类型: FS <span class="tag tag-blue"
+                                        style="margin-left: 8px;">固定</span> 2h</div>
+                            </div>
+                            <button class="btn btn-link" style="color: #ff4d4f;">删除</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 改进方案 A: 分组 + Footer 优化 -->
+    <div id="solution-proposed" class="solution-content container">
+        <div class="design-card">
+            <div class="card-header good">✅ 方案 A - 字段分组 + Footer 优化</div>
+            <div class="modal-preview">
+                <div class="modal">
+                    <div class="modal-header">
+                        编辑操作
+                        <button class="close-btn">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tabs">
+                            <div class="tab active">基本信息</div>
+                            <div class="tab">约束关系 <span class="count">3</span></div>
+                            <div class="tab">共享组</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">选择操作</label>
+                            <select class="form-select">
+                                <option>OP001 - 清洗操作 (2.5h)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">操作位置</label>
+                            <input class="form-input" value="阶段Day 0" />
+                        </div>
+
+                        <div class="divider"><span>推荐开始时间</span></div>
+
+                        <div class="field-row">
+                            <div class="form-group">
+                                <label class="form-label">时间</label>
+                                <input class="form-input" value="09:00" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">偏移天数</label>
+                                <input class="form-input" value="+0" />
+                            </div>
+                        </div>
+
+                        <div class="divider"><span>时间窗口</span></div>
+
+                        <div class="field-row">
+                            <div class="form-group">
+                                <label class="form-label">开始</label>
+                                <input class="form-input" value="09:00 (+0天)" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">结束</label>
+                                <input class="form-input" value="17:00 (+0天)" />
+                            </div>
+                        </div>
+
+                        <div class="info-box">
+                            <div class="info-box-title">💡 时间窗口说明</div>
+                            操作的可执行时间范围，超出窗口将产生违规警告
+                        </div>
+                    </div>
+                    <div class="modal-footer modal-footer-proper">
+                        <button class="btn btn-default">取消</button>
+                        <button class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="design-card">
+            <div class="card-header good">✅ 方案 A - 约束 Tab 优化</div>
+            <div class="modal-preview">
+                <div class="modal">
+                    <div class="modal-header">
+                        编辑操作 - 约束关系
+                    </div>
+                    <div class="modal-body">
+                        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                            <button class="btn btn-primary" style="flex: 1;">+ 添加前置约束</button>
+                            <button class="btn btn-default" style="flex: 1;">+ 添加后续约束</button>
+                        </div>
+
+                        <div style="font-size: 12px; color: #999; margin-bottom: 8px;">前置约束 (2)</div>
+                        <div class="constraint-item">
+                            <div>
+                                <div class="constraint-name">← OP002 - 配料操作</div>
+                                <div class="constraint-meta">FS · <span class="tag tag-blue">固定 2h</span></div>
+                            </div>
+                            <button class="btn btn-link" style="color: #ff4d4f; padding: 4px 8px;">×</button>
+                        </div>
+                        <div class="constraint-item">
+                            <div>
+                                <div class="constraint-name">← OP003 - 预处理</div>
+                                <div class="constraint-meta">SS · <span class="tag tag-orange">窗口 1-4h</span></div>
+                            </div>
+                            <button class="btn btn-link" style="color: #ff4d4f; padding: 4px 8px;">×</button>
+                        </div>
+
+                        <div style="font-size: 12px; color: #999; margin: 16px 0 8px;">后续约束 (1)</div>
+                        <div class="constraint-item">
+                            <div>
+                                <div class="constraint-name">OP005 - 包装 →</div>
+                                <div class="constraint-meta">FS · <span class="tag tag-blue">固定 0h</span></div>
+                            </div>
+                            <button class="btn btn-link" style="color: #ff4d4f; padding: 4px 8px;">×</button>
+                        </div>
+                    </div>
+                    <div class="modal-footer modal-footer-proper">
+                        <button class="btn btn-default">关闭</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 改进方案 B: 抽屉式 -->
+    <div id="solution-proposed2" class="solution-content container">
+        <div class="design-card" style="width: 700px;">
+            <div class="card-header good">✅ 方案 B - 抽屉式设计 (Apple HIG)</div>
+            <div class="modal-preview" style="display: flex; gap: 0;">
+                <!-- 主面板 -->
+                <div style="flex: 1; background: white; border-right: 1px solid #e8e8e8;">
+                    <div class="modal-header" style="background: #fafafa;">
+                        编辑操作
+                    </div>
+                    <div style="padding: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">操作</label>
+                            <div style="padding: 10px; background: #f5f5f5; border-radius: 6px; font-weight: 500;">
+                                OP001 - 清洗操作
+                                <span style="float: right; color: #999; font-weight: normal;">2.5h</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">时间位置</label>
+                            <input class="form-input" value="阶段Day 0, 09:00" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">时间窗口</label>
+                            <input class="form-input" value="09:00 - 17:00 (当天)" />
+                        </div>
+
+                        <div style="display: flex; gap: 8px; margin-top: 20px;">
+                            <button class="btn btn-default" style="flex: 1;">
+                                ← 前置 (2)
+                            </button>
+                            <button class="btn btn-default" style="flex: 1;">
+                                后续 (1) →
+                            </button>
+                            <button class="btn btn-default" style="flex: 1;">
+                                👥 共享组
+                            </button>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-default">取消</button>
+                        <button class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+
+                <!-- 侧边抽屉 -->
+                <div style="width: 280px; background: #fafafa;">
+                    <div class="modal-header" style="font-size: 14px; padding: 12px 16px;">
+                        前置约束
+                        <button class="btn btn-link" style="padding: 0; font-size: 12px;">+ 添加</button>
+                    </div>
+                    <div style="padding: 12px;">
+                        <div class="constraint-item" style="font-size: 12px;">
+                            <div>
+                                <div class="constraint-name" style="font-size: 12px;">OP002 - 配料</div>
+                                <div class="constraint-meta">FS · 延迟 2h</div>
+                            </div>
+                            <span style="color: #ff4d4f; cursor: pointer;">×</span>
+                        </div>
+                        <div class="constraint-item" style="font-size: 12px;">
+                            <div>
+                                <div class="constraint-name" style="font-size: 12px;">OP003 - 预处理</div>
+                                <div class="constraint-meta">SS · 窗口 1-4h</div>
+                            </div>
+                            <span style="color: #ff4d4f; cursor: pointer;">×</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showSolution(id) {
+            // Hide all
+            document.querySelectorAll('.solution-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            document.querySelectorAll('.solution-tab').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Show selected
+            document.getElementById('solution-' + id).classList.add('active');
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GanttModals 方案 B+ 增强版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0d1f33 100%);
+            min-height: 100vh;
+            padding: 40px;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 12px;
+            font-weight: 600;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .demo-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #f5f5f7;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        /* Window Chrome */
+        .window-chrome {
+            background: linear-gradient(180deg, #e8e8e8 0%, #d8d8d8 100%);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .dot-red {
+            background: #ff5f57;
+        }
+
+        .dot-yellow {
+            background: #febc2e;
+        }
+
+        .dot-green {
+            background: #28c840;
+        }
+
+        .window-title {
+            flex: 1;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        /* Main Layout */
+        .modal-layout {
+            display: flex;
+            height: 550px;
+            background: white;
+        }
+
+        /* Left Panel - Main Form */
+        .main-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #e5e5e5;
+        }
+
+        .panel-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e5e5e5;
+            font-weight: 600;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fafafa;
+        }
+
+        .panel-body {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .panel-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #e5e5e5;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            background: #fafafa;
+        }
+
+        /* Right Panel - Drawer */
+        .drawer-panel {
+            width: 320px;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+        }
+
+        .drawer-panel.collapsed {
+            width: 48px;
+        }
+
+        .drawer-tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e5e5;
+            background: #fff;
+        }
+
+        .drawer-tab {
+            flex: 1;
+            padding: 12px 8px;
+            text-align: center;
+            font-size: 12px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .drawer-tab:hover {
+            background: #f0f0f0;
+        }
+
+        .drawer-tab.active {
+            color: #007aff;
+            border-bottom-color: #007aff;
+            font-weight: 500;
+        }
+
+        .drawer-tab .tab-icon {
+            font-size: 16px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .drawer-tab .tab-count {
+            background: #007aff;
+            color: white;
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 8px;
+            margin-left: 4px;
+        }
+
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .drawer-content.active {
+            display: block;
+        }
+
+        .drawer-section {
+            padding: 16px;
+        }
+
+        .drawer-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #555;
+        }
+
+        .form-input,
+        .form-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #007aff;
+            box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #007aff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0066d6;
+        }
+
+        .btn-secondary {
+            background: #e5e5e5;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #d5d5d5;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #007aff;
+            padding: 6px 12px;
+        }
+
+        .btn-ghost:hover {
+            background: rgba(0, 122, 255, 0.1);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        /* Cards */
+        .constraint-card {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+            transition: box-shadow 0.2s;
+        }
+
+        .constraint-card:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .constraint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+
+        .constraint-name {
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .constraint-arrow {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .constraint-meta {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .tag-blue {
+            background: #e7f3ff;
+            color: #007aff;
+        }
+
+        .tag-orange {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+
+        .tag-green {
+            background: #e8f5e9;
+            color: #43a047;
+        }
+
+        .tag-purple {
+            background: #f3e5f5;
+            color: #8e24aa;
+        }
+
+        .delete-btn {
+            opacity: 0;
+            transition: opacity 0.2s;
+            background: none;
+            border: none;
+            color: #ff3b30;
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .constraint-card:hover .delete-btn {
+            opacity: 1;
+        }
+
+        /* Share Group Card */
+        .share-group-card {
+            background: white;
+            border: 1px solid #e5e5e5;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .share-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .share-group-name {
+            font-weight: 500;
+            font-size: 13px;
+        }
+
+        .share-group-members {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .member-chip {
+            background: #f0f0f0;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #555;
+        }
+
+        /* Info Box */
+        .info-box {
+            background: linear-gradient(135deg, #e8f4fd 0%, #d6eaff 100%);
+            border: 1px solid #b3d9ff;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 16px;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            color: #0066cc;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .info-box-content {
+            font-size: 12px;
+            color: #444;
+            line-height: 1.5;
+        }
+
+        /* Divider */
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0 16px;
+            color: #999;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e5e5e5;
+        }
+
+        .divider span {
+            padding: 0 12px;
+        }
+
+        /* Field Row */
+        .field-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .field-row .form-group {
+            flex: 1;
+        }
+
+        /* Add Button */
+        .add-btn {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #d1d5db;
+            border-radius: 10px;
+            background: transparent;
+            color: #007aff;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .add-btn:hover {
+            border-color: #007aff;
+            background: rgba(0, 122, 255, 0.05);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 32px 16px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 36px;
+            margin-bottom: 12px;
+        }
+
+        .empty-state-text {
+            font-size: 13px;
+        }
+
+        /* Badge */
+        .status-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ff3b30;
+            color: white;
+            font-size: 10px;
+            min-width: 16px;
+            height: 16px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 24px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 12px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.main {
+            background: #007aff;
+        }
+
+        .legend-dot.drawer {
+            background: #5856d6;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🍎 方案 B+ 增强版</h1>
+    <p class="subtitle">主面板 + 多功能侧边抽屉（约束 / 共享组 / 校验）</p>
+
+    <div class="demo-container">
+        <div class="window-chrome">
+            <div class="window-dot dot-red"></div>
+            <div class="window-dot dot-yellow"></div>
+            <div class="window-dot dot-green"></div>
+            <span class="window-title">编辑操作 - OP001 清洗操作</span>
+        </div>
+
+        <div class="modal-layout">
+            <!-- Left: Main Form -->
+            <div class="main-panel">
+                <div class="panel-header">
+                    基本信息
+                    <span style="color: #999; font-size: 12px; font-weight: normal;">OP001</span>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group">
+                        <label class="form-label">操作</label>
+                        <div
+                            style="padding: 12px; background: #f5f5f5; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 500;">OP001 - 清洗操作</div>
+                                <div style="font-size: 12px; color: #999;">阶段: 预处理 · 标准时长: 2.5h</div>
+                            </div>
+                            <span class="tag tag-green">✓ 已关联</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">时间位置</label>
+                        <div class="field-row">
+                            <input class="form-input" value="Day 0" style="flex: 1;" />
+                            <input class="form-input" value="09:00" style="flex: 1;" />
+                        </div>
+                    </div>
+
+                    <div class="divider"><span>时间窗口</span></div>
+
+                    <div class="field-row">
+                        <div class="form-group">
+                            <label class="form-label">开始</label>
+                            <input class="form-input" value="09:00 (+0天)" />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">结束</label>
+                            <input class="form-input" value="17:00 (+0天)" />
+                        </div>
+                    </div>
+
+                    <div class="info-box">
+                        <div class="info-box-title">💡 时间窗口</div>
+                        <div class="info-box-content">
+                            操作的可执行时间范围。超出窗口将在校验时产生警告。
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-footer">
+                    <button class="btn btn-secondary">取消</button>
+                    <button class="btn btn-primary">保存</button>
+                </div>
+            </div>
+
+            <!-- Right: Multi-Tab Drawer -->
+            <div class="drawer-panel">
+                <div class="drawer-tabs">
+                    <button class="drawer-tab active" onclick="switchDrawer('constraints')">
+                        <span class="tab-icon">⛓️</span>
+                        约束<span class="tab-count">3</span>
+                    </button>
+                    <button class="drawer-tab" onclick="switchDrawer('sharegroup')">
+                        <span class="tab-icon">👥</span>
+                        共享组<span class="tab-count">1</span>
+                    </button>
+                    <button class="drawer-tab" onclick="switchDrawer('validate')">
+                        <span class="tab-icon">✓</span>
+                        校验
+                    </button>
+                </div>
+
+                <!-- Constraints Drawer -->
+                <div id="drawer-constraints" class="drawer-content active">
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">前置约束 (2)</div>
+
+                        <div class="constraint-card">
+                            <div class="constraint-header">
+                                <div>
+                                    <span class="constraint-arrow">←</span>
+                                    <span class="constraint-name">OP002 - 配料操作</span>
+                                </div>
+                                <button class="delete-btn">×</button>
+                            </div>
+                            <div class="constraint-meta">
+                                <span class="tag tag-blue">FS</span>
+                                <span class="tag tag-orange">延迟 2h</span>
+                            </div>
+                        </div>
+
+                        <div class="constraint-card">
+                            <div class="constraint-header">
+                                <div>
+                                    <span class="constraint-arrow">←</span>
+                                    <span class="constraint-name">OP003 - 预处理</span>
+                                </div>
+                                <button class="delete-btn">×</button>
+                            </div>
+                            <div class="constraint-meta">
+                                <span class="tag tag-blue">SS</span>
+                                <span class="tag tag-purple">窗口 1-4h</span>
+                            </div>
+                        </div>
+
+                        <button class="add-btn">+ 添加前置约束</button>
+                    </div>
+
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">后续约束 (1)</div>
+
+                        <div class="constraint-card">
+                            <div class="constraint-header">
+                                <div>
+                                    <span class="constraint-name">OP005 - 包装</span>
+                                    <span class="constraint-arrow">→</span>
+                                </div>
+                                <button class="delete-btn">×</button>
+                            </div>
+                            <div class="constraint-meta">
+                                <span class="tag tag-blue">FS</span>
+                                <span class="tag tag-green">立即</span>
+                            </div>
+                        </div>
+
+                        <button class="add-btn">+ 添加后续约束</button>
+                    </div>
+                </div>
+
+                <!-- Share Group Drawer -->
+                <div id="drawer-sharegroup" class="drawer-content">
+                    <div class="drawer-section">
+                        <div class="drawer-section-title">已加入的共享组 (1)</div>
+
+                        <div class="share-group-card">
+                            <div class="share-group-header">
+                                <span class="share-group-name">清洗小组</span>
+                                <div>
+                                    <span class="tag tag-blue">同组执行</span>
+                                    <button class="btn btn-ghost btn-sm">编辑</button>
+                                </div>
+                            </div>
+                            <div class="share-group-members">
+                                <span class="member-chip">OP001 清洗 ★</span>
+                                <span class="member-chip">OP002 冲洗</span>
+                                <span class="member-chip">OP003 消毒</span>
+                            </div>
+                        </div>
+
+                        <button class="add-btn">+ 加入/创建共享组</button>
+                    </div>
+
+                    <div class="drawer-section">
+                        <div class="info-box"
+                            style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); border-color: #ce93d8;">
+                            <div class="info-box-title" style="color: #7b1fa2;">共享模式说明</div>
+                            <div class="info-box-content">
+                                • <span class="tag tag-blue" style="font-size: 10px;">同组执行</span> 由同一组人员完成<br>
+                                • <span class="tag tag-orange" style="font-size: 10px;">不同人员</span> 必须由不同人员完成
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Validate Drawer -->
+                <div id="drawer-validate" class="drawer-content">
+                    <div class="drawer-section">
+                        <button class="btn btn-primary" style="width: 100%; margin-bottom: 16px;">
+                            🔍 运行校验
+                        </button>
+
+                        <div style="background: #e8f5e9; border-radius: 10px; padding: 16px; text-align: center;">
+                            <div style="font-size: 32px; margin-bottom: 8px;">✅</div>
+                            <div style="font-weight: 500; color: #388e3c;">无冲突</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">所有约束均已满足</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <span class="legend-dot main"></span>
+            主面板：基本信息编辑
+        </div>
+        <div class="legend-item">
+            <span class="legend-dot drawer"></span>
+            侧边抽屉：约束 / 共享组 / 校验
+        </div>
+    </div>
+
+    <script>
+        function switchDrawer(tab) {
+            // Update tabs
+            document.querySelectorAll('.drawer-tab').forEach(t => t.classList.remove('active'));
+            event.target.closest('.drawer-tab').classList.add('active');
+
+            // Update content
+            document.querySelectorAll('.drawer-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('drawer-' + tab).classList.add('active');
+        }
+    </script>
+</body>
+
+</html>

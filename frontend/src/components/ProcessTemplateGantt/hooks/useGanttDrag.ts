@@ -4,6 +4,8 @@ import { message } from 'antd';
 // 吸附精度：0.25 小时（15分钟）
 const SNAP_HOURS = 0.25;
 const MAX_UNDO = 10;
+// 拖拽阈值：鼠标移动超过此像素才认为是拖拽（避免双击误触发）
+const DRAG_THRESHOLD = 5;
 
 interface UndoAction {
     nodeId: string;
@@ -29,6 +31,7 @@ interface DragState {
     blockElement: HTMLElement;
     ghostElement: HTMLElement | null;
     startMouseX: number;
+    startMouseY: number;
     startLeft: number;
     startWidth: number;
     originalData: UndoAction['oldValue'];
@@ -38,6 +41,8 @@ interface DragState {
     // 窗口边界（仅用于 move 类型）
     windowMinX?: number;
     windowMaxX?: number;
+    // 是否已真正开始拖拽（超过阈值）
+    isDragging: boolean;
 }
 
 interface UseGanttDragProps {
@@ -63,6 +68,8 @@ export function useGanttDrag({
     const dragState = useRef<DragState | null>(null);
     const rafId = useRef<number>(0);
     const undoStack = useRef<UndoAction[]>([]);
+    // 用于存储 parentRect，避免重复计算
+    const parentRectRef = useRef<DOMRect | null>(null);
     const tooltipRef = useRef<HTMLDivElement | null>(null);
 
     // 计算时间从 X 位置
@@ -76,10 +83,12 @@ export function useGanttDrag({
     const createGhost = useCallback((element: HTMLElement): HTMLElement => {
         const ghost = element.cloneNode(true) as HTMLElement;
         ghost.style.position = 'absolute';
-        ghost.style.opacity = '0.7';
+        ghost.style.opacity = '0.85';
         ghost.style.pointerEvents = 'none';
         ghost.style.zIndex = '1000';
-        ghost.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+        ghost.style.boxShadow = '0 8px 24px rgba(0,0,0,0.25), 0 0 0 2px rgba(59, 130, 246, 0.5)';
+        ghost.style.borderRadius = '6px';
+        // 不使用 transition，避免与 snapping 产生果冻效应
         element.parentElement?.appendChild(ghost);
         return ghost;
     }, []);
@@ -118,7 +127,7 @@ export function useGanttDrag({
         }
     }, []);
 
-    // 开始拖拽
+    // 开始拖拽（mousedown时调用，但不立即创建ghost）
     const handleDragStart = useCallback((
         e: React.MouseEvent,
         type: DragState['type'],
@@ -135,6 +144,9 @@ export function useGanttDrag({
         const parentRect = blockElement.parentElement?.getBoundingClientRect();
 
         if (!parentRect) return;
+
+        // 保存parentRect供后续使用
+        parentRectRef.current = parentRect;
 
         const startLeft = rect.left - parentRect.left;
         const startWidth = rect.width;
@@ -170,37 +182,26 @@ export function useGanttDrag({
             // 转换为像素位置
             windowMinX = (windowStartHour - startDay * 24) * hourWidth;
             windowMaxX = (windowEndHour - startDay * 24) * hourWidth;
-
-            console.log('[Drag] Window bounds calculated:', {
-                windowStartHour, windowEndHour, windowMinX, windowMaxX, startWidth
-            });
         }
 
-        // 创建 ghost
-        const ghost = createGhost(blockElement);
-        ghost.style.left = `${startLeft}px`;
-        ghost.style.top = `${rect.top - parentRect.top}px`;
-        ghost.style.width = `${startWidth}px`;
-
-        // 原始元素变为虚线框
-        blockElement.style.opacity = '0.3';
-        blockElement.style.border = '2px dashed #1890ff';
-
+        // 不立即创建ghost，等待鼠标移动超过阈值才创建
         dragState.current = {
             type,
             nodeId,
             scheduleId,
             stageId,
             blockElement,
-            ghostElement: ghost,
+            ghostElement: null, // 延迟创建
             startMouseX: e.clientX,
+            startMouseY: e.clientY,
             startLeft,
             startWidth,
             originalData,
             minX,
             maxX,
             windowMinX,
-            windowMaxX
+            windowMaxX,
+            isDragging: false // 尚未真正开始拖拽
         };
 
         // 添加全局事件
@@ -215,13 +216,46 @@ export function useGanttDrag({
         cancelAnimationFrame(rafId.current);
         rafId.current = requestAnimationFrame(() => {
             const state = dragState.current;
-            if (!state || !state.ghostElement) return;
+            if (!state) return;
 
             const deltaX = e.clientX - state.startMouseX;
+            const deltaY = e.clientY - state.startMouseY;
+
+            // 检查是否超过拖拽阈值
+            if (!state.isDragging) {
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                if (distance < DRAG_THRESHOLD) {
+                    // 尚未超过阈值，不处理
+                    return;
+                }
+
+                // 超过阈值，开始真正的拖拽
+                state.isDragging = true;
+
+                // 现在创建ghost和视觉反馈
+                const parentRect = parentRectRef.current;
+                if (parentRect) {
+                    const rect = state.blockElement.getBoundingClientRect();
+                    const ghost = createGhost(state.blockElement);
+                    ghost.style.left = `${state.startLeft}px`;
+                    ghost.style.top = `${rect.top - parentRect.top}px`;
+                    ghost.style.width = `${state.startWidth}px`;
+                    state.ghostElement = ghost;
+
+                    // 原始元素变为虚线框
+                    state.blockElement.style.opacity = '0.3';
+                    state.blockElement.style.border = '2px dashed #1890ff';
+                }
+            }
+
+            // 如果没有ghost元素，返回
+            if (!state.ghostElement) return;
+
+            const dx = e.clientX - state.startMouseX;
 
             if (state.type === 'move') {
                 // 移动操作条
-                let newLeft = state.startLeft + deltaX;
+                let newLeft = state.startLeft + dx;
 
                 // 使用窗口边界限制（如果存在），否则使用视图边界
                 if (state.windowMinX !== undefined && state.windowMaxX !== undefined) {
@@ -232,15 +266,29 @@ export function useGanttDrag({
                     newLeft = Math.max(state.minX, Math.min(state.maxX - state.startWidth, newLeft));
                 }
 
-                state.ghostElement.style.left = `${newLeft}px`;
+                // 实时吸附到网格 (15分钟间隔)
+                const snapWidth = SNAP_HOURS * hourWidth;
+                const snappedLeft = Math.round(newLeft / snapWidth) * snapWidth;
 
-                const newHour = computeHourFromX(newLeft);
+                state.ghostElement.style.left = `${snappedLeft}px`;
+
+                // 吸附时添加视觉反馈 - 短暂的缩放效果
+                if (Math.abs(snappedLeft - newLeft) > 1) {
+                    state.ghostElement.style.transform = 'scaleX(1.01)';
+                    setTimeout(() => {
+                        if (state.ghostElement) {
+                            state.ghostElement.style.transform = '';
+                        }
+                    }, 50);
+                }
+
+                const newHour = computeHourFromX(snappedLeft);
                 updateTooltip(e.clientX, e.clientY, newHour);
 
             } else if (state.type === 'resize-start') {
                 // 调整窗口开始
-                let newLeft = state.startLeft + deltaX;
-                let newWidth = state.startWidth - deltaX;
+                let newLeft = state.startLeft + dx;
+                let newWidth = state.startWidth - dx;
 
                 // 最小宽度限制（至少 0.25 小时）
                 const minWidth = SNAP_HOURS * hourWidth;
@@ -250,15 +298,20 @@ export function useGanttDrag({
                 }
                 newLeft = Math.max(state.minX, newLeft);
 
-                state.ghostElement.style.left = `${newLeft}px`;
-                state.ghostElement.style.width = `${newWidth}px`;
+                // 实时吸附到网格 (15分钟间隔)
+                const snapWidth = SNAP_HOURS * hourWidth;
+                const snappedLeft = Math.round(newLeft / snapWidth) * snapWidth;
+                const snappedWidth = Math.round(newWidth / snapWidth) * snapWidth;
 
-                const newHour = computeHourFromX(newLeft);
+                state.ghostElement.style.left = `${snappedLeft}px`;
+                state.ghostElement.style.width = `${Math.max(minWidth, snappedWidth)}px`;
+
+                const newHour = computeHourFromX(snappedLeft);
                 updateTooltip(e.clientX, e.clientY, newHour);
 
             } else if (state.type === 'resize-end') {
                 // 调整窗口结束
-                let newWidth = state.startWidth + deltaX;
+                let newWidth = state.startWidth + dx;
 
                 // 最小宽度限制
                 const minWidth = SNAP_HOURS * hourWidth;
@@ -268,9 +321,13 @@ export function useGanttDrag({
                 const maxWidth = state.maxX - state.startLeft;
                 newWidth = Math.min(maxWidth, newWidth);
 
-                state.ghostElement.style.width = `${newWidth}px`;
+                // 实时吸附到网格 (15分钟间隔)
+                const snapWidth = SNAP_HOURS * hourWidth;
+                const snappedWidth = Math.round(newWidth / snapWidth) * snapWidth;
 
-                const endHour = computeHourFromX(state.startLeft + newWidth);
+                state.ghostElement.style.width = `${Math.max(minWidth, snappedWidth)}px`;
+
+                const endHour = computeHourFromX(state.startLeft + snappedWidth);
                 updateTooltip(e.clientX, e.clientY, endHour);
             }
         });
@@ -285,6 +342,13 @@ export function useGanttDrag({
 
         const state = dragState.current;
         if (!state) return;
+
+        // 如果没有真正开始拖拽（未超过阈值），直接清理并返回
+        if (!state.isDragging) {
+            dragState.current = null;
+            parentRectRef.current = null;
+            return;
+        }
 
         // 直接读取 style.left 和 style.width，避免 getBoundingClientRect 受滚动等因素影响
         const ghostLeft = state.ghostElement?.style.left;
@@ -302,6 +366,7 @@ export function useGanttDrag({
             state.blockElement.style.opacity = '';
             state.blockElement.style.border = '';
             dragState.current = null;
+            parentRectRef.current = null;
             return;
         }
 
@@ -342,10 +407,7 @@ export function useGanttDrag({
             const deltaDays = relativeOperationDay - state.originalData.operation_day;
             const deltaTime = newTime - state.originalData.recommended_time;
 
-            console.log('[Drag] Move calculation:', {
-                newHour, absoluteDay, stageStartDay, relativeOperationDay, newTime, newLeft,
-                deltaDays, deltaTime, deltaHours
-            });
+
 
 
             // 更新 operation_day 和 recommended_time
@@ -374,7 +436,7 @@ export function useGanttDrag({
             // 限制偏移在 -7 到 7 之间
             const clampedOffset = Math.max(-7, Math.min(7, windowOffset));
 
-            console.log('[Drag] Resize-start:', { newHour, newWindowDay, newWindowTime, windowOffset, clampedOffset });
+
 
             updates = {
                 window_start_time: newWindowTime,
@@ -392,7 +454,7 @@ export function useGanttDrag({
             const windowOffset = endDay - state.originalData.operation_day;
             const clampedOffset = Math.max(-7, Math.min(7, windowOffset));
 
-            console.log('[Drag] Resize-end:', { endHour, endDay, endWindowTime, windowOffset, clampedOffset });
+
 
             updates = {
                 window_end_time: endWindowTime,
@@ -415,18 +477,18 @@ export function useGanttDrag({
         }
 
         dragState.current = null;
+        parentRectRef.current = null;
 
-        // 调用 API 更新（静默模式，不刷新界面）
-        try {
-            await onDragEnd(state.scheduleId, state.stageId, updates);
-            // 静默更新本地节点数据，确保后续拖拽使用新值
-            if (onNodeUpdate) {
-                onNodeUpdate(state.nodeId, updates);
-            }
-        } catch (error) {
-            message.error('保存失败，请重试');
-            // 可以考虑自动撤销
+        // 立即更新本地节点数据（无阻塞）
+        if (onNodeUpdate) {
+            onNodeUpdate(state.nodeId, updates);
         }
+
+        // 异步调用 API 更新（fire-and-forget，不阻塞 UI）
+        onDragEnd(state.scheduleId, state.stageId, updates)
+            .catch(() => {
+                message.error('保存失败，请重试');
+            });
     }, [hourWidth, computeHourFromX, destroyTooltip, onDragEnd, onNodeUpdate, handleMouseMove]);
 
     // 撤销

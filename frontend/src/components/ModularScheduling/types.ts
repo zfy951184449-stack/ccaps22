@@ -50,7 +50,6 @@ export interface SolverConfig {
   sharingViolationPenalty: number;          // 共享人员不满足罚分
 
   // ==================== 班次一致性模块 ====================
-  enableShiftConsistency: boolean;          // 模块开关
   shiftMatchingToleranceMinutes: number;    // 班次匹配容差（分钟）
   workdayRestPenalty: number;               // 工作日休息罚分
   nonWorkdayWorkPenalty: number;            // 非工作日上班罚分
@@ -94,10 +93,6 @@ export interface SolverConfig {
   solverTimeLimit: number;                  // 求解时间限制（秒）
   solverImprovementTimeout: number;         // 无改进超时（秒）
 
-  // ==================== 兼容旧字段（将在后续版本移除） ====================
-  monthlyHoursLowerBound?: number;
-  monthlyHoursUpperBound?: number;
-  preferShorterShift?: boolean;
 }
 
 /**

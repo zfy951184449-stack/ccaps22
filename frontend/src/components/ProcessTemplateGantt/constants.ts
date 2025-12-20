@@ -24,6 +24,6 @@ export const HEADER_HEIGHT = 40; // 树/时间轴表头高度
 export const TITLE_BAR_HEIGHT = 64; // 顶部标题区域高度
 export const CONTENT_GAP = 16; // 标题区与主视图间距
 export const LEFT_PANEL_WIDTH = 360; // 左侧树列宽度
-export const ROW_HEIGHT = 36; // 树与甘特行高度统一
+export const ROW_HEIGHT = 32; // 树与甘特行高度统一 (36 -> 32)
 
 export const API_BASE_URL = 'http://localhost:3001/api';

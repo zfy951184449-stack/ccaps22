@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Form, message, Modal } from 'antd';
 import axios from 'axios';
 import {
@@ -38,7 +38,10 @@ export const useGanttInteraction = (
     const [activeHighlight, setActiveHighlight] = useState<{ operations: string[]; constraints: number[] }>({ operations: [], constraints: [] });
     const [scheduling, setScheduling] = useState(false);
     const [scheduleConflicts, setScheduleConflicts] = useState<Record<number, string>>({});
-    const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+
+
+    // Performance Optimization: Use Ref for hover state to avoid re-renders (Forced Recompile)
+    const lastHoveredRowIdRef = React.useRef<string | null>(null);
 
     // Data State for Interaction
     const [operationConstraints, setOperationConstraints] = useState<{
@@ -601,6 +604,24 @@ export const useGanttInteraction = (
         setActiveHighlight({ operations: [], constraints: [] });
     };
 
+
+    // Imperative Hover Handler
+    const setHoveredRow = useCallback((rowId: string | null) => {
+        // 1. Clear previous hover
+        if (lastHoveredRowIdRef.current && lastHoveredRowIdRef.current !== rowId) {
+            const prevElements = document.querySelectorAll(`[data-row-id="${lastHoveredRowIdRef.current}"]`);
+            prevElements.forEach(el => el.classList.remove('is-hovered'));
+        }
+
+        // 2. Set new hover
+        if (rowId) {
+            const newElements = document.querySelectorAll(`[data-row-id="${rowId}"]`);
+            newElements.forEach(el => el.classList.add('is-hovered'));
+        }
+
+        lastHoveredRowIdRef.current = rowId;
+    }, []);
+
     return {
         editingNode, setEditingNode,
         editModalVisible, setEditModalVisible,
@@ -643,7 +664,6 @@ export const useGanttInteraction = (
         loadShareGroups, // Expose this
         handleOperationDragEnd,
         refreshData,
-        hoveredRowId,
-        setHoveredRowId
+        setHoveredRow // Expose imperative handler
     };
 };

@@ -143,6 +143,10 @@ function convertBatchToGanttData(operations: ActiveOperation[], baseDate: dayjs.
             editable: false
         };
 
+        // 计算批次整体范围
+        let batchMinDay = Infinity;
+        let batchMaxDay = -Infinity;
+
         Array.from(stageMap.entries()).forEach(([stageName, ops], stageIndex) => {
             // 计算阶段开始天数
             const stageOps = ops.sort((a, b) =>
@@ -152,6 +156,10 @@ function convertBatchToGanttData(operations: ActiveOperation[], baseDate: dayjs.
             const stageEndTime = dayjs(stageOps[stageOps.length - 1].planned_end_datetime);
             const stageStartDay = stageStartTime.startOf('day').diff(baseDate, 'day');
             const stageEndDay = stageEndTime.startOf('day').diff(baseDate, 'day');
+
+            // 更新批次范围
+            batchMinDay = Math.min(batchMinDay, stageStartDay);
+            batchMaxDay = Math.max(batchMaxDay, stageEndDay);
 
             // 创建阶段节点
             const stageNode: GanttNode = {
@@ -379,6 +387,25 @@ function convertBatchToGanttData(operations: ActiveOperation[], baseDate: dayjs.
             batchNode.children!.push(stageNode);
         });
 
+        // 添加批次甘特条
+        if (batchMinDay !== Infinity && batchMaxDay !== -Infinity) {
+            readOnlyOperationIds.add(batchNode.id); // 批次条不可拖动
+
+            const batchStartHour = batchMinDay * 24;
+            const batchDurationHours = (batchMaxDay - batchMinDay + 1) * 24;
+
+            timeBlocks.push({
+                id: `batch_bar_${batchId}`,
+                node_id: batchNode.id,
+                title: sample.batch_name,
+                start_hour: batchStartHour, // 覆盖整个批次的时间跨度
+                duration_hours: batchDurationHours,
+                color: batchColor,
+                // 不设置 isStage/isTimeWindow，使其渲染为实体（Deep Space 风格）
+                // 由于我们在 GanttBarsFix 中优先使用了 block.color，这将显示为批次颜色
+            });
+        }
+
         ganttNodes.push(batchNode);
     });
 
@@ -438,17 +465,6 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
 
     // 独立操作添加弹窗状态
     const [addIndependentModalVisible, setAddIndependentModalVisible] = useState(false);
-
-    // 待保存的更改记录（用于批量确认保存）
-    const [pendingChanges, setPendingChanges] = useState<Map<number, {
-        planned_start_datetime?: string;
-        planned_end_datetime?: string;
-        window_start_datetime?: string | null;
-        window_end_datetime?: string | null;
-    }>>(new Map());
-
-    // 是否有未保存更改
-    const isDirty = pendingChanges.size > 0;
 
     // 批次约束原始数据（仅 API ID 信息，不包含计算的位置）
     const [rawConstraints, setRawConstraints] = useState<any[]>([]);
@@ -746,16 +762,7 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
             return;
         }
 
-        // 将更改添加到待保存队列（不立即调用 API）
-        setPendingChanges(prev => {
-            const next = new Map(prev);
-            const existing = next.get(scheduleId) || {};
-            next.set(scheduleId, { ...existing, ...requestBody });
-            return next;
-        });
-
-        // 同步更新本地 operations 状态，触发 ganttData 重新计算
-        // 确保后续拖拽使用最新数据
+        // 立即更新本地状态（无阻塞，流畅体验）
         setOperations(prev => prev.map(op =>
             op.operation_plan_id === scheduleId
                 ? {
@@ -772,7 +779,12 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
                 : op
         ));
 
-        message.info('已修改，请点击保存确认');
+        // 异步保存到后端（fire-and-forget，不阻塞 UI）
+        axios.put(`/api/calendar/operations/${scheduleId}/schedule`, requestBody)
+            .catch((err: any) => {
+                const msg = err?.response?.data?.error || '保存失败';
+                message.error(msg);
+            });
     }, [ganttData, baseDate]);
 
     // 过滤推荐人员
@@ -784,47 +796,6 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
             p.employee_code.toLowerCase().includes(keyword)
         );
     }, [assignCandidates, assignSearch]);
-
-    // 批量确认保存所有待保存的更改
-    const handleConfirmSave = useCallback(async () => {
-        if (pendingChanges.size === 0) {
-            message.info('没有需要保存的更改');
-            return;
-        }
-
-        setLoading(true);
-        const totalCount = pendingChanges.size;
-        let successCount = 0;
-        const errors: string[] = [];
-
-        try {
-            // 并行保存所有待保存的更改
-            const promises = Array.from(pendingChanges.entries()).map(
-                async ([scheduleId, changes]) => {
-                    try {
-                        await axios.put(`/api/calendar/operations/${scheduleId}/schedule`, changes);
-                        successCount++;
-                    } catch (err: any) {
-                        const msg = err?.response?.data?.error || `操作 ${scheduleId} 保存失败`;
-                        errors.push(msg);
-                    }
-                }
-            );
-            await Promise.all(promises);
-
-            if (errors.length === 0) {
-                setPendingChanges(new Map()); // 清空待保存队列
-                message.success(`已成功保存 ${successCount} 项更改`);
-            } else {
-                message.warning(`保存完成：${successCount}/${totalCount} 成功，${errors.length} 失败`);
-                console.error('Save errors:', errors);
-            }
-        } catch (err: any) {
-            message.error('批量保存失败，请重试');
-        } finally {
-            setLoading(false);
-        }
-    }, [pendingChanges]);
 
     // 默认返回操作
     const handleBack = useCallback(() => {
@@ -903,8 +874,6 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
                         onOperationClick={handleOperationClick}
                         onCustomDragEnd={handleDragEnd}
                         readOnlyOperations={ganttData.readOnlyOperationIds}
-                        externalIsDirty={isDirty}
-                        onExternalSave={handleConfirmSave}
                         externalConstraints={batchConstraints}
                     />
                 )}

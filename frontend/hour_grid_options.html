@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>甘特图网格方案对比</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #F8FAFC;
+            padding: 24px;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: #111827;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: 13px;
+            color: #374151;
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            background: #E5E7EB;
+            border-radius: 6px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 14px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .card.recommended {
+            border: 2px solid #2563EB;
+        }
+
+        .card.recommended h2::after {
+            content: ' ⭐ 推荐';
+            color: #2563EB;
+        }
+
+        .preview {
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 180px;
+            position: relative;
+        }
+
+        /* Axis */
+        .axis {
+            height: 28px;
+            display: flex;
+            background: white;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .axis-cell {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748B;
+            border-right: 1px solid #E5E7EB;
+            position: relative;
+        }
+
+        /* Content */
+        .content {
+            position: relative;
+            height: calc(100% - 28px);
+            background: white;
+        }
+
+        .row {
+            height: 30px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #E5E7EB;
+        }
+
+        .row.even {
+            background: #F8FAFC;
+        }
+
+        .row.blue {
+            background: rgba(37, 99, 235, 0.06);
+        }
+
+        /* Operation bars */
+        .bar {
+            position: absolute;
+            height: 22px;
+            border-radius: 6px;
+            background: #2563EB;
+            top: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Grid lines */
+        .grid-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .day-line {
+            width: 1.5px;
+            background: #94A3B8;
+        }
+
+        /* Time period backgrounds */
+        .period-work {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(59, 130, 246, 0.05);
+            mix-blend-mode: multiply;
+        }
+
+        .period-long {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(251, 191, 36, 0.06);
+            mix-blend-mode: multiply;
+        }
+
+        /* ===== 方案 A: 每小时实线 (当前) ===== */
+        .style-a .hour-line {
+            width: 1px;
+            background: #CBD5E1;
+        }
+
+        /* ===== 方案 B: 6小时线 + 刻度 ===== */
+        .style-b .hour-line {
+            display: none;
+        }
+
+        .style-b .h6-line {
+            width: 1px;
+            background: #E2E8F0;
+        }
+
+        .style-b .tick {
+            position: absolute;
+            top: 0;
+            width: 1px;
+            height: 6px;
+            background: #CBD5E1;
+        }
+
+        /* ===== 方案 C: 虚线网格 ===== */
+        .style-c .hour-line {
+            width: 1px;
+            border-left: 1px dashed #D1D5DB;
+            background: transparent;
+        }
+
+        /* ===== 方案 D: 仅在轴上标注 ===== */
+        .style-d .hour-line {
+            display: none;
+        }
+
+        .style-d .hour-mark {
+            position: absolute;
+            bottom: 0;
+            font-size: 8px;
+            color: #94A3B8;
+            transform: translateX(-50%);
+        }
+
+        .desc {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #64748B;
+            line-height: 1.5;
+        }
+
+        .desc strong {
+            color: #374151;
+        }
+
+        .pros {
+            color: #059669;
+        }
+
+        .cons {
+            color: #DC2626;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎨 甘特图小时网格方案对比</h1>
+
+    <div class="grid">
+        <!-- 方案 A: 当前 - 每小时实线 -->
+        <div class="card">
+            <h2>方案 A: 每小时实线 (当前)</h2>
+            <div class="preview style-a">
+                <div class="axis">
+                    <div class="axis-cell">Day 0</div>
+                    <div class="axis-cell">Day 1</div>
+                </div>
+                <div class="content">
+                    <div class="row even"></div>
+                    <div class="row blue">
+                        <div class="bar" style="left: 35%; width: 20%;"></div>
+                    </div>
+                    <div class="row even">
+                        <div class="bar" style="left: 55%; width: 25%;"></div>
+                    </div>
+                    <div class="row blue"></div>
+                    <div class="row even">
+                        <div class="bar" style="left: 15%; width: 18%;"></div>
+                    </div>
+                    <!-- 时段背景 -->
+                    <div class="period-work" style="left: 18.75%; width: 33.33%;"></div>
+                    <div class="period-long" style="left: 52.08%; width: 16.67%;"></div>
+                    <div class="period-work" style="left: 68.75%; width: 33.33%;"></div>
+                    <!-- 小时线 (24根/天) -->
+                    <div class="grid-line hour-line" style="left: 4.17%;"></div>
+                    <div class="grid-line hour-line" style="left: 8.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 12.5%;"></div>
+                    <div class="grid-line hour-line" style="left: 16.67%;"></div>
+                    <div class="grid-line hour-line" style="left: 20.83%;"></div>
+                    <div class="grid-line hour-line" style="left: 25%;"></div>
+                    <div class="grid-line hour-line" style="left: 29.17%;"></div>
+                    <div class="grid-line hour-line" style="left: 33.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 37.5%;"></div>
+                    <div class="grid-line hour-line" style="left: 41.67%;"></div>
+                    <div class="grid-line hour-line" style="left: 45.83%;"></div>
+                    <!-- 日线 -->
+                    <div class="grid-line day-line" style="left: 50%;"></div>
+                    <div class="grid-line hour-line" style="left: 54.17%;"></div>
+                    <div class="grid-line hour-line" style="left: 58.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 62.5%;"></div>
+                    <div class="grid-line hour-line" style="left: 66.67%;"></div>
+                    <div class="grid-line hour-line" style="left: 70.83%;"></div>
+                    <div class="grid-line hour-line" style="left: 75%;"></div>
+                    <div class="grid-line hour-line" style="left: 79.17%;"></div>
+                    <div class="grid-line hour-line" style="left: 83.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 87.5%;"></div>
+                    <div class="grid-line hour-line" style="left: 91.67%;"></div>
+                    <div class="grid-line hour-line" style="left: 95.83%;"></div>
+                </div>
+            </div>
+            <div class="desc">
+                <span class="cons">✗ 视觉杂乱，干扰内容阅读</span><br>
+                <span class="cons">✗ 24根线/天，信息过载</span>
+            </div>
+        </div>
+
+        <!-- 方案 B: 6小时线 + 顶部刻度 -->
+        <div class="card recommended">
+            <h2>方案 B: 6小时线 + 顶部刻度</h2>
+            <div class="preview style-b">
+                <div class="axis">
+                    <div class="axis-cell">
+                        Day 0
+                        <span class="tick" style="left: 25%;"></span>
+                        <span class="tick" style="left: 50%;"></span>
+                        <span class="tick" style="left: 75%;"></span>
+                    </div>
+                    <div class="axis-cell">
+                        Day 1
+                        <span class="tick" style="left: 25%;"></span>
+                        <span class="tick" style="left: 50%;"></span>
+                        <span class="tick" style="left: 75%;"></span>
+                    </div>
+                </div>
+                <div class="content">
+                    <div class="row even"></div>
+                    <div class="row blue">
+                        <div class="bar" style="left: 35%; width: 20%;"></div>
+                    </div>
+                    <div class="row even">
+                        <div class="bar" style="left: 55%; width: 25%;"></div>
+                    </div>
+                    <div class="row blue"></div>
+                    <div class="row even">
+                        <div class="bar" style="left: 15%; width: 18%;"></div>
+                    </div>
+                    <!-- 时段背景 -->
+                    <div class="period-work" style="left: 18.75%; width: 33.33%;"></div>
+                    <div class="period-long" style="left: 52.08%; width: 16.67%;"></div>
+                    <div class="period-work" style="left: 68.75%; width: 33.33%;"></div>
+                    <!-- 只有 6h 线 -->
+                    <div class="grid-line h6-line" style="left: 12.5%;"></div>
+                    <div class="grid-line h6-line" style="left: 25%;"></div>
+                    <div class="grid-line h6-line" style="left: 37.5%;"></div>
+                    <div class="grid-line day-line" style="left: 50%;"></div>
+                    <div class="grid-line h6-line" style="left: 62.5%;"></div>
+                    <div class="grid-line h6-line" style="left: 75%;"></div>
+                    <div class="grid-line h6-line" style="left: 87.5%;"></div>
+                </div>
+            </div>
+            <div class="desc">
+                <span class="pros">✓ 保留时间定位能力</span><br>
+                <span class="pros">✓ 仅 6 根线/天，视觉清爽</span><br>
+                <span class="pros">✓ 顶部刻度辅助精细定位</span>
+            </div>
+        </div>
+
+        <!-- 方案 C: 虚线网格 -->
+        <div class="card">
+            <h2>方案 C: 虚线小时网格</h2>
+            <div class="preview style-c">
+                <div class="axis">
+                    <div class="axis-cell">Day 0</div>
+                    <div class="axis-cell">Day 1</div>
+                </div>
+                <div class="content">
+                    <div class="row even"></div>
+                    <div class="row blue">
+                        <div class="bar" style="left: 35%; width: 20%;"></div>
+                    </div>
+                    <div class="row even">
+                        <div class="bar" style="left: 55%; width: 25%;"></div>
+                    </div>
+                    <div class="row blue"></div>
+                    <div class="row even">
+                        <div class="bar" style="left: 15%; width: 18%;"></div>
+                    </div>
+                    <!-- 时段背景 -->
+                    <div class="period-work" style="left: 18.75%; width: 33.33%;"></div>
+                    <div class="period-long" style="left: 52.08%; width: 16.67%;"></div>
+                    <div class="period-work" style="left: 68.75%; width: 33.33%;"></div>
+                    <!-- 虚线 -->
+                    <div class="grid-line hour-line" style="left: 8.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 16.67%;"></div>
+                    <div class="grid-line hour-line" style="left: 25%;"></div>
+                    <div class="grid-line hour-line" style="left: 33.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 41.67%;"></div>
+                    <div class="grid-line day-line" style="left: 50%;"></div>
+                    <div class="grid-line hour-line" style="left: 58.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 66.67%;"></div>
+                    <div class="grid-line hour-line" style="left: 75%;"></div>
+                    <div class="grid-line hour-line" style="left: 83.33%;"></div>
+                    <div class="grid-line hour-line" style="left: 91.67%;"></div>
+                </div>
+            </div>
+            <div class="desc">
+                <span class="pros">✓ 虚线比实线更轻</span><br>
+                <span class="cons">✗ 仍有 24 根线/天</span><br>
+                <span class="cons">✗ 虚线可能产生视觉振动</span>
+            </div>
+        </div>
+
+        <!-- 方案 D: 仅轴标注 -->
+        <div class="card">
+            <h2>方案 D: 仅在时间轴标注</h2>
+            <div class="preview style-d">
+                <div class="axis">
+                    <div class="axis-cell" style="position: relative;">
+                        Day 0
+                        <span class="hour-mark" style="left: 25%;">6h</span>
+                        <span class="hour-mark" style="left: 50%;">12h</span>
+                        <span class="hour-mark" style="left: 75%;">18h</span>
+                    </div>
+                    <div class="axis-cell" style="position: relative;">
+                        Day 1
+                        <span class="hour-mark" style="left: 25%;">6h</span>
+                        <span class="hour-mark" style="left: 50%;">12h</span>
+                        <span class="hour-mark" style="left: 75%;">18h</span>
+                    </div>
+                </div>
+                <div class="content">
+                    <div class="row even"></div>
+                    <div class="row blue">
+                        <div class="bar" style="left: 35%; width: 20%;"></div>
+                    </div>
+                    <div class="row even">
+                        <div class="bar" style="left: 55%; width: 25%;"></div>
+                    </div>
+                    <div class="row blue"></div>
+                    <div class="row even">
+                        <div class="bar" style="left: 15%; width: 18%;"></div>
+                    </div>
+                    <!-- 时段背景 -->
+                    <div class="period-work" style="left: 18.75%; width: 33.33%;"></div>
+                    <div class="period-long" style="left: 52.08%; width: 16.67%;"></div>
+                    <div class="period-work" style="left: 68.75%; width: 33.33%;"></div>
+                    <!-- 只有日线 -->
+                    <div class="grid-line day-line" style="left: 50%;"></div>
+                </div>
+            </div>
+            <div class="desc">
+                <span class="pros">✓ 最干净的视觉</span><br>
+                <span class="cons">✗ 精确时间定位困难</span><br>
+                <span class="cons">✗ 需用 tooltip 辅助</span>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

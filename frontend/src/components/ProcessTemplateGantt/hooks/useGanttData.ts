@@ -104,8 +104,8 @@ export const useGanttData = (options: UseGanttDataOptions | ProcessTemplate) => 
         }
     }, [template, isExternalMode]);
 
-    // 追踪是否已初始化外部数据
-    const externalDataInitialized = useRef(false);
+    // 追踪上次的节点ID集合，用于检测新增节点
+    const prevNodeIdsRef = useRef<Set<string>>(new Set());
 
     // 初始化外部数据（批次模式）
     useEffect(() => {
@@ -121,23 +121,36 @@ export const useGanttData = (options: UseGanttDataOptions | ProcessTemplate) => 
                 setTimeBlocks(blocks);
             }
 
-            // 只在首次初始化时设置默认展开节点
-            if (!externalDataInitialized.current) {
-                const defaultExpandedKeys: string[] = [];
-                const collectKeys = (nodes: GanttNode[]) => {
-                    nodes.forEach(node => {
-                        if (node.type !== 'operation') {
-                            defaultExpandedKeys.push(node.id);
-                        }
-                        if (node.children) {
-                            collectKeys(node.children);
-                        }
-                    });
-                };
-                collectKeys(externalData.ganttNodes);
-                setExpandedKeys(defaultExpandedKeys);
-                externalDataInitialized.current = true;
+            // 收集所有非操作节点的 ID（批次/阶段）
+            const allExpandableKeys: string[] = [];
+            const currentNodeIds = new Set<string>();
+            const collectKeys = (nodes: GanttNode[]) => {
+                nodes.forEach(node => {
+                    currentNodeIds.add(node.id);
+                    if (node.type !== 'operation') {
+                        allExpandableKeys.push(node.id);
+                    }
+                    if (node.children) {
+                        collectKeys(node.children);
+                    }
+                });
+            };
+            collectKeys(externalData.ganttNodes);
+
+            // 检测是否有新节点
+            const hasNewNodes = allExpandableKeys.some(id => !prevNodeIdsRef.current.has(id));
+            const isFirstInit = prevNodeIdsRef.current.size === 0;
+
+            if (isFirstInit || hasNewNodes) {
+                // 首次初始化或有新节点时，合并到 expandedKeys
+                setExpandedKeys(prev => {
+                    const combined = new Set([...prev, ...allExpandableKeys]);
+                    return Array.from(combined);
+                });
             }
+
+            // 更新上次节点ID集合
+            prevNodeIdsRef.current = currentNodeIds;
         }
     }, [isExternalMode, externalData]);
 

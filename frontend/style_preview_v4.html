@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gantt Styles V4 - Soft Dimensional Variations</title>
+    <style>
+        :root {
+            --bg-body: #f5f7fa;
+            --bg-card: #ffffff;
+            --text-primary: #1f2937;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-body);
+            padding: 40px;
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 32px;
+            color: #111827;
+        }
+
+        .style-card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-desc {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 400;
+            margin-left: 12px;
+        }
+
+        .gantt-track {
+            height: 52px;
+            background: #f8fafc;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            border: 1px dashed #e2e8f0;
+        }
+
+        .bar {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            color: white;
+            letter-spacing: -0.01em;
+        }
+
+        .bar:hover {
+            transform: translateY(-1px);
+            z-index: 10;
+        }
+
+        /* --- Style A: Classic Soft (The Chosen One) --- */
+        /* Soft linear gradient, elevated shadow, 8px radius */
+        .style-classic .bar {
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.05);
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+        }
+
+        .style-classic .bar-blue {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            /* Lighter start to darker end */
+            width: 220px;
+        }
+
+        .style-classic .bar:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
+            /* Lift effect */
+        }
+
+        .style-classic .bar-teal {
+            background: linear-gradient(135deg, #5eead4, #14b8a6);
+            color: #134e4a;
+            /* Dark text for light teal */
+            text-shadow: none;
+            width: 160px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style B: Modern Pill (Fully Rounded) --- */
+        /* Full pill shape, creates cleaner separation between items */
+        .style-pill .bar {
+            border-radius: 999px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+        }
+
+        .style-pill .bar-blue {
+            background: linear-gradient(180deg, #3b82f6, #2563eb);
+            /* Subtle top inner light */
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            width: 220px;
+        }
+
+        .style-pill .bar-teal {
+            background: linear-gradient(180deg, #14b8a6, #0d9488);
+            box-shadow: 0 2px 6px rgba(13, 148, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            width: 160px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style C: Ambient Glow (Soft Colored Shadow) --- */
+        /* Shadow matches the bar color, creating a glow effect. Very vivid. */
+        .style-glow .bar {
+            border-radius: 8px;
+        }
+
+        .style-glow .bar-blue {
+            background: #3b82f6;
+            /* Colored shadow */
+            box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+            width: 220px;
+        }
+
+        .style-glow .bar-teal {
+            background: #14b8a6;
+            box-shadow: 0 4px 14px rgba(20, 184, 166, 0.4);
+            width: 160px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style D: Matte Surface (Low Reflectivity) --- */
+        /* Very subtle gradient (almost flat), smooth finish, minimal shadow */
+        .style-surface .bar {
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+        }
+
+        .style-surface .bar-blue {
+            background: linear-gradient(to bottom right, #eff6ff, #dbeafe);
+            /* Very light, tinted bg */
+            color: #1e40af;
+            /* Dark text */
+            border: 1px solid #bfdbfe;
+            width: 220px;
+        }
+
+        /* Wait, Surface usually implies solid color but matte. Let's try deep solid colors. */
+        .style-surface .bar-blue {
+            background: linear-gradient(to bottom, #3b82f6, #2563eb);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            /* Subtle border for definition */
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            width: 220px;
+            color: white;
+        }
+
+        .style-surface .bar-teal {
+            background: linear-gradient(to bottom, #14b8a6, #0f766e);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            width: 160px;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🍏 Soft Dimensional Variations</h1>
+
+    <div class="style-card style-classic">
+        <div class="section-title">A. Classic Soft <span class="section-desc">Original choice. Clean gradient, soft
+                lift.</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+    <div class="style-card style-pill">
+        <div class="section-title">B. Modern Pill <span class="section-desc">Fully rounded. friendlier, distinct.</span>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+    <div class="style-card style-glow">
+        <div class="section-title">C. Ambient Glow <span class="section-desc">Colored shadow glow. Vibrant &
+                depth.</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+    <div class="style-card style-surface">
+        <div class="section-title">D. Matte Surface <span class="section-desc">Subtler gradient, crisp edge.
+                Professional.</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+</body>
+
+</html>

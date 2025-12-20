@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gantt Styles V5 - Floating Spatial</title>
+    <style>
+        :root {
+            --bg-body: #f5f7fa;
+            --bg-card: #ffffff;
+            --text-primary: #1f2937;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-body);
+            padding: 40px;
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 32px;
+            color: #111827;
+        }
+
+        .style-card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 32px;
+            margin-bottom: 32px;
+            /* Card itself has depth */
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.03);
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-desc {
+            font-size: 13px;
+            color: #6b7280;
+            font-weight: 400;
+            margin-left: 12px;
+        }
+
+        .gantt-track {
+            height: 52px;
+            background: #f1f5f9;
+            /* Slightly darker track to show contrast with floating bar */
+            border-radius: 12px;
+            margin-bottom: 16px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            /* Inner shadow to make track look recessed, enhancing bar floating effect */
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0, 0, 0, 0.02);
+            box-sizing: border-box;
+        }
+
+        .bar {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative;
+            color: white;
+            letter-spacing: -0.01em;
+            z-index: 2;
+        }
+
+        .bar:hover {
+            transform: translateY(-2px) scale(1.01);
+            z-index: 10;
+        }
+
+        /* --- Style A: Floating Matte (Refined Surface) --- */
+        /* Matte finish but with layered shadows to separate from bg */
+        .style-floating-matte .bar {
+            border-radius: 6px;
+            /* Key: Double shadow. 
+               1. Tight ambient shadow for definition. 
+               2. Larger, softer diffuse shadow for height. 
+            */
+            box-shadow:
+                0 1px 2px rgba(0, 0, 0, 0.1),
+                /* Definition */
+                0 4px 12px rgba(0, 0, 0, 0.08),
+                /* Float/Height */
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            /* Top light for 3D edge */
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            /* Physical bottom edge */
+        }
+
+        .style-floating-matte .bar-blue {
+            background: linear-gradient(180deg, #3b82f6, #2563eb);
+            width: 220px;
+        }
+
+        .style-floating-matte .bar:hover {
+            box-shadow:
+                0 2px 4px rgba(0, 0, 0, 0.12),
+                0 8px 24px rgba(0, 0, 0, 0.12),
+                /* Higher float on hover */
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .style-floating-matte .bar-teal {
+            background: linear-gradient(180deg, #14b8a6, #0f766e);
+            width: 160px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style B: Floating Classic (Soft Spatial) --- */
+        /* Smoother gradient, softer shadows, slightly more rounded */
+        .style-floating-classic .bar {
+            border-radius: 8px;
+            /* Softer, more diffuse shadows */
+            box-shadow:
+                0 2px 4px rgba(50, 50, 93, 0.11),
+                0 1px 3px rgba(0, 0, 0, 0.08);
+            /* Base float */
+        }
+
+        .style-floating-classic .bar-blue {
+            background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+            /* Inner light bloom */
+            width: 220px;
+        }
+
+        .style-floating-classic .bar:hover {
+            box-shadow:
+                0 6px 12px -2px rgba(50, 50, 93, 0.25),
+                0 3px 7px -3px rgba(0, 0, 0, 0.3);
+            /* Significant lift */
+        }
+
+        .style-floating-classic .bar-teal {
+            background: linear-gradient(135deg, #2dd4bf 0%, #0d9488 100%);
+            width: 160px;
+            margin-left: 20px;
+        }
+
+
+        /* --- Style C: Deep Space (High Elevation) --- */
+        /* Emphasizes the disconnect from the track */
+        .style-deep-space .bar {
+            border-radius: 6px;
+            /* Stronger shadow offset */
+            box-shadow:
+                0 4px 6px -1px rgba(0, 0, 0, 0.1),
+                0 2px 4px -1px rgba(0, 0, 0, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            /* Outline */
+        }
+
+        .style-deep-space .bar-blue {
+            background: #2563eb;
+            /* Solid vivid */
+            width: 220px;
+        }
+
+        .style-deep-space .bar-teal {
+            background: #0f766e;
+            width: 160px;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>☁️ Floating Spatial Variations</h1>
+
+    <div class="style-card style-floating-matte">
+        <div class="section-title">A. Floating Matte <span class="section-desc">Crisp edge, layered shadows.
+                Professional depth.</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+    <div class="style-card style-floating-classic">
+        <div class="section-title">B. Floating Classic <span class="section-desc">Soft gradients, diffuse shadows.
+                Gentle lift.</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+    <div class="style-card style-deep-space">
+        <div class="section-title">C. Deep Space <span class="section-desc">Solid color, strong elevation. Distinct
+                layers.</span></div>
+        <div class="gantt-track">
+            <div class="bar bar-blue">Operation Alpha</div>
+        </div>
+        <div class="gantt-track">
+            <div class="bar bar-teal">Processing Data</div>
+        </div>
+    </div>
+
+</body>
+
+</html>

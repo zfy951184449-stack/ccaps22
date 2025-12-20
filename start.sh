@@ -128,6 +128,24 @@ PIDS+=("${BACKEND_PID}")
 
 wait_for_url "http://127.0.0.1:${BACKEND_PORT}/api/health" "后端 API"
 
+SOLVER_PORT="${SOLVER_PORT:-5001}"
+ensure_port_available "${SOLVER_PORT}" "求解器"
+
+echo "🧠 启动求解器服务 (端口${SOLVER_PORT})..."
+if [[ -d "solver/.venv" ]]; then
+  cd solver
+  source .venv/bin/activate
+  python app.py &
+  SOLVER_PID=$!
+  deactivate 2>/dev/null || true
+  cd "${SCRIPT_DIR}"
+  PIDS+=("${SOLVER_PID}")
+  wait_for_url "http://127.0.0.1:${SOLVER_PORT}/api/health" "求解器 API"
+else
+  echo "⚠️  未检测到求解器虚拟环境 (solver/.venv)，跳过求解器启动"
+  echo "   如需启动求解器，请先运行: cd solver && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"
+fi
+
 echo "🎨 启动前端服务 (端口${FRONTEND_PORT}，监听所有网卡)..."
 cd frontend
 HOST="${HOST}" PORT="${FRONTEND_PORT}" npm start &
@@ -141,6 +159,7 @@ echo ""
 echo "✅ 服务启动完成!"
 echo "📱 前端界面: http://localhost:${FRONTEND_PORT}"
 echo "🔗 后端API: http://localhost:${BACKEND_PORT}"
+echo "🧠 求解器API: http://localhost:${SOLVER_PORT}"
 echo ""
 
 LAN_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')

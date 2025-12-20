@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Space, Tag, Typography } from 'antd';
+import { Button, Space, Typography } from 'antd';
 import {
     CaretDownOutlined,
     CaretRightOutlined,
@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { GanttNode, FlattenedRow, ProcessStage } from '../types';
 import { TOKENS, ROW_HEIGHT } from '../constants';
+import { DSButton } from '../../design-system';
 
 const { Text } = Typography;
 
@@ -25,8 +26,8 @@ interface GanttSidebarProps {
     handleEditNode: (node: GanttNode) => void;
     handleDeleteNode: (nodeId: string) => void;
     stageColorMap: Map<number, string>;
-    hoveredRowId: string | null;
-    setHoveredRowId: (id: string | null) => void;
+    // Imperative hover handler
+    setHoveredRow: (id: string | null) => void;
 }
 
 export const GanttSidebar: React.FC<GanttSidebarProps> = ({
@@ -40,8 +41,7 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
     handleEditNode,
     handleDeleteNode,
     stageColorMap,
-    hoveredRowId,
-    setHoveredRowId
+    setHoveredRow
 }) => {
     const renderRowMain = (node: GanttNode) => {
         const isTemplate = node.type === 'template';
@@ -50,56 +50,55 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
         const fontWeight = isTemplate ? 600 : isStage ? 500 : 500;
 
         return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                 {isStage && node.data && (() => {
                     const stageColor = stageColorMap.get((node.data as ProcessStage).id) || TOKENS.primary;
                     return (
-                        <Tag
-                            color={stageColor}
-                            style={{ margin: 0, flexShrink: 0, borderRadius: 8, paddingInline: 10, background: 'transparent', color: stageColor, border: `1px solid ${stageColor}` }}
-                        >
-                            {node.stage_code}
-                        </Tag>
+                        <div
+                            style={{
+                                flexShrink: 0,
+                                borderRadius: 4,
+                                width: 4,
+                                height: 14,
+                                backgroundColor: stageColor,
+                                marginRight: 2
+                            }}
+                        />
                     );
                 })()}
                 <Text
                     style={{
-                        fontSize: isTemplate ? 15 : 13,
+                        fontSize: isTemplate ? 14 : 13,
                         fontWeight,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         flex: 1,
                         minWidth: 0,
-                        color: nameColor
+                        color: nameColor,
+                        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
                     }}
                     title={node.title}
                 >
                     {node.title}
                 </Text>
+                {/* 辅助信息降噪：使用纯文本+图标，去除 Tag 背景 */}
                 {node.type === 'operation' && (
-                    <Space size={4} style={{ flexShrink: 0 }}>
-                        {/* 合并的独立操作显示总数 */}
+                    <Space size={8} style={{ flexShrink: 0, marginLeft: 4 }}>
                         {(node.data as any)?._consolidatedCount ? (
-                            <Tag
-                                style={{ margin: 0, fontSize: 11, borderRadius: 6, color: '#7c3aed', background: 'rgba(124, 58, 237, 0.12)', border: 'none' }}
-                            >
-                                共{(node.data as any)._consolidatedCount}个
-                            </Tag>
+                            <span style={{ fontSize: 11, color: '#7c3aed', fontWeight: 500 }}>
+                                {(node.data as any)._consolidatedCount} items
+                            </span>
                         ) : (
                             <>
-                                <Tag
-                                    icon={<UserOutlined />}
-                                    style={{ margin: 0, fontSize: 11, borderRadius: 6, color: TOKENS.textSecondary, background: 'rgba(100, 116, 139, 0.12)', border: 'none' }}
-                                >
-                                    {node.required_people}人
-                                </Tag>
-                                <Tag
-                                    icon={<ClockCircleOutlined />}
-                                    style={{ margin: 0, fontSize: 11, borderRadius: 6, color: TOKENS.textSecondary, background: 'rgba(148, 163, 184, 0.12)', border: 'none' }}
-                                >
-                                    {node.standard_time}h
-                                </Tag>
+                                <Space size={2} style={{ fontSize: 11, color: TOKENS.textSecondary, opacity: 0.8 }}>
+                                    <UserOutlined style={{ fontSize: 10 }} />
+                                    <span>{node.required_people}</span>
+                                </Space>
+                                <Space size={2} style={{ fontSize: 11, color: TOKENS.textSecondary, opacity: 0.8 }}>
+                                    <ClockCircleOutlined style={{ fontSize: 10 }} />
+                                    <span>{node.standard_time}h</span>
+                                </Space>
                             </>
                         )}
                     </Space>
@@ -113,58 +112,42 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
 
         if (node.type === 'template') {
             actions.push(
-                <Button
+                <DSButton
                     key="add-stage"
-                    type="primary"
                     icon={<PlusOutlined />}
-                    style={{
-                        borderRadius: 8,
-                        height: 32,
-                        paddingInline: 16,
-                        fontWeight: 500
-                    }}
+                    tooltip="添加阶段"
+                    variant="ghost"
                     onClick={(e) => {
                         e.stopPropagation();
                         handleAddNode('stage', node);
                     }}
-                >
-                    添加阶段
-                </Button>
+                />
             );
         }
 
         if (node.type === 'stage') {
             actions.push(
-                <Button
+                <DSButton
                     key="add-operation"
-                    type="default"
                     icon={<PlusOutlined />}
-                    style={{
-                        borderRadius: 8,
-                        height: 32,
-                        paddingInline: 12,
-                        borderColor: TOKENS.primary,
-                        color: TOKENS.primary,
-                        fontWeight: 500
-                    }}
+                    tooltip="添加操作"
+                    variant="ghost"
+                    style={{ color: TOKENS.primary }}
                     onClick={(e) => {
                         e.stopPropagation();
                         handleAddNode('operation', node);
                     }}
-                >
-                    添加操作
-                </Button>
+                />
             );
         }
 
         if (selectedNode?.id === node.id && node.editable) {
             actions.push(
-                <Button
+                <DSButton
                     key="edit"
-                    type="text"
-                    size="small"
                     icon={<EditOutlined />}
-                    style={{ height: 24 }}
+                    tooltip="编辑"
+                    variant="ghost"
                     onClick={(e) => {
                         e.stopPropagation();
                         handleEditNode(node);
@@ -174,13 +157,12 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
 
             if (node.type !== 'template') {
                 actions.push(
-                    <Button
+                    <DSButton
                         key="delete"
-                        type="text"
-                        size="small"
-                        danger
                         icon={<DeleteOutlined />}
-                        style={{ height: 24 }}
+                        tooltip="删除"
+                        variant="ghost"
+                        danger
                         onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteNode(node.id);
@@ -204,47 +186,46 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
     const renderTreeRow = (row: FlattenedRow) => {
         const node = row.node;
         const isSelected = selectedNode?.id === node.id;
-        const isTemplate = node.type === 'template';
-        const isStage = node.type === 'stage';
 
-        let backgroundColor = isSelected ? 'rgba(37, 99, 235, 0.08)' : 'transparent';
-        if (!isSelected) {
-            if (row.id === hoveredRowId) {
-                backgroundColor = 'rgba(59, 130, 246, 0.12)';
-            } else if (isTemplate) {
-                backgroundColor = '#F9FAFB';
-            } else if (isStage) {
-                backgroundColor = 'rgba(148, 163, 184, 0.08)';
-            }
-        }
+
+
+        // Apple Style Selection: Blue Tint with rounded corners
+        // Zebra Striping will be handled by CSS :nth-child(even)
+        // We only explicitly set background for selected state or if we want to override zebra
+        let backgroundColor = isSelected ? 'rgba(0, 122, 255, 0.1)' : undefined;
 
         return (
             <div
                 key={row.id}
                 role="row"
+                className={`gantt-sidebar-row ${isSelected ? 'is-selected' : ''}`}
                 style={{
                     display: 'flex',
                     alignItems: 'center',
                     height: ROW_HEIGHT,
-                    paddingRight: 12,
-                    paddingLeft: 12,
+                    paddingRight: 8,
+                    paddingLeft: 8,
                     background: backgroundColor,
-                    borderBottom: `1px solid ${TOKENS.border}`,
-                    borderRadius: isTemplate ? 10 : 0,
-                    cursor: 'pointer'
+                    // Remove borderBottom for cleaner look
+                    // borderBottom: `1px solid ${TOKENS.border}`,
+                    cursor: 'pointer',
+                    transition: 'background-color 0.1s ease',
+                    position: 'relative' // For positioning if needed
                 }}
+                // Add data-row-id for imperative DOM manipulation
+                data-row-id={node.id}
                 onClick={() => {
                     setSelectedNode(node);
                 }}
-                onMouseEnter={() => setHoveredRowId(row.id)}
-                onMouseLeave={() => setHoveredRowId(null)}
+                onMouseEnter={() => setHoveredRow(node.id)}
+                onMouseLeave={() => setHoveredRow(null)}
             >
                 <div
                     style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 8,
-                        flex: 1,
+                        flex: 1, // Allow text to take remaining space
                         minWidth: 0,
                         paddingLeft: row.depth * 16
                     }}
@@ -255,10 +236,11 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
                             size="small"
                             icon={row.isExpanded ? <CaretDownOutlined /> : <CaretRightOutlined />}
                             style={{
-                                width: 28,
-                                height: 28,
+                                width: 24,
+                                height: 24,
                                 padding: 0,
-                                color: TOKENS.secondary
+                                color: TOKENS.secondary,
+                                flexShrink: 0
                             }}
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -266,22 +248,57 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
                             }}
                         />
                     ) : (
-                        <span style={{ width: 28 }} />
+                        <span style={{ width: 24, flexShrink: 0 }} />
                     )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         {renderRowMain(node)}
                     </div>
                 </div>
-                <div style={{ marginLeft: 8 }}>{renderRowActions(node)}</div>
+                <div className="row-actions" style={{ marginLeft: 8 }}>{renderRowActions(node)}</div>
             </div>
         );
     };
 
     return (
-        <div style={{ position: 'relative', height: totalHeight, overflow: 'hidden' }}>
-            <div style={{ transform: `translateY(${virtualOffsetY}px)` }}>
-                {virtualRows.map((row) => renderTreeRow(row))}
+        <>
+            <style>{`
+                .gantt-sidebar-row {
+                    margin: 0 8px; /* Floating effect margin */
+                    border-radius: 6px; /* Rounded corners */
+                }
+                /* Zebra Striping: Even rows get a subtle background */
+                .gantt-sidebar-row:nth-child(even) {
+                    background-color: rgba(0, 0, 0, 0.015);
+                }
+                /* Hover overrides Zebra */
+                .gantt-sidebar-row:hover,
+                .gantt-sidebar-row.is-hovered {
+                    background-color: rgba(0, 0, 0, 0.04) !important; /* Softer hover gray */
+                }
+                /* Selection overrides everything */
+                .gantt-sidebar-row.is-selected {
+                    background-color: rgba(0, 122, 255, 0.1) !important;
+                }
+                
+                /* Hide actions by default */
+                .gantt-sidebar-row .row-actions {
+                    opacity: 0;
+                    transition: opacity 0.15s ease;
+                    pointer-events: none;
+                }
+                /* Show actions on hover or when selected */
+                .gantt-sidebar-row:hover .row-actions,
+                .gantt-sidebar-row.is-hovered .row-actions,
+                .gantt-sidebar-row.is-selected .row-actions {
+                    opacity: 1;
+                    pointer-events: auto;
+                }
+            `}</style>
+            <div style={{ position: 'relative', height: totalHeight, overflow: 'hidden' }}>
+                <div style={{ transform: `translateY(${virtualOffsetY}px)` }}>
+                    {virtualRows.map((row) => renderTreeRow(row))}
+                </div>
             </div>
-        </div>
+        </>
     );
 };

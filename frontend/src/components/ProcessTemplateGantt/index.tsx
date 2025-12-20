@@ -137,12 +137,33 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
     }, [externalConstraints, interaction.ganttConstraints, interaction.shareGroups, isExternalMode, externalShareGroups]);
 
     const handleDayDoubleClick = useCallback((dayNumber: number) => {
-        setExpandedDay(prev => prev === dayNumber ? null : dayNumber);
-    }, []);
+        setExpandedDay(prev => {
+            const newValue = prev === dayNumber ? null : dayNumber;
+            // 重置滚动位置到起始位置，避免 Gantt 图不可见的问题
+            setTimeout(() => {
+                if (ganttContentRef.current) {
+                    ganttContentRef.current.scrollLeft = 0;
+                }
+                if (headerRef.current) {
+                    headerRef.current.scrollLeft = 0;
+                }
+            }, 0);
+            return newValue;
+        });
+    }, [ganttContentRef]);
 
     const handleCollapseDay = useCallback(() => {
         setExpandedDay(null);
-    }, []);
+        // 重置滚动位置
+        setTimeout(() => {
+            if (ganttContentRef.current) {
+                ganttContentRef.current.scrollLeft = 0;
+            }
+            if (headerRef.current) {
+                headerRef.current.scrollLeft = 0;
+            }
+        }, 0);
+    }, [ganttContentRef]);
 
     const handlePrevDay = useCallback(() => {
         setExpandedDay(prev => prev !== null ? prev - 1 : null);
@@ -417,8 +438,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                 } : interaction.handleEditNode}
                                 handleDeleteNode={isExternalMode ? (() => { }) : interaction.handleDeleteNode}
                                 stageColorMap={stageColorMap}
-                                hoveredRowId={interaction.hoveredRowId}
-                                setHoveredRowId={interaction.setHoveredRowId}
+                                setHoveredRow={interaction.setHoveredRow}
                             />
                         </div>
                     </div>
@@ -453,8 +473,8 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                     virtualRows={filteredVirtualRows}
                                     visibleStartIndex={visibleStartIndex}
                                     stageColorMap={stageColorMap}
-                                    hoveredRowId={interaction.hoveredRowId}
-                                    setHoveredRowId={interaction.setHoveredRowId}
+                                    setHoveredRow={interaction.setHoveredRow}
+                                    baseDate={externalData?.baseDate}
                                 />
                                 <GanttBars
                                     timeBlocks={timeBlocks}
@@ -477,8 +497,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                             onOperationClick(scheduleId, node.data as StageOperation);
                                         }
                                     } : interaction.handleEditNode}
-                                    hoveredRowId={interaction.hoveredRowId}
-                                    setHoveredRowId={interaction.setHoveredRowId}
+                                    setHoveredRow={interaction.setHoveredRow}
                                     expandedDay={expandedDay}
                                     onDragStart={handleDragStart}
                                     readOnlyOperations={readOnlyOperations}
