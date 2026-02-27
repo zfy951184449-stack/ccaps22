@@ -17,7 +17,8 @@ import {
   getWorkdayRange,
   getHolidayCacheStats,
   cleanupHolidayCache,
-  preloadHolidayData
+  preloadHolidayData,
+  getBatchOperations
 } from '../controllers/calendarController';
 import {
   lockOperationPlan,
@@ -31,6 +32,7 @@ router.get('/operations/week', getWeekOperations);
 router.get('/operations/month', getMonthOperations);
 router.get('/operations/active', getActiveBatchOperations);
 router.get('/workdays', getWorkdayRange);
+router.post('/batch-operations', getBatchOperations);
 
 // 操作详情和人员
 router.get('/operations/:operationId', getOperationDetail);

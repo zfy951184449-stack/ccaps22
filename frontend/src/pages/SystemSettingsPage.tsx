@@ -864,7 +864,7 @@ const SystemSettingsPage: React.FC = () => {
           </Spin>
         </Card>
 
-        <Card title="约束参数概览" variant="borderless">
+        <Card title="约束参数概览" bordered={false}>
           <Descriptions column={2} size="small" bordered>
             <Descriptions.Item label="月度工时容差 (h)">
               {configOverview?.monthlyToleranceHours ?? '—'}

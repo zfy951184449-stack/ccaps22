@@ -7,71 +7,16 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, DatePicker, Select, Spin, Empty, Statistic, Row, Col, Tooltip, Radio } from 'antd';
-import { ClockCircleOutlined, LeftOutlined, RightOutlined, InfoCircleOutlined, FireOutlined, UserOutlined } from '@ant-design/icons';
+import { DatePicker, Select, Spin, Empty, Statistic, Row, Col, Tooltip, Radio } from 'antd';
+import { ClockCircleOutlined, InfoCircleOutlined, FireOutlined, UserOutlined } from '@ant-design/icons';
 import { Line, DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
-import axios from 'axios';
+import GlassCard from '../common/GlassCard';
+import { dashboardService } from '../../services/dashboardService';
+import { WorkHoursData, DayViewData, MonthViewData, BatchInfo } from '../../types/dashboard';
 import './WorkHoursCurveCard.css';
 
 const { RangePicker } = DatePicker;
-const API_BASE = '/api';
-
-// ============== 类型定义 ==============
-
-interface DailyBatchData {
-    date: string;
-    batch_id: number;
-    batch_code: string;
-    work_hours: number;
-}
-
-interface TotalDailyData {
-    date: string;
-    work_hours: number;
-}
-
-interface BatchInfo {
-    batch_id: number;
-    batch_code: string;
-}
-
-interface DayViewData {
-    granularity: 'day';
-    daily_data: DailyBatchData[];
-    total_by_date: TotalDailyData[];
-    batches: BatchInfo[];
-    summary: {
-        total_hours: number;
-        avg_daily_hours: number;
-        peak_hours: number;
-        peak_date: string;
-        batch_count: number;
-    };
-}
-
-interface MonthlyDataItem {
-    year_month: string;
-    month_label: string;
-    total_hours: number;
-    hours_per_person: number;
-    peak_daily_hours: number;
-    peak_date: string;
-    batch_breakdown: { batch_code: string; work_hours: number }[];
-}
-
-interface MonthViewData {
-    granularity: 'month';
-    monthly_data: MonthlyDataItem[];
-    summary: {
-        total_hours: number;
-        avg_monthly_hours: number;
-        avg_hours_per_person: number;
-        total_employees: number;
-    };
-}
-
-type WorkHoursData = DayViewData | MonthViewData;
 
 // 批次颜色列表
 const BATCH_COLORS = [
@@ -79,42 +24,52 @@ const BATCH_COLORS = [
     '#13c2c2', '#fa541c', '#2f54eb', '#a0d911', '#f5222d',
 ];
 
-const WorkHoursCurveCard: React.FC = () => {
+interface WorkHoursCurveCardProps {
+    date: Dayjs;
+    orgPath: number[];
+}
+
+const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }) => {
     const [loading, setLoading] = useState(false);
     const [granularity, setGranularity] = useState<'day' | 'month'>('day');
+    const [data, setData] = useState<WorkHoursData | null>(null);
 
     // 日视图状态
-    const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs());
     const [selectedBatches, setSelectedBatches] = useState<number[]>([]);
 
-    // 月视图状态 - 默认最近6个月
+    // 月视图状态 - 默认最近6个月，基于传入的 date
+    // 如果 date 变化，我们也顺便把月视图的范围更新一下
     const [monthRange, setMonthRange] = useState<[Dayjs, Dayjs]>([
-        dayjs().subtract(5, 'month'),
-        dayjs()
+        date.subtract(5, 'month'),
+        date
     ]);
 
-    const [data, setData] = useState<WorkHoursData | null>(null);
+    // 当父组件日期变化时，更新月视图范围的结束日期
+    useEffect(() => {
+        setMonthRange(prev => [prev[0], date]);
+    }, [date]);
 
     // 加载数据
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
-                let params: any = { granularity };
+                let resData: WorkHoursData;
 
                 if (granularity === 'day') {
-                    params.year_month = selectedMonth.format('YYYY-MM');
+                    resData = await dashboardService.getWorkHoursCurve('day', date.format('YYYY-MM'), orgPath);
                 } else {
-                    params.start_month = monthRange[0].format('YYYY-MM');
-                    params.end_month = monthRange[1].format('YYYY-MM');
+                    resData = await dashboardService.getWorkHoursCurve('month', [
+                        monthRange[0].format('YYYY-MM'),
+                        monthRange[1].format('YYYY-MM')
+                    ], orgPath);
                 }
 
-                const res = await axios.get(`${API_BASE}/dashboard/work-hours-curve`, { params });
-                setData(res.data);
+                setData(resData);
 
                 // 日视图: 默认选中所有批次
-                if (granularity === 'day' && res.data?.batches?.length > 0 && selectedBatches.length === 0) {
-                    setSelectedBatches(res.data.batches.map((b: BatchInfo) => b.batch_id));
+                if (granularity === 'day' && 'batches' in resData && resData.batches?.length > 0 && selectedBatches.length === 0) {
+                    setSelectedBatches(resData.batches.map((b: BatchInfo) => b.batch_id));
                 }
             } catch (error) {
                 console.error('Failed to load work hours curve:', error);
@@ -125,7 +80,7 @@ const WorkHoursCurveCard: React.FC = () => {
         };
 
         loadData();
-    }, [granularity, selectedMonth, monthRange]);
+    }, [granularity, date, monthRange, orgPath]); // date 作为依赖，触发日视图刷新
 
     // ============== 日视图数据处理 ==============
 
@@ -317,137 +272,123 @@ const WorkHoursCurveCard: React.FC = () => {
     // ============== 渲染 ==============
 
     return (
-        <Card
-            className="work-hours-curve-card"
-            title={
-                <div className="card-header">
-                    <span className="card-title">
-                        <ClockCircleOutlined /> 工时需求曲线
-                        <Tooltip title={granularity === 'day'
-                            ? "红色粗线为每日总工时需求，虚线为各批次工时需求"
-                            : "柱状图为按批次堆叠的月总工时，红色折线为每月峰值日工时"
-                        }>
-                            <InfoCircleOutlined style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 12 }} />
-                        </Tooltip>
-                    </span>
-                    <div className="card-filters">
-                        {/* 粒度切换 */}
-                        <Radio.Group
-                            value={granularity}
-                            onChange={e => {
-                                setGranularity(e.target.value);
-                                setData(null);
-                            }}
-                            size="small"
-                            buttonStyle="solid"
-                            className="granularity-switcher"
-                        >
-                            <Radio.Button value="day">日</Radio.Button>
-                            <Radio.Button value="month">月</Radio.Button>
-                        </Radio.Group>
-
-                        {/* 日视图: 月份导航 */}
-                        {granularity === 'day' && (
-                            <>
-                                <div className="month-navigator">
-                                    <button
-                                        className="month-nav-btn"
-                                        onClick={() => setSelectedMonth(selectedMonth.subtract(1, 'month'))}
-                                        title="上一月"
-                                    >
-                                        <LeftOutlined />
-                                    </button>
-                                    <DatePicker
-                                        picker="month"
-                                        value={selectedMonth}
-                                        onChange={(date) => date && setSelectedMonth(date)}
-                                        allowClear={false}
-                                        size="small"
-                                        style={{ width: 100 }}
-                                    />
-                                    <button
-                                        className="month-nav-btn"
-                                        onClick={() => setSelectedMonth(selectedMonth.add(1, 'month'))}
-                                        title="下一月"
-                                    >
-                                        <RightOutlined />
-                                    </button>
-                                </div>
-                                <Select
-                                    mode="multiple"
-                                    value={selectedBatches}
-                                    onChange={setSelectedBatches}
-                                    placeholder="选择批次"
-                                    maxTagCount={2}
-                                    maxTagPlaceholder={(omittedValues) => `+${omittedValues.length}`}
-                                    size="small"
-                                    style={{ minWidth: 180, maxWidth: 300 }}
-                                    options={batchOptions}
-                                    allowClear
-                                />
-                            </>
-                        )}
-
-                        {/* 月视图: 月份范围选择器 */}
-                        {granularity === 'month' && (
-                            <RangePicker
-                                picker="month"
-                                value={monthRange}
-                                onChange={(dates) => {
-                                    if (dates && dates[0] && dates[1]) {
-                                        setMonthRange([dates[0], dates[1]]);
-                                    }
-                                }}
-                                allowClear={false}
-                                size="small"
-                                style={{ width: 220 }}
-                            />
-                        )}
+        <GlassCard>
+            <div className="card-header" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="card-title" style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                    <div className="icon-wrapper" style={{
+                        background: 'rgba(255, 144, 255, 0.1)', // customized purple/pink ish
+                        padding: 8,
+                        borderRadius: 12,
+                        marginRight: 12,
+                        color: '#722ed1'
+                    }}>
+                        <ClockCircleOutlined />
                     </div>
+                    工时需求曲线
+                    <Tooltip title={granularity === 'day'
+                        ? "红色粗线为每日总工时需求，虚线为各批次工时需求"
+                        : "柱状图为按批次堆叠的月总工时，红色折线为每月峰值日工时"
+                    }>
+                        <InfoCircleOutlined style={{ marginLeft: 8, color: '#bfbfbf', fontSize: 14 }} />
+                    </Tooltip>
+                </span>
+
+                <div className="card-filters" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    {/* 日视图: 批次筛选 (仅在日视图且有数据时显示) */}
+                    {granularity === 'day' && batchOptions.length > 0 && (
+                        <Select
+                            mode="multiple"
+                            value={selectedBatches}
+                            onChange={setSelectedBatches}
+                            placeholder="筛选批次"
+                            maxTagCount={1}
+                            size="small"
+                            style={{ width: 150 }}
+                            options={batchOptions}
+                            allowClear
+                            bordered={false}
+                            className="glass-input"
+                        />
+                    )}
+
+                    {/* 月视图: 范围选择 */}
+                    {granularity === 'month' && (
+                        <RangePicker
+                            picker="month"
+                            value={monthRange}
+                            onChange={(dates) => {
+                                if (dates && dates[0] && dates[1]) {
+                                    setMonthRange([dates[0], dates[1]]);
+                                }
+                            }}
+                            allowClear={false}
+                            size="small"
+                            style={{ width: 200 }}
+                            bordered={false}
+                            className="glass-input-range"
+                        />
+                    )}
+
+                    {/* 粒度切换 */}
+                    <Radio.Group
+                        value={granularity}
+                        onChange={e => {
+                            setGranularity(e.target.value);
+                            setData(null);
+                        }}
+                        size="small"
+                        buttonStyle="solid"
+                        className="granularity-switcher"
+                    >
+                        <Radio.Button value="day">日</Radio.Button>
+                        <Radio.Button value="month">月</Radio.Button>
+                    </Radio.Group>
                 </div>
-            }
-        >
+            </div>
+
             <Spin spinning={loading}>
                 {/* 日视图 */}
                 {granularity === 'day' && dayViewData && lineData.length > 0 && (
                     <>
-                        <div className="chart-container">
-                            <Line {...dayChartConfig} />
-                        </div>
-                        <div className="summary-row">
+                        <div className="summary-row" style={{ marginBottom: 24 }}>
                             <Row gutter={24}>
                                 <Col span={6}>
                                     <Statistic
-                                        title="月度总工时"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>月度总工时</span>}
                                         value={dayViewData.summary.total_hours}
                                         suffix="h"
-                                        prefix={<ClockCircleOutlined />}
+                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
                                     />
                                 </Col>
                                 <Col span={6}>
                                     <Statistic
-                                        title="日均工时"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>日均工时</span>}
                                         value={dayViewData.summary.avg_daily_hours}
                                         suffix="h/天"
+                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
                                     />
                                 </Col>
                                 <Col span={6}>
                                     <Statistic
-                                        title="峰值工时"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>峰值工时</span>}
                                         value={dayViewData.summary.peak_hours}
                                         suffix={dayViewData.summary.peak_date ? `h (${dayjs(dayViewData.summary.peak_date).format('M/D')})` : 'h'}
-                                        valueStyle={{ color: '#ff4d4f' }}
+                                        valueStyle={{ color: '#ff4d4f', fontSize: 24, fontWeight: 600 }}
                                         prefix={<FireOutlined />}
                                     />
                                 </Col>
                                 <Col span={6}>
                                     <Statistic
-                                        title="活跃批次"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>活跃批次</span>}
                                         value={dayViewData.summary.batch_count}
                                         suffix="个"
+                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
                                     />
                                 </Col>
                             </Row>
+                        </div>
+                        <div className="chart-container" style={{ height: 320 }}>
+                            <Line {...dayChartConfig} />
                         </div>
                     </>
                 )}
@@ -455,36 +396,24 @@ const WorkHoursCurveCard: React.FC = () => {
                 {/* 月视图 */}
                 {granularity === 'month' && monthViewData && monthColumnData.length > 0 && (
                     <>
-                        <div className="chart-container">
-                            <DualAxes {...monthChartConfig} />
-                        </div>
-                        <div className="summary-row">
-                            <Row gutter={24} justify="center" style={{ marginBottom: 16 }}>
+                        <div className="summary-row" style={{ marginBottom: 24 }}>
+                            <Row gutter={24} justify="center">
                                 <Col span={8}>
                                     <Statistic
-                                        title="月人均操作工时 (均值)"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>月人均操作工时 (均值)</span>}
                                         value={monthViewData.summary.avg_hours_per_person}
                                         suffix={`h (共${monthViewData.summary.total_employees}人)`}
                                         prefix={<UserOutlined />}
-                                        valueStyle={{ color: '#1890ff' }}
+                                        valueStyle={{ color: '#1890ff', fontSize: 24, fontWeight: 600 }}
                                     />
                                 </Col>
                             </Row>
-                            <div className="monthly-per-capita">
-                                <div className="per-capita-title">各月人均工时</div>
-                                <div className="per-capita-grid">
-                                    {monthViewData.monthly_data.map(m => (
-                                        <div key={m.year_month} className="per-capita-item">
-                                            <span className="month-label">{m.month_label}</span>
-                                            <span className="hours-value">{m.hours_per_person}h</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                        </div>
+                        <div className="chart-container" style={{ height: 320 }}>
+                            <DualAxes {...monthChartConfig} />
                         </div>
                     </>
                 )}
-
 
                 {/* 无数据状态 */}
                 {!loading && (
@@ -494,7 +423,7 @@ const WorkHoursCurveCard: React.FC = () => {
                         <Empty description="暂无数据" />
                     )}
             </Spin>
-        </Card>
+        </GlassCard>
     );
 };
 

@@ -6,7 +6,7 @@ interface EmployeeRow extends RowDataPacket {
   id: number;
   employee_code: string;
   employee_name: string;
-  org_role: string;
+  role_code: string;
   employment_status: string;
 }
 
@@ -14,7 +14,7 @@ interface ReportingRelationRow extends RowDataPacket {
   employee_id: number;
   employee_code: string;
   employee_name: string;
-  org_role: string;
+  role_code: string;
 }
 
 interface TeamRow extends RowDataPacket {
@@ -46,13 +46,14 @@ interface ReportingPairRow extends RowDataPacket {
 
 export async function fetchEmployeeOrgContext(employeeId: number): Promise<EmployeeOrgContext | null> {
   const [[employee]] = await pool.execute<EmployeeRow[]>(
-    `SELECT id,
-            employee_code,
-            employee_name,
-            org_role,
-            employment_status
-       FROM employees
-      WHERE id = ?
+    `SELECT e.id,
+            e.employee_code,
+            e.employee_name,
+            COALESCE(r.role_code, 'FRONTLINE') AS role_code,
+            e.employment_status
+       FROM employees e
+       LEFT JOIN employee_roles r ON r.id = e.primary_role_id
+      WHERE e.id = ?
       LIMIT 1`,
     [employeeId],
   );
@@ -139,7 +140,7 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
       unitName: unit?.unit_name ?? dept.dept_name,
       unitCode: unit?.unit_code ?? dept.dept_code,
       assignmentType: 'PRIMARY',
-      roleAtUnit: employee.org_role === 'DEPT_MANAGER' ? 'LEADER' : 'MEMBER',
+      roleAtUnit: employee.role_code === 'DEPT_MANAGER' ? 'LEADER' : 'MEMBER',
       startDate: null,
       endDate: null,
     });
@@ -155,7 +156,7 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
       unitName: unit?.unit_name ?? team.team_name,
       unitCode: unit?.unit_code ?? team.team_code,
       assignmentType: 'PRIMARY',
-      roleAtUnit: employee.org_role === 'TEAM_LEADER' ? 'LEADER' : 'MEMBER',
+      roleAtUnit: employee.role_code === 'TEAM_LEADER' ? 'LEADER' : 'MEMBER',
       startDate: null,
       endDate: null,
     });
@@ -236,10 +237,11 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
     `SELECT e.id AS employee_id,
             e.employee_code,
             e.employee_name,
-            e.org_role
-       FROM employee_reporting_relations r
-       JOIN employees e ON e.id = r.leader_id
-      WHERE r.subordinate_id = ?`,
+            COALESCE(r.role_code, 'FRONTLINE') AS role_code
+       FROM employee_reporting_relations rel
+       JOIN employees e ON e.id = rel.leader_id
+       LEFT JOIN employee_roles r ON r.id = e.primary_role_id
+      WHERE rel.subordinate_id = ?`,
     [employeeId],
   );
 
@@ -247,10 +249,11 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
     `SELECT e.id AS employee_id,
             e.employee_code,
             e.employee_name,
-            e.org_role
-       FROM employee_reporting_relations r
-       JOIN employees e ON e.id = r.subordinate_id
-      WHERE r.leader_id = ?`,
+            COALESCE(r.role_code, 'FRONTLINE') AS role_code
+       FROM employee_reporting_relations rel
+       JOIN employees e ON e.id = rel.subordinate_id
+       LEFT JOIN employee_roles r ON r.id = e.primary_role_id
+      WHERE rel.leader_id = ?`,
     [employeeId],
   );
 
@@ -263,8 +266,9 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
       `SELECT e.id AS employee_id,
               e.employee_code,
               e.employee_name,
-              e.org_role
+              COALESCE(r.role_code, 'FRONTLINE') AS role_code
          FROM employees e
+         LEFT JOIN employee_roles r ON r.id = e.primary_role_id
          WHERE e.id = ?
          LIMIT 1`,
       [currentId],
@@ -278,10 +282,11 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
       `SELECT e.id AS employee_id,
               e.employee_code,
               e.employee_name,
-              e.org_role
-         FROM employee_reporting_relations r
-         JOIN employees e ON e.id = r.leader_id
-        WHERE r.subordinate_id = ?
+              COALESCE(r.role_code, 'FRONTLINE') AS role_code
+         FROM employee_reporting_relations rel
+         JOIN employees e ON e.id = rel.leader_id
+         LEFT JOIN employee_roles r ON r.id = e.primary_role_id
+        WHERE rel.subordinate_id = ?
         LIMIT 1`,
       [row.employee_id],
     );
@@ -292,26 +297,26 @@ export async function fetchEmployeeOrgContext(employeeId: number): Promise<Emplo
     employeeId: employee.id,
     employeeCode: employee.employee_code,
     employeeName: employee.employee_name,
-    orgRole: employee.org_role,
+    orgRole: employee.role_code,
     employmentStatus: employee.employment_status,
     memberships: normalizedMemberships,
     directLeaders: leaderRows.map((row) => ({
       employeeId: row.employee_id,
       employeeCode: row.employee_code,
       employeeName: row.employee_name,
-      orgRole: row.org_role,
+      orgRole: row.role_code,
     })),
     directSubordinates: subRows.map((row) => ({
       employeeId: row.employee_id,
       employeeCode: row.employee_code,
       employeeName: row.employee_name,
-      orgRole: row.org_role,
+      orgRole: row.role_code,
     })),
     reportingChain: reportingChain.map((row) => ({
       employeeId: row.employee_id,
       employeeCode: row.employee_code,
       employeeName: row.employee_name,
-      orgRole: row.org_role,
+      orgRole: row.role_code,
     })),
   };
 }

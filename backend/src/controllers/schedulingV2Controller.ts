@@ -9,7 +9,7 @@ import { RowDataPacket } from 'mysql2';
 import { DataAssembler } from '../services/schedulingV2/dataAssembler';
 import { ResultParser } from '../services/schedulingV2/resultParser';
 import { PersistenceService } from '../services/schedulingV2/persistenceService';
-import { SolverResponse, SolverConfig, SolverRequest } from '../types/schedulingV2';
+import { SolverResponse, SolverConfig, SolverRequest, SchedulingMode } from '../types/schedulingV2';
 import solverProgressService from '../services/solverProgressService';
 import pool from '../config/database';
 
@@ -70,7 +70,7 @@ async function callSolverWithProgress(
               const data = line.substring(6);
               try {
                 const parsed = JSON.parse(data);
-                
+
                 // 根据事件类型处理
                 if (currentEventType === 'progress') {
                   // 进度更新
@@ -100,7 +100,7 @@ async function callSolverWithProgress(
                 } else if (currentEventType === 'heartbeat') {
                   // 心跳，忽略
                 }
-                
+
                 // 重置事件类型
                 currentEventType = '';
               } catch (e) {
@@ -109,7 +109,7 @@ async function callSolverWithProgress(
             }
           }
         }
-        
+
         // 流结束但没有收到完成事件
         clearTimeout(timeout);
         reject(new Error('求解器流意外结束'));
@@ -140,10 +140,12 @@ function parseJsonField<T>(value: any, fallback: T): T {
  */
 export const createSolveTask = async (req: Request, res: Response) => {
   try {
-    const { batchIds, window, config } = req.body;
+    const { batchIds, window, config, mode } = req.body;
 
     // 参数验证
-    if (!batchIds || !Array.isArray(batchIds) || batchIds.length === 0) {
+    // 如果是 TIME_RANGE 模式，batchIds 可以为空
+    // 如果是 BATCH 模式（默认），batchIds 必须非空
+    if ((!mode || mode === 'BATCH') && (!batchIds || !Array.isArray(batchIds) || batchIds.length === 0)) {
       return res.status(400).json({
         success: false,
         error: 'batchIds 必须是非空数组',
@@ -164,7 +166,7 @@ export const createSolveTask = async (req: Request, res: Response) => {
     );
 
     // 异步执行求解（传入 runCode 用于中断请求匹配）
-    executeSolve(runId, runCode, batchIds, window, config).catch(err => {
+    executeSolve(runId, runCode, batchIds || [], window, config, mode).catch(err => {
       console.error(`[SchedulingV2] 求解任务 ${runId} 失败:`, err);
       PersistenceService.updateStatus(runId, 'FAILED', 'ERROR', err.message);
     });
@@ -195,25 +197,27 @@ async function executeSolve(
   runCode: string,
   batchIds: number[],
   window: { start_date: string; end_date: string },
-  config?: Partial<SolverConfig>
+  config?: Partial<SolverConfig>,
+  mode?: SchedulingMode
 ): Promise<void> {
   try {
     // 0. 数据验证
-    if (!batchIds || batchIds.length === 0) {
+    if ((!mode || mode === 'BATCH') && (!batchIds || batchIds.length === 0)) {
       throw new Error('批次列表不能为空');
     }
-    
+
     if (!window.start_date || !window.end_date) {
       throw new Error('时间窗口配置无效');
     }
 
     // 1. 组装数据
     await PersistenceService.updateStatus(runId, 'RUNNING', 'ASSEMBLING');
-    
+
     const solverRequest = await DataAssembler.assemble({
       batchIds,
       window,
       config,
+      mode,
       requestId: runCode,  // 使用 runCode 作为 request_id，用于中断请求匹配
     });
 
@@ -221,11 +225,11 @@ async function executeSolve(
     if (solverRequest.operation_demands.length === 0) {
       throw new Error('没有找到需要排班的操作，请检查批次是否已激活');
     }
-    
+
     if (solverRequest.employee_profiles.length === 0) {
       throw new Error('没有可用的员工，请检查员工状态');
     }
-    
+
     if (solverRequest.shift_definitions.length === 0) {
       throw new Error('没有定义班次，请先配置班次定义');
     }
@@ -256,22 +260,22 @@ async function executeSolve(
     if (solverResponse.status === 'INFEASIBLE') {
       throw new Error(`无可行解: ${solverResponse.summary || '约束条件过于严格，请放宽部分约束'}`);
     }
-    
+
     if (solverResponse.status === 'ERROR') {
       throw new Error(`求解器错误: ${solverResponse.error_message || '未知错误'}`);
     }
 
     // 3. 解析结果
     await PersistenceService.updateStatus(runId, 'RUNNING', 'PARSING');
-    
+
     const parsedResult = ResultParser.parse(solverResponse);
     const validation = ResultParser.validate(parsedResult);
-    
+
     if (!validation.valid) {
       console.warn('[SchedulingV2] 结果验证错误:', validation.errors);
       throw new Error(`结果验证失败: ${validation.errors.join(', ')}`);
     }
-    
+
     if (validation.warnings.length > 0) {
       console.warn('[SchedulingV2] 结果验证警告:', validation.warnings);
     }
@@ -307,30 +311,30 @@ async function executeSolve(
 
     // 广播成功完成
     solverProgressService.completeRun(runId, true, '求解完成');
-    
+
   } catch (error: any) {
     console.error(`[SchedulingV2] 求解失败:`, error);
-    
+
     // 提取更友好的错误信息
     let errorMessage = error.message || String(error);
-    
+
     // 处理 axios 错误
     if (error.response?.data?.error) {
       errorMessage = error.response.data.error;
     } else if (error.response?.data?.message) {
       errorMessage = error.response.data.message;
     }
-    
+
     await PersistenceService.updateStatus(
       runId,
       'FAILED',
       'ERROR',
       errorMessage
     );
-    
+
     // 广播失败
     solverProgressService.completeRun(runId, false, errorMessage);
-    
+
     throw error;
   }
 }
@@ -369,7 +373,7 @@ export const getRunStatus = async (req: Request, res: Response) => {
       const timeLimit = run.time_limit_seconds;
       const progressPercent = Math.min(100, Math.round((elapsedSeconds / timeLimit) * 100));
       const estimatedRemaining = Math.max(0, timeLimit - elapsedSeconds);
-      
+
       solverProgress = {
         solutions_found: existingProgress?.solutions_found || 0,
         best_objective: existingProgress?.best_objective ?? null,
@@ -439,10 +443,15 @@ export const getRunResult = async (req: Request, res: Response) => {
     const shiftPlans = await getRunShiftPlans(Number(runId));
     const hoursSummaries = await getRunHoursSummaries(Number(runId), run.window_start, run.window_end);
     const resultSummary = parseJsonField<{ status?: string; message?: string }>(run.result_summary, {});
-    
+
     // 获取原始操作需求（含 required_people）
-    const operationDemands = await getOperationDemands(batchIds);
-    
+    let operationDemands;
+    if (batchIds.length > 0) {
+      operationDemands = await getOperationDemands(batchIds);
+    } else {
+      operationDemands = await getOperationDemandsByWindow(run.window_start, run.window_end);
+    }
+
     // 获取激活的班次定义
     const shiftDefinitions = await getActiveShiftDefinitions();
 
@@ -450,11 +459,11 @@ export const getRunResult = async (req: Request, res: Response) => {
     const totalOperations = operationDemands.length;
     const totalPositions = operationDemands.reduce((sum, op) => sum + op.required_people, 0);
     const assignedPositions = assignments.length;
-    
+
     // 计算已分配的操作数（至少有1个岗位分配的操作）
     const operationsWithAssignment = new Set((assignments as any[]).map(a => a.operation_plan_id));
     const assignedOperations = operationsWithAssignment.size;
-    
+
     // 计算员工数
     const employeesWithShifts = new Set((shiftPlans as any[])
       .filter(p => p.plan_type === 'WORK')
@@ -563,7 +572,7 @@ async function getRunShiftPlans(runId: number) {
      ORDER BY esp.plan_date, esp.employee_id`,
     [runId]
   );
-  
+
   return rows.map((row: RowDataPacket) => ({
     ...row,
     is_night_shift: !!row.is_night_shift,
@@ -598,6 +607,41 @@ async function getOperationDemands(batchIds: number[]) {
        AND pbp.plan_status = 'ACTIVATED'
      ORDER BY bop.planned_start_datetime ASC`,
     batchIds
+  );
+
+  return rows.map(row => ({
+    operation_plan_id: row.operation_plan_id,
+    batch_id: row.batch_id,
+    batch_code: row.batch_code,
+    batch_name: row.batch_name,
+    operation_name: row.operation_name,
+    planned_start_datetime: row.planned_start_datetime,
+    planned_end_datetime: row.planned_end_datetime,
+    required_people: row.required_people || 1,
+  }));
+}
+
+/**
+ * 获取时间窗口内的操作需求
+ */
+async function getOperationDemandsByWindow(startDate: string, endDate: string) {
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT
+       bop.id AS operation_plan_id,
+       pbp.id AS batch_id,
+       pbp.batch_code,
+       pbp.batch_name,
+       o.operation_name,
+       bop.planned_start_datetime,
+       bop.planned_end_datetime,
+       bop.required_people
+     FROM batch_operation_plans bop
+     JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+     JOIN operations o ON bop.operation_id = o.id
+     WHERE bop.planned_start_datetime BETWEEN ? AND ?
+       AND pbp.plan_status = 'ACTIVATED'
+     ORDER BY bop.planned_start_datetime ASC`,
+    [startDate, endDate]
   );
 
   return rows.map(row => ({
@@ -658,14 +702,14 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
     `SELECT options_json FROM scheduling_runs WHERE id = ?`,
     [runId]
   );
-  
+
   let lowerOffset = 4;  // 默认值
   let upperOffset = 32; // 默认值
-  
+
   if (runRows.length > 0 && runRows[0].options_json) {
     try {
-      const options = typeof runRows[0].options_json === 'string' 
-        ? JSON.parse(runRows[0].options_json) 
+      const options = typeof runRows[0].options_json === 'string'
+        ? JSON.parse(runRows[0].options_json)
         : runRows[0].options_json;
       // 尝试从 options_json 中读取配置
       lowerOffset = options.monthly_hours_lower_offset ?? options.monthlyHoursLowerOffset ?? 4;
@@ -674,7 +718,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
       console.error('[getRunHoursSummaries] 解析配置失败:', e);
     }
   }
-  
+
   // 计算求解区间内每月的标准工时（排除三倍工资日）
   const [calendarRows] = await pool.execute<RowDataPacket[]>(
     `SELECT 
@@ -686,7 +730,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
      GROUP BY DATE_FORMAT(calendar_date, '%Y-%m')`,
     [windowStart, windowEnd]
   );
-  
+
   // 构建月份 -> 标准工时的映射
   const standardHoursMap: Record<string, number> = {};
   const workdayCountMap: Record<string, number> = {};
@@ -694,7 +738,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
     standardHoursMap[row.month] = parseFloat(row.standard_hours) || 0;
     workdayCountMap[row.month] = parseInt(row.workday_count) || 0;
   }
-  
+
   // 查询三倍工资日列表（从 holiday_salary_config 表获取）
   const [tripleDays] = await pool.execute<RowDataPacket[]>(
     `SELECT calendar_date
@@ -706,7 +750,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
   const tripleDatesSet = new Set(
     tripleDays.map(r => new Date(r.calendar_date).toISOString().split('T')[0])
   );
-  
+
   // 查询排班数据（排除三倍工资日的工时）
   // BASE、PRODUCTION、OVERTIME 都计入工时统计（REST 不计入）
   const [rows] = await pool.execute<RowDataPacket[]>(
@@ -724,7 +768,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
        AND esp.plan_date >= ? AND esp.plan_date <= ?`,
     [runId, windowStart, windowEnd]
   );
-  
+
   // 按员工+月份分组统计
   const summaryMap: Record<string, {
     employee_id: number;
@@ -736,7 +780,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
     rest_days: number;
     triple_salary_days: number;
   }> = {};
-  
+
   for (const row of rows) {
     const key = `${row.employee_id}-${row.month}`;
     const planDate = new Date(row.plan_date).toISOString().split('T')[0];
@@ -744,7 +788,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
     const planHours = parseFloat(row.plan_hours) || 0;
     const isWork = ['BASE', 'PRODUCTION', 'OVERTIME'].includes(row.plan_category);
     const isRest = row.plan_category === 'REST';
-    
+
     if (!summaryMap[key]) {
       summaryMap[key] = {
         employee_id: row.employee_id,
@@ -757,9 +801,9 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
         triple_salary_days: 0,
       };
     }
-    
+
     const summary = summaryMap[key];
-    
+
     if (isTripleSalary) {
       summary.triple_salary_days += 1;
       // 三倍工资日的工时不计入统计
@@ -770,7 +814,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
       summary.rest_days += 1;
     }
   }
-  
+
   // 转换为数组并计算偏差
   return Object.values(summaryMap).map(summary => {
     const standardHours = standardHoursMap[summary.month] || 0;
@@ -778,7 +822,7 @@ async function getRunHoursSummaries(runId: number, windowStart: string, windowEn
     const minHours = Math.max(0, standardHours - lowerOffset);
     const maxHours = standardHours + upperOffset;
     const isWithinBounds = summary.scheduled_hours >= minHours && summary.scheduled_hours <= maxHours;
-    
+
     return {
       employee_id: summary.employee_id,
       employee_name: summary.employee_name,
@@ -908,7 +952,7 @@ export const abortRun = async (req: Request, res: Response) => {
   try {
     const { runId } = req.params;
     const { request_id } = req.body;
-    
+
     const run = await PersistenceService.getRun(Number(runId));
 
     if (!run) {
@@ -927,16 +971,16 @@ export const abortRun = async (req: Request, res: Response) => {
 
     // 获取 request_id（从数据库或请求参数）
     const requestId = request_id || run.run_code;
-    
+
     // 调用求解器的中断接口
     try {
       const abortResponse = await fetch(`${SOLVER_URL}/api/v2/abort/${requestId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      
+
       const abortResult = await abortResponse.json() as { success?: boolean; error?: string; message?: string };
-      
+
       if (!abortResult.success) {
         console.warn('[SchedulingV2] 求解器中断请求失败:', abortResult.error);
         // 即使求解器中断失败，也继续（可能求解已经完成）

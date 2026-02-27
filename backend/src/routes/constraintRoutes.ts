@@ -8,7 +8,8 @@ import {
   updateConstraint,
   deleteConstraint,
   getAvailableOperations,
-  validateTemplateConstraints
+  validateTemplateConstraints,
+  getBatchConstraintsForGanttBatches
 } from '../controllers/constraintController';
 
 const router = Router();
@@ -21,6 +22,9 @@ router.get('/template/:templateId/gantt', getTemplateConstraintsForGantt);
 
 // 获取批次的约束关系（用于批次甘特图显示）
 router.get('/batch/:batchPlanId/gantt', getBatchConstraintsForGantt);
+
+// 批量获取批次的约束关系（新优化接口）
+router.get('/batches/gantt', getBatchConstraintsForGanttBatches);
 
 // 校验模板约束是否存在时间冲突
 router.get('/template/:templateId/validate', validateTemplateConstraints);

@@ -28,13 +28,17 @@ interface BatchPlan {
 
 export const getAllBatchPlans = async (req: Request, res: Response) => {
   try {
-    const query = `
+    const { status, start_date, end_date } = req.query;
+
+    let query = `
       SELECT 
         pbp.id,
         pbp.batch_code,
         pbp.batch_name,
         pbp.template_id,
         pt.template_name,
+        ou.unit_code as team_code,
+        ou.unit_name as team_name,
         pbp.project_code,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
         DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date,
@@ -52,14 +56,32 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
          WHERE bop.batch_plan_id = pbp.id AND bpa.assignment_status != 'CANCELLED') AS assigned_people_count
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
-      ORDER BY pbp.created_at DESC
+      LEFT JOIN organization_units ou ON pt.team_id = ou.id
+      WHERE 1=1
     `;
 
-    const [rows] = await pool.execute<RowDataPacket[]>(query);
-    res.json(rows);
+    const params: any[] = [];
+
+    // 状态过滤
+    if (status && typeof status === 'string') {
+      query += ` AND pbp.plan_status = ?`;
+      params.push(status.toUpperCase());
+    }
+
+    // 日期范围过滤: 批次的计划日期与请求范围有交集
+    if (start_date && end_date && typeof start_date === 'string' && typeof end_date === 'string') {
+      // 批次在范围内: planned_start_date <= end_date AND planned_end_date >= start_date
+      query += ` AND pbp.planned_start_date <= ? AND pbp.planned_end_date >= ?`;
+      params.push(end_date, start_date);
+    }
+
+    query += ` ORDER BY pbp.created_at DESC`;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, params);
+    res.json({ success: true, data: rows });
   } catch (error) {
     console.error('Error fetching batch plans:', error);
-    res.status(500).json({ error: 'Failed to fetch batch plans' });
+    res.status(500).json({ success: false, error: 'Failed to fetch batch plans' });
   }
 };
 

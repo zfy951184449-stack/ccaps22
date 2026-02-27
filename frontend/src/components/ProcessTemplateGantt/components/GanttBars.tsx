@@ -15,8 +15,8 @@ interface TooltipState {
 
 
 interface GanttBarsProps {
-    timeBlocks: TimeBlock[];
-    ganttNodes: GanttNode[];
+    timeBlocks: TimeBlock[];    // Added back
+    nodeMap: Map<string, GanttNode>;  // P0 Fix: O(1) lookup
     rowIndexMap: Map<string, number>;
     visibleStartIndex: number;
     visibleEndIndex: number;
@@ -58,9 +58,10 @@ interface GanttBarsProps {
     drawingSelectedScheduleId?: number | null;
 }
 
-export const GanttBars: React.FC<GanttBarsProps> = ({
+const GanttBarsComponent: React.FC<GanttBarsProps> = ({
     timeBlocks,
-    ganttNodes,
+    // ganttNodes, // Removed: No longer needed for finding nodes
+    nodeMap,      // Added: O(1) lookup
     rowIndexMap,
     visibleStartIndex,
     visibleEndIndex,
@@ -107,6 +108,8 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
     };
 
     // Build tooltip content helper
+    // P0 Fix: Memoize tooltip content generation function is likely not enough,
+    // needs internal memoization per block, but keeping this simple for now.
     const buildTooltipContent = useCallback((block: TimeBlock, absoluteStartHour: number) => {
         const blockStartDay = Math.floor(absoluteStartHour / 24);
         const startHourOfDay = Math.floor(absoluteStartHour % 24);
@@ -195,7 +198,9 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
                 const isHighlightedOperation = activeOperationSet.has(block.node_id);
                 const isConflictOperation = conflictOperationSet.has(block.node_id);
 
-                const node = findNodeById(ganttNodes, block.node_id);
+                // P0 Fix: Use nodeMap for O(1) lookup
+                const node = nodeMap.get(block.node_id);
+                // const node = findNodeById(ganttNodes, block.node_id);
                 const stageColor = node ? getStageColorByNode(node) : STAGE_COLORS.DEFAULT;
 
                 // 检查是否为只读操作（ACTIVATED 批次的操作不允许拖拽）
@@ -514,3 +519,28 @@ export const GanttBars: React.FC<GanttBarsProps> = ({
         </>
     );
 };
+
+// P0 Fix: Memoize the component
+export const GanttBars = React.memo(GanttBarsComponent, (prevProps, nextProps) => {
+    // Only re-render if critical props change
+    // Note: We're doing a shallow comparison of most props, but specifically checking
+    // data structures that might change reference but not content if not careful.
+    if (prevProps.timeBlocks !== nextProps.timeBlocks) return false;
+    if (prevProps.rowIndexMap !== nextProps.rowIndexMap) return false;
+    // if (prevProps.ganttNodes !== nextProps.ganttNodes) return false; // Still check reference even if unused inside
+    if (prevProps.nodeMap !== nextProps.nodeMap) return false; // Check nodeMap reference
+    if (prevProps.visibleStartIndex !== nextProps.visibleStartIndex) return false;
+    if (prevProps.visibleEndIndex !== nextProps.visibleEndIndex) return false;
+    if (prevProps.startDay !== nextProps.startDay) return false;
+    if (prevProps.hourWidth !== nextProps.hourWidth) return false;
+    if (prevProps.setHoveredRow !== nextProps.setHoveredRow) return false;
+    if (prevProps.expandedDay !== nextProps.expandedDay) return false;
+
+    // Sets need to be checked carefully or just check reference identity
+    if (prevProps.activeOperationSet !== nextProps.activeOperationSet) return false;
+    if (prevProps.conflictOperationSet !== nextProps.conflictOperationSet) return false;
+    if (prevProps.scheduleConflicts !== nextProps.scheduleConflicts) return false;
+    if (prevProps.readOnlyOperations !== nextProps.readOnlyOperations) return false;
+
+    return true; // Props are equal
+});

@@ -12,10 +12,8 @@ const respondWithError = (res: Response, error: unknown, message: string) => {
   res.status(500).json({ error: message });
 };
 
-const isTableMissingError = (error: any) => {
-  const code = error?.code;
-  return code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_TABLE_ERROR';
-};
+
+
 
 const parseMetadata = (metadata: unknown): Record<string, unknown> | null => {
   if (!metadata) {
@@ -135,38 +133,8 @@ export const getDepartments = async (_req: Request, res: Response) => {
 
     const [unitRows] = await pool.execute<RowDataPacket[]>(sql);
     res.json(unitRows.map(mapDepartmentUnitRow));
-    return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to fetch departments');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
-  }
-
-  try {
-    const legacySql = `
-      SELECT id,
-             parent_id,
-             dept_code,
-             dept_name,
-             description,
-             sort_order,
-             is_active,
-             NULL AS metadata,
-             created_at,
-             updated_at
-        FROM departments
-       ORDER BY sort_order, dept_name`;
-
-    const [legacyRows] = await pool.execute<RowDataPacket[]>(legacySql);
-    res.json(legacyRows.map(mapDepartmentUnitRow));
-  } catch (legacyError: any) {
-    if (isTableMissingError(legacyError)) {
-      res.json([]);
-      return;
-    }
-    respondWithError(res, legacyError, 'Failed to fetch departments');
+    respondWithError(res, error, 'Failed to fetch departments');
   }
 };
 
@@ -245,50 +213,12 @@ export const createDepartment = async (req: Request, res: Response) => {
     );
 
     res.status(201).json({ id: result.insertId, unitType: 'DEPARTMENT' });
-    return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      if (error?.code === 'ER_DUP_ENTRY') {
-        res.status(409).json({ error: 'Department code already exists' });
-        return;
-      }
-      respondWithError(res, error, 'Failed to create department');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
-  }
-
-  try {
-    const [existsLegacy] = await pool.execute<RowDataPacket[]>(
-      'SELECT id FROM departments WHERE dept_code = ? LIMIT 1',
-      [normalizedCode],
-    );
-
-    if (existsLegacy.length) {
+    if (error?.code === 'ER_DUP_ENTRY') {
       res.status(409).json({ error: 'Department code already exists' });
       return;
     }
-
-    const [resultLegacy] = await pool.execute<ResultSetHeader>(
-      `INSERT INTO departments (dept_code, dept_name, parent_id, description, sort_order, is_active)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        normalizedCode,
-        normalizedName,
-        parentIdInput ?? null,
-        descriptionInput ? String(descriptionInput) : null,
-        Number.isFinite(Number(sortOrderInput)) ? Number(sortOrderInput) : 0,
-        Number(isActiveInput) ? 1 : 0,
-      ],
-    );
-
-    res.status(201).json({ id: resultLegacy.insertId });
-  } catch (legacyError: any) {
-    if (legacyError?.code === 'ER_DUP_ENTRY') {
-      res.status(409).json({ error: 'Department code already exists' });
-      return;
-    }
-    respondWithError(res, legacyError, 'Failed to create department');
+    respondWithError(res, error, 'Failed to create department');
   }
 };
 
@@ -362,8 +292,8 @@ export const updateDepartment = async (req: Request, res: Response) => {
       sortOrderInput === null || sortOrderInput === undefined
         ? existing.sort_order ?? 0
         : Number.isFinite(Number(sortOrderInput))
-        ? Number(sortOrderInput)
-        : existing.sort_order ?? 0;
+          ? Number(sortOrderInput)
+          : existing.sort_order ?? 0;
     const nextIsActive =
       isActiveInput === null || isActiveInput === undefined
         ? Number(existing.is_active ?? 1) ? 1 : 0
@@ -376,8 +306,8 @@ export const updateDepartment = async (req: Request, res: Response) => {
         descriptionInput === null
           ? null
           : typeof descriptionInput === 'string'
-          ? descriptionInput.trim()
-          : String(descriptionInput);
+            ? descriptionInput.trim()
+            : String(descriptionInput);
       if (descriptionValue) {
         metadataObj.description = descriptionValue;
       } else {
@@ -400,46 +330,8 @@ export const updateDepartment = async (req: Request, res: Response) => {
     );
 
     res.json({ success: true });
-    return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to update department');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
-  }
-
-  try {
-    const sql = `
-      UPDATE departments
-         SET dept_name = COALESCE(?, dept_name),
-             parent_id = ?,
-             description = COALESCE(?, description),
-             sort_order = COALESCE(?, sort_order),
-             is_active = COALESCE(?, is_active)
-       WHERE id = ?`;
-
-    const [result] = await pool.execute<ResultSetHeader>(sql, [
-      deptNameInput ? String(deptNameInput).trim() : null,
-      parentIdInput ?? null,
-      descriptionInput ? String(descriptionInput) : null,
-      sortOrderInput === null || sortOrderInput === undefined
-        ? null
-        : Number.isFinite(Number(sortOrderInput))
-        ? Number(sortOrderInput)
-        : null,
-      isActiveInput === null || isActiveInput === undefined ? null : Number(isActiveInput) ? 1 : 0,
-      id,
-    ]);
-
-    if (result.affectedRows === 0) {
-      res.status(404).json({ error: 'Department not found' });
-      return;
-    }
-
-    res.json({ success: true });
-  } catch (legacyError) {
-    respondWithError(res, legacyError, 'Failed to update department');
+    respondWithError(res, error, 'Failed to update department');
   }
 };
 
@@ -495,40 +387,8 @@ export const deleteDepartment = async (req: Request, res: Response) => {
     }
 
     res.json({ success: true });
-    return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to delete department');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy departments table');
-  }
-
-  try {
-    const [dependency] = await pool.execute<RowDataPacket[]>(
-      'SELECT COUNT(*) AS teamCount FROM teams WHERE department_id = ?',
-      [id],
-    );
-
-    if (dependency[0]?.teamCount > 0) {
-      await pool.execute<ResultSetHeader>('UPDATE departments SET is_active = 0 WHERE id = ?', [id]);
-      res.json({ success: true, softDeleted: true });
-      return;
-    }
-
-    const [result] = await pool.execute<ResultSetHeader>(
-      'DELETE FROM departments WHERE id = ? LIMIT 1',
-      [id],
-    );
-
-    if (result.affectedRows === 0) {
-      res.status(404).json({ error: 'Department not found' });
-      return;
-    }
-
-    res.json({ success: true });
-  } catch (legacyError) {
-    respondWithError(res, legacyError, 'Failed to delete department');
+    respondWithError(res, error, 'Failed to delete department');
   }
 };
 
@@ -556,35 +416,30 @@ export const getTeams = async (_req: Request, res: Response) => {
 
     const [rows] = await pool.execute<RowDataPacket[]>(sql);
     res.json(rows.map(mapTeamUnitRow));
-    return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to fetch teams');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
+    respondWithError(res, error, 'Failed to fetch teams');
   }
+};
 
+/**
+ * Get teams from the legacy `teams` table for Solver use.
+ * This ensures ID consistency with employees.primary_team_id.
+ */
+export const getSolverTeams = async (_req: Request, res: Response) => {
   try {
-    const legacySql = `
+    const sql = `
       SELECT t.id,
-             t.department_id,
-             t.team_code,
-             t.team_name,
-             t.description,
-             t.is_active,
-             t.default_shift_code,
-             t.created_at,
-             t.updated_at,
-             d.dept_name AS departmentName
-        FROM teams t
-        JOIN departments d ON d.id = t.department_id
-       ORDER BY d.sort_order, d.dept_name, t.team_name`;
+             t.unit_code AS teamCode,
+             t.unit_name AS teamName
+        FROM organization_units t
+       WHERE t.is_active = 1
+         AND t.unit_type = 'TEAM'
+       ORDER BY t.unit_name`;
 
-    const [legacyRows] = await pool.execute<RowDataPacket[]>(legacySql);
-    res.json(legacyRows.map(mapTeamUnitRow));
-  } catch (legacyError) {
-    respondWithError(res, legacyError, 'Failed to fetch teams');
+    const [rows] = await pool.execute<RowDataPacket[]>(sql);
+    res.json(rows);
+  } catch (error) {
+    respondWithError(res, error, 'Failed to fetch solver teams');
   }
 };
 
@@ -663,42 +518,8 @@ export const createTeam = async (req: Request, res: Response) => {
     );
 
     res.status(201).json({ id: result.insertId, unitType: 'TEAM' });
-    return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to create team');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
-  }
-
-  try {
-    const [existsLegacy] = await pool.execute<RowDataPacket[]>(
-      'SELECT id FROM teams WHERE team_code = ? LIMIT 1',
-      [normalizedCode],
-    );
-
-    if (existsLegacy.length) {
-      res.status(409).json({ error: 'Team code already exists' });
-      return;
-    }
-
-    const sql = `
-      INSERT INTO teams (department_id, team_code, team_name, description, is_active, default_shift_code)
-      VALUES (?, ?, ?, ?, ?, ?)`;
-
-    const [result] = await pool.execute<ResultSetHeader>(sql, [
-      Number(departmentIdInput),
-      normalizedCode,
-      normalizedName,
-      descriptionInput ? String(descriptionInput) : null,
-      Number(isActiveInput) ? 1 : 0,
-      defaultShiftCodeInput ? String(defaultShiftCodeInput).trim() : null,
-    ]);
-
-    res.status(201).json({ id: result.insertId });
-  } catch (legacyError) {
-    respondWithError(res, legacyError, 'Failed to create team');
+    respondWithError(res, error, 'Failed to create team');
   }
 };
 
@@ -793,8 +614,8 @@ export const updateTeam = async (req: Request, res: Response) => {
         descriptionInput === null
           ? null
           : typeof descriptionInput === 'string'
-          ? descriptionInput.trim()
-          : String(descriptionInput);
+            ? descriptionInput.trim()
+            : String(descriptionInput);
       if (descriptionValue) {
         metadataObj.description = descriptionValue;
       } else {
@@ -820,10 +641,8 @@ export const updateTeam = async (req: Request, res: Response) => {
     res.json({ success: true });
     return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to update team');
-      return;
-    }
+    respondWithError(res, error, 'Failed to update team');
+    return;
     console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
   }
 
@@ -897,7 +716,7 @@ export const deleteTeam = async (req: Request, res: Response) => {
 
     try {
       const [assignmentRows] = await pool.execute<RowDataPacket[]>(
-        'SELECT COUNT(*) AS cnt FROM employee_team_roles WHERE team_id = ?',
+        'SELECT COUNT(*) AS cnt FROM employee_team_roles WHERE unit_id = ?',
         [id],
       );
       if (assignmentRows[0]?.cnt > 0) {
@@ -909,9 +728,7 @@ export const deleteTeam = async (req: Request, res: Response) => {
         return;
       }
     } catch (assignmentError: any) {
-      if (!isTableMissingError(assignmentError)) {
-        console.warn('[OrganizationController] Failed to check team assignments during delete:', assignmentError);
-      }
+      console.warn('[OrganizationController] Failed to check team assignments during delete:', assignmentError);
     }
 
     const [result] = await pool.execute<ResultSetHeader>(
@@ -930,38 +747,7 @@ export const deleteTeam = async (req: Request, res: Response) => {
     res.json({ success: true });
     return;
   } catch (error: any) {
-    if (!isTableMissingError(error)) {
-      respondWithError(res, error, 'Failed to delete team');
-      return;
-    }
-    console.warn('[OrganizationController] organization_units missing, fallback to legacy teams table');
-  }
-
-  try {
-    const [assignmentRows] = await pool.execute<RowDataPacket[]>(
-      'SELECT COUNT(*) AS cnt FROM employee_team_roles WHERE team_id = ?',
-      [id],
-    );
-
-    if (assignmentRows[0]?.cnt > 0) {
-      await pool.execute<ResultSetHeader>('UPDATE teams SET is_active = 0 WHERE id = ?', [id]);
-      res.json({ success: true, softDeleted: true });
-      return;
-    }
-
-    const [result] = await pool.execute<ResultSetHeader>(
-      'DELETE FROM teams WHERE id = ? LIMIT 1',
-      [id],
-    );
-
-    if (result.affectedRows === 0) {
-      res.status(404).json({ error: 'Team not found' });
-      return;
-    }
-
-    res.json({ success: true });
-  } catch (legacyError) {
-    respondWithError(res, legacyError, 'Failed to delete team');
+    respondWithError(res, error, 'Failed to delete team');
   }
 };
 
@@ -1155,7 +941,7 @@ export const createEmployeeTeamRole = async (req: Request, res: Response) => {
 
     const id = await createAssignmentService({
       employeeId: Number(employeeId),
-      teamId: Number(teamId),
+      unitId: Number(teamId),
       roleId: Number(roleId),
       isPrimary: Boolean(isPrimary),
       effectiveFrom,

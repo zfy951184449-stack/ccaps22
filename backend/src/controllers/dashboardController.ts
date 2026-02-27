@@ -21,7 +21,7 @@ import dayjs from 'dayjs';
  */
 export const getManpowerCurve = async (req: Request, res: Response) => {
     try {
-        const { year_month, department_id, team_id, shift_id } = req.query;
+        const { year_month, shift_id, unit_id } = req.query;
 
         if (!year_month) {
             return res.status(400).json({ error: 'year_month 为必填参数，格式: YYYY-MM' });
@@ -37,72 +37,84 @@ export const getManpowerCurve = async (req: Request, res: Response) => {
         const startDate = monthStart.format('YYYY-MM-DD');
         const endDate = monthEnd.format('YYYY-MM-DD');
 
-        // 获取真实的 team_id（从 organization_units 的 metadata 中查找）
-        let realTeamId: number | null = null;
         let realDeptId: number | null = null;
+        let realTeamId: number | null = null;
+        let realGroupId: number | null = null;
 
-        if (team_id) {
+        // 解析 unit_id 的真实类型
+        if (unit_id) {
             const [unitRows] = await pool.execute<RowDataPacket[]>(
-                `SELECT metadata FROM organization_units WHERE id = ? AND unit_type = 'TEAM'`,
-                [team_id]
+                `SELECT id, unit_type, metadata FROM organization_units WHERE id = ?`,
+                [unit_id]
             );
-            if (unitRows.length > 0 && unitRows[0].metadata) {
-                const metadata = typeof unitRows[0].metadata === 'string'
-                    ? JSON.parse(unitRows[0].metadata)
-                    : unitRows[0].metadata;
-                realTeamId = metadata.teamId || null;
-            }
-            // 如果没有 metadata，尝试直接使用 team_id（可能是旧数据）
-            if (!realTeamId) {
-                realTeamId = Number(team_id);
+
+            if (unitRows.length > 0) {
+                const unit = unitRows[0];
+                const metadata = typeof unit.metadata === 'string' && unit.metadata
+                    ? JSON.parse(unit.metadata)
+                    : (unit.metadata || {});
+
+                if (unit.unit_type === 'DEPARTMENT') {
+                    realDeptId = unit.id;
+                } else if (unit.unit_type === 'TEAM') {
+                    realTeamId = unit.id;
+                } else if (unit.unit_type === 'GROUP') {
+                    realGroupId = unit.id;
+                    // 如果选择了 Group，我们需要找到它的父级 Team，因为某些需求查询可能挂在 Team 上
+                    const [parentTeamRows] = await pool.execute<RowDataPacket[]>(
+                        `SELECT id FROM organization_units WHERE id = (SELECT parent_id FROM organization_units WHERE id = ?) AND unit_type = 'TEAM'`,
+                        [unit_id]
+                    );
+                    if (parentTeamRows.length > 0) {
+                        realTeamId = parentTeamRows[0].id;
+                    }
+                }
             }
         }
 
-        if (department_id && !team_id) {
-            const [unitRows] = await pool.execute<RowDataPacket[]>(
-                `SELECT metadata FROM organization_units WHERE id = ? AND unit_type = 'DEPARTMENT'`,
-                [department_id]
-            );
-            if (unitRows.length > 0 && unitRows[0].metadata) {
-                const metadata = typeof unitRows[0].metadata === 'string'
-                    ? JSON.parse(unitRows[0].metadata)
-                    : unitRows[0].metadata;
-                realDeptId = metadata.departmentId || null;
-            }
-            if (!realDeptId) {
-                realDeptId = Number(department_id);
+        // 员工组织过滤通用逻辑
+        let empOrgJoin = '';
+        let empOrgWhere = '';
+        const empOrgParams: any[] = [];
+
+        if (realTeamId || realDeptId || realGroupId) {
+            empOrgJoin = `
+              LEFT JOIN organization_units u ON e.unit_id = u.id
+              LEFT JOIN organization_units team ON (
+                (u.unit_type = 'TEAM' AND u.id = team.id) OR
+                (u.unit_type = 'GROUP' AND u.parent_id = team.id)
+              )
+              LEFT JOIN organization_units dept ON (
+                (u.unit_type = 'DEPARTMENT' AND u.id = dept.id) OR
+                (team.parent_id = dept.id) OR
+                (u.unit_type = 'TEAM' AND u.parent_id = dept.id)
+              )
+            `;
+            if (realGroupId) {
+                empOrgWhere = ' AND u.id = ?';
+                empOrgParams.push(realGroupId);
+            } else if (realTeamId) {
+                empOrgWhere = ' AND team.id = ?';
+                empOrgParams.push(realTeamId);
+            } else if (realDeptId) {
+                empOrgWhere = ' AND dept.id = ?';
+                empOrgParams.push(realDeptId);
             }
         }
 
         // 1. 获取团队总人数
-        const employeeParams: any[] = [];
-        let employeeFilter = "e.employment_status = 'ACTIVE'";
-
-        if (realTeamId) {
-            employeeFilter += ' AND e.primary_team_id = ?';
-            employeeParams.push(realTeamId);
-        } else if (realDeptId) {
-            employeeFilter += ' AND e.department_id = ?';
-            employeeParams.push(realDeptId);
-        }
-
         const [headcountRows] = await pool.execute<RowDataPacket[]>(
-            `SELECT COUNT(*) as total FROM employees e WHERE ${employeeFilter}`,
-            employeeParams
+            `SELECT COUNT(DISTINCT e.id) as total 
+             FROM employees e 
+             ${empOrgJoin} 
+             WHERE e.employment_status = 'ACTIVE' ${empOrgWhere}`,
+            empOrgParams
         );
         const totalHeadcount = Number(headcountRows[0]?.total || 0);
 
         // 2. 获取每日可用人数（上班员工，非 REST）
-        const availableParams: any[] = [startDate, endDate];
+        const availableParams: any[] = [startDate, endDate, ...empOrgParams];
         let availableFilter = '';
-
-        if (realTeamId) {
-            availableFilter += ' AND e.primary_team_id = ?';
-            availableParams.push(realTeamId);
-        } else if (realDeptId) {
-            availableFilter += ' AND e.department_id = ?';
-            availableParams.push(realDeptId);
-        }
 
         // 班次筛选逻辑优化：
         // - 如果指定了班次，只统计该班次类型的员工
@@ -121,9 +133,11 @@ export const getManpowerCurve = async (req: Request, res: Response) => {
          COUNT(DISTINCT esp.employee_id) as available_count
        FROM employee_shift_plans esp
        JOIN employees e ON esp.employee_id = e.id
+       ${empOrgJoin}
        WHERE esp.plan_date BETWEEN ? AND ?
          ${categoryFilter}
          AND e.employment_status = 'ACTIVE'
+         ${empOrgWhere}
          ${availableFilter}
        GROUP BY esp.plan_date
        ORDER BY esp.plan_date`,
@@ -132,12 +146,27 @@ export const getManpowerCurve = async (req: Request, res: Response) => {
 
         // 3. 获取每日需求人数（峰值模式：每小时最大同时需求）
         // 使用批次操作计划的时间范围计算
-        const demandParams: any[] = [startDate, endDate, startDate, endDate];
-        let demandFilter = '';
 
-        // 如果指定了 team_id 或 department_id，需要关联已分配的员工来筛选
-        // 这里简化处理：需求人数按全部操作统计，不按团队筛选
-        // 因为操作本身不属于某个团队，而是由多个团队的人员共同完成
+        let demandJoin = '';
+        let demandWhere = '';
+        const demandQueryParams: any[] = [];
+
+        if (realTeamId) {
+            demandJoin = `
+              JOIN process_templates pt ON pbp.template_id = pt.id
+            `;
+            demandWhere = 'AND pt.team_id = ?';
+            demandQueryParams.push(realTeamId);
+        } else if (realDeptId) {
+            demandJoin = `
+              JOIN process_templates pt ON pbp.template_id = pt.id
+              JOIN organization_units team ON pt.team_id = team.id
+            `;
+            demandWhere = 'AND team.parent_id = ?';
+            demandQueryParams.push(realDeptId);
+        }
+
+        const demandParams: any[] = [startDate, endDate, startDate, endDate, ...demandQueryParams];
 
         const [demandRows] = await pool.execute<RowDataPacket[]>(
             `SELECT 
@@ -167,9 +196,11 @@ export const getManpowerCurve = async (req: Request, res: Response) => {
            SUM(bop.required_people) as hour_demand
          FROM batch_operation_plans bop
          JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+         ${demandJoin}
          WHERE pbp.plan_status = 'ACTIVATED'
            AND bop.planned_start_datetime >= ?
            AND bop.planned_start_datetime <= DATE_ADD(?, INTERVAL 1 DAY)
+           ${demandWhere}
          GROUP BY DATE_FORMAT(bop.planned_start_datetime, '%Y-%m-%d'), 
                   DATE_FORMAT(bop.planned_start_datetime, '%Y-%m-%d %H:00:00')
        ) hourly_demand ON dates.date = hourly_demand.date
@@ -215,9 +246,11 @@ export const getManpowerCurve = async (req: Request, res: Response) => {
              FROM employee_shift_plans esp
              JOIN employees e ON esp.employee_id = e.id
              JOIN shift_definitions sd ON esp.shift_id = sd.id
+             ${empOrgJoin}
              WHERE esp.plan_date BETWEEN ? AND ?
                AND esp.plan_category != 'REST'
                AND e.employment_status = 'ACTIVE'
+               ${empOrgWhere}
                ${availableFilter}
              GROUP BY esp.plan_date, sd.shift_code, sd.shift_name, 
                       CASE WHEN esp.batch_operation_plan_id IS NOT NULL THEN 1 ELSE 0 END
@@ -350,7 +383,59 @@ export const getShiftOptions = async (_req: Request, res: Response) => {
  */
 export const getWorkHoursCurve = async (req: Request, res: Response) => {
     try {
-        const { year_month, granularity = 'day', start_month, end_month } = req.query;
+        const { year_month, granularity = 'day', start_month, end_month, unit_id } = req.query;
+
+        // 1. 解析组织架构参数
+        let realDeptId: number | null = null;
+        let realTeamId: number | null = null;
+        let realGroupId: number | null = null;
+
+        if (unit_id) {
+            const [unitRows] = await pool.execute<RowDataPacket[]>(
+                `SELECT id, unit_type, metadata FROM organization_units WHERE id = ?`,
+                [unit_id]
+            );
+
+            if (unitRows.length > 0) {
+                const unit = unitRows[0];
+                const metadata = typeof unit.metadata === 'string' && unit.metadata
+                    ? JSON.parse(unit.metadata)
+                    : (unit.metadata || {});
+
+                if (unit.unit_type === 'DEPARTMENT') {
+                    realDeptId = unit.id;
+                } else if (unit.unit_type === 'TEAM') {
+                    realTeamId = unit.id;
+                } else if (unit.unit_type === 'GROUP') {
+                    realGroupId = unit.id;
+                    const [parentTeamRows] = await pool.execute<RowDataPacket[]>(
+                        `SELECT id FROM organization_units WHERE id = (SELECT parent_id FROM organization_units WHERE id = ?) AND unit_type = 'TEAM'`,
+                        [unit_id]
+                    );
+                    if (parentTeamRows.length > 0) {
+                        realTeamId = parentTeamRows[0].id;
+                    }
+                }
+            }
+        }
+
+        // 构建组织过滤 SQL (关联 process_templates.team_id)
+        let orgJoin = '';
+        let orgWhere = '';
+        const orgQueryParams: any[] = [];
+
+        if (realTeamId) {
+            orgJoin = `JOIN process_templates pt ON pbp.template_id = pt.id`;
+            orgWhere = 'AND pt.team_id = ?';
+            orgQueryParams.push(realTeamId);
+        } else if (realDeptId) {
+            orgJoin = `
+              JOIN process_templates pt ON pbp.template_id = pt.id
+              JOIN organization_units team ON pt.team_id = team.id
+            `;
+            orgWhere = 'AND team.parent_id = ?';
+            orgQueryParams.push(realDeptId);
+        }
 
         // ================= 日视图 =================
         if (granularity === 'day') {
@@ -368,6 +453,8 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
             const startDate = monthStart.format('YYYY-MM-DD');
             const endDate = monthEnd.add(1, 'day').format('YYYY-MM-DD');
 
+            const params = [startDate, endDate, ...orgQueryParams];
+
             // 按批次分组统计每日工时
             const [batchHoursRows] = await pool.execute<RowDataPacket[]>(
                 `SELECT 
@@ -377,13 +464,15 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
                    SUM(bop.planned_duration * bop.required_people) as work_hours
                  FROM batch_operation_plans bop
                  JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+                 ${orgJoin}
                  WHERE pbp.plan_status = 'ACTIVATED'
                    AND bop.planned_start_datetime >= ? 
                    AND bop.planned_start_datetime < ?
+                   ${orgWhere}
                  GROUP BY DATE_FORMAT(bop.planned_start_datetime, '%Y-%m-%d'), 
                           pbp.id, pbp.batch_code
                  ORDER BY date, batch_code`,
-                [startDate, endDate]
+                params
             );
 
             // 构建数据结构
@@ -455,6 +544,8 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
             const startDate = rangeStart.format('YYYY-MM-DD');
             const endDate = rangeEnd.add(1, 'day').format('YYYY-MM-DD');
 
+            const params = [startDate, endDate, ...orgQueryParams];
+
             // 1. 按月+批次分组统计工时
             const [monthlyBatchRows] = await pool.execute<RowDataPacket[]>(
                 `SELECT 
@@ -463,12 +554,14 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
                    SUM(bop.planned_duration * bop.required_people) as work_hours
                  FROM batch_operation_plans bop
                  JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+                 ${orgJoin}
                  WHERE pbp.plan_status = 'ACTIVATED'
                    AND bop.planned_start_datetime >= ? 
                    AND bop.planned_start_datetime < ?
+                   ${orgWhere}
                  GROUP BY DATE_FORMAT(bop.planned_start_datetime, '%Y-%m'), pbp.batch_code
                  ORDER BY ym, pbp.batch_code`,
-                [startDate, endDate]
+                params
             );
 
             // 2. 计算每日工时，用于找每月峰值
@@ -479,12 +572,14 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
                    SUM(bop.planned_duration * bop.required_people) as daily_hours
                  FROM batch_operation_plans bop
                  JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+                 ${orgJoin}
                  WHERE pbp.plan_status = 'ACTIVATED'
                    AND bop.planned_start_datetime >= ?
                    AND bop.planned_start_datetime < ?
+                   ${orgWhere}
                  GROUP BY DATE_FORMAT(bop.planned_start_datetime, '%Y-%m'), DATE_FORMAT(bop.planned_start_datetime, '%Y-%m-%d')
                  ORDER BY ym, daily_hours DESC`,
-                [startDate, endDate]
+                params
             );
 
             // 找每月峰值
@@ -500,8 +595,44 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
             }
 
             // 3. 获取员工总人数 (用于计算人均)
+            // 如果筛选了组织，这里也应该只统计该组织的人数？
+            // 是的，"人均工时"应该是 "该组织的总工时 / 该组织的总人数"
+            // 员工筛选：使用统一的 V4 邻接表模型 JOIN 逻辑
+            let empOrgJoin = '';
+            let empOrgWhere = '';
+            const employeeParams: any[] = [];
+
+            if (realTeamId || realDeptId || realGroupId) {
+                empOrgJoin = `
+                  LEFT JOIN organization_units u ON e.unit_id = u.id
+                  LEFT JOIN organization_units team ON (
+                    (u.unit_type = 'TEAM' AND u.id = team.id) OR
+                    (u.unit_type = 'GROUP' AND u.parent_id = team.id)
+                  )
+                  LEFT JOIN organization_units dept ON (
+                    (u.unit_type = 'DEPARTMENT' AND u.id = dept.id) OR
+                    (team.parent_id = dept.id) OR
+                    (u.unit_type = 'TEAM' AND u.parent_id = dept.id)
+                  )
+                `;
+                if (realGroupId) {
+                    empOrgWhere = ' AND u.id = ?';
+                    employeeParams.push(realGroupId);
+                } else if (realTeamId) {
+                    empOrgWhere = ' AND team.id = ?';
+                    employeeParams.push(realTeamId);
+                } else if (realDeptId) {
+                    empOrgWhere = ' AND dept.id = ?';
+                    employeeParams.push(realDeptId);
+                }
+            }
+
             const [employeeCountRows] = await pool.execute<RowDataPacket[]>(
-                `SELECT COUNT(*) as total FROM employees WHERE employment_status = 'ACTIVE'`
+                `SELECT COUNT(DISTINCT e.id) as total 
+                 FROM employees e 
+                 ${empOrgJoin} 
+                 WHERE e.employment_status = 'ACTIVE' ${empOrgWhere}`,
+                employeeParams
             );
             const totalEmployees = Number(employeeCountRows[0]?.total || 1);
 
@@ -543,7 +674,7 @@ export const getWorkHoursCurve = async (req: Request, res: Response) => {
                 year_month: ym,
                 month_label: dayjs(ym).format('M月'),
                 total_hours: Math.round(data.total * 10) / 10,
-                hours_per_person: Math.round(data.total / totalEmployees * 10) / 10,
+                hours_per_person: totalEmployees > 0 ? Math.round(data.total / totalEmployees * 10) / 10 : 0,
                 peak_daily_hours: data.peak,
                 peak_date: data.peakDate,
                 batch_breakdown: data.batches,

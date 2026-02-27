@@ -10,7 +10,9 @@ import {
     createBatchConstraint,
     updateBatchConstraint,
     deleteBatchConstraint,
-    getBatchAvailableOperations
+    getBatchAvailableOperations,
+    searchBatchOperations,
+    getBatchOperationHierarchy
 } from '../controllers/batchConstraintController';
 import { runBatchValidation } from '../services/batchValidationService';
 
@@ -21,6 +23,10 @@ router.get('/batch-operation-plans/:operationPlanId/constraints', getBatchOperat
 
 // 获取批次可用操作（用于创建约束）
 router.get('/batches/:batchPlanId/available-operations', getBatchAvailableOperations);
+
+// 搜索批次操作（支持跨批次）
+router.get('/batch-operations/search', searchBatchOperations);
+router.get('/batch-operations/hierarchy', getBatchOperationHierarchy);
 
 // 约束 CRUD
 router.post('/batch-constraints', createBatchConstraint);

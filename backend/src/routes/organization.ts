@@ -5,6 +5,7 @@ import {
   updateDepartment,
   deleteDepartment,
   getTeams,
+  getSolverTeams,
   createTeam,
   updateTeam,
   deleteTeam,
@@ -30,6 +31,7 @@ router.put('/departments/:id', updateDepartment);
 router.delete('/departments/:id', deleteDepartment);
 
 router.get('/teams', getTeams);
+router.get('/solver-teams', getSolverTeams);
 router.post('/teams', createTeam);
 router.put('/teams/:id', updateTeam);
 router.delete('/teams/:id', deleteTeam);

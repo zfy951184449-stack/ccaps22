@@ -24,24 +24,9 @@ interface EmployeeRow extends RowDataPacket {
   id: number;
   employee_code: string;
   employee_name: string;
-  department_id: number | null;
-  primary_team_id: number | null;
-  org_role: string;
+  unit_id: number | null;
+  role_code: string;
   employment_status: string;
-}
-
-interface TeamRow extends RowDataPacket {
-  id: number;
-  team_name: string;
-  team_code: string | null;
-  department_id: number | null;
-}
-
-interface DepartmentRow extends RowDataPacket {
-  id: number;
-  parent_id: number | null;
-  dept_name: string;
-  dept_code: string | null;
 }
 
 interface ReportingPairRow extends RowDataPacket {
@@ -50,6 +35,7 @@ interface ReportingPairRow extends RowDataPacket {
 }
 
 export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarchyResult> {
+  // 1. Fetch all Units
   const [unitRows] = await pool.execute<OrganizationUnitRow[]>(
     `SELECT id,
             parent_id,
@@ -61,43 +47,33 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
             is_active,
             metadata
       FROM organization_units
+     WHERE is_active = 1
      ORDER BY COALESCE(parent_id, 0), sort_order, unit_name`
   );
 
+  // 2. Fetch all Employees with Unit ID and Role Code
   const [employeeRows] = await pool.execute<EmployeeRow[]>(
-    `SELECT id,
-            employee_code,
-            employee_name,
-            department_id,
-            primary_team_id,
-            org_role,
-            employment_status
-       FROM employees`
+    `SELECT e.id,
+            e.employee_code,
+            e.employee_name,
+            e.unit_id,
+            COALESCE(r.role_code, 'FRONTLINE') AS role_code,
+            e.employment_status
+       FROM employees e
+       LEFT JOIN employee_roles r ON r.id = e.primary_role_id`
   );
 
-  const [teamRows] = await pool.execute<TeamRow[]>(
-    `SELECT id,
-            team_name,
-            team_code,
-            department_id
-       FROM teams`
-  );
-
-  const [departmentRows] = await pool.execute<DepartmentRow[]>(
-    `SELECT id,
-            parent_id,
-            dept_name,
-            dept_code
-       FROM departments`
-  );
-
+  // 3. Fetch Reporting Relations
   const [reportingPairs] = await pool.execute<ReportingPairRow[]>(
     `SELECT leader_id,
             subordinate_id
        FROM employee_reporting_relations`
   );
 
+  // --- Data Structure Building ---
+
   const unitMap = new Map<number, OrganizationUnitNode>();
+  const parentMap = new Map<number, number | null>(); // Unit ID -> Parent ID
 
   unitRows.forEach((row) => {
     let metadata: Record<string, unknown> | null = null;
@@ -123,13 +99,18 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
       memberCount: 0,
       children: [],
     });
+
+    parentMap.set(row.id, row.parent_id);
   });
 
+  // Build Tree
   const roots: OrganizationUnitNode[] = [];
-
   unitMap.forEach((node) => {
-    if (node.parentId && unitMap.has(node.parentId)) {
-      unitMap.get(node.parentId)!.children.push(node);
+    if (node.parentId) {
+      if (unitMap.has(node.parentId)) {
+        unitMap.get(node.parentId)!.children.push(node);
+      }
+      // 轻微隐患修复：当父节点失效未被装载时，该子节点（ Ghost Root ）被安静地过滤掉，不再强行升维到 roots 中。
     } else {
       roots.push(node);
     }
@@ -140,29 +121,7 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
     employeeMap.set(row.id, row);
   });
 
-  const teamMap = new Map<number, TeamRow>();
-  teamRows.forEach((row) => teamMap.set(row.id, row));
-
-  const teamDepartmentMap = new Map<number, number>();
-  teamRows.forEach((row) => {
-    if (row.department_id !== null && row.department_id !== undefined) {
-      teamDepartmentMap.set(row.id, row.department_id);
-    }
-  });
-
-  const departmentMap = new Map<number, DepartmentRow>();
-  departmentRows.forEach((row) => departmentMap.set(row.id, row));
-
-  const departmentByCode = new Map<string, DepartmentRow>();
-  departmentRows.forEach((row) => {
-    if (row.dept_code) {
-      departmentByCode.set(row.dept_code, row);
-    }
-  });
-
-  const departmentParents = new Map<number, number | null>();
-  departmentRows.forEach((row) => departmentParents.set(row.id, row.parent_id));
-
+  // Reporting / Stats
   const leaderToSubordinates = new Map<number, number[]>();
   reportingPairs.forEach((pair) => {
     const leaderId = Number(pair.leader_id);
@@ -178,7 +137,7 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
     let shiftLeaderCount = 0;
     subordinates.forEach((subordinateId) => {
       const subordinate = employeeMap.get(subordinateId);
-      if (subordinate && subordinate.org_role === 'SHIFT_LEADER') {
+      if (subordinate && subordinate.role_code === 'SHIFT_LEADER') {
         shiftLeaderCount += 1;
       }
     });
@@ -188,51 +147,35 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
     });
   });
 
-  const employeesByTeam = new Map<number, EmployeeRow[]>();
-  const departmentEmployeeSets = new Map<number, Set<number>>();
+  // Employee Assignment & Recursive Member Counting
+  const employeesByUnit = new Map<number, EmployeeRow[]>();
+  const unitRecursiveMemberSets = new Map<number, Set<number>>();
 
-  const teamByCode = new Map<string, TeamRow>();
-  teamRows.forEach((row) => {
-    if (row.team_code) {
-      teamByCode.set(row.team_code, row);
-    }
-  });
-
-  const addEmployeeToDepartment = (departmentId: number | null | undefined, employeeId: number) => {
-    let current = departmentId ?? null;
+  const addToRecursiveMembers = (unitId: number | null | undefined, employeeId: number) => {
+    let current = unitId ?? null;
     while (current) {
-      if (!departmentEmployeeSets.has(current)) {
-        departmentEmployeeSets.set(current, new Set());
+      if (!unitRecursiveMemberSets.has(current)) {
+        unitRecursiveMemberSets.set(current, new Set());
       }
-      departmentEmployeeSets.get(current)!.add(employeeId);
-      current = departmentParents.get(current) ?? null;
+      unitRecursiveMemberSets.get(current)!.add(employeeId);
+      current = parentMap.get(current) ?? null;
     }
   };
 
   employeeRows.forEach((employee) => {
-    if (employee.primary_team_id !== null && employee.primary_team_id !== undefined) {
-      if (!employeesByTeam.has(employee.primary_team_id)) {
-        employeesByTeam.set(employee.primary_team_id, []);
+    if (employee.unit_id) {
+      // Direct Assignment
+      if (!employeesByUnit.has(employee.unit_id)) {
+        employeesByUnit.set(employee.unit_id, []);
       }
-      employeesByTeam.get(employee.primary_team_id)!.push(employee);
+      employeesByUnit.get(employee.unit_id)!.push(employee);
 
-      const deptId = teamDepartmentMap.get(employee.primary_team_id);
-      if (deptId) {
-        addEmployeeToDepartment(deptId, employee.id);
-      }
-    }
-
-    if (employee.department_id) {
-      addEmployeeToDepartment(employee.department_id, employee.id);
+      // Recursive Counts (works for Dept <- Team <- Emp)
+      addToRecursiveMembers(employee.unit_id, employee.id);
     }
   });
 
-  unitMap.forEach((unit) => {
-    const meta = unit.metadata as Record<string, any> | null;
-    if (!meta) {
-      return;
-    }
-  });
+  // --- Leader & Stats Population ---
 
   let leaderCounter = 0;
   let emptyLeadershipNodes = 0;
@@ -243,12 +186,12 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
       employeeId: employee.id,
       employeeCode: employee.employee_code,
       employeeName: employee.employee_name,
-      orgRole: employee.org_role,
+      orgRole: employee.role_code,
       employmentStatus: employee.employment_status,
       directSubordinateCount: stats.subordinateCount,
       shiftLeaderCount: stats.shiftLeaderCount,
       hasShiftLeaderGap:
-        employee.org_role === 'GROUP_LEADER' && stats.subordinateCount > 0 && stats.shiftLeaderCount === 0,
+        employee.role_code === 'GROUP_LEADER' && stats.subordinateCount > 0 && stats.shiftLeaderCount === 0,
     };
 
     if (summary.hasShiftLeaderGap) {
@@ -263,60 +206,42 @@ export async function fetchOrganizationHierarchy(): Promise<OrganizationHierarch
     unit.leaders = [];
     unit.memberCount = 0;
 
+    // Set Member Count
+    if (unitRecursiveMemberSets.has(unit.id)) {
+      unit.memberCount = unitRecursiveMemberSets.get(unit.id)!.size;
+    }
+
+    // Find Leaders based on Logic
+    const directMembers = employeesByUnit.get(unit.id) || [];
     const meta = unit.metadata as Record<string, any> | null;
 
     if (unit.unitType === 'DEPARTMENT') {
-      let deptId = meta?.departmentId ?? null;
-      if (!deptId && unit.unitCode && departmentByCode.has(unit.unitCode)) {
-        deptId = departmentByCode.get(unit.unitCode)!.id;
-      }
-      if (deptId && departmentEmployeeSets.has(deptId)) {
-        unit.memberCount = departmentEmployeeSets.get(deptId)!.size;
-      }
-
-      if (deptId) {
-        employeeRows
-          .filter((emp) => emp.department_id === deptId && emp.org_role === 'DEPT_MANAGER')
-          .forEach((emp) => unit.leaders.push(buildLeaderSummary(emp)));
-      }
+      // Logic: Employees in this unit (presumably the manager) with DEPT_MANAGER role
+      directMembers
+        .filter((emp) => emp.role_code === 'DEPT_MANAGER')
+        .forEach((emp) => unit.leaders.push(buildLeaderSummary(emp)));
     } else if (unit.unitType === 'TEAM') {
-      let teamId = meta?.teamId ?? null;
-      if (!teamId && unit.unitCode && teamByCode.has(unit.unitCode)) {
-        teamId = teamByCode.get(unit.unitCode)!.id;
-      }
-      if (teamId && employeesByTeam.has(teamId)) {
-        unit.memberCount = employeesByTeam.get(teamId)!.length;
-        employeesByTeam
-          .get(teamId)!
-          .filter((emp) => emp.org_role === 'TEAM_LEADER')
-          .forEach((emp) => unit.leaders.push(buildLeaderSummary(emp)));
-      }
-    } else if (unit.unitType === 'GROUP') {
+      // Logic: Employees in this unit with TEAM_LEADER role
+      directMembers
+        .filter((emp) => emp.role_code === 'TEAM_LEADER')
+        .forEach((emp) => unit.leaders.push(buildLeaderSummary(emp)));
+    } else if (unit.unitType === 'GROUP' || unit.unitType === 'SHIFT') {
+      // Logic: Leader is explicitly linked via Metadata (AutoStructureService)
       const leaderId = meta?.leaderEmployeeId;
       if (leaderId && employeeMap.has(leaderId)) {
         const leader = employeeMap.get(leaderId)!;
         unit.leaders.push(buildLeaderSummary(leader));
-        const stats = reportingStats.get(leaderId);
-        unit.memberCount = stats ? stats.subordinateCount : 0;
-      }
-    } else if (unit.unitType === 'SHIFT') {
-      const leaderId = meta?.leaderEmployeeId;
-      if (leaderId && employeeMap.has(leaderId)) {
-        const leader = employeeMap.get(leaderId)!;
-        unit.leaders.push(buildLeaderSummary(leader));
-        const stats = reportingStats.get(leaderId);
-        unit.memberCount = stats ? stats.subordinateCount : 0;
       }
     }
   });
 
   const unassignedEmployees: UnassignedEmployeeSummary[] = employeeRows
-    .filter((employee) => !employee.department_id && !employee.primary_team_id)
+    .filter((employee) => !employee.unit_id)
     .map((employee) => ({
       employeeId: employee.id,
       employeeCode: employee.employee_code,
       employeeName: employee.employee_name,
-      orgRole: employee.org_role,
+      orgRole: employee.role_code,
       employmentStatus: employee.employment_status,
     }));
 

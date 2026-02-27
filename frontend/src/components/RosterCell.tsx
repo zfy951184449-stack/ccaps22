@@ -113,12 +113,35 @@ const RosterCell: React.FC<RosterCellProps> = ({ plans, allPlans }) => {
         </div>
     );
 
+    // Get short label for display
+    const getShortLabel = (plan: ShiftPlan) => {
+        const name = plan.shift_name || '';
+        if (name.includes('夜')) return '夜班';
+        if (name.includes('长白')) return '长白';
+        if (name.includes('日') || name.includes('早')) return '日班';
+        if (plan.plan_category === 'REST') return '休息';
+        return name.slice(0, 2) || '班';
+    };
+
+    // Get time display
+    const getTimeDisplay = (plan: ShiftPlan) => {
+        if (plan.shift_start_time && plan.shift_end_time) {
+            return `${plan.shift_start_time.slice(0, 5)}-${plan.shift_end_time.slice(0, 5)}`;
+        }
+        return null;
+    };
+
+    const shortLabel = getShortLabel(primaryPlan);
+    const timeDisplay = getTimeDisplay(primaryPlan);
+    const hasProductionTask = !!primaryPlan.operation_name;
+
     return (
-        <div className="roster-cell-plans">
+        <div className={`roster-cell-plans ${hasProductionTask ? 'has-production-task' : ''}`}>
             <Tooltip title={tip}>
                 <div className={`shift-chip ${shiftClass}`}>
-                    {displayHours !== undefined && displayHours !== null && (
-                        <span className="shift-chip-hours">{displayHours}h</span>
+                    <span className="shift-chip-label">{shortLabel}</span>
+                    {timeDisplay && (
+                        <span className="shift-chip-time">{timeDisplay}</span>
                     )}
                 </div>
             </Tooltip>

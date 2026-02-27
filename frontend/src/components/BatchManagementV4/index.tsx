@@ -1,0 +1,377 @@
+import React, { useMemo } from 'react';
+import { Typography, Empty, Button, Segmented } from 'antd';
+import { PlusOutlined, AppstoreOutlined, FileTextOutlined, RocketOutlined, CopyOutlined, BarsOutlined, BarChartOutlined } from '@ant-design/icons';
+import { message } from 'antd';
+import StatsCardV4 from './StatsCardV4';
+import BatchListV4 from './BatchListV4';
+import BatchFilterBar from './BatchFilterBar';
+import CreateBatchModalV4 from './CreateBatchModalV4';
+import BulkCreateModalV4 from './BulkCreateModalV4';
+import BatchGanttV4 from './BatchGanttV4';
+import { batchPlanApi, processTemplateApi } from '../../services/api';
+import type { BatchStatistics, BatchPlan, ProcessTemplate } from '../../types';
+
+const { Title, Text } = Typography;
+
+/**
+ * BatchManagementV4
+ * 
+ * A completely new implementation of Batch Management interface following Apple HIG.
+ * Features:
+ * - Glassmorphism effects (backdrop-filter)
+ * - Large rounded corners (Squircle-like)
+ * - Minimalist design
+ * - Fluid animations
+ * - Dual-Mode View: List vs Gantt
+ * - Multi-select filtering by Team, Template, and Batch
+ */
+
+const BatchManagementV4: React.FC = () => {
+    // State
+    const [viewMode, setViewMode] = React.useState<'list' | 'gantt'>('list');
+    const [stats, setStats] = React.useState<BatchStatistics>({
+        total_batches: 0,
+        draft_count: 0,
+        activated_count: 0
+    });
+    const [batches, setBatches] = React.useState<BatchPlan[]>([]);
+    const [templates, setTemplates] = React.useState<ProcessTemplate[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    // Modal states
+    const [createModalVisible, setCreateModalVisible] = React.useState(false);
+    const [bulkModalVisible, setBulkModalVisible] = React.useState(false);
+    const [editingBatch, setEditingBatch] = React.useState<BatchPlan | null>(null);
+
+    // Filter states
+    const [selectedBatchIds, setSelectedBatchIds] = React.useState<number[]>([]);
+    const [selectedTemplateIds, setSelectedTemplateIds] = React.useState<number[]>([]);
+    const [selectedTeamCodes, setSelectedTeamCodes] = React.useState<string[]>([]);
+
+    // Initial data load
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [statsData, batchesData, templatesData] = await Promise.all([
+                batchPlanApi.getStatistics(),
+                batchPlanApi.list(),
+                processTemplateApi.getAll().then(res => res.data)
+            ]);
+            setStats(statsData);
+            setBatches(batchesData);
+            setTemplates(templatesData);
+        } catch (error) {
+            console.error('Failed to load data', error);
+            message.error('加载数据失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    React.useEffect(() => {
+        loadData();
+    }, []);
+
+    // Filtered batches based on filter criteria
+    const filteredBatches = useMemo(() => {
+        return batches.filter(batch => {
+            // Filter by batch IDs
+            if (selectedBatchIds.length > 0 && !selectedBatchIds.includes(batch.id)) {
+                return false;
+            }
+            // Filter by template IDs
+            if (selectedTemplateIds.length > 0 && !selectedTemplateIds.includes(batch.template_id)) {
+                return false;
+            }
+            // Filter by team codes (via batch's team_code or template lookup)
+            if (selectedTeamCodes.length > 0) {
+                // First try using batch's own team_code (from API)
+                if (batch.team_code) {
+                    if (!selectedTeamCodes.includes(batch.team_code)) {
+                        return false;
+                    }
+                } else {
+                    // Fallback: lookup from templates
+                    const template = templates.find(t => t.id === batch.template_id);
+                    if (!template || !template.team_code || !selectedTeamCodes.includes(template.team_code)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        });
+    }, [batches, templates, selectedBatchIds, selectedTemplateIds, selectedTeamCodes]);
+
+    // Clear all filters
+    const handleClearFilters = () => {
+        setSelectedBatchIds([]);
+        setSelectedTemplateIds([]);
+        setSelectedTeamCodes([]);
+    };
+
+    // Handlers
+    const handleCreate = () => {
+        setEditingBatch(null);
+        setCreateModalVisible(true);
+    };
+
+    const handleEdit = (batch: BatchPlan) => {
+        setEditingBatch(batch);
+        setCreateModalVisible(true);
+    };
+
+    const handleSuccess = () => {
+        setCreateModalVisible(false);
+        setBulkModalVisible(false);
+        setEditingBatch(null);
+        loadData();
+    };
+
+    const handleDelete = async (batch: BatchPlan) => {
+        try {
+            await batchPlanApi.remove(batch.id);
+            message.success('批次已删除');
+            loadData();
+        } catch (error) {
+            message.error('删除批次失败');
+        }
+    };
+
+    const handleActivate = async (batch: BatchPlan) => {
+        try {
+            await batchPlanApi.activate(batch.id);
+            message.success('批次已激活');
+            loadData();
+        } catch (error) {
+            message.error('激活失败');
+        }
+    };
+
+    const handleDeactivate = async (batch: BatchPlan) => {
+        try {
+            await batchPlanApi.deactivate(batch.id);
+            message.success('批次已撤销激活');
+            loadData();
+        } catch (error) {
+            message.error('撤销激活失败');
+        }
+    };
+
+    // Apple HIG style constants that override/extend the base tokens for this specific new look
+    const styles = {
+        container: {
+            height: '100%',
+            width: '100%',
+            backgroundColor: 'rgba(255, 255, 255, 0.6)', // Translucent background
+            backdropFilter: 'blur(20px)', // Heavy blur for glass effect
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: '24px', // Large rounded corners (approx. rounded-3xl)
+            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.07)', // Soft, diffused shadow
+            border: '1px solid rgba(255, 255, 255, 0.18)', // Subtle white border
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column' as const,
+            overflow: 'hidden',
+        },
+        header: {
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px',
+            padding: '0 8px', // Slight padding for alignment
+        },
+        statsRow: {
+            display: 'flex',
+            gap: '20px',
+            marginBottom: '16px',
+            flexShrink: 0, // Ensure stats don't shrink
+        },
+        content: {
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column' as const,
+            background: 'rgba(245, 245, 247, 0.3)',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            opacity: 1,
+            // For Gantt view, we want to remove extra padding/margin so it fits perfectly
+            position: 'relative' as const,
+        }
+    };
+
+    return (
+        <div style={styles.container}>
+            <div style={styles.header}>
+                <div>
+                    <Title level={2} style={{ margin: 0, fontWeight: 600, letterSpacing: '-0.5px' }}>
+                        批次管理
+                    </Title>
+                    <Text type="secondary" style={{ fontSize: '15px' }}>
+                        管理您的生产批次与排程
+                    </Text>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    {/* View Switcher */}
+                    <Segmented
+                        options={[
+                            { label: '列表视图', value: 'list', icon: <BarsOutlined /> },
+                            { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
+                        ]}
+                        value={viewMode}
+                        onChange={(val) => setViewMode(val as 'list' | 'gantt')}
+                        style={{ background: 'rgba(118, 118, 128, 0.12)', fontWeight: 500 }}
+                    />
+
+                    <div style={{ width: 1, height: 24, backgroundColor: 'rgba(0,0,0,0.1)' }}></div>
+
+                    <Button
+                        type="default"
+                        size="large"
+                        icon={<CopyOutlined />}
+                        onClick={() => setBulkModalVisible(true)}
+                        style={{
+                            borderRadius: '12px',
+                            height: '44px',
+                            padding: '0 20px',
+                            fontWeight: 500,
+                            border: 'none',
+                            background: 'rgba(255,255,255,0.5)',
+                            backdropFilter: 'blur(10px)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}
+                    >
+                        批量创建
+                    </Button>
+                    <Button
+                        type="primary"
+                        size="large"
+                        icon={<PlusOutlined />}
+                        style={{
+                            borderRadius: '12px',
+                            height: '44px',
+                            padding: '0 24px',
+                            fontWeight: 500,
+                            boxShadow: '0 4px 14px 0 rgba(0, 118, 255, 0.2)',
+                            backgroundColor: '#007AFF', // Force Apple Blue
+                            border: 'none',
+                            color: '#ffffff'
+                        }}
+                        onClick={handleCreate}
+                    >
+                        新建批次
+                    </Button>
+                </div>
+            </div>
+
+            <div style={styles.statsRow}>
+                <div style={{ flex: 1 }}>
+                    <StatsCardV4
+                        title="总批次"
+                        value={stats.total_batches}
+                        icon={<AppstoreOutlined />}
+                        color="#007AFF"
+                    />
+                </div>
+                <div style={{ flex: 1 }}>
+                    <StatsCardV4
+                        title="草稿"
+                        value={stats.draft_count}
+                        icon={<FileTextOutlined />}
+                        color="#8E8E93"
+                    />
+                </div>
+                <div style={{ flex: 1 }}>
+                    <StatsCardV4
+                        title="已激活"
+                        value={stats.activated_count}
+                        icon={<RocketOutlined />}
+                        color="#34C759"
+                    />
+                </div>
+            </div>
+
+            {/* Filter Bar */}
+            <BatchFilterBar
+                batches={batches}
+                templates={templates}
+                selectedBatchIds={selectedBatchIds}
+                selectedTemplateIds={selectedTemplateIds}
+                selectedTeamCodes={selectedTeamCodes}
+                onBatchChange={setSelectedBatchIds}
+                onTemplateChange={setSelectedTemplateIds}
+                onTeamChange={setSelectedTeamCodes}
+                onClear={handleClearFilters}
+            />
+
+            <div style={styles.content}>
+                {viewMode === 'list' ? (
+                    filteredBatches.length > 0 ? (
+                        <BatchListV4
+                            data={filteredBatches}
+                            loading={loading}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onActivate={handleActivate}
+                            onDeactivate={handleDeactivate}
+                        />
+                    ) : (
+                        <div style={{
+                            flex: 1,
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100%'
+                        }}>
+                            <Empty
+                                image={<div style={{
+                                    fontSize: '64px',
+                                    color: 'rgba(0,0,0,0.1)',
+                                    marginBottom: '16px',
+                                    display: 'flex',
+                                    justifyContent: 'center'
+                                }}>
+                                    <AppstoreOutlined />
+                                </div>}
+                                description={
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                        <Text strong style={{ fontSize: '18px', color: '#1d1d1f' }}>
+                                            {selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0
+                                                ? '没有匹配的批次'
+                                                : '暂无批次数据'}
+                                        </Text>
+                                        <Text type="secondary">
+                                            {selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0
+                                                ? '请尝试调整筛选条件'
+                                                : '点击右上角的按钮开始创建一个新的生产批次'}
+                                        </Text>
+                                    </div>
+                                }
+                            />
+                        </div>
+                    )
+                ) : (
+                    // Gantt View
+                    <BatchGanttV4 filteredBatchIds={filteredBatches.map(b => b.id)} />
+                )}
+            </div>
+
+            <CreateBatchModalV4
+                visible={createModalVisible}
+                initialValues={editingBatch}
+                onCancel={() => {
+                    setCreateModalVisible(false);
+                    setEditingBatch(null);
+                }}
+                onSuccess={handleSuccess}
+            />
+
+            <BulkCreateModalV4
+                visible={bulkModalVisible}
+                onCancel={() => setBulkModalVisible(false)}
+                onSuccess={handleSuccess}
+            />
+        </div>
+    );
+};
+
+export default BatchManagementV4;

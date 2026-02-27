@@ -394,3 +394,56 @@ export interface SchedulingRunEventRecord {
   metadata?: any;
   created_at?: string;
 }
+
+// V2 Personnel Scheduling Interfaces
+export interface ScheduleV2FilterDepartment {
+  id: number;
+  name: string;
+  teams: {
+    id: number;
+    name: string;
+  }[];
+}
+
+export interface ScheduleV2FiltersResponse {
+  departments: ScheduleV2FilterDepartment[];
+}
+
+export interface ShiftStyleV2 {
+  color: string;      // Background color class, e.g., "bg-emerald-500/10"
+  label: string;      // Display text, e.g., "8", "11", "休"
+  textColor: string;  // Text color class, e.g., "text-emerald-600"
+  borderColor?: string; // Optional border color
+}
+
+export interface ShiftStylesV2Response {
+  [shiftId: number]: ShiftStyleV2;
+}
+
+export interface ScheduleV2GridShift {
+  type: 'WORK' | 'REST' | 'LEAVE' | 'UNKNOWN';
+  shiftId?: number;
+  shiftName?: string;
+  hours?: number;
+  isOvertime?: boolean;
+}
+
+export interface ScheduleV2GridEmployee {
+  id: number;
+  name: string;
+  code: string;
+  departmentName: string;
+  teamName: string;
+  shifts: {
+    [date: string]: ScheduleV2GridShift; // Key is YYYY-MM-DD
+  };
+}
+
+export interface ScheduleV2GridResponse {
+  meta: {
+    totalEmployees: number;
+    startDate: string;
+    endDate: string;
+  };
+  employees: ScheduleV2GridEmployee[];
+}

@@ -5,20 +5,20 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Card, DatePicker, Select, Spin, Empty, Button, Tooltip, Tag } from 'antd';
+import { Select, Spin, Empty, Button, Tooltip, Tag, DatePicker } from 'antd';
 import {
-    CalendarOutlined,
     LeftOutlined,
     RightOutlined,
     FilterOutlined,
     TeamOutlined,
     ClockCircleOutlined,
 } from '@ant-design/icons';
-import axios from 'axios';
 import dayjs, { Dayjs } from 'dayjs';
+import { motion, AnimatePresence } from 'framer-motion';
+import GlassCard from '../common/GlassCard';
+import { dashboardService } from '../../services/dashboardService';
+import { DailyAssignmentsData, BatchData } from '../../types/dashboard';
 import './DailyAssignmentsPanel.css';
-
-const API_BASE = '/api';
 
 // 批次颜色列表
 const BATCH_COLORS = [
@@ -26,41 +26,12 @@ const BATCH_COLORS = [
     '#13c2c2', '#fa541c', '#2f54eb', '#a0d911', '#f5222d',
 ];
 
-interface Assignment {
-    position: number;
-    employee_name: string | null;
+interface DailyAssignmentsPanelProps {
+    date: Dayjs;
 }
 
-interface Operation {
-    operation_plan_id: number;
-    operation_name: string;
-    start_time: string;
-    end_time: string;
-    required_people: number;
-    assignments: Assignment[];
-}
-
-interface Stage {
-    stage_id: number;
-    stage_name: string;
-    operations: Operation[];
-}
-
-interface BatchData {
-    batch_id: number;
-    batch_code: string;
-    stages: Stage[];
-}
-
-interface DailyAssignmentsData {
-    date: string;
-    batches: BatchData[];
-}
-
-
-const DailyAssignmentsPanel: React.FC = () => {
+const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) => {
     const [loading, setLoading] = useState(false);
-    const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
     const [data, setData] = useState<DailyAssignmentsData | null>(null);
     const [selectedBatches, setSelectedBatches] = useState<number[]>([]);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -79,7 +50,7 @@ const DailyAssignmentsPanel: React.FC = () => {
         }
         const { scrollLeft, scrollWidth, clientWidth } = container;
         setCanScrollLeft(scrollLeft > 0);
-        setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 1); // -1 for float precision
+        setCanScrollRight(Math.ceil(scrollLeft + clientWidth) < scrollWidth);
     }, []);
 
     // 监听滚动事件和窗口大小变化
@@ -110,18 +81,26 @@ const DailyAssignmentsPanel: React.FC = () => {
         return map;
     }, [data?.batches]);
 
+    const [selectedDate, setSelectedDate] = useState<Dayjs>(date);
+
+    // Sync selectedDate when prop date (month) changes
+    useEffect(() => {
+        // If the month changes, reset selectedDate to the first day of that month
+        if (!selectedDate.isSame(date, 'month')) {
+            setSelectedDate(date.startOf('month'));
+        }
+    }, [date]);
+
     // 加载数据
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
-                const res = await axios.get(`${API_BASE}/dashboard/daily-assignments`, {
-                    params: { date: selectedDate.format('YYYY-MM-DD') },
-                });
-                setData(res.data);
+                const resData = await dashboardService.getDailyAssignments(selectedDate.format('YYYY-MM-DD'));
+                setData(resData);
                 // 每次日期变化时，自动选中所有批次
-                if (res.data?.batches?.length > 0) {
-                    setSelectedBatches(res.data.batches.map((b: BatchData) => b.batch_id));
+                if (resData.batches?.length > 0) {
+                    setSelectedBatches(resData.batches.map((b: BatchData) => b.batch_id));
                 } else {
                     setSelectedBatches([]);
                 }
@@ -136,11 +115,6 @@ const DailyAssignmentsPanel: React.FC = () => {
         loadData();
     }, [selectedDate]);
 
-
-    // 日期导航
-    const handlePrevDay = () => setSelectedDate(prev => prev.subtract(1, 'day'));
-    const handleNextDay = () => setSelectedDate(prev => prev.add(1, 'day'));
-
     // 批次筛选选项
     const batchOptions = data?.batches.map(b => ({
         value: b.batch_id,
@@ -152,143 +126,207 @@ const DailyAssignmentsPanel: React.FC = () => {
         selectedBatches.includes(b.batch_id)
     ) || [];
 
-    // 左右滚动卡片区域（滚动距离 = 卡片最小宽度 320px + 间距 16px = 336px）
-    const SCROLL_DISTANCE = 340;
-
+    // 左右滚动卡片区域
     const scrollLeft = () => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: -SCROLL_DISTANCE, behavior: 'smooth' });
+            scrollContainerRef.current.scrollBy({ left: -340, behavior: 'smooth' });
         }
     };
 
     const scrollRight = () => {
         if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: SCROLL_DISTANCE, behavior: 'smooth' });
+            scrollContainerRef.current.scrollBy({ left: 340, behavior: 'smooth' });
         }
     };
 
     return (
-        <Card
-            className="daily-assignments-panel"
-            title={
-                <div className="panel-header">
-                    <span className="panel-title">
-                        <TeamOutlined /> 每日操作人员分配
-                    </span>
-                    <div className="panel-controls">
-                        <div className="date-nav">
-                            <Button
-                                icon={<LeftOutlined />}
-                                size="small"
-                                onClick={handlePrevDay}
-                            />
-                            <DatePicker
-                                value={selectedDate}
-                                onChange={(date) => date && setSelectedDate(date)}
-                                allowClear={false}
-                                suffixIcon={<CalendarOutlined />}
-                            />
-                            <Button
-                                icon={<RightOutlined />}
-                                size="small"
-                                onClick={handleNextDay}
-                            />
-                        </div>
-                        <Select
-                            mode="multiple"
-                            placeholder="筛选批次"
-                            value={selectedBatches}
-                            onChange={setSelectedBatches}
-                            options={batchOptions}
-                            style={{ minWidth: 200 }}
-                            maxTagCount={2}
-                            suffixIcon={<FilterOutlined />}
-                            allowClear
+        <GlassCard className="daily-assignments-panel">
+            <div className="panel-header" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                    <div className="icon-wrapper" style={{
+                        background: 'rgba(56, 158, 13, 0.1)', // customized green
+                        padding: 8,
+                        borderRadius: 12,
+                        marginRight: 12,
+                        color: '#52c41a'
+                    }}>
+                        <TeamOutlined />
+                    </div>
+                    每日操作人员分配
+                </span>
+
+                <div className="panel-controls" style={{ display: 'flex', gap: 12 }}>
+                    {/* Date Picker (Day) */}
+                    <div className="filter-item">
+                        <DatePicker
+                            value={selectedDate}
+                            onChange={(d) => {
+                                if (d) setSelectedDate(d);
+                            }}
+                            allowClear={false}
+                            className="glass-input"
+                            style={{ width: 130 }}
+                            format="MM-DD"
+                            showToday={false}
+                            disabledDate={(current) => {
+                                // Disable dates outside the selected month
+                                return !current.isSame(date, 'month');
+                            }}
+                        />
+                    </div>
+
+                    {/* Batch Filter */}
+                    <Select
+                        mode="multiple"
+                        placeholder="筛选批次"
+                        value={selectedBatches}
+                        onChange={setSelectedBatches}
+                        options={batchOptions}
+                        style={{ minWidth: 160 }}
+                        maxTagCount={1}
+                        suffixIcon={<FilterOutlined />}
+                        allowClear
+                        bordered={false}
+                        className="glass-input"
+                    />
+
+                    {/* Scroll Controls (Only show if needed) */}
+                    <div className="scroll-controls" style={{ display: 'flex', gap: 4 }}>
+                        <Button
+                            icon={<LeftOutlined />}
+                            size="small"
+                            onClick={scrollLeft}
+                            disabled={!canScrollLeft}
+                            shape="circle"
+                            type="text"
+                        />
+                        <Button
+                            icon={<RightOutlined />}
+                            size="small"
+                            onClick={scrollRight}
+                            disabled={!canScrollRight}
+                            shape="circle"
+                            type="text"
                         />
                     </div>
                 </div>
-            }
-        >
+            </div>
+
             <Spin spinning={loading}>
                 {filteredBatches.length > 0 ? (
-                    <div className="batch-cards-wrapper">
-                        <Button
-                            className="scroll-btn scroll-btn-left"
-                            icon={<LeftOutlined />}
-                            onClick={scrollLeft}
-                            disabled={!canScrollLeft}
-                        />
-                        <div className="batch-cards-container" ref={scrollContainerRef}>
-                            {filteredBatches.map(batch => {
-                                const totalOps = batch.stages.reduce((sum, s) => sum + s.operations.length, 0);
-                                return (
-                                    <div
-                                        key={batch.batch_id}
-                                        className="batch-card"
-                                        style={{ borderTopColor: batchColorMap[batch.batch_id] }}
-                                    >
-                                        <div className="batch-card-header">
-                                            <Tag color={batchColorMap[batch.batch_id]}>
-                                                {batch.batch_code}
-                                            </Tag>
-                                            <span className="operation-count">
-                                                {totalOps} 项操作
-                                            </span>
-                                        </div>
-                                        <div className="stages-list">
-                                            {batch.stages.map(stage => (
-                                                <div key={stage.stage_id} className="stage-section">
-                                                    <div className="stage-header">
-                                                        <span className="stage-name">{stage.stage_name}</span>
-                                                        <span className="stage-op-count">{stage.operations.length}项</span>
-                                                    </div>
-                                                    <div className="operations-list">
-                                                        {stage.operations.map(op => (
-                                                            <div key={op.operation_plan_id} className="operation-item">
-                                                                <div className="operation-header">
-                                                                    <span className="operation-time">
-                                                                        <ClockCircleOutlined /> {op.start_time}
-                                                                    </span>
-                                                                    <span className="operation-name">{op.operation_name}</span>
-                                                                    <span className="operation-people">{op.required_people}人</span>
-                                                                </div>
-                                                                <div className="assignments-row">
-                                                                    {op.assignments.map(a => (
-                                                                        <Tooltip
-                                                                            key={a.position}
-                                                                            title={a.employee_name ? `位置${a.position}: ${a.employee_name}` : `位置${a.position}: 待分配`}
-                                                                        >
-                                                                            <span
-                                                                                className={`assignment-tag ${a.employee_name ? 'assigned' : 'unassigned'}`}
-                                                                            >
-                                                                                {a.position}. {a.employee_name || '--'}
-                                                                            </span>
-                                                                        </Tooltip>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                    <div className="batch-cards-wrapper" style={{ position: 'relative' }}>
+                        <div
+                            className="batch-cards-container"
+                            ref={scrollContainerRef}
+                            style={{
+                                display: 'flex',
+                                gap: 24,
+                                overflowX: 'auto',
+                                paddingBottom: 16,
+                                paddingLeft: 4,
+                                paddingRight: 4,
+                                scrollBehavior: 'smooth',
+                                scrollSnapType: 'x mandatory',
+                                // Hide scrollbar but keep functionality
+                                scrollbarWidth: 'none',
+                                msOverflowStyle: 'none'
+                            }}
+                        >
+                            <AnimatePresence>
+                                {filteredBatches.map(batch => {
+                                    const totalOps = batch.stages.reduce((sum, s) => sum + s.operations.length, 0);
+                                    return (
+                                        <motion.div
+                                            key={batch.batch_id}
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.95 }}
+                                            layout
+                                            className="batch-card"
+                                            style={{
+                                                flex: '0 0 320px',
+                                                background: '#fff',
+                                                borderRadius: 16,
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                                border: '1px solid rgba(0,0,0,0.04)',
+                                                borderTop: `4px solid ${batchColorMap[batch.batch_id]}`,
+                                                scrollSnapAlign: 'start',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                overflow: 'hidden'
+                                            }}
+                                        >
+                                            <div className="batch-card-header" style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Tag color={batchColorMap[batch.batch_id]} style={{ margin: 0, fontSize: 14, padding: '4px 10px', borderRadius: 6 }}>
+                                                    {batch.batch_code}
+                                                </Tag>
+                                                <span className="operation-count" style={{ color: '#8c8c8c', fontSize: 12 }}>
+                                                    {totalOps} 项操作
+                                                </span>
+                                            </div>
 
-                        <Button
-                            className="scroll-btn scroll-btn-right"
-                            icon={<RightOutlined />}
-                            onClick={scrollRight}
-                            disabled={!canScrollRight}
-                        />
+                                            <div className="stages-list" style={{ padding: '12px 0', overflowY: 'auto', maxHeight: 400 }}>
+                                                {batch.stages.map(stage => (
+                                                    <div key={stage.stage_id} className="stage-section" style={{ marginBottom: 16 }}>
+                                                        <div className="stage-header" style={{ padding: '0 20px 8px', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                                                            <span className="stage-name" style={{ fontWeight: 600, color: '#262626' }}>{stage.stage_name}</span>
+                                                            <span className="stage-op-count" style={{ color: '#8c8c8c' }}>{stage.operations.length}项</span>
+                                                        </div>
+                                                        <div className="operations-list">
+                                                            {stage.operations.map(op => (
+                                                                <div key={op.operation_plan_id} className="operation-item" style={{
+                                                                    padding: '8px 20px',
+                                                                    borderLeft: '2px solid transparent',
+                                                                    transition: 'all 0.3s'
+                                                                }}>
+                                                                    <div className="operation-header" style={{ marginBottom: 6 }}>
+                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                                            <span className="operation-time" style={{ color: '#1890ff', fontSize: 12 }}>
+                                                                                <ClockCircleOutlined /> {op.start_time}
+                                                                            </span>
+                                                                            <span className="operation-people" style={{ color: '#8c8c8c', fontSize: 12 }}>{op.required_people}人</span>
+                                                                        </div>
+                                                                        <div className="operation-name" style={{ color: '#595959', fontSize: 13 }}>{op.operation_name}</div>
+                                                                    </div>
+                                                                    <div className="assignments-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                                                        {op.assignments.map(a => (
+                                                                            <Tooltip
+                                                                                key={a.position}
+                                                                                title={a.employee_name ? `位置${a.position}: ${a.employee_name}` : `位置${a.position}: 待分配`}
+                                                                            >
+                                                                                <div
+                                                                                    style={{
+                                                                                        fontSize: 12,
+                                                                                        padding: '2px 8px',
+                                                                                        borderRadius: 4,
+                                                                                        background: a.employee_name ? '#f6ffed' : '#f5f5f5',
+                                                                                        border: `1px solid ${a.employee_name ? '#b7eb8f' : '#d9d9d9'}`,
+                                                                                        color: a.employee_name ? '#389e0d' : '#8c8c8c',
+                                                                                        cursor: 'default'
+                                                                                    }}
+                                                                                >
+                                                                                    {a.position}. {a.employee_name || '--'}
+                                                                                </div>
+                                                                            </Tooltip>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </AnimatePresence>
+                        </div>
                     </div>
                 ) : (
                     !loading && <Empty description="暂无数据" />
                 )}
             </Spin>
-        </Card>
+        </GlassCard>
     );
 };
 

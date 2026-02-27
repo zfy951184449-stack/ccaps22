@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+// Trigger restart
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import pool from '../config/database';
 import dayjs from 'dayjs';
@@ -310,6 +311,189 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
   }
 };
 
+// 获取指定批次的详细操作信息（用于排班预览）
+export const getBatchOperations = async (req: Request, res: Response) => {
+  try {
+    const { batch_ids, start_date, end_date } = req.body;
+
+    if (!Array.isArray(batch_ids) || batch_ids.length === 0) {
+      return res.status(400).json({ error: 'batch_ids array is required and must not be empty' });
+    }
+
+    const startDate = dayjs(start_date);
+    const endDate = dayjs(end_date);
+
+    if (!startDate.isValid() || !endDate.isValid()) {
+      return res.status(400).json({ error: 'Invalid start_date or end_date' });
+    }
+
+    // 1. 获取操作基础信息
+    const placeholders = batch_ids.map(() => '?').join(',');
+    const query = `
+      SELECT
+        bop.id AS operation_plan_id,
+        bop.operation_id,
+        pbp.batch_code,
+        o.operation_name,
+        bop.planned_start_datetime,
+        bop.planned_end_datetime,
+        bop.required_people,
+        pbp.plan_status,
+        GROUP_CONCAT(DISTINCT bsg.group_name SEPARATOR ', ') as share_group_name,
+        GROUP_CONCAT(DISTINCT bsg.group_code SEPARATOR ', ') as share_group_code,
+        GROUP_CONCAT(DISTINCT bsg.id SEPARATOR ',') as share_group_ids
+      FROM batch_operation_plans bop
+      JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+      JOIN operations o ON bop.operation_id = o.id
+      LEFT JOIN batch_share_group_members bsgm ON bop.id = bsgm.batch_operation_plan_id
+      LEFT JOIN batch_share_groups bsg ON bsgm.group_id = bsg.id
+      WHERE bop.batch_plan_id IN (${placeholders})
+        AND bop.planned_start_datetime BETWEEN ? AND ?
+      GROUP BY bop.id
+      ORDER BY bop.planned_start_datetime ASC
+    `;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, [
+      ...batch_ids,
+      startDate.format('YYYY-MM-DD 00:00:00'),
+      endDate.format('YYYY-MM-DD 23:59:59')
+    ]);
+
+    // 2. 获取涉及的操作ID的资质要求 并计算可用人数
+    const operationIds = [...new Set(rows.map(r => r.operation_id))];
+    const requirementsMap = new Map<number, any[]>();
+    const availableCountsMap = new Map<string, number>(); // Key: "opId-posNum"
+
+    if (operationIds.length > 0) {
+      const opPlaceholders = operationIds.map(() => '?').join(',');
+      const reqQuery = `
+            SELECT
+                oqr.operation_id,
+                oqr.position_number,
+                oqr.qualification_id,
+                q.qualification_name,
+                oqr.required_level,
+                oqr.is_mandatory
+            FROM operation_qualification_requirements oqr
+            JOIN qualifications q ON oqr.qualification_id = q.id
+            WHERE oqr.operation_id IN (${opPlaceholders})
+            ORDER BY oqr.operation_id, oqr.position_number
+        `;
+
+      const [reqRows] = await pool.execute<RowDataPacket[]>(reqQuery, operationIds);
+
+      reqRows.forEach(row => {
+        if (!requirementsMap.has(row.operation_id)) {
+          requirementsMap.set(row.operation_id, []);
+        }
+        requirementsMap.get(row.operation_id)?.push({
+          position_number: row.position_number,
+          qualification_name: row.qualification_name,
+          required_level: row.required_level,
+          is_mandatory: !!row.is_mandatory
+        });
+      });
+
+      // 2b. Calculate available counts for each unique position
+      const uniquePositions: { opId: number, posNum: number }[] = [];
+      requirementsMap.forEach((reqs, opId) => {
+        const positions = new Set(reqs.map(r => r.position_number));
+        positions.forEach(p => uniquePositions.push({ opId, posNum: p }));
+      });
+
+      for (const { opId, posNum } of uniquePositions) {
+        // Count employees who satisfy ALL MANDATORY requirements for this position
+        const countQuery = `
+                SELECT COUNT(*) as count
+                FROM employees e
+                WHERE e.employment_status = 'ACTIVE'
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM operation_qualification_requirements oqr
+                    WHERE oqr.operation_id = ? 
+                      AND oqr.position_number = ? 
+                      AND oqr.is_mandatory = 1
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM employee_qualifications eq
+                          WHERE eq.employee_id = e.id
+                            AND eq.qualification_id = oqr.qualification_id
+                            AND eq.qualification_level >= oqr.required_level
+                      )
+                )
+            `;
+        const [countRows] = await pool.execute<RowDataPacket[]>(countQuery, [opId, posNum]);
+        availableCountsMap.set(`${opId}-${posNum}`, countRows[0].count);
+      }
+    }
+
+
+    // Get total active employees for operations with no specific requirements
+    const [totalActiveRows] = await pool.execute<RowDataPacket[]>(
+      "SELECT COUNT(*) as count FROM employees WHERE employment_status = 'ACTIVE'"
+    );
+    const totalActiveCount = Number(totalActiveRows[0]?.count || 0);
+
+    // 3. 组装结果
+    const result = rows.map(row => {
+      const reqs = requirementsMap.get(row.operation_id) || [];
+
+      let positions;
+      if (reqs.length === 0) {
+        // No specific requirements: generate positions for ALL required people
+        // e.g. if required_people = 2, generate Pos 1 and Pos 2, both with all employees available
+        const count = Math.max(1, Number(row.required_people) || 1);
+        positions = Array.from({ length: count }, (_, i) => ({
+          position_number: i + 1,
+          available_count: totalActiveCount,
+          total_count: totalActiveCount,
+          qualifications: []
+        }));
+      } else {
+        // 按 position_number 分组
+        const positionsMap = new Map();
+        reqs.forEach(req => {
+          if (!positionsMap.has(req.position_number)) {
+            positionsMap.set(req.position_number, []);
+          }
+          positionsMap.get(req.position_number).push({
+            qualification_name: req.qualification_name,
+            required_level: req.required_level,
+            is_mandatory: req.is_mandatory
+          });
+        });
+
+        positions = Array.from(positionsMap.entries()).map(([posNum, quals]) => ({
+          position_number: posNum,
+          available_count: availableCountsMap.get(`${row.operation_id}-${posNum}`) ?? 0,
+          total_count: totalActiveCount, // Using total active count for scarcity ratio
+          qualifications: quals
+        }));
+      }
+
+      return {
+        operation_plan_id: row.operation_plan_id,
+        batch_code: row.batch_code,
+        operation_name: row.operation_name,
+        planned_start: row.planned_start_datetime,
+        planned_end: row.planned_end_datetime,
+        required_people: row.required_people,
+        status: row.is_locked ? 'LOCKED' : (row.plan_status === 'ACTIVATED' ? 'READY' : 'PENDING'),
+        share_group_name: row.share_group_name || null,
+        share_group_code: row.share_group_code || null,
+        share_group_ids: row.share_group_ids || null, // [NEW]
+        positions: positions
+      };
+    });
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('Error fetching batch operations:', error);
+    res.status(500).json({ error: 'Failed to fetch batch operations' });
+  }
+};
+
 
 // 获取操作详情
 export const getOperationDetail = async (req: Request, res: Response) => {
@@ -533,13 +717,22 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
       operation.planned_start_datetime,
     ];
 
+    // Check for position_number filter from query
+    const positionNumber = req.query.position_number ? Number(req.query.position_number) : null;
+
     if (hasRequirements) {
+      let positionFilterClause = '';
+      if (positionNumber) {
+        positionFilterClause = 'AND oqr.position_number = ?';
+        // We will push positionNumber into params later
+      }
+
       const query = `
       SELECT 
         e.id as employee_id,
         e.employee_name,
         e.employee_code,
-        e.department,
+        t.team_name as department,
         GROUP_CONCAT(
           CONCAT(q.qualification_name, '(', eq.qualification_level, '级)')
           SEPARATOR ', '
@@ -575,19 +768,39 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
             AND WEEK(bop3.planned_start_datetime) = WEEK(?)
         ) as weekly_workload
       FROM employees e
+      LEFT JOIN teams t ON t.id = e.primary_team_id
       JOIN employee_qualifications eq ON e.id = eq.employee_id
       JOIN operation_qualification_requirements oqr ON eq.qualification_id = oqr.qualification_id
       JOIN qualifications q ON eq.qualification_id = q.id
       WHERE oqr.operation_id = ?
+        ${positionFilterClause}
         AND eq.qualification_level >= oqr.required_level
+        -- STRICTLY EXCLUDE employees who miss ANY mandatory qualification for this operation/position
+        AND NOT EXISTS (
+            SELECT 1
+            FROM operation_qualification_requirements oqr_check
+            WHERE oqr_check.operation_id = oqr.operation_id
+              ${positionNumber ? 'AND oqr_check.position_number = oqr.position_number' : ''}
+              AND oqr_check.is_mandatory = 1
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM employee_qualifications eq_check
+                  WHERE eq_check.employee_id = e.id
+                    AND eq_check.qualification_id = oqr_check.qualification_id
+                    AND eq_check.qualification_level >= oqr_check.required_level
+              )
+        )
       GROUP BY e.id
       ORDER BY match_score DESC, conflict_count ASC, weekly_workload ASC
       LIMIT 20
     `;
-      const [rows] = await pool.execute<RowDataPacket[]>(query, [
-        ...baseParams,
-        operation.operation_id,
-      ]);
+
+      const queryParams = [...baseParams, operation.operation_id];
+      if (positionNumber) {
+        queryParams.push(positionNumber); // For the main oqr.position_number = ?
+      }
+
+      const [rows] = await pool.execute<RowDataPacket[]>(query, queryParams);
       personnelRows = rows;
     } else {
       // 无资质要求时，采用默认候选：所有在职员工，配合冲突/工作量排序
@@ -596,7 +809,7 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
           e.id AS employee_id,
           e.employee_name,
           e.employee_code,
-          e.department,
+          t.team_name as department,
           GROUP_CONCAT(
             CONCAT(q.qualification_name, '(', IFNULL(eq.qualification_level, 0), '级)')
             SEPARATOR ', '
@@ -623,6 +836,7 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
               AND WEEK(bop3.planned_start_datetime) = WEEK(?)
           ) AS weekly_workload
         FROM employees e
+        LEFT JOIN teams t ON t.id = e.primary_team_id
         LEFT JOIN employee_qualifications eq ON e.id = eq.employee_id
         LEFT JOIN qualifications q ON eq.qualification_id = q.id
         WHERE e.employment_status = 'ACTIVE'

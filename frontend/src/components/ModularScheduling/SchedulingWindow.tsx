@@ -44,9 +44,9 @@ const SchedulingWindowDisplay: React.FC<SchedulingWindowProps> = ({ window, load
           <span className="window-date-value">{startDate.format('YYYY-MM-DD')}</span>
           <span className="window-date-weekday">{startDate.format('dddd')}</span>
         </div>
-        
+
         <ArrowRightOutlined className="window-arrow" />
-        
+
         <div className="window-date-item">
           <span className="window-date-label">求解结束</span>
           <span className="window-date-value">{endDate.format('YYYY-MM-DD')}</span>
@@ -63,13 +63,13 @@ const SchedulingWindowDisplay: React.FC<SchedulingWindowProps> = ({ window, load
               width: `${rawEndPercent - rawStartPercent}%`,
             }}
           />
-          <Tooltip title={`批次实际开始: ${rawStartDate.format('YYYY-MM-DD')}`}>
+          <Tooltip title={`设定开始: ${rawStartDate.format('YYYY-MM-DD')}`}>
             <div
               className="timeline-marker timeline-marker-start"
               style={{ left: `${rawStartPercent}%` }}
             />
           </Tooltip>
-          <Tooltip title={`批次实际结束: ${rawEndDate.format('YYYY-MM-DD')}`}>
+          <Tooltip title={`设定结束: ${rawEndDate.format('YYYY-MM-DD')}`}>
             <div
               className="timeline-marker timeline-marker-end"
               style={{ left: `${rawEndPercent}%` }}
@@ -79,7 +79,7 @@ const SchedulingWindowDisplay: React.FC<SchedulingWindowProps> = ({ window, load
         <div className="timeline-labels">
           <span>{startDate.format('MM/DD')}</span>
           <span className="timeline-center-label">
-            批次操作范围: {rawStartDate.format('MM/DD')} ~ {rawEndDate.format('MM/DD')}
+            设定时间范围: {rawStartDate.format('MM/DD')} ~ {rawEndDate.format('MM/DD')}
           </span>
           <span>{endDate.format('MM/DD')}</span>
         </div>

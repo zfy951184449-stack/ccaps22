@@ -77,11 +77,8 @@ export const useGanttData = (options: UseGanttDataOptions | ProcessTemplate) => 
             const blocks = generateTimeBlocks(nodes, fetchedStages);
             setTimeBlocks(blocks);
 
-            // 默认展开所有节点
+            // 默认只展开根节点（模版名称）
             const defaultExpandedKeys = [template.id.toString()];
-            nodes[0]?.children?.forEach(stageNode => {
-                defaultExpandedKeys.push(stageNode.id);
-            });
             setExpandedKeys(defaultExpandedKeys);
 
             // 加载人员用量曲线

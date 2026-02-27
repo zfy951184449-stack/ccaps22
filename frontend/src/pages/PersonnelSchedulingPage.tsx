@@ -1,8 +1,8 @@
 import React from 'react';
-import RoleBasedPersonnelScheduling from '../components/RoleBasedPersonnelScheduling';
+import SchedulingPageV2 from './personnel-scheduling/index';
 
 const PersonnelSchedulingPage: React.FC = () => {
-  return <RoleBasedPersonnelScheduling />;
+  return <SchedulingPageV2 />;
 };
 
 export default PersonnelSchedulingPage;

@@ -515,18 +515,17 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
 
         // 获取所有唯一的批次 ID
         const batchIds = Array.from(new Set(ops.map(op => op.batch_id)));
+        if (batchIds.length === 0) return;
 
         try {
-            // 并行加载所有批次的约束
-            const constraintPromises = batchIds.map(batchId =>
-                axios.get<any[]>(`/api/constraints/batch/${batchId}/gantt`)
-                    .then(res => res.data)
-                    .catch(() => []) // 忽略单个批次的加载错误
-            );
-            const allConstraintArrays = await Promise.all(constraintPromises);
+            // P0 Optimization: Use bulk API instead of parallel requests
+            // This reduces network overhead significantly when loading many batches
+            const response = await axios.get<any[]>('/api/constraints/batches/gantt', {
+                params: { batch_ids: batchIds.join(',') }
+            });
 
             // 仅存储原始约束数据（不计算位置）
-            setRawConstraints(allConstraintArrays.flat());
+            setRawConstraints(response.data);
             setConstraintsLoaded(true);
         } catch (err) {
             console.error('Failed to load batch constraints', err);
@@ -534,14 +533,20 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
     }, []);
 
     // 动态计算约束位置（基于当前 operations 状态，这样拖拽后位置会自动更新）
+    // 动态计算约束位置（基于当前 operations 状态，这样拖拽后位置会自动更新）
     const batchConstraints = useMemo((): GanttConstraint[] => {
         if (rawConstraints.length === 0 || operations.length === 0) return [];
 
+        // P2.3 Optimization: Pre-build Map for O(1) lookup instead of O(N) find()
+        // Reduces complexity from O(M*N) to O(N+M) where M is constraints count
+        const opMap = new Map<number, ActiveOperation>();
+        operations.forEach(op => opMap.set(op.operation_plan_id, op));
+
         const constraints: GanttConstraint[] = [];
         rawConstraints.forEach(row => {
-            // 从当前 operations 状态中查找对应的操作
-            const fromOp = operations.find(op => op.operation_plan_id === row.predecessor_batch_operation_plan_id);
-            const toOp = operations.find(op => op.operation_plan_id === row.batch_operation_plan_id);
+            // Use Map lookup (O(1))
+            const fromOp = opMap.get(row.predecessor_batch_operation_plan_id);
+            const toOp = opMap.get(row.batch_operation_plan_id);
 
             if (!fromOp || !toOp) return;
 
@@ -580,15 +585,34 @@ const BatchGanttAdapter: React.FC<BatchGanttAdapterProps> = ({
     // 操作首次加载后加载约束（仅加载一次）
     useEffect(() => {
         if (operations.length > 0 && !constraintsLoaded) {
-            loadBatchConstraints(operations);
+            // P2.2 Optimization: Load constraints in idle time to avoid blocking initial render
+            if ('requestIdleCallback' in window) {
+                (window as any).requestIdleCallback(() => {
+                    loadBatchConstraints(operations);
+                });
+            } else {
+                // Fallback for Safari/others
+                setTimeout(() => {
+                    loadBatchConstraints(operations);
+                }, 50);
+            }
         }
     }, [operations, constraintsLoaded, loadBatchConstraints]);
 
     // 转换数据
+    // P2.1 Optimization: Prevent re-calculation if data content hasn't changed
+    // Create a stable signature to avoid re-running comprehensive conversion on reference change
+    const operationsSignature = useMemo(() => {
+        return operations.map(op =>
+            `${op.operation_plan_id}_${op.planned_start_datetime}_${op.planned_end_datetime}_${op.plan_status}`
+        ).join('|');
+    }, [operations]);
+
     const ganttData = useMemo(() => {
         if (operations.length === 0) return null;
         return convertBatchToGanttData(operations, baseDate);
-    }, [operations, baseDate]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [operationsSignature, baseDate]);
 
     // 处理操作点击（打开编辑弹窗）
     const handleOperationClick = useCallback((operationId: number, operationData: StageOperation) => {

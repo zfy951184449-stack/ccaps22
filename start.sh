@@ -140,7 +140,7 @@ if [[ -d "solver/.venv" ]]; then
   deactivate 2>/dev/null || true
   cd "${SCRIPT_DIR}"
   PIDS+=("${SOLVER_PID}")
-  wait_for_url "http://127.0.0.1:${SOLVER_PORT}/api/health" "求解器 API"
+  wait_for_url "http://127.0.0.1:${SOLVER_PORT}/api/health" "求解器 API" 60 1
 else
   echo "⚠️  未检测到求解器虚拟环境 (solver/.venv)，跳过求解器启动"
   echo "   如需启动求解器，请先运行: cd solver && python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt"

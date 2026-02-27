@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, DatePicker, Button, Space, Spin, message, Empty, Tooltip, Tag, Select, Modal } from 'antd';
-import { LeftOutlined, RightOutlined, CalendarOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Card, DatePicker, Button, Space, Spin, message, Empty, Tooltip, Tag, Select, Modal, Popover, Dropdown } from 'antd';
+import { LeftOutlined, RightOutlined, CalendarOutlined, ReloadOutlined, DeleteOutlined, FilterOutlined, MoreOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs, { Dayjs } from 'dayjs';
 import './RoleBasedPersonnelScheduling.css';
@@ -309,93 +309,129 @@ const RoleBasedPersonnelScheduling: React.FC = () => {
       {messageContext}
       <div className="role-scheduling">
         <Card className="role-scheduling-toolbar">
+          {/* Left: Month Navigation */}
           <div className="toolbar-left">
-            <Space size={12}>
-              <CalendarOutlined style={{ fontSize: 18 }} />
-              <span className="toolbar-title">人力总览 · {currentMonth.format('YYYY年MM月')}</span>
-              <Tag color="blue">按月视图</Tag>
-            </Space>
+            <div className="toolbar-month-nav">
+              <Button
+                type="text"
+                icon={<LeftOutlined />}
+                onClick={() => handleMonthChange('prev')}
+              />
+              <DatePicker
+                picker="month"
+                allowClear={false}
+                value={currentMonth}
+                onChange={handleMonthSelect}
+                format="YYYY年MM月"
+                bordered={false}
+                style={{ fontWeight: 600, fontSize: 17, width: 140 }}
+              />
+              <Button
+                type="text"
+                icon={<RightOutlined />}
+                onClick={() => handleMonthChange('next')}
+              />
+            </div>
           </div>
-          <Space size={8} wrap>
-            <Select
-              value={departmentFilter}
-              onChange={setDepartmentFilter}
-              style={{ width: 120 }}
-              placeholder="部门"
-            >
-              <Option value="all">全部部门</Option>
-              {departments.map(d => (
-                <Option key={d.id} value={d.id}>{d.name}</Option>
-              ))}
-            </Select>
 
-            <Select
-              value={teamFilter}
-              onChange={setTeamFilter}
-              style={{ width: 120 }}
-              placeholder="Team"
+          {/* Right: Filters + Actions */}
+          <div className="toolbar-actions">
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              content={
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 200 }}>
+                  <Select
+                    value={departmentFilter}
+                    onChange={setDepartmentFilter}
+                    style={{ width: '100%' }}
+                    placeholder="部门"
+                  >
+                    <Option value="all">全部部门</Option>
+                    {departments.map(d => (
+                      <Option key={d.id} value={d.id}>{d.name}</Option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={teamFilter}
+                    onChange={setTeamFilter}
+                    style={{ width: '100%' }}
+                    placeholder="Team"
+                  >
+                    <Option value="all">全部Team</Option>
+                    {teams
+                      .filter(t => departmentFilter === 'all' || t.departmentId === Number(departmentFilter))
+                      .map(t => (
+                        <Option key={t.id} value={t.id}>{t.name}</Option>
+                      ))}
+                  </Select>
+                  <Select
+                    value={leaderFilter}
+                    onChange={setLeaderFilter}
+                    style={{ width: '100%' }}
+                    placeholder="组长"
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    <Option value="all">全部组长</Option>
+                    {leaders.map(l => (
+                      <Option key={l.id} value={l.id}>{l.name}</Option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={employeeFilter}
+                    onChange={setEmployeeFilter}
+                    style={{ width: '100%' }}
+                    placeholder="员工"
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    <Option value="all">全部员工</Option>
+                    {employees.map(e => (
+                      <Option key={e.id} value={e.id}>{e.name}</Option>
+                    ))}
+                  </Select>
+                  <Button
+                    onClick={clearFilters}
+                    disabled={departmentFilter === 'all' && teamFilter === 'all' && leaderFilter === 'all' && employeeFilter === 'all'}
+                    block
+                  >
+                    清除筛选
+                  </Button>
+                </div>
+              }
             >
-              <Option value="all">全部Team</Option>
-              {teams
-                .filter(t => departmentFilter === 'all' || t.departmentId === Number(departmentFilter))
-                .map(t => (
-                  <Option key={t.id} value={t.id}>{t.name}</Option>
-                ))}
-            </Select>
-
-            <Select
-              value={leaderFilter}
-              onChange={setLeaderFilter}
-              style={{ width: 120 }}
-              placeholder="组长"
-              showSearch
-              optionFilterProp="children"
-            >
-              <Option value="all">全部组长</Option>
-              {leaders.map(l => (
-                <Option key={l.id} value={l.id}>{l.name}</Option>
-              ))}
-            </Select>
-
-            <Select
-              value={employeeFilter}
-              onChange={setEmployeeFilter}
-              style={{ width: 120 }}
-              placeholder="员工"
-              showSearch
-              optionFilterProp="children"
-            >
-              <Option value="all">全部员工</Option>
-              {employees.map(e => (
-                <Option key={e.id} value={e.id}>{e.name}</Option>
-              ))}
-            </Select>
+              <Button
+                icon={<FilterOutlined />}
+                type={departmentFilter !== 'all' || teamFilter !== 'all' || leaderFilter !== 'all' || employeeFilter !== 'all' ? 'primary' : 'text'}
+              >
+                筛选
+              </Button>
+            </Popover>
 
             <Button
-              onClick={clearFilters}
-              disabled={departmentFilter === 'all' && teamFilter === 'all' && leaderFilter === 'all' && employeeFilter === 'all'}
-            >
-              清除筛选
-            </Button>
-
-            <Button icon={<LeftOutlined />} onClick={() => handleMonthChange('prev')}>上一月</Button>
-            <DatePicker
-              picker="month"
-              allowClear={false}
-              value={currentMonth}
-              onChange={handleMonthSelect}
-              format="YYYY-MM"
+              type="text"
+              icon={<ReloadOutlined />}
+              onClick={() => loadShiftPlans(currentMonth)}
             />
-            <Button icon={<RightOutlined />} onClick={() => handleMonthChange('next')}>下一月</Button>
-            <Button icon={<ReloadOutlined />} onClick={() => loadShiftPlans(currentMonth)}>刷新</Button>
-            <Button
-              icon={<DeleteOutlined />}
-              danger
-              onClick={deleteMonthlySchedule}
+
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    key: 'delete',
+                    label: '删除当月排班',
+                    icon: <DeleteOutlined />,
+                    danger: true,
+                    onClick: deleteMonthlySchedule,
+                  }
+                ]
+              }}
+              trigger={['click']}
             >
-              删除当月排班
-            </Button>
-          </Space>
+              <Button type="text" icon={<MoreOutlined />} />
+            </Dropdown>
+          </div>
         </Card>
 
         <Card className="role-scheduling-table-card">

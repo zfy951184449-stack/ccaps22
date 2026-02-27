@@ -96,14 +96,24 @@ export class PersistenceService {
     }
 
     const opIds = [...new Set(assignments.map(a => a.batchOperationPlanId))];
-    const batchPlaceholders = batchIds.map(() => '?').join(',');
 
-    const [rows] = await connection.execute<RowDataPacket[]>(
-      `SELECT id FROM batch_operation_plans 
-       WHERE id IN (${opIds.map(() => '?').join(',')})
-         AND batch_plan_id IN (${batchPlaceholders})`,
-      [...opIds, ...batchIds]
-    );
+    // 额外保护：如果opIds为空，直接返回空
+    if (opIds.length === 0) {
+      return { valid: new Set(), invalid: [] };
+    }
+
+    const params: any[] = [...opIds];
+
+    let query = `SELECT id FROM batch_operation_plans 
+       WHERE id IN (${opIds.map(() => '?').join(',')})`;
+
+    if (batchIds.length > 0) {
+      const batchPlaceholders = batchIds.map(() => '?').join(',');
+      query += ` AND batch_plan_id IN (${batchPlaceholders})`;
+      params.push(...batchIds);
+    }
+
+    const [rows] = await connection.execute<RowDataPacket[]>(query, params);
 
     const validIds = new Set(rows.map(r => r.id as number));
     const invalidIds = opIds.filter(id => !validIds.has(id));
@@ -139,7 +149,7 @@ export class PersistenceService {
         result.assignments,
         options.batchIds
       );
-      
+
       if (invalidOpIds.length > 0) {
         warnings.push(`发现 ${invalidOpIds.length} 个无效的操作ID: ${invalidOpIds.slice(0, 5).join(', ')}${invalidOpIds.length > 5 ? '...' : ''}`);
         console.warn(`[PersistenceService] 无效操作ID: ${invalidOpIds}`);
@@ -193,7 +203,7 @@ export class PersistenceService {
       console.error(`[PersistenceService] 保存失败，回滚事务:`, error);
       await connection.rollback();
       errors.push(error.message || String(error));
-      
+
       return {
         success: false,
         assignmentsInserted: 0,
@@ -222,7 +232,7 @@ export class PersistenceService {
     options: PersistenceOptions
   ): Promise<void> {
     const { window } = options;
-    
+
     if (!window) {
       console.log(`[clearExistingData] 未提供求解区间，跳过清除`);
       return;
@@ -242,7 +252,7 @@ export class PersistenceService {
     if (shiftPlansToDelete.length > 0) {
       const shiftPlanIds = shiftPlansToDelete.map(sp => sp.id);
       const spPlaceholders = shiftPlanIds.map(() => '?').join(',');
-      
+
       // 2. 清除所有引用这些班次计划的非锁定分配的引用
       const [updateResult] = await connection.execute<ResultSetHeader>(
         `UPDATE batch_personnel_assignments
@@ -268,7 +278,7 @@ export class PersistenceService {
     // 4. 删除求解区间内的非锁定班次计划
     if (shiftPlansToDelete.length > 0) {
       const deleteIds = shiftPlansToDelete.map(sp => sp.id);
-      
+
       // 检查是否有锁定分配仍然引用这些班次
       const spPlaceholders = deleteIds.map(() => '?').join(',');
       const [lockedRefs] = await connection.execute<RowDataPacket[]>(
@@ -278,17 +288,17 @@ export class PersistenceService {
            AND is_locked = 1`,
         deleteIds
       );
-      
+
       const lockedShiftPlanIds = new Set(lockedRefs.map(r => r.shift_plan_id));
       const safeToDeleteIds = deleteIds.filter(id => !lockedShiftPlanIds.has(id));
-      
+
       if (lockedShiftPlanIds.size > 0) {
         console.warn(`[clearExistingData] 警告: ${lockedShiftPlanIds.size} 个班次计划被锁定分配引用，将保留`);
       }
-      
+
       if (safeToDeleteIds.length > 0) {
         const safeSpPlaceholders = safeToDeleteIds.map(() => '?').join(',');
-        
+
         // 删除班次计划
         const [shiftResult] = await connection.execute<ResultSetHeader>(
           `DELETE FROM employee_shift_plans WHERE id IN (${safeSpPlaceholders})`,
@@ -297,7 +307,7 @@ export class PersistenceService {
         console.log(`[clearExistingData] 删除了 ${shiftResult.affectedRows} 条班次计划记录`);
       }
     }
-    
+
     console.log(`[clearExistingData] 清除完成`);
   }
 
@@ -314,7 +324,7 @@ export class PersistenceService {
     let failed = 0;
 
     console.log(`[insertAssignments] 开始写入 ${assignments.length} 个分配记录`);
-    
+
     if (assignments.length > 0) {
       console.log(`[insertAssignments] 示例: op=${assignments[0].batchOperationPlanId}, pos=${assignments[0].positionNumber}, emp=${assignments[0].employeeId}`);
     }
@@ -454,7 +464,7 @@ export class PersistenceService {
 
           if (shiftPlanRow.length > 0) {
             const shiftPlanId = shiftPlanRow[0].id;
-            
+
             // 批量更新所有相关操作的 shift_plan_id
             const opIds = plan.operations.map(op => op.operationPlanId);
             if (opIds.length > 0) {
@@ -517,7 +527,7 @@ export class PersistenceService {
     // 生成 UUID 格式的 run_key (兼容旧版表结构，36字符)
     // 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     const hex = () => Math.random().toString(16).slice(2);
-    const runKey = `${hex().slice(0,8)}-${hex().slice(0,4)}-${hex().slice(0,4)}-${hex().slice(0,4)}-${hex().slice(0,12).padEnd(12,'0')}`;
+    const runKey = `${hex().slice(0, 8)}-${hex().slice(0, 4)}-${hex().slice(0, 4)}-${hex().slice(0, 4)}-${hex().slice(0, 12).padEnd(12, '0')}`;
 
     const [result] = await pool.execute<ResultSetHeader>(
       `INSERT INTO scheduling_runs

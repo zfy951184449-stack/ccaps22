@@ -24,6 +24,8 @@ import 'dayjs/locale/zh-cn';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
 import BatchSelector from './BatchSelector';
+import { SolveModePicker, SolveMode } from './SolveModePicker';
+import { CustomDateRange } from './CustomDateRange';
 import SchedulingWindowDisplay from './SchedulingWindow';
 import SchedulingSummaryDisplay from './SchedulingSummary';
 import SolveProgress from './SolveProgress';
@@ -110,6 +112,10 @@ const ModularScheduling: React.FC = () => {
   const [operationsLoading, setOperationsLoading] = useState(false);
   const [selectedBatchIds, setSelectedBatchIds] = useState<number[]>([]);
   const [batchSearch, setBatchSearch] = useState('');
+
+  // 排班模式状态
+  const [solveMode, setSolveMode] = useState<SolveMode>('BATCH');
+  const [customRange, setCustomRange] = useState<[Dayjs, Dayjs] | null>(null);
 
   // 日历数据状态
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
@@ -246,21 +252,26 @@ const ModularScheduling: React.FC = () => {
 
   // 计算求解区间（扩展到完整月份）
   const schedulingWindow: SchedulingWindow | null = useMemo(() => {
-    if (selectedBatches.length === 0) return null;
-
-    // 计算原始日期范围
     let rawStart: Dayjs | null = null;
     let rawEnd: Dayjs | null = null;
 
-    for (const batch of selectedBatches) {
-      const batchStart = dayjs(batch.startDate);
-      const batchEnd = dayjs(batch.endDate);
+    if (solveMode === 'TIME_RANGE') {
+      if (!customRange || !customRange[0] || !customRange[1]) return null;
+      rawStart = customRange[0];
+      rawEnd = customRange[1];
+    } else {
+      if (selectedBatches.length === 0) return null;
 
-      if (!rawStart || batchStart.isBefore(rawStart)) {
-        rawStart = batchStart;
-      }
-      if (!rawEnd || batchEnd.isAfter(rawEnd)) {
-        rawEnd = batchEnd;
+      for (const batch of selectedBatches) {
+        const batchStart = dayjs(batch.startDate);
+        const batchEnd = dayjs(batch.endDate);
+
+        if (!rawStart || batchStart.isBefore(rawStart)) {
+          rawStart = batchStart;
+        }
+        if (!rawEnd || batchEnd.isAfter(rawEnd)) {
+          rawEnd = batchEnd;
+        }
       }
     }
 
@@ -307,7 +318,7 @@ const ModularScheduling: React.FC = () => {
       triplePayDays,
       months,
     };
-  }, [selectedBatches, calendarDays]);
+  }, [selectedBatches, calendarDays, solveMode, customRange]);
 
   // 加载日历数据
   useEffect(() => {
@@ -338,7 +349,9 @@ const ModularScheduling: React.FC = () => {
 
   // 计算求解摘要
   const schedulingSummary: SchedulingSummary | null = useMemo(() => {
-    if (selectedBatches.length === 0) return null;
+    if (solveMode === 'BATCH' && selectedBatches.length === 0) return null;
+    if (solveMode === 'TIME_RANGE' && !schedulingWindow) return null;
+
 
     const selectedOperations = operations.filter((op) =>
       selectedBatchIds.includes(op.batch_id)
@@ -386,7 +399,7 @@ const ModularScheduling: React.FC = () => {
 
   // 开始求解
   const handleStartSolve = async () => {
-    if (selectedBatchIds.length === 0) {
+    if (solveMode === 'BATCH' && selectedBatchIds.length === 0) {
       message.warning('请先选择需要排班的批次');
       return;
     }
@@ -401,14 +414,26 @@ const ModularScheduling: React.FC = () => {
       title: '确认开始求解',
       content: (
         <div>
-          <p>将对以下批次进行排班：</p>
-          <ul>
-            {selectedBatches.map((b) => (
-              <li key={b.batchId}>{b.batchCode} - {b.batchName}</li>
-            ))}
-          </ul>
+          {solveMode === 'BATCH' ? (
+            <>
+              <p>将对以下批次进行排班：</p>
+              <ul>
+                {selectedBatches.map((b) => (
+                  <li key={b.batchId}>{b.batchCode} - {b.batchName}</li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <>
+              <p>将对以下时间段进行排班：</p>
+              <p style={{ fontWeight: 'bold' }}>
+                {schedulingWindow.startDate.format('YYYY-MM-DD')} 至 {schedulingWindow.endDate.format('YYYY-MM-DD')}
+              </p>
+              <p>包括该时间段内的所有激活操作。</p>
+            </>
+          )}
           <p style={{ color: '#ff4d4f' }}>
-            注意：这将覆盖选中批次的现有排班结果！
+            注意：这将覆盖该范围内的现有排班结果！
           </p>
         </div>
       ),
@@ -428,7 +453,8 @@ const ModularScheduling: React.FC = () => {
     try {
       // 构建请求 - 映射前端配置到后端格式
       const request: CreateSolveRequest = {
-        batchIds: selectedBatchIds,
+        mode: solveMode,
+        batchIds: solveMode === 'BATCH' ? selectedBatchIds : [],
         window: {
           start_date: schedulingWindow.startDate.format('YYYY-MM-DD'),
           end_date: schedulingWindow.endDate.format('YYYY-MM-DD'),
@@ -664,33 +690,45 @@ const ModularScheduling: React.FC = () => {
         />
       )}
 
-      {/* 步骤1：选择批次 */}
+      {/* 步骤1：选择方式 */}
       <Card
         className="step-card"
         title={
           <>
             <span className="step-number">1</span>
-            选择需要排班的批次
+            {solveMode === 'BATCH' ? '选择需要排班的批次' : '选择时间范围'}
           </>
         }
         extra={
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={loadOperations}
-            loading={operationsLoading}
-          >
-            刷新批次
-          </Button>
+          solveMode === 'BATCH' ? (
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={loadOperations}
+              loading={operationsLoading}
+            >
+              刷新批次
+            </Button>
+          ) : null
         }
       >
-        <BatchSelector
-          batches={batchCards}
-          selectedIds={selectedBatchIds}
-          onSelectionChange={setSelectedBatchIds}
-          loading={operationsLoading}
-          searchValue={batchSearch}
-          onSearchChange={setBatchSearch}
-        />
+        <SolveModePicker value={solveMode} onChange={setSolveMode} disabled={solving} />
+
+        {solveMode === 'BATCH' ? (
+          <BatchSelector
+            batches={batchCards}
+            selectedIds={selectedBatchIds}
+            onSelectionChange={setSelectedBatchIds}
+            loading={operationsLoading}
+            searchValue={batchSearch}
+            onSearchChange={setBatchSearch}
+          />
+        ) : (
+          <CustomDateRange
+            value={customRange}
+            onChange={setCustomRange}
+            disabled={solving}
+          />
+        )}
       </Card>
 
       {/* 步骤2：求解区间 */}
@@ -740,7 +778,11 @@ const ModularScheduling: React.FC = () => {
           className="solve-button"
           icon={solving ? <Spin size="small" /> : <RocketOutlined />}
           onClick={handleStartSolve}
-          disabled={selectedBatchIds.length === 0 || solving}
+          disabled={
+            (solveMode === 'BATCH' && selectedBatchIds.length === 0) ||
+            (solveMode === 'TIME_RANGE' && !schedulingWindow) ||
+            solving
+          }
           loading={solving}
         >
           {solving ? '求解中...' : '开始求解'}

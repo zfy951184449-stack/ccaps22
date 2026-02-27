@@ -59,6 +59,27 @@ export const fuzzyMatch = (query: string, target: string) => {
     });
 };
 
+/**
+ * 收集所有可展开的节点 ID（非操作节点）
+ * 用于单日模式下自动展开 sidebar 到操作层级
+ */
+export const collectAllExpandableKeys = (nodes: GanttNode[]): string[] => {
+    const keys: string[] = [];
+    const traverse = (nodeList: GanttNode[]) => {
+        nodeList.forEach(node => {
+            // 模板和阶段节点都可展开，操作节点不可展开（无子节点）
+            if (node.type !== 'operation') {
+                keys.push(node.id);
+            }
+            if (node.children) {
+                traverse(node.children);
+            }
+        });
+    };
+    traverse(nodes);
+    return keys;
+};
+
 export const flattenGanttNodes = (nodes: GanttNode[], expandedKeys: string[], depth = 0, parentId?: string): FlattenedRow[] => {
     const expandedSet = new Set(expandedKeys);
     const result: FlattenedRow[] = [];
@@ -351,7 +372,7 @@ export const buildGanttNodes = (template: ProcessTemplate, stages: ProcessStage[
             stage_code: stage.stage_code,
             start_day: stage.start_day,
             start_hour: 0,
-            expanded: true,
+            expanded: false,
             children: [],
             editable: true,
             level: 1,

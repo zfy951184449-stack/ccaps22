@@ -181,7 +181,8 @@ export interface SolveRun {
  * 创建求解任务的请求参数
  */
 export interface CreateSolveRequest {
-  batchIds: number[];
+  mode?: 'BATCH' | 'TIME_RANGE';
+  batchIds?: number[];
   window: {
     start_date: string;
     end_date: string;

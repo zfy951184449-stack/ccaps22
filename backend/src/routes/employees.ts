@@ -9,13 +9,16 @@ import {
   listEmployeeAssignments,
   createEmployeeAssignment,
   deleteEmployeeAssignment,
+  updateEmployeeAssignment,
   getEmployeeReporting,
   updateEmployeeDirectReports,
-  getEmployeeOrgContext
+  getEmployeeOrgContext,
+  getRoles
 } from '../controllers/employeeController';
 
 const router = express.Router();
 
+router.get('/roles', getRoles);
 router.get('/', getEmployees);
 router.post('/', createEmployee);
 router.put('/:id', updateEmployee);
@@ -27,6 +30,7 @@ router.put('/:id/reporting', updateEmployeeDirectReports);
 router.get('/:id/organization-context', getEmployeeOrgContext);
 router.get('/:id/assignments', listEmployeeAssignments);
 router.post('/:id/assignments', createEmployeeAssignment);
+router.put('/:id/assignments/:assignmentId', updateEmployeeAssignment);
 router.delete('/:id/assignments/:assignmentId', deleteEmployeeAssignment);
 
 export default router;

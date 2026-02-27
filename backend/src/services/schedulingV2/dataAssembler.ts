@@ -27,6 +27,7 @@ import {
   SchedulingWindow,
   DEFAULT_SOLVER_CONFIG,
   PlanCategory,
+  SchedulingMode,
 } from '../../types/schedulingV2';
 
 dayjs.extend(isSameOrBefore);
@@ -38,6 +39,7 @@ export interface AssembleOptions {
   batchIds: number[];
   window: SchedulingWindow;
   config?: Partial<SolverConfig>;
+  mode?: SchedulingMode;
   requestId?: string;
 }
 
@@ -49,33 +51,115 @@ export class DataAssembler {
    * 组装完整的求解器请求
    */
   static async assemble(options: AssembleOptions): Promise<SolverRequest> {
-    const { batchIds, window, config } = options;
+    const { batchIds, window, config, mode } = options;
     const requestId = options.requestId || `solve-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // 合并配置（需要先获取以便确定历史班次天数）
+    // 合并配置
     const mergedConfig: SolverConfig = {
       ...DEFAULT_SOLVER_CONFIG,
       ...config,
     };
 
-    // 并行获取所有数据
+    let operationDemands: OperationDemand[] = [];
+    let targetBatchIds: number[] = [];
+    let lockedOperations: LockedOperation[] = [];
+    let relatedBatchIds: number[] = [];
+
+    // 1. 根据模式获取操作需求和批次 ID
+    if (mode === 'TIME_RANGE') {
+      // (1) 获取窗口内的所有操作
+      const primaryDemands = await this.fetchOperationDemandsByWindow(
+        window.start_date,
+        window.end_date
+      );
+
+      // 提取涉及的批次 ID
+      const batchIdSet = new Set(primaryDemands.map(d => d.batch_id));
+      relatedBatchIds = Array.from(batchIdSet);
+      targetBatchIds = relatedBatchIds; // 在 Time Range 模式下，targetBatchIds 就是涉及的批次
+
+      // (2) 获取共享组配置以处理边界
+      const sharedPreferences = await this.fetchSharedPreferences(relatedBatchIds);
+
+      // (3) 识别边界操作（属于共享组但不在窗口内的操作）
+      const primaryOpIds = new Set(primaryDemands.map(d => d.operation_plan_id));
+      const boundaryOpIds = new Set<number>();
+
+      for (const group of sharedPreferences) {
+        // 检查该组是否涉及当前窗口内的操作
+        const hasMemberInWindow = group.members.some(m => primaryOpIds.has(m.operation_plan_id));
+        if (hasMemberInWindow) {
+          for (const member of group.members) {
+            if (!primaryOpIds.has(member.operation_plan_id)) {
+              boundaryOpIds.add(member.operation_plan_id);
+            }
+          }
+        }
+      }
+
+      // (4) 获取边界操作的现有分配（作为硬约束）
+      const existingAssignments = await this.fetchExistingAssignments(relatedBatchIds);
+      const outputLockedOps: LockedOperation[] = [];
+      const boundaryOpIdsToFetch: number[] = [];
+
+      // 建立操作ID到分配的映射
+      const assignmentMap = new Map<number, number[]>();
+      for (const assign of existingAssignments) {
+        assignmentMap.set(assign.operation_plan_id, assign.enforced_employee_ids);
+      }
+
+      // 只有存在历史分配的边界操作才会被纳入
+      for (const opId of boundaryOpIds) {
+        if (assignmentMap.has(opId)) {
+          boundaryOpIdsToFetch.push(opId);
+          outputLockedOps.push({
+            operation_plan_id: opId,
+            enforced_employee_ids: assignmentMap.get(opId)!,
+          });
+        }
+      }
+
+      // (5) 获取边界操作的详情并添加到需求列表（标记为锁定）
+      const boundaryDemands = await this.fetchOperationDemandsByIds(boundaryOpIdsToFetch);
+      const lockedBoundaryDemands = boundaryDemands.map(d => ({ ...d, is_locked: true }));
+
+      operationDemands = [...primaryDemands, ...lockedBoundaryDemands];
+
+      // (6) 处理用户显式锁定的操作（针对窗口内的操作）
+      const userLockedOps = await this.fetchLockedOperations(relatedBatchIds);
+      // 过滤只针对 operationDemands 中的操作
+      const allOpIds = new Set(operationDemands.map(d => d.operation_plan_id));
+      const validUserLockedOps = userLockedOps.filter(l => allOpIds.has(l.operation_plan_id));
+
+      // 合并锁定列表（边界硬约束 + 用户显式锁定）
+      // 注意：如果有冲突，由于边界操作和窗口内操作不重叠，理论上无ID冲突
+      lockedOperations = [...outputLockedOps, ...validUserLockedOps];
+
+    } else {
+      // 默认 BATCH 模式
+      if (batchIds.length === 0) {
+        throw new Error('批量模式下必须提供 batchIds');
+      }
+      operationDemands = await this.fetchOperationDemands(batchIds);
+      targetBatchIds = batchIds;
+      relatedBatchIds = batchIds;
+      lockedOperations = await this.fetchLockedOperations(batchIds);
+    }
+
+    // 2. 并行获取其他数据
     const [
-      operationDemands,
       employeeProfiles,
       calendar,
       shiftDefinitions,
       sharedPreferences,
-      lockedOperations,
       lockedShifts,
       employeeUnavailability,
       historicalShifts,
     ] = await Promise.all([
-      this.fetchOperationDemands(batchIds),
       this.fetchEmployeeProfiles(),
       this.fetchCalendar(window.start_date, window.end_date),
       this.fetchShiftDefinitions(),
-      this.fetchSharedPreferences(batchIds),
-      this.fetchLockedOperations(batchIds),
+      this.fetchSharedPreferences(relatedBatchIds),
       this.fetchLockedShifts(window.start_date, window.end_date),
       this.fetchEmployeeUnavailability(window.start_date, window.end_date),
       this.fetchHistoricalShifts(
@@ -97,7 +181,7 @@ export class DataAssembler {
       locked_shifts: lockedShifts,
       employee_unavailability: employeeUnavailability,
       historical_shifts: historicalShifts,
-      target_batch_ids: batchIds,
+      target_batch_ids: targetBatchIds,
     };
   }
 
@@ -109,7 +193,7 @@ export class DataAssembler {
 
     const placeholders = batchIds.map(() => '?').join(',');
     const query = `
-      SELECT
+      SELECT DISTINCT
         bop.id AS operation_plan_id,
         pbp.id AS batch_id,
         pbp.batch_code,
@@ -196,6 +280,146 @@ export class DataAssembler {
   }
 
   /**
+   * 按时间窗口获取操作需求
+   */
+  static async fetchOperationDemandsByWindow(
+    windowStart: string,
+    windowEnd: string
+  ): Promise<OperationDemand[]> {
+    const query = `
+      SELECT DISTINCT
+        bop.id AS operation_plan_id,
+        pbp.id AS batch_id,
+        pbp.batch_code,
+        bop.operation_id,
+        o.operation_code,
+        o.operation_name,
+        ps.id AS stage_id,
+        COALESCE(ps.stage_name, '独立操作') AS stage_name,
+        bop.planned_start_datetime,
+        bop.planned_end_datetime,
+        bop.planned_duration,
+        bop.required_people,
+        bop.is_locked,
+        bop.is_independent,
+        sos.window_start_time,
+        sos.window_end_time,
+        sos.window_start_day_offset,
+        sos.window_end_day_offset,
+        bop.window_start_datetime AS direct_window_start,
+        bop.window_end_datetime AS direct_window_end
+      FROM batch_operation_plans bop
+      JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+      JOIN operations o ON bop.operation_id = o.id
+      LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+      LEFT JOIN process_stages ps ON sos.stage_id = ps.id
+      WHERE bop.planned_start_datetime BETWEEN ? AND ?
+        AND pbp.plan_status = 'ACTIVATED'
+      ORDER BY bop.planned_start_datetime ASC
+    `;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, [windowStart, windowEnd]);
+    return this.processOperationRows(rows);
+  }
+
+  /**
+   * 按ID列表获取操作需求
+   */
+  static async fetchOperationDemandsByIds(operationIds: number[]): Promise<OperationDemand[]> {
+    if (operationIds.length === 0) return [];
+
+    const placeholders = operationIds.map(() => '?').join(',');
+    const query = `
+      SELECT
+        bop.id AS operation_plan_id,
+        pbp.id AS batch_id,
+        pbp.batch_code,
+        bop.operation_id,
+        o.operation_code,
+        o.operation_name,
+        ps.id AS stage_id,
+        COALESCE(ps.stage_name, '独立操作') AS stage_name,
+        bop.planned_start_datetime,
+        bop.planned_end_datetime,
+        bop.planned_duration,
+        bop.required_people,
+        bop.is_locked,
+        bop.is_independent,
+        sos.window_start_time,
+        sos.window_end_time,
+        sos.window_start_day_offset,
+        sos.window_end_day_offset,
+        bop.window_start_datetime AS direct_window_start,
+        bop.window_end_datetime AS direct_window_end
+      FROM batch_operation_plans bop
+      JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+      JOIN operations o ON bop.operation_id = o.id
+      LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+      LEFT JOIN process_stages ps ON sos.stage_id = ps.id
+      WHERE bop.id IN (${placeholders})
+      ORDER BY bop.planned_start_datetime ASC
+    `;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, operationIds);
+    return this.processOperationRows(rows);
+  }
+
+  /**
+   * 处理操作查询结果行
+   */
+  private static async processOperationRows(rows: RowDataPacket[]): Promise<OperationDemand[]> {
+    if (rows.length === 0) return [];
+
+    // 获取每个操作的资质需求
+    const operationIds = rows.map(r => r.operation_id);
+    const qualifications = await this.fetchOperationQualifications(operationIds);
+
+    return rows.map(row => {
+      const opQuals = qualifications.get(row.operation_id) || [];
+
+      let windowStart: string | null = null;
+      let windowEnd: string | null = null;
+
+      if (row.direct_window_start) {
+        windowStart = dayjs(row.direct_window_start).format('YYYY-MM-DDTHH:mm:ss');
+      } else if (row.window_start_time && row.window_start_day_offset !== null) {
+        const baseDate = dayjs(row.planned_start_datetime).startOf('day');
+        const offsetDays = Number(row.window_start_day_offset) || 0;
+        const timeStr = String(row.window_start_time).substring(0, 8); // HH:mm:ss
+        windowStart = baseDate.add(offsetDays, 'day').format('YYYY-MM-DD') + 'T' + timeStr;
+      }
+
+      if (row.direct_window_end) {
+        windowEnd = dayjs(row.direct_window_end).format('YYYY-MM-DDTHH:mm:ss');
+      } else if (row.window_end_time && row.window_end_day_offset !== null) {
+        const baseDate = dayjs(row.planned_end_datetime).startOf('day');
+        const offsetDays = Number(row.window_end_day_offset) || 0;
+        const timeStr = String(row.window_end_time).substring(0, 8); // HH:mm:ss
+        windowEnd = baseDate.add(offsetDays, 'day').format('YYYY-MM-DD') + 'T' + timeStr;
+      }
+
+      return {
+        operation_plan_id: row.operation_plan_id,
+        batch_id: row.batch_id,
+        batch_code: row.batch_code,
+        operation_id: row.operation_id,
+        operation_code: row.operation_code,
+        operation_name: row.operation_name,
+        stage_id: row.stage_id,
+        stage_name: row.stage_name,
+        planned_start: dayjs(row.planned_start_datetime).format('YYYY-MM-DDTHH:mm:ss'),
+        planned_end: dayjs(row.planned_end_datetime).format('YYYY-MM-DDTHH:mm:ss'),
+        planned_duration_minutes: Math.round((Number(row.planned_duration) || 0) * 60),
+        required_people: Number(row.required_people) || 1,
+        position_qualifications: opQuals,
+        window_start: windowStart,
+        window_end: windowEnd,
+        is_locked: Boolean(row.is_locked),
+      };
+    });
+  }
+
+  /**
    * 获取操作的资质需求（按岗位分组）
    * 
    * 返回每个操作的岗位资质需求列表。
@@ -269,10 +493,11 @@ export class DataAssembler {
         e.id AS employee_id,
         e.employee_code,
         e.employee_name,
-        e.org_role,
+        COALESCE(r.role_code, 'FRONTLINE') AS role_code,
         e.department_id,
         e.primary_team_id AS team_id
       FROM employees e
+      LEFT JOIN employee_roles r ON r.id = e.primary_role_id
       WHERE e.employment_status = 'ACTIVE'
       ORDER BY e.employee_code
     `);
@@ -306,7 +531,7 @@ export class DataAssembler {
       employee_id: e.employee_id,
       employee_code: e.employee_code,
       employee_name: e.employee_name,
-      org_role: e.org_role || 'FRONTLINE',
+      org_role: e.role_code || 'FRONTLINE',
       department_id: e.department_id,
       team_id: e.team_id,
       qualifications: qualMap.get(e.employee_id) || [],
@@ -393,11 +618,15 @@ export class DataAssembler {
         end_time,
         nominal_hours,
         is_cross_day,
-        is_night_shift
+        is_cross_day,
+        is_night_shift,
+        category
       FROM shift_definitions
       WHERE is_active = 1
       ORDER BY nominal_hours ASC, shift_code ASC
     `);
+
+    console.log('[DataAssembler] Raw Shift Rows:', JSON.stringify(rows));
 
     return rows.map((row, index) => ({
       shift_id: row.shift_id,
@@ -409,6 +638,12 @@ export class DataAssembler {
       is_cross_day: Boolean(row.is_cross_day),
       is_night_shift: Boolean(row.is_night_shift), // 使用专门的 is_night_shift 列
       priority: index, // 按工时排序的优先级
+      // 核心修复: 映射 plan_category
+      // 逻辑: 如果 shift_code 为 REST 或 nominal_hours 为 0，强制视为 REST
+      // 否则: 默认为 PRODUCTION (或者使用数据库的 category 字段如果需要)
+      plan_category: (row.shift_code === 'REST' || Number(row.nominal_hours) === 0)
+        ? 'REST'
+        : 'PRODUCTION'
     }));
   }
 
@@ -543,6 +778,41 @@ export class DataAssembler {
        JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
        WHERE pbp.id IN (${placeholders})
          AND bpa.is_locked = 1
+         AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')`,
+      batchIds
+    );
+
+    // 按操作分组员工
+    const opMap = new Map<number, number[]>();
+    for (const row of rows) {
+      if (!opMap.has(row.operation_plan_id)) {
+        opMap.set(row.operation_plan_id, []);
+      }
+      opMap.get(row.operation_plan_id)!.push(row.employee_id);
+    }
+
+    return Array.from(opMap.entries()).map(([opId, empIds]) => ({
+      operation_plan_id: opId,
+      enforced_employee_ids: empIds,
+    }));
+  }
+
+  /**
+   * 获取现有的操作分配（不限于锁定状态）
+   * 用于 Time Range 模式下获取边界操作的历史分配
+   */
+  static async fetchExistingAssignments(batchIds: number[]): Promise<LockedOperation[]> {
+    if (batchIds.length === 0) return [];
+
+    const placeholders = batchIds.map(() => '?').join(',');
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT
+        bpa.batch_operation_plan_id AS operation_plan_id,
+        bpa.employee_id
+       FROM batch_personnel_assignments bpa
+       JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+       JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
+       WHERE pbp.id IN (${placeholders})
          AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')`,
       batchIds
     );

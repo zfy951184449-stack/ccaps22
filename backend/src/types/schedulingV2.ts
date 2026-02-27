@@ -11,6 +11,8 @@ export type QualificationMatchMode = 'EXACT' | 'MINIMUM';
 
 export type PlanCategory = 'WORK' | 'REST';
 
+export type SchedulingMode = 'BATCH' | 'TIME_RANGE';
+
 export type SolverStatus = 'OPTIMAL' | 'FEASIBLE' | 'INFEASIBLE' | 'TIMEOUT' | 'ERROR';
 
 export type WarningType =
@@ -128,6 +130,7 @@ export interface ShiftDefinition {
   is_cross_day: boolean;
   is_night_shift: boolean;
   priority: number;
+  plan_category: string; // PRODUCTION, REST, OVERTIME
 }
 
 /**

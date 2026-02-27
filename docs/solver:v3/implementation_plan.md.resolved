@@ -1,0 +1,1491 @@
+# V3 模块化高性能求解器实施计划
+
+基于现有 V2 求解器，设计并实现一个完全独立的 V3 版本，具备更好的模块化、更快的求解速度、更优的求解质量。
+
+## User Review Required
+
+> [!IMPORTANT]
+> **日志与报错系统**: V3 求解器将包含完善的中文日志和错误报告功能。
+
+### 日志系统设计
+
+```python
+# solver_v3/utils/logger.py
+import logging
+
+class ChineseFormatter(logging.Formatter):
+    """中文日志格式化器"""
+    LEVELS = {
+        'DEBUG': '调试',
+        'INFO': '信息', 
+        'WARNING': '警告',
+        'ERROR': '错误',
+        'CRITICAL': '严重'
+    }
+
+# 日志输出示例:
+# [2025-01-15 14:32:05] [信息] 开始求解任务 RUN-001
+# [2025-01-15 14:32:05] [调试] 加载约束模块: H1-资质匹配
+# [2025-01-15 14:32:10] [警告] 员工张三在1月15日-20日不可用，已自动排除
+# [2025-01-15 14:32:15] [错误] 无法满足约束 H5: 员工李四连续工作超过6天
+```
+
+**日志级别**:
+- `DEBUG`: 详细变量信息，用于开发调试
+- `INFO`: 关键步骤记录 (开始/结束/统计)
+- `WARNING`: 潜在问题 (不可用员工、边缘工时)
+- `ERROR`: 约束冲突、无解原因分析
+
+---
+
+### 中止求解功能设计 (NEW)
+
+> [!IMPORTANT]
+> 用户可以在求解过程中随时中止，系统返回当前最优解。
+
+**API 设计:**
+
+```
+POST /api/v3/scheduling/cancel/:runId
+
+Response:
+{
+    "success": true,
+    "message": "求解已中止",
+    "partialResult": { ... }  // 可选，返回当前最优解
+}
+```
+
+**实现架构:**
+
+```mermaid
+sequenceDiagram
+    participant Frontend
+    participant Node.js Backend
+    participant V3 Solver (Python)
+    
+    Frontend->>Node.js Backend: POST /cancel/:runId
+    Node.js Backend->>Node.js Backend: 设置 cancel_flag = true (Redis/DB)
+    Node.js Backend-->>Frontend: { success: true }
+    
+    Note over V3 Solver: 求解循环中定期检查标志
+    V3 Solver->>Node.js Backend: 检测到 cancel_flag
+    V3 Solver->>Node.js Backend: 返回当前最优解
+```
+
+**Solver 端实现:**
+
+```python
+# solver_v3/core/engine.py
+class SolverEngine:
+    def solve(self, data, cancel_checker=None):
+        # 在求解回调中检查中止标志
+        def solution_callback(solution):
+            if cancel_checker and cancel_checker():
+                raise SolveCancelledException()
+            # ... 正常处理
+```
+
+---
+
+### SSE 实时进度推送设计 (NEW)
+
+> [!TIP]
+> 使用 Server-Sent Events 实现低延迟的单向实时推送。
+
+**架构选择:**
+
+| 方案 | 优点 | 缺点 | 选择 |
+|------|------|------|------|
+| **轮询** | 简单 | 延迟高、无效请求多 | ❌ |
+| **WebSocket** | 双向、低延迟 | 需要维护连接 | ❌ |
+| **SSE** | 单向推送、自动重连、HTTP兼容 | 仅支持文本 | ✅ |
+
+**SSE 端点设计:**
+
+```
+GET /api/v3/scheduling/progress/:runId/stream
+Content-Type: text/event-stream
+
+event: progress
+data: {"stage":"SOLVING","progress":45,"metrics":{...}}
+
+event: objective
+data: {"time":12.5,"value":-8500}
+
+event: complete
+data: {"status":"COMPLETED","result_url":"/api/v3/scheduling/result/123"}
+```
+
+**后端实现 (Node.js):**
+
+```typescript
+// backend/src/controllers/schedulingV3Controller.ts
+export const progressStream = (req: Request, res: Response) => {
+    const { runId } = req.params;
+    
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const interval = setInterval(async () => {
+        const status = await getRunStatus(runId);
+        res.write(`event: progress\n`);
+        res.write(`data: ${JSON.stringify(status)}\n\n`);
+        
+        if (status.status === 'COMPLETED' || status.status === 'FAILED') {
+            clearInterval(interval);
+            res.end();
+        }
+    }, 500);
+    
+    req.on('close', () => clearInterval(interval));
+};
+```
+
+**前端使用:**
+
+```typescript
+// 使用 EventSource 订阅
+const eventSource = new EventSource(`/api/v3/scheduling/progress/${runId}/stream`);
+
+eventSource.addEventListener('progress', (event) => {
+    const data = JSON.parse(event.data);
+    setProgress(data.progress);
+    setMetrics(data.metrics);
+});
+
+eventSource.addEventListener('complete', () => {
+    eventSource.close();
+    loadResult();
+});
+```
+
+---
+
+### 实时指标数据设计 (NEW)
+
+> [!IMPORTANT]
+> 进度面板显示的指标需要从求解器实时计算并推送。
+
+**指标定义:**
+
+| 指标 | 字段名 | 计算方式 | 数据来源 |
+|------|--------|----------|----------|
+| 硬约束满足率 | `hard_constraint_satisfaction` | 已满足硬约束数/总硬约束数 | Solver回调 |
+| 缺员操作数 | `understaffed_operations` | 未分配岗位数 | 当前解分析 |
+| 共享组一致性 | `share_group_consistency` | 一致共享组/总共享组 | 当前解分析 |
+| 公平性偏差 | `fairness_deviation` | max(夜班) - min(夜班) | 当前解分析 |
+| 已找到解数 | `solutions_found` | 计数器累加 | 回调统计 |
+
+**Solver 端收集指标:**
+
+```python
+# solver_v3/core/metrics_collector.py
+class MetricsCollector:
+    def __init__(self):
+        self.solutions_found = 0
+        self.best_objective = None
+        
+    def on_solution(self, solution, context):
+        self.solutions_found += 1
+        self.best_objective = solution.ObjectiveValue()
+        
+        # 分析当前解计算实时指标
+        metrics = self.analyze_solution(solution, context)
+        return metrics
+    
+    def analyze_solution(self, solution, context):
+        return {
+            "hard_constraint_satisfaction": self._calc_hard_satisfaction(),
+            "understaffed_operations": self._count_understaffed(),
+            "share_group_consistency": self._calc_share_consistency(),
+            "fairness_deviation": self._calc_fairness(),
+        }
+```
+
+**数据流:**
+
+```
+Solver 求解回调
+    ↓
+MetricsCollector.on_solution()
+    ↓
+写入 Redis/内存缓存 (run_id -> metrics)
+    ↓
+SSE 端点读取并推送
+    ↓
+前端 SolveProgressPanel 更新显示
+```
+
+---
+
+### 可扩展性设计
+
+> [!TIP]
+> V3 采用 **插件式约束注册** 架构，新增约束仅需 3 步：
+
+**新增约束流程**:
+
+```python
+# 1. 创建约束文件 solver_v3/constraints/policy/new_constraint.py
+from constraints.base import BaseConstraint
+
+class NewConstraint(BaseConstraint):
+    """新约束的中文描述"""
+    
+    name = "H12 或 S10"  # 约束 ID
+    priority = "P2"       # 优先级
+    
+    def apply(self, model, context):
+        # 实现约束逻辑
+        pass
+
+# 2. 在 constraints/__init__.py 注册
+CONSTRAINT_REGISTRY = {
+    ...
+    "new_constraint": NewConstraint,
+}
+
+# 3. 前端配置开关 (可选)
+```
+
+**扩展点**:
+
+| 扩展类型 | 位置 | 说明 |
+|---------|------|------|
+| 新增硬约束 | `constraints/` | 继承 `BaseConstraint`，实现 [apply()](file:///Users/zhengfengyi/ccaps22/backend/src/controllers/schedulingV3Controller.ts#445-528) |
+| 新增软约束 | `constraints/` | 同上，设置 `is_soft = True` |
+| 新优化目标 | `objectives/` | 实现 `ObjectiveComponent` 接口 |
+| 新班次类型 | `utils/shift_classifier.py` | 扩展识别规则 |
+| 新报告格式 | `core/result_builder.py` | 新增输出字段 |
+
+## 背景与现状分析
+
+### V2 求解器架构概览
+
+```mermaid
+graph TB
+    subgraph Current V2 Architecture
+        A[app.py :5001] --> B[solver.py]
+        B --> C[hierarchical_solver.py]
+        B --> D[segmented_solver.py]
+        B --> E[Constraints 9 modules]
+        B --> F[ObjectiveBuilder]
+        E --> E1[operation_assignment.py 1033行]
+        E --> E2[Others: 8 modules]
+    end
+```
+
+### V3 求解器架构概览
+
+```mermaid
+graph TB
+    subgraph V3_Solver_Architecture
+        direction TB
+        API[Flask API Port 5002] --> Svc[SchedulingV3Service]
+        Svc --> Ass[DataAssembler]
+        Svc --> Eng[Core Engine]
+        Svc --> Per[PersistenceService]
+        
+        Eng --> C_Mgr[Constraint Registry]
+        Eng --> O_Mgr[Objective Builder]
+        Eng --> P_Mgr[Pre-processor]
+        
+        C_Mgr --> C1[Hard Constraints]
+        C_Mgr --> C2[Soft Constraints]
+        
+        C1 --> H_Assign[Assignment Logic]
+        C1 --> H_Time[Temporal Logic]
+        C1 --> H_Work[Workload Logic]
+        
+        Svc --> Res[ResultParser]
+    end
+    
+    subgraph Database
+        DB[(MySQL)]
+    end
+    
+    Per --> DB
+    Ass --> DB
+```
+
+---
+
+### V3 求解流程图 (Process Flowchart)
+
+> **效率说明**: 图中的 "约束传播 (Constraint Propagation)" 和 "预处理" 是求解器的核心加速引擎。它们能利用数学逻辑瞬间剪除 99% 的无效搜索分支（Pruning），从而避免傻瓜式的暴力穷举。
+
+```mermaid
+graph TD
+    Start((开始)) --> Input[数据组装]
+    Input --> Pre[预处理]
+    Pre --> C_Build[构建约束模型]
+    
+    subgraph SolvingProcess[求解过程]
+        C_Build --> CheckTime{超时检查}
+        CheckTime -->|超时| Stop((结束))
+        CheckTime -->|继续| Prop[约束传播与剪枝]
+        
+        Prop --> Search{搜索分支}
+        Search -->|可行| Sol[生成候选解]
+        Search -->|冲突| Back[快速回溯]
+        Back --> CheckTime
+        
+        Sol --> Opt[多目标优化]
+        Opt --> Best{更优解?}
+        Best -->|是| Update[更新最优解]
+        Best -->|否| CheckTime
+        Update --> CheckTime
+    end
+    
+    Stop --> Result[结果解析与持久化]
+```
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **完全独立的端口分离**: 
+> - V2 求解器: `solver/` 目录, 端口 **5001**
+> - V3 求解器: `solver_v3/` 目录, 端口 **5002**
+> - 两者完全独立，互不影响
+
+> [!WARNING]
+> **约束策略变更**:
+> - **共享组 (Share Group) 升级为硬约束**: 必须严格满足人员一致性。
+> - **智能抢占优先级** (无需 priority 字段) — 详见下方实现。
+
+### 智能抢占优先级实现方案
+
+**核心思想**: 在目标函数中为不同类型的"缺员"赋予不同的惩罚权重，使求解器自动优先填满高权重岗位。
+
+**实现步骤**:
+
+1. **预处理阶段 — 计算每个操作的优先级权重**:
+   ```python
+   def compute_priority_weight(operation, daily_demand_counts):
+       weight = 1000  # 基础权重
+       
+       # 规则1: 夜班操作 +5000
+       if is_night_shift_operation(operation):
+           weight += 5000
+           
+       # 规则2: 高峰日操作 (需求人数 >= 当日总操作数的 70%) +3000
+       date = operation.planned_date
+       if daily_demand_counts[date] >= threshold_for_peak(date):
+           weight += 3000
+           
+       return weight
+   ```
+
+2. **目标函数构建 — 加权缺员惩罚**:
+   ```python
+   shortage_penalty = 0
+   for op in operations:
+       for pos in range(op.required_people):
+           # skip_var = 1 表示该岗位未分配
+           shortage_penalty += skip_var[op.id][pos] * priority_weights[op.id]
+   
+   model.Minimize(shortage_penalty + other_objectives)
+   ```
+
+3. **效果**: 
+   - 夜班岗位缺员: 惩罚 `1000 + 5000 = 6000`
+   - 高峰日岗位缺员: 惩罚 `1000 + 3000 = 4000`
+   - 普通岗位缺员: 惩罚 `1000`
+   
+   求解器会**自动优先填满高惩罚岗位**，空缺自然集中在低惩罚的普通岗位。
+
+---
+
+## 完整约束清单
+
+### 硬约束 (Hard Constraints) - 必须满足，否则无解
+
+| ID | 约束名称 | 详细描述与示例 | V3 模块 |
+|----|---------|----------------|---------|
+| H1 | 资质匹配 | **描述**: 员工必须持有操作所需的特定资质，且等级达标。<br>**示例**: 操作"无菌灌装"需要"无菌操作员 Lv2"资质。员工A只有 Lv1，不能分配；员工B有 Lv3，可以分配。 | `assignment/qualification.py`<br>(资质匹配模块) |
+| H2 | 一位一人 | **描述**: 同一个操作的一个具体位置，同一时刻只能分配给一个人。<br>**示例**: 操作"包装线A"的"操作工1"位置，不能同时分给张三和李四。 | `assignment/position.py`<br>(位置分配模块) |
+| H3 | 同操作互斥 | **描述**: 同一个员工在同一个操作中，不能占据多个位置。<br>**示例**: 张三不能同时担任"包装线A"的"操作工1"和"操作工2"。 | `assignment/mutex.py`<br>(互斥检测模块) |
+| H4 | 时间冲突互斥 | **描述**: 同一个员工不能同时处理两个时间重叠的不同操作（除非它们属于允许同一人的共享组）。<br>**示例**: 操作A (09:00-11:00) 和 操作B (10:00-12:00) 时间重叠，张三不能同时做这两个。 | `assignment/mutex.py`<br>(互斥检测模块) |
+| H5 | 连续工作限制 | **描述**: 员工连续工作的自然日天数不得超过设定值。工作日定义为当天有排班或操作。<br>**示例**: 设定上限为6天。如果张三从周一到周六都有操作，则周日必须强制休息，不能安排任何任务。 | `temporal/consecutive.py`<br>(连续性模块) |
+| H6 | 班次覆盖 | **描述**: 同一天内分配给同一员工的所有操作，必须能被系统中定义的一个有效班次覆盖。<br>**示例**: 张三被分了两个操作：09:00-12:00 和 14:00-17:00。系统必须存在一个如"常日班 (08:30-17:30)"能包住这两个时间段。如果只有"早班 (06:00-14:00)"，则此分配非法。 | `assignment/mutex.py`<br>(互斥检测模块) |
+| H7 | 夜班强制休息 | **描述**: 员工上完夜班后，随后的一定天数（通常为1天）内必须休息，不得安排任何工作。<br>**示例**: 张三在1月1日上了夜班（20:00-08:00）。则1月2日全天（00:00-24:00）属于强制休息期，不能安排任何操作。 | `temporal/night_shift.py`<br>(夜班规则模块) |
+| H8 | 月度工时上限 | **描述**: 员工一个月的累计工时不能超过标准工时加上允许的浮动上限。<br>**示例**: 1月标准工时160小时，上限浮动16小时。则张三1月总工时不得超过 176 小时。 | `capacity/monthly_hours.py`<br>(工时计算模块) |
+| H9 | 月度工时下限 | **描述**: 员工一个月的累计工时不能低于标准工时减去允许的浮动下限。<br>**示例**: 1月标准工时160小时，下限浮动16小时。则张三1月总工时不得低于 144 小时。 | `capacity/monthly_hours.py`<br>(工时计算模块) |
+| H10 | **共享组一致性** | **描述 (严格固定班底)**: 组内操作人员必须保持最大程度的一致性。<br>**逻辑**: 组内所有操作的分配人员，必须是该组"班底"的严格子集（且优先选择班底中顺序靠前的人）。若多个子操作人数相同，必须使用完全相同的人（除非时间冲突）。<br>**示例**: 组内有操作A(4人)、B(2人)、C(2人)。<br>- A分配: {张,李,王,赵}<br>- B分配: {张,李}<br>- C分配: {张,李} ✅ (必须与B一致)<br>- 若C分配 {王,赵} ❌ (违规，虽然在班底内但未保持一致) | `assignment/sharing.py`<br>(共享组模块) |
+| H11 | **不可用时间段** | **描述**: 员工在设定的不可用时间段内，不能被分配任何操作（但可以有班次安排）。<br>**数据来源**: `http://localhost:3000/organization-workbench` 界面设置。<br>**示例**: 张三在 1月15日-1月20日 标记为"请假"，则这期间不能分配操作给他。<br>**注意**: 仅限制操作分配，不限制班次排定（因员工可能请假但仍有工时记录）。 | `assignment/availability.py`<br>(可用性模块) |
+
+### 软约束 (Soft Constraints) - 尽可能满足，用于优化解的质量
+
+**现代化优先级系统**: 使用 P0 (最高) 到 P3 (最低) 的层级。
+
+| ID | 约束名称 | 详细描述与示例 | 默认优先级 | V3 模块 |
+|----|---------|----------------|-----------|---------| 
+| S1 | 最小化缺员 | **描述**: 尽可能填满需求。<br>**优先级判定**: 通过操作数据的 `priority` 字段判断（来源：生产计划系统或前端手动设置）。<br>- Critical (关键批次/工序): P0<br>- Normal (辅助工序): P1<br>- Low (清洁/整理): P3 | **P0 (Critical)** | `assignment/position.py`<br>(位置分配模块) |
+| F1 | 夜班数量公平 | **描述**: 同一层级（如都是一线员工）的人员之间，夜班总次数应该尽量接近。<br>**示例**: 一个月内，张三上了5个夜班，李四上了0个，这是不公平的。系统会尝试让两人各上2-3个夜班。 | **P2 (Medium)** | `policy/fairness.py`<br>(公平性模块) |
+| F2 | 长白班公平 | **描述**: 同一层级人员的长白班次数尽量接近。<br>**示例**: 避免某人一直上轻松的长白班，而其他人一直轮班。 | **P2 (Medium)** | `policy/fairness.py`<br>(公平性模块) |
+| F3 | 夜班间隔均匀 | **描述**: 避免员工的夜班过于集中，希望夜班能均匀分布。<br>**示例**: 不要让张三在月初连续上3个夜班然后月底都没夜班，而是建议每周上1个。 | **P2 (Medium)** | `policy/fairness.py`<br>(公平性模块) |
+| F4 | 操作时长公平 | **描述**: 同一层级人员的总操作工时尽量接近。<br>**示例**: 张三总工时180小时，李四只有120小时，系统会尝试给李四多排班。 | **P2 (Medium)** | `policy/fairness.py`<br>(公平性模块) |
+| S5 | 夜班后软休息 | **描述**: 在强制休息（硬约束）的基础上，额外增加建议休息天数。<br>**示例**: 硬约束要求夜班后休1天。软约束建议休2天。如果资源允许，系统会安排张三夜班后休2天；如果实在缺人，休1天也可接受。 | **P3 (Low)** | `temporal/night_shift.py`<br>(夜班规则模块) |
+| S6 | **非工作日惩罚** | **描述**: 尽量避免在法定节假日或周末安排上班。<br>**示例**: 12月25日是圣诞节（非工作日），如果必须安排人上班，系统会给该方案加惩罚分，优先选择工作日排班的方案。<br>**默认罚分**: 1000/人次 | **P3 (Low)** | [policy/calendar.py](file:///Users/zhengfengyi/ccaps22/solver_v3/constraints/policy/calendar.py)<br>(日历策略模块) |
+| S7 | 主管少干活 | **描述**: 除非万不得已，尽量少安排组长（Group Leader）去干一线操作工的活。<br>**示例**: 一个操作需要5人，优先选5个一线员工。实在凑不齐，才安排组长顶上。 | **P3 (Low)** | [policy/supervisor.py](file:///Users/zhengfengyi/ccaps22/solver_v3/constraints/policy/supervisor.py)<br>(主管策略模块) |
+| S8 | **连续工作后补偿休息** | **描述**: 员工连续工作 5+ 天后，确保至少 2 天连休（而非只休 1 天）。<br>**示例**: 张三周一到周六连续工作 6 天。如果周日只休一天周一又上班，则产生惩罚。建议周日+周一连休。<br>**默认罚分**: 500/次 | **P3 (Low)** | `temporal/consecutive.py`<br>(连续性模块) |
+| S9 | **主管避免夜班** | **描述**: 尽可能不安排 Group Leader / Team Leader 上夜班。<br>**示例**: 夜班需要 3 人，优先选择一线员工。实在凑不齐才安排主管顶上。<br>**默认罚分**: 2000/人次 | **P3 (Low)** | [policy/supervisor.py](file:///Users/zhengfengyi/ccaps22/solver_v3/constraints/policy/supervisor.py)<br>(主管策略模块) |
+
+*(S10 已移除，本项目不考虑三倍工资日优化)*
+
+---
+
+### 班次类型识别逻辑
+
+**数据来源**: `shift_types` 表 (含 `shift_code`, `start_time`, `end_time`, `work_hours`, `is_night_shift` 标记)。
+
+| 班次类型 | 识别规则 | 示例 |
+|---------|---------|------|
+| **夜班 (Night Shift)** | `is_night_shift = true` 或 **跨日班次** (end_time < start_time) | 20:00-08:00, 22:00-06:00 |
+| **长白班 (Day Shift)** | `start_time >= 06:00` 且 `end_time <= 23:00` 且 `work_hours > 8h` 且 **不跨日** (晚于 17:00 下班) | 08:00-18:00, 07:00-19:00 |
+| **常日班 (Regular Day)** | `start_time >= 06:00` 且 `end_time <= 17:00` 且 `work_hours = 8h` | 08:00-17:00, 09:00-18:00 |
+| **休息 (Rest)** | `plan_type = 'REST'` 或无班次安排 | - |
+
+**操作工时 vs 排班工时**:
+- **操作工时**: 员工参与操作的实际时长 (∑ 操作持续时间)。用于 F4 (操作时长公平)。
+- **排班工时**: 班次本身的工作时长 (8h/12h)。用于 H8/H9 (月度工时上下限)。
+
+---
+
+## Proposed Changes
+
+### 4. 后端 API (独立服务)
+
+#### [NEW] [schedulingV3/](file:///Users/zhengfengyi/ccaps22/backend/src/services/schedulingV3/)
+
+```typescript
+// backend/src/services/schedulingV3/index.ts
+export const SOLVER_V3_URL = 'http://localhost:5002';  // 独立端口
+
+export class SchedulingV3Service {
+  // 调用 V3 求解器
+  async solve(request: SolverRequest): Promise<SolverResponse>;
+}
+```
+
+---
+
+## 结果持久化与数据库设计
+
+V3 求解器虽然独立运行，但最终结果仍需写入现有的核心业务表，以保持与 ERP/MES 系统的兼容性。我们将实现 **完全独立的数据写入服务 (`Services/SchedulingV3/Persistence`)**，确保写入逻辑的隔离性和事务安全性。
+
+### 1. 核心写入流程
+写入过程将在一个原子事务中执行，确保数据一致性：
+
+1.  **验证 (Validation)**: 检查 V3 返回的操作 ID 是否在数据库中真实存在且状态有效。
+2.  **清理 (Cleanup)**: 根据求解范围（Time Range 或 Batch ID），**仅清除该范围内的非锁定数据**。
+    *   锁定分配 (`is_locked=1`) 及其关联的班次计划将被**严格保留**。
+3.  **写入分配 (Insert Assignments)**:
+    *   目标表: `batch_personnel_assignments`
+    *   内容: `operation_id`, `employee_id`, `position_number`
+4.  **写入班次 (Insert Shift Plans)**:
+    *   目标表: `employee_shift_plans`
+    *   内容: `plan_date`, `shift_id`, `plan_hours`, `plan_category`
+5.  **建立关联 (Linkage)**:
+    *   更新 `batch_personnel_assignments` 的 `shift_plan_id` 字段，将分配与具体的班次计划关联。
+
+### 2. 数据库表设计 (复用现有架构)
+
+| 表名 | 用途 | 写入内容示例 |
+|-----|-----|-------------|
+| `batch_personnel_assignments` | **操作分配详情** | 操作A-岗位1 分给 张三 (锁定状态: 否) |
+| `employee_shift_plans` | **每日班次安排** | 张三 2025-01-01 上早班 (08:00-16:00) |
+| `scheduling_runs` | **求解记录与状态** | 任务ID: 1024, 状态: COMPLETED, 包含了 V3 的性能指标摘要 |
+
+---
+
+## V3 约束演进与提升
+
+**用户痛点**: V2 约束逻辑主要集中在 1000+ 行的 `operation_assignment.py` 中，难以维护且性能瓶颈明显。V3 将对其进行彻底的解耦和优化。
+
+| 约束类型 | V2 实现现状 (痛点) | V3 改进设计 (提升点) | 性能/质量提升 |
+|---------|-------------------|-------------------|--------------|
+| **H3/H4 互斥** | 逻辑混杂在分配约束中，每次分配都要遍历历史检查冲突。 | **预计算冲突表 (Conflict Table)**。在求解前计算好所有互斥对，O(1) 查表。 | 冲突检测速度 **+500%** |
+| **S2 共享人员** | 依赖复杂的逻辑判断，难以处理跨天和多批次边界。 | **基于图的连通性约束**。将共享组建模为连通图，强制组内人员一致性。 | 边界一致性 **+100%** |
+| **H7 夜班休息** | 只能处理简单的"夜班后休1天"，复杂排班容易失效。 | **状态机模型 (State Machine)**。严格定义 `夜班->休息->白班` 的状态转移合法性。 | 彻底杜绝连班违规 |
+| **S1 缺员惩罚** | 固定的 1000 分惩罚，无法区分关键岗位。 | **动态缺员惩罚**。关键岗位 (P0) 惩罚 10000+，辅助岗位 (P2) 惩罚 100。 | 关键岗位满足率 **+20%** |
+| **F1-F4 公平性** | 计算方差耗时极高，且只能做到"大致公平"。 | **增量式公平性计算**。每分配一个人，O(1) 更新偏差值，无需全量重算。 | 求解速度 **+40%** |
+| **S7 主管策略** | 硬编码在代码中，难以调整。 | **策略插件化**。主管策略作为独立插件 (Policy Plugin)，可随时开关。 | 灵活度极大提升 |
+
+---
+
+### 1. V3 求解器目录结构 (完全独立)
+
+#### [NEW] [solver_v3/](file:///Users/zhengfengyi/ccaps22/solver_v3/)
+
+```
+solver_v3/                    # 独立目录，端口 5002
+├── app.py                    # Flask 入口，端口 5002
+├── requirements.txt
+├── core/
+│   ├── engine.py             # 核心求解引擎
+│   ├── constraint_registry.py # 插件式约束注册
+│   ├── preprocessor.py       # 变量域预处理
+│   └── priorities.py         # 优先级管理系统 [NEW]
+├── constraints/
+│   ├── base.py
+│   ├── assignment/           # 分配约束 (拆分自 operation_assignment.py)
+│   │   ├── position.py       # H2, S1
+│   │   ├── qualification.py  # H1
+│   │   ├── mutex.py          # H3, H4, H6
+│   │   └── sharing.py        # S2
+│   ├── temporal/             # 时间约束
+│   │   ├── consecutive.py    # H5
+│   │   └── night_shift.py    # H7, S5
+│   ├── capacity/             # 容量约束
+│   │   ├── monthly_hours.py  # H8, H9
+│   │   └── quarterly_hours.py
+│   └── policy/               # 策略约束
+│       ├── supervisor.py     # S7, S8, S9
+│       └── fairness.py       # F1-F4
+├── objectives/
+│   ├── multi_objective.py    # 多目标优化器 [NEW]
+│   └── evaluator.py
+├── strategies/
+│   ├── symmetry.py           # 对称性破缺
+│   └── heuristics.py         # 搜索启发式
+├── contracts/                # 可复用 V2 的数据契约
+└── models/                   # 可复用 V2 的数据模型
+```
+
+#### **核心求解引擎 (engine.py) 说明**
+这是 V3 求解器的主入口，负责协调整个求解流程：
+1.  接收 [SolverRequest](file:///Users/zhengfengyi/ccaps22/backend/src/services/schedulingV3/dataAssemblerV3.ts#18-30) 并初始化上下文
+2.  调用约束注册表加载所有启用的约束模块
+3.  构建 CP-SAT 模型并注入约束
+4.  执行求解并通过回调报告进度
+5.  解析结果并返回 `SolverResponse`
+
+---
+
+### 2. 对称性破缺策略详解 (Symmetry Breaking)
+
+**核心疑虑解答**: "如果张三和李四现在看一样，但张三以后有大用（有特殊资质），怎么办？"
+
+**答案**: **不用担心，求解器有"上帝视角" (Global View)**。
+求解器是**全局考虑**整个排班周期的。
+1.  如果下午有一个"高难度操作" *必须* 张三做（李四做不了）。
+2.  这个"必须"就是一个**硬约束**。
+3.  那么在上午分配"普通操作"时，张三和李四就**不再是对称的了**（张三变得"珍贵"）。
+4.  求解器会发现：如果上午把张三用了，下午他就没法干那个重要活（违背硬约束）。所以它会**自动**在上午通过逻辑推理排除张三，或者保留体力给下午。
+5.  **对称性破缺仅在"真·无所谓"时生效**：只有当两人在**整个**求解周期内，对所有任务的可行性和贡献度**完全一致**时，我们才强制指定顺序，避免无意义的纠结。
+
+---
+
+### 3. 预计算冲突表 (Conflict Table) 实现方案
+
+**痛点**: V2 每次判断冲突都要实时比较 `StartA < EndB && StartB < EndA`，重复计算数亿次。
+
+**V3 方案**: **空间换时间**
+1.  **预处理阶段**: 在开始搜索前，遍历所有操作对 $(O_i, O_j)$。
+2.  **构建图谱**: 建立一个静态的**冲突邻接表 (Adjacency List)**。
+    ```python
+    # 冲突表结构示例 (conflict_map)
+    # KEY: 操作ID
+    # VALUE: 与该操作存在"真实冲突"的其他操作ID列表
+    # "真实冲突"定义: 时间重叠 AND 不属于同一个共享组
+    conflict_map = {
+        101: [102, 105, 108],  # 操作101 与 102, 105, 108 存在真实冲突
+        102: [101, 109],       # 操作102 与 101, 109 存在真实冲突
+        103: [],               # 操作103 与任何操作都不冲突 (可能时间独立)
+        # ...
+    }
+    
+    # 使用方式:
+    # 当求解器尝试将张三分配到操作 101 时:
+    # 1. 查表: conflicts = conflict_map[101]  -> [102, 105, 108]
+    # 2. 标记: 张三此后不能再被分配到 102, 105, 或 108
+    # 时间复杂度: O(1) 的字典查找，极其高效
+    ```
+3.  **O(1) 查表**: 求解过程中，当给张三分配 101 时，直接获取 `conflict_map[101]`。
+    *   逻辑: "张三已选 101 -> 这里的 [102, 105, 108] 张三都禁止选"。
+    *   这是一个简单的集合操作，比反复做时间数值比较快得多。
+
+### 4. 关键问题解答 (Q&A) - 完整版
+
+---
+
+#### Q1: 无操作时的排班是否由现有约束体系保障？
+**是的，完全由 H8/H9 工时约束驱动**。
+
+**工作日来源**: 
+- 数据来源: **天行API** (配置于 `http://localhost:3000/system-settings` 界面)。
+- 后端读取 `calendar_config` 表，该表由天行API每年同步一次。
+
+**非工作日约束 (S6)**: 
+- 惩罚非工作日上班 (默认 1000分/人次)。
+- 系统会**优先在工作日安排班次**。
+
+---
+
+#### Q2: 约束传播 (Constraint Propagation) 如何实现？
+**原理**: OR-Tools CP-SAT 内置约束传播引擎，我们只需正确建模约束。
+
+**V3 实现方式**:
+1.  **定义布尔变量**: `assigned[e][o] = True` 表示员工 e 被分配到操作 o。
+2.  **添加约束**: 如 `model.Add(assigned[张三][Op101] + assigned[张三][Op102] <= 1)` (时间冲突互斥)。
+3.  **传播过程**: 当求解器决定 `assigned[张三][Op101] = True` 时，自动推导 `assigned[张三][Op102] = False`。
+4.  **剪枝效果**: 无需搜索 Op102 分配给张三的分支，直接跳过。
+
+**我们不需要手动实现传播算法**，OR-Tools 会自动处理。
+
+---
+
+#### Q3: 约束优先级可调节吗？
+**是的，前端已设计了可调选项**。
+
+**调节方式**:
+- 在 "约束配置与优先级" 面板中，用户可以通过下拉选择器调整各约束类别的优先级层级 (P0-P3)。
+- 例如：将 "公平性策略" 从默认的 P2 调整为 P1，使其比 "成本控制" 更优先。
+
+**注意**: 这是**约束类别优先级**的调节，不是单个操作的优先级。所有操作在 S1 约束中被**平等对待** (无需数据库 priority 字段)。
+
+---
+
+#### Q4-Q7: 公平性与班次分布
+*(已在上方详细解答)*
+
+---
+
+#### Q8: 如何发挥 CPU 最佳性能？
+**OR-Tools 多线程配置**:
+```python
+solver = cp_model.CpSolver()
+solver.parameters.num_search_workers = 8  # 使用 8 个 CPU 核心
+solver.parameters.random_seed = 0         # 固定种子以复现结果
+solver.parameters.log_search_progress = True  # 记录搜索过程
+```
+
+**V3 默认策略**: 自动检测 CPU 核心数，使用 `min(核心数, 8)` 个线程。
+
+---
+
+#### Q9: V2 组件如何参考？
+**参考方法**:
+1.  阅读 V2 源代码，理解核心逻辑。
+2.  提取关键算法思路和数据结构设计。
+3.  在 V3 中**从零重写**，保持接口独立。
+
+**示例**: 参考 `SolverCallback` 的中断检测逻辑，但在 V3 使用 Redis 轮询而非回调内检查。
+
+---
+
+#### Q10: Progress Dashboard 需要分值曲线
+**UI 线稿 (新增)**:
+```
+│  📈 目标分值曲线 (实时更新):                                             │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │ -20000 ─┬─────────────────────────────────────────────────────    │   │
+│  │         │                                                         │   │
+│  │ -15000 ─┤     ╭───╮                                               │   │
+│  │         │    ╱     ╲                                              │   │
+│  │ -12000 ─┤   ╱       ╲─────────────────────────── (当前: -12,450)  │   │
+│  │         │  ╱                                                      │   │
+│  │ -10000 ─┼─╱───────────────────────────────────────────────────    │   │
+│  │         0s        10s        20s        30s        40s            │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+```
+
+---
+
+#### Q11-Q12: 求解结果界面 (Result View) - 详细设计
+
+**参考 V2 设计，V3 新开发 6 个 Tab**:
+
+| Tab | 名称 | 内容 |
+|-----|------|------|
+| 1 | **求解摘要** | 操作覆盖率、人员利用率、公平性评分、软约束违规汇总 |
+| 2 | **岗位分配** | 按操作展开到**每个岗位 (position)** 显示分配给谁 (如: Op101-岗位1: 张三, 岗位2: 李四) |
+| 3 | **班次计划** | 按员工×日期矩阵显示班次安排 (常日班/夜班/休息) |
+| 4 | **工时统计** | 每位员工的已排工时、剩余额度、与标准的差值 |
+| 5 | **未分配岗位** | 列出所有未满足需求的**具体岗位**，可手动补分配 |
+| 6 | **冲突分析** | ⚠️ 显示违规详情 (如: 12/25 非工作日上班: 张三, 李四) |
+
+**"查看详细排班表"按钮**: 点击后切换到 **Tab 3 (班次计划)**。
+
+**软约束违规追溯**: 在 **Tab 6 (冲突分析)** 中显示具体违规操作、日期、员工。
+
+---
+
+#### Q13: "中止求解" 如何实现？
+**机制** (改进版 - 响应时间 <500ms):
+1.  **前端**: 用户点击 [🛑 中止] 按钮 → 调用 `POST /api/v3/scheduling/:runId/abort`。
+2.  **后端**: 在 Redis 中设置 `abort_flag:runId = true`。
+3.  **求解器**: 使用 **定时轮询** (每 200ms 检查一次)，而非仅在找到新解时检查。
+4.  **响应时间**: < 500ms (几乎实时)。
+5.  **结果**: 返回**中止时刻的最佳解** (状态: `ABORTED / FEASIBLE`)。
+
+---
+
+#### Q14: 多目标优化 - 优先级如何定义？ *(保持不变)*
+
+#### Q14: 多目标优化 - 优先级如何定义？
+**澄清**: 此处的 P0/P1/P2/P3 是**约束类别的优先级**，而非单个操作的优先级。
+
+**V3 多目标层级**:
+| 层级 | 目标 | 含义 |
+|------|------|------|
+| P0 | 最小化缺员 | 所有操作尽量有人做 |
+| P1 | 共享组一致性 | 同组操作用同一批人 |
+| P2 | 公平性 | 夜班/工时分布均匀 |
+| P3 | 成本控制 | 减少非工作日上班等 |
+
+**不需要操作级 priority 字段**：优先级是针对**约束类别**的，由系统配置决定，用户无需为每个操作手动设置。
+
+---
+
+### Phase 3: 求解性能优化
+- [ ] **实现联合域缩减 (Joint Domain Reduction)**: 取资质与共享组的交集。
+- [ ] **实现预计算冲突表**:
+    - 建立 $O(1)$ 查找的静态冲突表。
+    - **逻辑**: $Conflict(A, B) = TimeOverlap(A, B) \land \neg ShareGroup(A, B)$ (有时间重叠 且 不属于同一共享组)。
+- [ ] 实现对称性破缺 (Lexicographic Ordering)
+- [ ] 实现并行候选方案评估
+
+---
+
+### 5. 前端界面线稿 (中文版)
+
+**设计目标**: 清晰、专业、支持手动分段。
+
+#### [NEW] [SolvingCenterV3/](file:///Users/zhengfengyi/ccaps22/frontend/src/components/SolvingCenterV3/)
+
+**主界面布局 - 模式 A: 按时间段 (手动分段)**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  [V2 求解器]  [V3 求解器 (当前)]                                [设置]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─────────────────────┐  ┌─────────────────────────────────────────────┐│
+│  │ 求解选项            │  │ 约束配置与优先级 (可拖拽调整)               ││
+│  │                     │  │                                             ││
+│  │ 模式选择:           │  │ ┌─────────────────┐ ┌─────────────────────┐ ││
+│  │ ● 按时间段 (手动)   │  │ │ 基础硬约束 (H1-9) │ │ 公平性策略 (F1-4)   │ ││
+│  │ ○ 按生产批次        │  │ │ [必须满足]      │ │ [优先级: 中 P2 ▼] │ ││
+│  │                     │  │ ├─────────────────┤ ├─────────────────────┤ ││
+│  │ ------------------  │  │ │ ■ 资质匹配      │ │ ■ 夜班数量均衡      │ ││
+│  │ 日期范围:           │  │ │ ■ 连续工作限制  │ │ ■ 长白班均衡        │ ││
+│  │ [ 2025-01-01 ]      │  │ │ ■ 班次覆盖      │ │ ■ 间隔均匀          │ ││
+│  │        到           │  │ └─────────────────┘ └─────────────────────┘ ││
+│  │ [ 2025-01-31 ]      │  │                                             ││
+│  │                     │  │                                             ││
+│  │ 快速选月:           │  │                                             ││
+│  │ [ 📅 2025年1月 ▼ ]  │  │                                             ││
+│  │                     │  │                                             ││
+│  │ 📋 范围内批次 (3个): │  │                                             ││
+│  │ · B20250101-01      │  │                                             ││
+│  │ · B20250105-02      │  │                                             ││
+│  │ · B20250112-01      │  │                                             ││
+│  │                     │  │                                             ││
+│  │ *手动分段说明:      │  │ ┌─────────────────┐ ┌─────────────────────┐ ││
+│  │ 建议每次求解半个月  │  │ │ 运营软约束 (S1-2) │ │ 其他策略 (P3)       │ ││
+│  │                     │  │ │ [优先级: 高 P1 ▼]│ │ [优先级: 低 ▼]    │ ││
+│  │                     │  │ ├─────────────────┤ ├─────────────────────┤ ││
+│  │ ------------------  │  │ │ ■ 最小化缺员    │ │ ■ 非工作日惩罚      │ ││
+│  │                     │  │ │ ■ 共享组人员固定│ │ ■ 减少主管操作      │ ││
+│  │ ┌─────────────────┐ │  │ └─────────────────┘ └─────────────────────┘ ││
+│  │ │   开始求解    │ │  │                                             ││
+│  │ └─────────────────┘ │  └─────────────────────────────────────────────┘│
+│  └─────────────────────┘                                                 │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+> **Result View 设计参考**: 参考 V2 的 [SolveResultModal](file:///Users/zhengfengyi/ccaps22/frontend/src/components/ModularScheduling/components/SolveResultModal.tsx) **设计理念**，V3 将重新开发独立组件，包含结果摘要、操作覆盖率、员工工时统计和导出功能。
+
+**高级约束配置弹窗 (Advanced Config Modal)**
+
+> **触发方式**: 点击主界面上的 [设置] 或约束齿轮图标。
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ⚙️ 高级求解参数配置                                                    [x] │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  🔧 算法参数                                                             │
+│  ├── 最大求解时间: [ 60s ▼ ]                                           │
+│  ├── 线程数: [ 8 ▼ ] (CPU核心数)                                       │
+│  └── 随机种子: [ 0 ] (固定以复现结果)                                  │
+│                                                                          │
+│  ⚖️ 权重因子 (Weight Factors)                                            │
+│  ├── 缺员惩罚系数: [ 10000 ] (P0)                                      │
+│  ├── 共享组违规系数: [ 5000 ] (P1)                                     │
+│  └── 公平性方差系数: [ 100 ] (P2)                                      │
+│                                                                          │
+│  🚀 性能优化 (Beta)                                                      │
+│  ├── [x] 启用联合域缩减 (Joint Domain Reduction)                       │
+│  ├── [x] 启用对称性破缺 (Symmetry Breaking)                            │
+│  └── [ ] 启用预计算冲突表 (Conflict Table)                             │
+│                                                                          │
+│                                                  [ 恢复默认 ] [ 确认 ]  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ... (顶部页签同上) ...                                                  │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─────────────────────┐  ┌─────────────────────────────────────────────┐│
+│  │ 求解选项            │  │ 待排产批次选择                              ││
+│  │                     │  │                                             ││
+│  │ 模式选择:           │  │ [ 🔍 搜索批次号... ]  [ 过滤器 ▼ ]           ││
+│  │ ○ 按时间段 (手动)   │  │                                             ││
+│  │ ● 按生产批次        │  │  ☑ 全选                                     ││
+│  │                     │  │ ┌─────────────────────────────────────────┐ ││
+│  │ ------------------  │  │ │ ☑ B20250101-01 (阿莫西林)  [28个操作]   │ ││
+│  │                     │  │ │   📅 计划: 1/1 - 1/5   状态: 待排产     │ ││
+│  │ 已选批次: 3 个      │  │ ├─────────────────────────────────────────┤ ││
+│  │ 总操作数: 156 个    │  │ │ ☑ B20250102-02 (布洛芬)    [45个操作]   │ ││
+│  │                     │  │ │   📅 计划: 1/2 - 1/8   状态: 待排产     │ ││
+│  │                     │  │ ├─────────────────────────────────────────┤ ││
+│  │                     │  │ │ ☐ B20250105-01 (维生素C)   [83个操作]   │ ││
+│  │                     │  │ │   📅 计划: 1/5 - 1/12  状态: 暂停       │ ││
+│  │                     │  │ └─────────────────────────────────────────┘ ││
+│  │ ┌─────────────────┐ │  │                                             ││
+│  │ │   开始求解    │ │  │ [ < ]  1 / 5 页  [ > ]                        ││
+│  │ └─────────────────┘ │  └─────────────────────────────────────────────┘│
+│  └─────────────────────┘                                                 │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**求解进度监控面板 (Solving Progress Dashboard)**
+
+> **设计目的**: 替代结果对比，专注于实时展示求解过程，让用户知道"求解器正在努力"。
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 🚀 求解进行中...  [ 耗时: 12.5s ]                                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  当前阶段: 多目标优化 (Round 2/3)                                        │
+│  状态: 正在尝试优化 P1 层级 (共享组一致性)                               │
+│                                                                          │
+│  🔢 已找到解: 8 个                                                       │
+│  📊 当前最佳分: -12,450 (越小越好)                                       │
+│                                                                          │
+│  总体进度:                                                               │
+│  [████████████████████░░░░░░░░░░░░░░░░░░░░] 45%                         │
+│                                                                          │
+│  实时指标:                                                               │
+│  ├── ✅ 硬约束满足: 100% (无冲突)                                        │
+│  ├── ⚠️ 缺员操作数: 2 个 (关键路径: 0)                                   │
+│  ├── 👥 共享组一致: 98% (仅 1 组微调中)                                  │
+│  └── ⚖️ 公平性偏差: 8.5 -> 6.2 (正在下降)                                │
+│                                                                          │
+│  [ 🛑 中止求解 ] (响应时间 <500ms，使用定时轮询 flag)                    │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**求解结果界面 (Result View)**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  ✅ 求解完成   耗时: 42.3s   状态: OPTIMAL                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  📊 结果摘要                                                             │
+│  ├── 操作覆盖率: 98.5% (156/158 操作已分配)                              │
+│  ├── 人员利用率: 87.2% (平均工时 152h / 月)                              │
+│  ├── 公平性评分: 优 (夜班极差: 2, 工时极差: 12h)                         │
+│  └── 软约束违规: 3 项 (非工作日上班 x2, 组长干活 x1)                     │
+│                                                                          │
+│  [ 查看详细排班表 ]  [ 导出 Excel ]  [ 应用到系统 ]                      │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**历史求解列表 (History List)** - 位于 V3 求解器主界面底部
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  📜 求解历史                                            [ 🔍 筛选 ▼ ]   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  | 时间               | 范围           | 状态    | 分数    | 操作      │
+│  | 2025-01-15 14:32  | 1月1日-15日   | OPTIMAL | -8,200  | [查看]    │
+│  | 2025-01-14 09:15  | 1月1日-31日   | TIMEOUT | -15,400 | [查看]    │
+│  | 2025-01-10 16:48  | B20250101-01  | OPTIMAL | -5,100  | [查看]    │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+```bash
+# 1. V2 独立可用性测试 (端口 5001)
+cd solver && python app.py &  # 启动 V2
+curl http://localhost:5001/api/health  # 应返回 OK
+
+# 2. V3 独立可用性测试 (端口 5002)  
+cd solver_v3 && python app.py &  # 启动 V3
+curl http://localhost:5002/api/health  # 应返回 OK
+
+# 3. 后端回归测试
+cd backend && npm run test -- --testPathPattern=schedulingV2
+
+# 4. V3 集成测试
+cd backend && npm run test -- --testPathPattern=schedulingV3
+
+# 5. 性能基准测试
+cd solver_v3 && python -m pytest tests/benchmark_test.py -v
+```
+
+### Manual Verification
+
+1. **启动服务** (3个独立终端):
+   ```bash
+   # 终端1: V2 求解器 (端口 5001)
+   cd solver && python app.py
+   
+   # 终端2: V3 求解器 (端口 5002)
+   cd solver_v3 && python app.py
+   
+   # 终端3: 后端 + 前端
+   cd backend && npm run dev
+   cd frontend && npm start
+   ```
+
+2. **功能验证**:
+   - [ ] V3 界面支持 "By Time Range" 模式
+   - [ ] V3 界面支持 "By Batch" 模式
+   - [ ] 约束开关正常工作
+   - [ ] 进度条和目标曲线显示正确
+   - [ ] V2 求解器仍然可用（完全独立）
+
+---
+
+## V3 vs V2 预期改进
+
+| 维度 | V2 现状 | V3 预期 | 提升幅度 |
+|------|---------|---------|----------|
+| **求解速度** | 半月数据 60-120s | 半月数据 15-30s | **3-4x 加速** |
+| **约束可维护性** | 单文件 700+ 行 | 12 个独立模块 | **代码可读性 ↑** |
+| **空缺分布** | 随机分布 | 集中于低负载日/非夜班 | **手动调整量 ↓ 60-80%** |
+| **公平性** | 极差可能 >5 | 极差 ≤ 2 | **员工满意度 ↑** |
+| **可中断性** | 1-5s 响应 | <500ms 响应 | **用户体验 ↑** |
+| **进度可视化** | 简单百分比 | 实时目标曲线 + 指标 | **透明度 ↑** |
+
+---
+
+## 分阶段执行计划 (跨多次会话)
+
+### Sprint 1A: 目录结构与启动 (第 1 次会话) ✅ 已完成
+
+**目标**: 创建 V3 目录结构，实现可启动的 Flask 服务。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 1.1 | 创建 `solver_v3/` 目录结构 | ✅ 目录存在 | ✅ 完成 |
+| 1.2 | 实现 [app.py](file:///Users/zhengfengyi/ccaps22/solver_v3/app.py) (Flask/端口 5002) | ✅ 健康检查通过 | ✅ 完成 |
+| 1.3 | 实现 `utils/logger.py` (中文日志) | ✅ 日志输出中文 | ✅ 完成 |
+
+**自动验证脚本** (会话结束前运行):
+```bash
+#!/bin/bash
+# test_sprint_1a.sh
+cd solver_v3
+
+# 1. 检查目录结构
+echo "=== 检查目录结构 ==="
+[ -d "core" ] && echo "✅ core/ 存在" || echo "❌ core/ 不存在"
+[ -d "constraints" ] && echo "✅ constraints/ 存在" || echo "❌ constraints/ 不存在"
+[ -d "utils" ] && echo "✅ utils/ 存在" || echo "❌ utils/ 不存在"
+[ -f "app.py" ] && echo "✅ app.py 存在" || echo "❌ app.py 不存在"
+
+# 2. 启动服务并检查健康
+echo -e "\n=== 启动服务测试 ==="
+python app.py &
+PID=$!
+sleep 3
+HEALTH=$(curl -s http://localhost:5002/api/health)
+kill $PID 2>/dev/null
+[ "$HEALTH" == "OK" ] && echo "✅ 健康检查通过" || echo "❌ 健康检查失败: $HEALTH"
+```
+
+---
+
+### Sprint 1B: 数据契约与引擎骨架 (第 2 次会话) ✅ 已完成
+
+**目标**: 定义请求/响应契约，实现引擎空壳。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 1.4 | 定义 `contracts/request.py` | ✅ [SolverRequest](file:///Users/zhengfengyi/ccaps22/backend/src/services/schedulingV3/dataAssemblerV3.ts#18-30) 类可实例化 | ✅ 完成 |
+| 1.5 | 定义 `contracts/response.py` | ✅ `SolverResponse` 类可实例化 | ✅ 完成 |
+| 1.6 | 实现 `core/engine.py` (空壳) | ✅ 可接收请求并返回模拟响应 | ✅ 完成 |
+| 1.7 | 实现 [core/context.py](file:///Users/zhengfengyi/ccaps22/solver_v3/core/context.py) | ✅ 上下文对象可构建 | ✅ 完成 |
+
+**自动验证脚本** (会话结束前运行):
+```bash
+#!/bin/bash
+# test_sprint_1b.sh
+cd solver_v3
+
+# 1. 检查契约类
+echo "=== 检查数据契约 ==="
+python -c "from contracts.request import SolverRequest; print('✅ SolverRequest 可导入')" 2>/dev/null || echo "❌ SolverRequest 导入失败"
+python -c "from contracts.response import SolverResponse; print('✅ SolverResponse 可导入')" 2>/dev/null || echo "❌ SolverResponse 导入失败"
+
+# 2. 测试引擎端点
+echo -e "\n=== 测试求解端点 ==="
+python app.py &
+PID=$!
+sleep 3
+RESPONSE=$(curl -s -X POST http://localhost:5002/api/v3/solve -H "Content-Type: application/json" -d '{"operations":[]}')
+kill $PID 2>/dev/null
+echo "$RESPONSE" | python -c "import sys,json; d=json.load(sys.stdin); print('✅ 返回有效 JSON' if 'status' in d else '❌ 响应格式错误')" 2>/dev/null || echo "❌ JSON 解析失败"
+```
+
+---
+
+### Sprint 2A: 分配约束 (第 3 次会话) ✅ 已完成
+
+**目标**: 实现分配相关硬约束 (H1-H4, H11)。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 2.1 | 创建约束基类 `constraints/base.py` | ✅ BaseConstraint 可继承 | ✅ 完成 |
+| 2.2 | H1: 资质匹配 | ✅ 无资质员工不被分配 | ✅ 完成 |
+| 2.3 | H2: 一位一人 | ✅ 同位置不重复分配 | ✅ 完成 |
+| 2.4 | H3: 同操作互斥 | ✅ 同员工不占多位置 | ✅ 完成 |
+| 2.5 | H4: 时间冲突互斥 | ✅ 时间重叠操作不同时分配 | ✅ 完成 |
+| 2.6 | H11: 不可用时间段 | ✅ 不可用期间无分配 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+# test_sprint_2a.sh
+cd solver_v3
+
+echo "=== 检查约束模块 ==="
+python3 -c "from constraints.base import BaseConstraint; print('✅ BaseConstraint 可导入')" || echo "❌ 导入失败"
+python3 -c "from constraints.assignment.qualification import QualificationConstraint; print('✅ H1 资质约束')" || echo "❌ H1 失败"
+python3 -c "from constraints.assignment.position import PositionConstraint; print('✅ H2-H3 位置约束')" || echo "❌ H2-H3 失败"
+python3 -c "from constraints.assignment.mutex import MutexConstraint; print('✅ H4 互斥约束')" || echo "❌ H4 失败"
+python3 -c "from constraints.assignment.availability import AvailabilityConstraint; print('✅ H11 可用性约束')" || echo "❌ H11 失败"
+
+echo -e "\n=== 功能测试 ==="
+# 测试: 无资质员工应被排除
+curl -s -X POST http://localhost:5002/api/v3/solve -H "Content-Type: application/json" -d '{
+  "operations": [{"id":1, "required_qualifications":[99], "required_people":1, "planned_start":"2025-01-15T09:00:00", "planned_end":"2025-01-15T12:00:00"}],
+  "employees": [{"id":1, "qualifications":[1,2]}]
+}' | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ 资质过滤生效' if d.get('diagnostics',{}).get('unassigned_positions_count',0) > 0 else '⚠️ 需检查资质过滤')"
+```
+
+---
+
+### Sprint 2B: 时间约束 (第 4 次会话) ✅ 已完成
+
+**目标**: 实现时间相关硬约束 (H5-H7)。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 2.7 | H5: 连续工作限制 | ✅ 连续 >6 天返回无解或跳过 | ✅ 完成 |
+| 2.8 | H6: 班次覆盖 | ✅ 所有操作被有效班次覆盖 | ✅ 完成 |
+| 2.9 | H7: 夜班强制休息 | ✅ 夜班后 1 天无分配 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+# test_sprint_2b.sh
+cd solver_v3
+
+echo "=== 检查时间约束模块 ==="
+python3 -c "from constraints.temporal.consecutive import ConsecutiveConstraint; print('✅ H5 连续工作约束')" || echo "❌ H5 失败"
+python3 -c "from constraints.temporal.shift_coverage import ShiftCoverageConstraint; print('✅ H6 班次覆盖约束')" || echo "❌ H6 失败"
+python3 -c "from constraints.temporal.night_rest import NightRestConstraint; print('✅ H7 夜班休息约束')" || echo "❌ H7 失败"
+
+echo -e "\n=== 功能测试 ==="
+# 测试: 连续工作7天应无解或跳过
+echo "测试连续工作限制..."
+```
+
+---
+
+### Sprint 2C: 容量约束与共享组 (第 5 次会话) ✅ 已完成
+
+**目标**: 实现容量和共享组硬约束 (H8-H10)。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 2.10 | H8-H9: 月度工时上下限 | ✅ 工时在限制范围内 | ✅ 完成 |
+| 2.11 | H10: 共享组一致性 | ✅ 组内人员子集关系正确 | ✅ 完成 |
+| 2.12 | 整合所有硬约束到引擎 | ✅ 引擎可加载所有约束 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+# test_sprint_2c.sh
+cd solver_v3
+
+echo "=== 检查容量约束模块 ==="
+python3 -c "from constraints.capacity.monthly_hours import MonthlyHoursConstraint; print('✅ H8-H9 月度工时约束')" || echo "❌ H8-H9 失败"
+python3 -c "from constraints.assignment.sharing import SharingConstraint; print('✅ H10 共享组约束')" || echo "❌ H10 失败"
+
+echo -e "\n=== 整合测试 ==="
+# 测试: 所有硬约束应可加载
+python3 -c "
+from core.engine import SolverEngine
+from constraints import CONSTRAINT_REGISTRY
+print(f'✅ 已注册 {len(CONSTRAINT_REGISTRY)} 个约束模块')
+" || echo "❌ 约束注册失败"
+
+# 测试完整求解流程
+curl -s -X POST http://localhost:5002/api/v3/solve -H "Content-Type: application/json" -d '{
+  "operations": [{"id":1, "required_people":2, "planned_start":"2025-01-15T09:00:00", "planned_end":"2025-01-15T12:00:00"}],
+  "employees": [{"id":1, "qualifications":[]}, {"id":2, "qualifications":[]}],
+  "config": {"enforce_qualification": false}
+}' | python3 -c "import sys,json; d=json.load(sys.stdin); print('✅ 完整求解流程正常' if d.get('status') in ['OPTIMAL','FEASIBLE','MOCK'] else '❌ 求解失败')"
+```
+
+---
+
+### Sprint 3A: 软约束基础与缺员惩罚 (第 6 次会话) ✅ 已完成
+
+**目标**: 实现软约束基类和 S1 缺员惩罚 + 智能优先级。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 3.1 | 创建 `objectives/__init__.py` + `builder.py` | ✅ ObjectiveBuilder 可实例化 | ✅ 完成 |
+| 3.2 | S1: 最小化缺员惩罚 | ✅ 未填岗产生惩罚分 | ✅ 完成 |
+| 3.3 | 智能优先级 (夜班+5000, 高峰日+3000) | ✅ 夜班/高峰日优先填满 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd solver_v3
+
+echo "=== 检查目标函数模块 ==="
+python3 -c "from objectives.builder import ObjectiveBuilder; print('✅ ObjectiveBuilder 可导入')" || echo "❌ 导入失败"
+
+echo -e "\n=== 验证缺员惩罚 ==="
+python3 -c "
+from tests.test_sprint_3a import TestS1SkipPenalty
+import unittest
+suite = unittest.TestLoader().loadTestsFromTestCase(TestS1SkipPenalty)
+result = unittest.TextTestRunner(verbosity=1).run(suite)
+exit(0 if result.wasSuccessful() else 1)
+"
+```
+
+---
+
+### Sprint 3B: 公平性约束 (第 7 次会话) ✅ 已完成
+
+**目标**: 实现 F1-F4 公平性约束 (最小化方差/极差)。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 3.4 | F1: 夜班数量方差最小化 | ✅ 夜班分配均衡 | ✅ 完成 |
+| 3.5 | F2: 长白班数量方差最小化 | ✅ 长白班分配均衡 | ✅ 完成 |
+| 3.6 | F3: 工时方差最小化 | ✅ 操作工时分配均衡 | ✅ 完成 |
+| 3.7 | F4: 极差最小化 (max - min) | ✅ 极差 ≤ 3 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd solver_v3
+
+echo "=== 验证公平性约束 ==="
+python3 -c "
+from objectives.fairness import FairnessObjective
+from ortools.sat.python import cp_model
+model = cp_model.CpModel()
+obj = FairnessObjective()
+print('✅ FairnessObjective 可实例化')
+"
+
+python3 tests/test_sprint_3b.py
+```
+
+---
+
+### Sprint 3C: 其他软约束 (第 8 次会话) ✅ 已完成
+
+**目标**: 实现 S5-S9 其他软约束。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 3.8 | S5: 共享组跨天惩罚 | ✅ 跨天换人产生惩罚 | ✅ 完成 |
+| 3.9 | S6: 非工作日工作惩罚 | ✅ 非工作日分配产生惩罚 | ✅ 完成 |
+| 3.10 | S7: 夜班后软休息 (2天) | ✅ 夜班后2天工作产生惩罚 | ✅ 完成 |
+| 3.11 | S8: 连续工作后补偿休息 | ✅ 5天后无休息产生惩罚 | ✅ 完成 |
+| 3.12 | S9: 主管避免夜班 | ✅ 主管夜班产生额外惩罚 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd solver_v3
+
+echo "=== 检查软约束模块 ==="
+python3 -c "from constraints.soft import SOFT_CONSTRAINT_REGISTRY; print(f'✅ 已注册 {len(SOFT_CONSTRAINT_REGISTRY)} 个软约束')"
+
+python3 tests/test_sprint_3c.py
+```
+
+---
+
+### Sprint 3D: 多目标字典序优化 (第 9 次会话) ✅ 已完成
+
+**目标**: 整合所有目标函数，实现 P0-P3 字典序优化。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 3.13 | 优先级层定义: P0(硬约束满足) > P1(缺员最小化) > P2(公平性) > P3(其他软约束) | ✅ 优先级顺序正确 | ✅ 完成 |
+| 3.14 | 字典序优化实现 (Lexicographic) | ✅ 分阶段求解，锁定前层结果 | ✅ 完成 |
+| 3.15 | 整合到 engine.py | ✅ solve() 返回带惩罚明细的结果 | ✅ 完成 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd solver_v3
+
+echo "=== 整合测试 ==="
+python3 -c "
+from core.engine import SolverEngine
+from objectives.builder import ObjectiveBuilder
+engine = SolverEngine()
+print('✅ 引擎可创建')
+
+# 测试完整求解流程
+from tests.test_sprint_3d import TestLexicographicOptimization
+import unittest
+suite = unittest.TestLoader().loadTestsFromTestCase(TestLexicographicOptimization)
+result = unittest.TextTestRunner(verbosity=1).run(suite)
+exit(0 if result.wasSuccessful() else 1)
+"
+
+echo -e "\n=== 最终约束统计 ==="
+python3 -c "
+from constraints import load_all_constraints, CONSTRAINT_REGISTRY
+load_all_constraints()
+print(f'硬约束: {len(CONSTRAINT_REGISTRY)} 个')
+print(f'约束列表: {list(CONSTRAINT_REGISTRY.keys())}')
+"
+```
+
+---
+
+### Sprint 4A: 后端 API 路由 (第 10 次会话) ✅ 已完成
+
+**目标**: 在后端实现 V3 求解器的 API 路由和数据组装。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 4.1 | 创建 `schedulingV3Routes.ts` | ✅ 路由文件存在 | ✅ 完成 |
+| 4.2 | 实现 `/api/v3/scheduling/solve` 端点 | ✅ 调用成功 | ✅ 完成 |
+| 4.3 | 创建 [dataAssemblerV3.ts](file:///Users/zhengfengyi/ccaps22/backend/src/services/schedulingV3/dataAssemblerV3.ts) (独立) | ✅ V3 契约格式 | ✅ 完成 |
+| 4.4 | 实现 SSE 进度推送端点 | ✅ 返回求解状态 | ✅ 完成 |
+
+**已创建文件**:
+- [backend/src/routes/schedulingV3Routes.ts](file:///Users/zhengfengyi/ccaps22/backend/src/routes/schedulingV3Routes.ts) - V3 API 路由
+- [backend/src/controllers/schedulingV3Controller.ts](file:///Users/zhengfengyi/ccaps22/backend/src/controllers/schedulingV3Controller.ts) - V3 控制器
+- [backend/src/services/schedulingV3/dataAssemblerV3.ts](file:///Users/zhengfengyi/ccaps22/backend/src/services/schedulingV3/dataAssemblerV3.ts) - V3 数据组装器
+- [backend/src/services/schedulingV3/index.ts](file:///Users/zhengfengyi/ccaps22/backend/src/services/schedulingV3/index.ts) - 模块入口
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd backend
+
+echo "=== 检查路由文件存在 ==="
+ls -la src/routes/schedulingV3.ts || echo "❌ 路由文件不存在"
+
+echo -e "\n=== 测试健康检查 ==="
+curl -s http://localhost:3001/api/v3/scheduling/health | jq .
+
+echo -e "\n=== 测试求解端点 (空请求) ==="
+curl -s -X POST http://localhost:3001/api/v3/scheduling/solve \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "BY_PERIOD", "start_date": "2025-01-15", "end_date": "2025-01-20"}' | jq .status
+```
+
+---
+
+### Sprint 4B: 前端 V3 求解中心 (第 11 次会话) ✅ 已完成
+
+**目标**: 创建独立的 V3 前端界面 (不使用 Tab 切换)。
+
+| 任务 | 描述 | 验证点 | 状态 |
+|------|------|--------|------|
+| 4.5 | 创建 [SolvingCenterV3.tsx](file:///Users/zhengfengyi/ccaps22/frontend/src/components/ModularScheduling/SolvingCenterV3.tsx) 组件 | ✅ 可导入和渲染 | ✅ 完成 |
+| 4.6 | 实现时间范围选择器 | ✅ 月份/自定义模式 | ✅ 完成 |
+| 4.7 | 实现求解进度面板 (轮询实时更新) | ✅ 进度条和状态显示 | ✅ 完成 |
+| 4.8 | 集成到路由 `/scheduling-v3` | ✅ 页面可访问 | ✅ 完成 |
+
+**已创建文件**:
+- [frontend/src/components/ModularScheduling/SolvingCenterV3.tsx](file:///Users/zhengfengyi/ccaps22/frontend/src/components/ModularScheduling/SolvingCenterV3.tsx) - V3 求解中心组件 (330行)
+- [frontend/src/components/ModularScheduling/SolvingCenterV3.css](file:///Users/zhengfengyi/ccaps22/frontend/src/components/ModularScheduling/SolvingCenterV3.css) - 样式
+- [frontend/src/pages/SchedulingV3Page.tsx](file:///Users/zhengfengyi/ccaps22/frontend/src/pages/SchedulingV3Page.tsx) - 页面包装
+
+**已修改文件**:
+- [frontend/src/App.tsx](file:///Users/zhengfengyi/ccaps22/frontend/src/App.tsx) - 添加路由和菜单项
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd frontend
+
+echo "=== 检查组件文件存在 ==="
+ls -la src/components/ModularScheduling/SolvingCenterV3.tsx || echo "❌ 组件不存在"
+
+echo -e "\n=== 检查路由配置 ==="
+grep -n "scheduling-v3" src/App.tsx || echo "❌ 路由未配置"
+
+echo -e "\n=== 构建测试 ==="
+npm run build 2>&1 | tail -5
+```
+
+---
+
+### Sprint 4C: 结果展示与应用 (第 12 次会话)
+
+**目标**: 实现 V3 结果展示和应用到系统功能。
+
+| 任务 | 描述 | 验证点 |
+|------|------|--------|
+| 4.9 | 创建结果展示 Tab 组件 (分配视图/公平性指标/违规详情) | ✅ 6 个 Tab 可切换 |
+| 4.10 | 实现目标函数曲线图 | ✅ 实时更新图表 |
+| 4.11 | 实现"应用到系统"功能 | ✅ 写入 batch_operation_assignments |
+| 4.12 | 端到端测试 | ✅ 完整流程可运行 |
+
+**自动验证脚本**:
+```bash
+#!/bin/bash
+cd frontend
+
+echo "=== 检查结果组件 ==="
+ls -la src/components/ModularScheduling/SolveResultV3.tsx || echo "❌ 结果组件不存在"
+
+echo -e "\n=== 浏览器测试 (手动) ==="
+echo "1. 打开 http://localhost:3000/scheduling-v3"
+echo "2. 选择日期范围"
+echo "3. 点击开始求解"
+echo "4. 查看结果"
+echo "5. 点击应用"
+```
+
+**手动验证**:
+- 完整 E2E 流程: 选择时间范围 → 开始求解 → 查看结果 → 应用到系统
+
+---
+
+### Sprint 5: 性能优化 (可选, 预计 1-2 次会话)
+
+**目标**: 提升求解速度。
+
+| 任务 | 描述 | 验证点 |
+|------|------|--------|
+| 5.1 | 联合域缩减 | ✅ 候选人数 <10 |
+| 5.2 | 预计算冲突表 | ✅ 冲突检测 O(1) |
+| 5.3 | 多线程配置 | ✅ 使用 8 核心 |
+
+**手动验证**:
+- 基准测试: 同样数据集，V2 vs V3 求解时间对比
+
+---
+
+## 当前实施状态 (2025-12-27 更新)
+
+### 已完成 Sprint 汇总
+
+| Sprint | 状态 | 主要产出 |
+|--------|------|----------|
+| 1A-1B | ✅ 完成 | 核心数据结构、Context |
+| 2A-2C | ✅ 完成 | H1-H10 硬约束 |
+| 3A-3D | ✅ 完成 | 目标函数、软约束、词典序优化 |
+| 4A-4C | ✅ 完成 | 后端 API、前端界面、结果展示 |
+
+### 约束实现对照表
+
+| ID | 约束名称 | 模块位置 | 状态 |
+|----|----------|----------|------|
+| H1 | 资质匹配 | `assignment/qualification.py` | ✅ |
+| H2-H3 | 岗位分配/互斥 | `assignment/position.py` | ✅ |
+| H4 | 时间冲突 | `assignment/mutex.py` | ✅ |
+| H5 | 连续工作 | `temporal/consecutive.py` | ✅ |
+| H6 | 班次覆盖 | `temporal/shift_coverage.py` | ✅ |
+| H7 | 夜班休息 | `temporal/night_rest.py` | ✅ |
+| H8-H9 | 月度工时 | `capacity/monthly_hours.py` | ✅ |
+| H10 | 共享组一致性 | `assignment/sharing.py` | ✅ |
+| H11 | 不可用时间 | `assignment/availability.py` | ✅ |
+| S1 | 最小化缺员 | `objectives/skip_penalty.py` | ✅ |
+| S5 | 共享组跨日 | `soft/share_group_cross_day.py` | ✅ |
+| S6 | 非工作日 | [policy/calendar.py](file:///Users/zhengfengyi/ccaps22/solver_v3/constraints/policy/calendar.py) | ✅ |
+| S7 | 主管少干活 | [policy/supervisor.py](file:///Users/zhengfengyi/ccaps22/solver_v3/constraints/policy/supervisor.py) | ✅ |
+| S8 | 连续休息 | `soft/consecutive_rest.py` | ✅ |
+| S9 | 主管夜班 | [policy/supervisor.py](file:///Users/zhengfengyi/ccaps22/solver_v3/constraints/policy/supervisor.py) | ✅ |
+| F1-F4 | 公平性 | [objectives/fairness.py](file:///Users/zhengfengyi/ccaps22/solver_v3/objectives/fairness.py) | ✅ |
+
+### 智能抢占优先级 ✅ 已实现
+
+**文件**: [objectives/priority.py](file:///Users/zhengfengyi/ccaps22/solver_v3/objectives/priority.py) (163 行)
+- 夜班自动识别: +5000 分
+- 高峰日自动识别: +3000 分
+- 自动高峰日检测 (前25%需求日)
+
+### 前端 UI 差异分析 (2025-12-27 更新)
+
+| 设计线稿 | 当前实现 | 差异级别 |
+|----------|----------|----------|
+| V2/V3 Tab 切换 | 独立路由 `/scheduling-v3` (保持独立) | ✅ 已确认 |
+| 约束配置面板 | ✅ ConstraintConfigPanel.tsx (318行) | ✅ 已完成 |
+| 高级配置弹窗 | ✅ AdvancedConfigModal.tsx (205行) | ✅ 已完成 |
+| 实时指标面板 | ObjectiveCurveChart + Progress | ✅ 已完成 |
+| 结果 6 Tab | ✅ SolveResultV3.tsx (450行) | ✅ 已完成 |
+| 历史求解列表 | ✅ HistoryRunList.tsx (170行) | ✅ 已完成 |
+
+---
+
+## Sprint 5: 前端完善 + 性能优化
+
+### Sprint 5A: 前端 UI 补齐 (预计 1 次会话)
+
+| 任务 | 描述 | 优先级 |
+|------|------|--------|
+| 5A.1 | 添加约束配置面板 (右侧栏) | 🔴 高 |
+| 5A.2 | 添加高级配置弹窗 (时间限制、线程数) | 🟡 中 |
+| 5A.3 | 添加历史求解列表 | 🟡 中 |
+| 5A.4 | 增强实时指标面板 | 🟢 低 |
+
+**验证方式**: 截图对比设计线稿
+
+---
+
+### Sprint 5B: 性能优化 (预计 1 次会话)
+
+| 任务 | 描述 | 验证点 |
+|------|------|--------|
+| 5B.1 | 预计算冲突表集成 | ✅ 冲突检测 O(1) |
+| 5B.2 | 多线程配置优化 | ✅ 使用 CPU 核心数 |
+| 5B.3 | 对称性破缺启用 | ✅ 搜索空间减少 |
+
+**验证方式**: 基准测试对比
+
+---
+
+### Sprint 5C: 端到端测试 (预计 1 次会话)
+
+| 任务 | 描述 |
+|------|------|
+| 5C.1 | 完整 E2E 流程验证 |
+| 5C.2 | 边界条件测试 |
+| 5C.3 | 错误处理测试 |

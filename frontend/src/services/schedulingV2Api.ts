@@ -22,14 +22,9 @@ interface ApiResponse<T> {
 export async function createSolveTask(
   request: CreateSolveRequest
 ): Promise<CreateSolveResponse> {
-  // 前端验证
-  if (!request.batchIds || request.batchIds.length === 0) {
-    return {
-      success: false,
-      error: '请选择至少一个批次',
-    };
-  }
+  console.log('[API] createSolveTask request:', request);
 
+  // 前端验证
   if (!request.window?.start_date || !request.window?.end_date) {
     return {
       success: false,
@@ -218,7 +213,7 @@ export function pollRunStatus(
     if (!active) return;
 
     const result = await getSolveRunStatus(runId);
-    
+
     if (!active) return;
 
     if (!result.success || !result.data) {
@@ -279,7 +274,7 @@ export function subscribeToSolveProgress(
   // 轮询检查状态（作为 WebSocket 的备份）
   const checkStatus = async () => {
     if (isClosing) return;
-    
+
     try {
       const result = await getSolveRunStatus(runId);
       if (!result.success || !result.data) {
@@ -290,7 +285,7 @@ export function subscribeToSolveProgress(
       }
 
       const run = result.data;
-      
+
       // 更新进度
       if (run.solver_progress && run.status === 'RUNNING') {
         onProgress({
@@ -333,7 +328,7 @@ export function subscribeToSolveProgress(
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws/solver-progress`;
-      
+
       console.log(`[WS] 连接到 ${wsUrl}`);
       ws = new WebSocket(wsUrl);
 
@@ -362,7 +357,7 @@ export function subscribeToSolveProgress(
               solutionsFound: data.solutionsFound,
               message: data.message,
             });
-            
+
             if (data.stage === 'COMPLETED' || data.stage === 'FAILED') {
               const result = await getSolveRunStatus(runId);
               if (result.success && result.data) {

@@ -31,6 +31,10 @@ export interface Employee {
   orgRole?: string;
   directLeaderIds?: number[];
   directSubordinateIds?: number[];
+  unit_id?: number | null;
+  unit_name?: string | null;
+  unitId?: number | null;
+  unitName?: string | null;
 }
 
 export type OrgUnitType = 'DEPARTMENT' | 'TEAM' | 'GROUP' | 'SHIFT';
@@ -148,6 +152,9 @@ export interface ProcessTemplate {
   template_name: string;
   description?: string;
   total_days?: number;
+  team_id?: number;
+  team_code?: string;
+  team_name?: string;
 }
 
 export interface ProcessStage {
@@ -212,6 +219,8 @@ export interface BatchPlan {
   batch_name: string;
   template_id: number;
   template_name?: string;
+  team_code?: string;
+  team_name?: string;
   project_code?: string | null;
   planned_start_date: string;
   planned_end_date?: string | null;

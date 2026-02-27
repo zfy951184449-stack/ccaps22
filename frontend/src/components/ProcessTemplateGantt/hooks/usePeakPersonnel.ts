@@ -5,13 +5,14 @@
  * 拖拽操作时会自动重新计算
  * 
  * 考虑人员共享：
- * - 有 share_mode='SAME_TEAM' 约束的操作视为共享同一组人员
+ * - 优先使用 shareGroups 表中的共享组成员关系
+ * - 备选：有 share_mode='SAME_TEAM' 约束的操作视为共享同一组人员
  * - 同组内并发操作取 max(required_people)
  * - 不同组间求和
  */
 
 import { useMemo } from 'react';
-import { GanttNode, TimeBlock, GanttConstraint } from '../types';
+import { GanttNode, TimeBlock, GanttConstraint, ShareGroup } from '../types';
 
 // 峰值计算结果
 export interface DailyPeak {
@@ -63,6 +64,7 @@ interface UsePeakPersonnelProps {
     startDay: number;
     endDay: number;
     constraints?: GanttConstraint[];
+    shareGroups?: ShareGroup[];  // 共享组数据（优先使用）
 }
 
 export const usePeakPersonnel = ({
@@ -70,7 +72,8 @@ export const usePeakPersonnel = ({
     ganttNodes,
     startDay,
     endDay,
-    constraints = []
+    constraints = [],
+    shareGroups = []
 }: UsePeakPersonnelProps): Map<number, DailyPeak> => {
     return useMemo(() => {
         const dailyPeaks = new Map<number, DailyPeak>();
@@ -89,8 +92,22 @@ export const usePeakPersonnel = ({
         };
         collectNodes(ganttNodes);
 
-        // 构建共享组：使用并查集将 share_mode='SAME_TEAM' 的操作分组
+        // 构建共享组：使用并查集合并人员共享关系
         const uf = createUnionFind();
+
+        // 优先使用 shareGroups 表的共享组成员关系
+        for (const group of shareGroups) {
+            if (group.share_mode === 'SAME_TEAM' && group.members && group.members.length >= 2) {
+                // 将同一共享组内的所有成员合并到同一个并查集
+                const firstMemberId = `operation_${group.members[0].schedule_id}`;
+                for (let i = 1; i < group.members.length; i++) {
+                    const memberId = `operation_${group.members[i].schedule_id}`;
+                    uf.union(firstMemberId, memberId);
+                }
+            }
+        }
+
+        // 备选：从约束表中读取 share_mode='SAME_TEAM' 的约束
         for (const c of constraints) {
             if (c.share_mode === 'SAME_TEAM') {
                 const nodeIdA = `operation_${c.from_schedule_id}`;
@@ -174,7 +191,7 @@ export const usePeakPersonnel = ({
         }
 
         return dailyPeaks;
-    }, [timeBlocks, ganttNodes, startDay, endDay, constraints]);
+    }, [timeBlocks, ganttNodes, startDay, endDay, constraints, shareGroups]);
 };
 
 export default usePeakPersonnel;

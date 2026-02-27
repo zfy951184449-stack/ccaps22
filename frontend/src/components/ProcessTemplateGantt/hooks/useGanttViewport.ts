@@ -13,6 +13,19 @@ export const useGanttViewport = (
     const [viewportHeight, setViewportHeight] = useState(640);
     const ganttContentRef = useRef<HTMLDivElement>(null);
 
+    // Build node map for O(1) lookup
+    const nodeMap = useMemo(() => {
+        const map = new Map<string, GanttNode>();
+        const traverse = (nodes: GanttNode[]) => {
+            nodes.forEach(node => {
+                map.set(node.id, node);
+                if (node.children) traverse(node.children);
+            });
+        };
+        traverse(ganttNodes);
+        return map;
+    }, [ganttNodes]);
+
     const flattenedRows = useMemo(() => {
         if (!ganttNodes.length) {
             return [] as FlattenedRow[];
@@ -201,6 +214,7 @@ export const useGanttViewport = (
         endDay,
         totalDays,
         rowIndexMap,
+        nodeMap, // Return the optimized map
         operationBlockMap,
         overscanCount,
         handleGanttMouseDown,

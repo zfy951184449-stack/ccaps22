@@ -127,7 +127,7 @@ describe('Scheduling V2 Services', () => {
     describe('parse', () => {
       it('should parse solver response correctly', () => {
         const result = ResultParser.parse(mockSolverResponse);
-        
+
         expect(result.assignments.length).toBe(2);
         expect(result.shiftPlans.length).toBe(2);
         expect(result.summary.totalAssignments).toBe(2);
@@ -137,7 +137,7 @@ describe('Scheduling V2 Services', () => {
 
       it('should parse assignment records with correct status', () => {
         const result = ResultParser.parse(mockSolverResponse);
-        
+
         result.assignments.forEach(assignment => {
           expect(assignment.assignmentStatus).toBe('PLANNED');
           expect(assignment.isLocked).toBe(false);
@@ -146,7 +146,7 @@ describe('Scheduling V2 Services', () => {
 
       it('should parse shift plan records with correct category', () => {
         const result = ResultParser.parse(mockSolverResponse);
-        
+
         result.shiftPlans.forEach(plan => {
           expect(plan.planCategory).toBe('WORK');
         });
@@ -157,7 +157,7 @@ describe('Scheduling V2 Services', () => {
       it('should return valid for correct parsed result', () => {
         const parsed = ResultParser.parse(mockSolverResponse);
         const validation = ResultParser.validate(parsed);
-        
+
         expect(validation.valid).toBe(true);
         expect(validation.errors.length).toBe(0);
       });
@@ -168,10 +168,10 @@ describe('Scheduling V2 Services', () => {
           status: 'FEASIBLE',
           assignments: [],
         };
-        
+
         const parsed = ResultParser.parse(emptyResponse);
         const validation = ResultParser.validate(parsed);
-        
+
         expect(validation.warnings.length).toBeGreaterThan(0);
       });
     });
@@ -192,12 +192,12 @@ describe('Scheduling V2 Services', () => {
         monthly_hours_lower_offset: 20,
         max_consecutive_workdays: 5,
       };
-      
+
       const merged = {
         ...DEFAULT_SOLVER_CONFIG,
         ...customConfig,
       };
-      
+
       expect(merged.monthly_hours_lower_offset).toBe(20);
       expect(merged.max_consecutive_workdays).toBe(5);
       expect(merged.monthly_hours_upper_offset).toBe(16); // unchanged
@@ -268,6 +268,7 @@ describe('Integration Tests', () => {
             is_cross_day: false,
             is_night_shift: false,
             priority: 0,
+            plan_category: 'PRODUCTION',
           },
         ],
         config: DEFAULT_SOLVER_CONFIG,

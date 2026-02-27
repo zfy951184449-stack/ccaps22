@@ -63,13 +63,16 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
       params.push(employee_id);
     }
 
+    // Refactored Filter Logic using unit_id
     if (department_id) {
-      filters.push('e.department_id = ?');
-      params.push(department_id);
+      // Find employees where unit_id matches dept or parent matches dept
+      // Assuming 2-level hierarchy: Dept -> Team
+      filters.push('(u_unit.id = ? OR u_unit.parent_id = ?)');
+      params.push(department_id, department_id);
     }
 
     if (team_id) {
-      filters.push('e.primary_team_id = ?');
+      filters.push('e.unit_id = ?');
       params.push(team_id);
     }
 
@@ -80,6 +83,7 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
 
     const employeeFilter = filters.length > 0 ? ' AND ' + filters.join(' AND ') : '';
 
+    // Refactored Query: Joins organization_units instead of teams
     const [rows] = await pool.execute(
       `SELECT
          esp.id AS plan_id,
@@ -89,10 +93,9 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
          e.primary_role_id,
          er.role_code AS primary_role_code,
          er.role_name AS primary_role_name,
-         e.org_role,
-         e.primary_team_id,
-         e.department_id,
-         t.team_name,
+         e.unit_id AS primary_team_id, -- Return UnitID as TeamID for frontend compat
+         u_dept.id AS department_id,    -- Return Dept UnitID as DeptID from hierarchy
+         u_unit.unit_name AS team_name, -- Return Unit Name as Team Name
          (SELECT leader_id FROM employee_reporting_relations WHERE subordinate_id = e.id LIMIT 1) AS direct_leader_id,
          esp.plan_date,
          esp.plan_category,
@@ -124,7 +127,8 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
        FROM employee_shift_plans esp
        JOIN employees e ON esp.employee_id = e.id
        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
-       LEFT JOIN teams t ON e.primary_team_id = t.id
+       LEFT JOIN organization_units u_unit ON u_unit.id = e.unit_id -- Join Unit (Team)
+       LEFT JOIN organization_units u_dept ON u_dept.id = u_unit.parent_id -- Join Parent (Dept)
        LEFT JOIN shift_definitions sd ON esp.shift_id = sd.id
        LEFT JOIN batch_personnel_assignments bpa ON esp.id = bpa.shift_plan_id
        LEFT JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id

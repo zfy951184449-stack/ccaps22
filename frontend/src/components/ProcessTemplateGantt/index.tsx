@@ -3,7 +3,8 @@
  */
 
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
-import { Empty, Drawer } from 'antd';
+import { Empty, Drawer, message } from 'antd';
+import axios from 'axios';
 import { ProcessTemplateGanttProps, StageOperation } from './types';
 import { useGanttData } from './hooks/useGanttData';
 import { useGanttViewport } from './hooks/useGanttViewport';
@@ -19,6 +20,7 @@ import { ShareLinkLayer } from './components/ShareLinkLayer';
 import { GanttModals } from './components/GanttModals';
 import { GanttAxis } from './components/GanttAxis';
 import ShareGroupPanel from './components/ShareGroupPanel';
+import { collectAllExpandableKeys } from './utils';
 import { TOKENS, LEFT_PANEL_WIDTH, TITLE_BAR_HEIGHT, HEADER_HEIGHT, CONTENT_GAP, STAGE_COLORS } from './constants';
 
 const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
@@ -69,7 +71,8 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
         visibleEndIndex,
         overscanCount,
         handleGanttMouseDown,
-        isPanningRef
+        isPanningRef,
+        nodeMap // Extract nodeMap
     } = useGanttViewport(ganttNodes, expandedKeys, timeBlocks);
 
     const interaction = useGanttInteraction(
@@ -90,7 +93,8 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
         ganttNodes,
         startDay,
         endDay,
-        constraints: externalConstraints ?? interaction.ganttConstraints
+        constraints: externalConstraints ?? interaction.ganttConstraints,
+        shareGroups: externalShareGroups ?? interaction.shareGroups
     });
 
 
@@ -99,6 +103,67 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
 
     // 共享组面板状态
     const [shareGroupPanelVisible, setShareGroupPanelVisible] = useState(false);
+
+    // 快捷创建共享组模式状态
+    const [isShareGroupMode, setIsShareGroupMode] = useState(false);
+    const [selectedOperationIds, setSelectedOperationIds] = useState<string[]>([]);
+    const API_BASE_URL = 'http://localhost:3001/api';
+
+    // 操作勾选处理
+    const handleOperationCheck = useCallback((operationId: string, checked: boolean) => {
+        setSelectedOperationIds(prev =>
+            checked
+                ? [...prev, operationId]
+                : prev.filter(id => id !== operationId)
+        );
+    }, []);
+
+    // 进入共享组创建模式
+    const handleEnterShareGroupMode = useCallback(() => {
+        setIsShareGroupMode(true);
+        setSelectedOperationIds([]);
+    }, []);
+
+    // 取消共享组创建
+    const handleCancelShareGroup = useCallback(() => {
+        setIsShareGroupMode(false);
+        setSelectedOperationIds([]);
+    }, []);
+
+    // 确认创建共享组
+    const handleConfirmShareGroup = useCallback(async () => {
+        if (selectedOperationIds.length < 2) {
+            message.warning('请至少选择2个操作');
+            return;
+        }
+
+        try {
+            // 提取 schedule_id（从 operation_X 格式中提取数字）
+            const memberIds = selectedOperationIds.map(id =>
+                parseInt(id.replace('operation_', ''))
+            );
+
+            // 自动生成组名
+            const existingCount = interaction.shareGroups?.length || 0;
+            const groupName = `共享组-${existingCount + 1}`;
+
+            await axios.post(`${API_BASE_URL}/share-groups/template/${template.id}`, {
+                group_name: groupName,
+                share_mode: 'SAME_TEAM',
+                member_ids: memberIds
+            });
+
+            message.success(`${groupName} 创建成功`);
+            handleCancelShareGroup();
+
+            // 刷新共享组数据
+            interaction.loadShareGroups();
+        } catch (error) {
+            console.error('创建共享组失败:', error);
+            message.error('创建共享组失败');
+        }
+    }, [selectedOperationIds, template.id, interaction.shareGroups?.length, interaction.loadShareGroups, handleCancelShareGroup]);
+
     // 绘制共享关系 hook
     // 绘制共享关系 hook (Removed)
     // const shareLinkDraw = ...
@@ -139,6 +204,13 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
     const handleDayDoubleClick = useCallback((dayNumber: number) => {
         setExpandedDay(prev => {
             const newValue = prev === dayNumber ? null : dayNumber;
+
+            // 进入单日模式时，自动展开所有层级到操作层
+            if (newValue !== null) {
+                const allKeys = collectAllExpandableKeys(ganttNodes);
+                setExpandedKeys(allKeys);
+            }
+
             // 重置滚动位置到起始位置，避免 Gantt 图不可见的问题
             setTimeout(() => {
                 if (ganttContentRef.current) {
@@ -150,7 +222,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
             }, 0);
             return newValue;
         });
-    }, [ganttContentRef]);
+    }, [ganttContentRef, ganttNodes, setExpandedKeys]);
 
     const handleCollapseDay = useCallback(() => {
         setExpandedDay(null);
@@ -167,11 +239,17 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
 
     const handlePrevDay = useCallback(() => {
         setExpandedDay(prev => prev !== null ? prev - 1 : null);
-    }, []);
+        // 单日模式切换日期时，保持所有层级展开
+        const allKeys = collectAllExpandableKeys(ganttNodes);
+        setExpandedKeys(allKeys);
+    }, [ganttNodes, setExpandedKeys]);
 
     const handleNextDay = useCallback(() => {
         setExpandedDay(prev => prev !== null ? prev + 1 : null);
-    }, []);
+        // 单日模式切换日期时，保持所有层级展开
+        const allKeys = collectAllExpandableKeys(ganttNodes);
+        setExpandedKeys(allKeys);
+    }, [ganttNodes, setExpandedKeys]);
 
     // ESC 键收起展开的日期
     useEffect(() => {
@@ -351,6 +429,11 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                 scheduling={interaction.scheduling}
                 onToggleSharePanel={() => setShareGroupPanelVisible(true)}
                 shareGroupCount={interaction.shareGroups?.length || 0}
+                isShareGroupMode={isShareGroupMode}
+                selectedOperationCount={selectedOperationIds.length}
+                onEnterShareGroupMode={handleEnterShareGroupMode}
+                onConfirmShareGroup={handleConfirmShareGroup}
+                onCancelShareGroup={handleCancelShareGroup}
             />
 
             <div style={{ flex: 1, background: TOKENS.background, overflow: 'visible' }}>
@@ -439,6 +522,9 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                 handleDeleteNode={isExternalMode ? (() => { }) : interaction.handleDeleteNode}
                                 stageColorMap={stageColorMap}
                                 setHoveredRow={interaction.setHoveredRow}
+                                isShareGroupMode={isShareGroupMode}
+                                selectedOperationIds={selectedOperationIds}
+                                onOperationCheck={handleOperationCheck}
                             />
                         </div>
                     </div>
@@ -478,7 +564,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                                 />
                                 <GanttBars
                                     timeBlocks={timeBlocks}
-                                    ganttNodes={ganttNodes}
+                                    nodeMap={nodeMap} // Pass the nodeMap here
                                     rowIndexMap={effectiveRowIndexMap}
                                     visibleStartIndex={visibleStartIndex}
                                     visibleEndIndex={visibleEndIndex}

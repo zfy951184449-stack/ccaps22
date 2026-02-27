@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Space, Typography } from 'antd';
+import { Button, Space, Typography, Checkbox } from 'antd';
 import {
     CaretDownOutlined,
     CaretRightOutlined,
@@ -28,6 +28,10 @@ interface GanttSidebarProps {
     stageColorMap: Map<number, string>;
     // Imperative hover handler
     setHoveredRow: (id: string | null) => void;
+    // 快捷创建共享组模式
+    isShareGroupMode?: boolean;
+    selectedOperationIds?: string[];
+    onOperationCheck?: (operationId: string, checked: boolean) => void;
 }
 
 export const GanttSidebar: React.FC<GanttSidebarProps> = ({
@@ -41,16 +45,34 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
     handleEditNode,
     handleDeleteNode,
     stageColorMap,
-    setHoveredRow
+    setHoveredRow,
+    // 快捷创建共享组
+    isShareGroupMode = false,
+    selectedOperationIds = [],
+    onOperationCheck
 }) => {
     const renderRowMain = (node: GanttNode) => {
         const isTemplate = node.type === 'template';
         const isStage = node.type === 'stage';
+        const isOperation = node.type === 'operation';
         const nameColor = isTemplate ? TOKENS.textPrimary : isStage ? TOKENS.textPrimary : TOKENS.textSecondary;
         const fontWeight = isTemplate ? 600 : isStage ? 500 : 500;
+        const isChecked = selectedOperationIds.includes(node.id);
 
         return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                {/* 共享组模式下显示勾选框 */}
+                {isShareGroupMode && isOperation && onOperationCheck && (
+                    <Checkbox
+                        checked={isChecked}
+                        onChange={(e) => {
+                            e.stopPropagation();
+                            onOperationCheck(node.id, e.target.checked);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ flexShrink: 0 }}
+                    />
+                )}
                 {isStage && node.data && (() => {
                     const stageColor = stageColorMap.get((node.data as ProcessStage).id) || TOKENS.primary;
                     return (

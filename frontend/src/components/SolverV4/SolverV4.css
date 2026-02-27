@@ -1,0 +1,405 @@
+/* ==========================================================================
+   Solver V4 Result Interface - Design Tokens & Base Styles
+   Apple HIG Compliant - Light Mode
+   ========================================================================== */
+
+:root {
+    /* ========== Background Colors ========== */
+    --v4-bg-primary: #F5F5F7;
+    --v4-bg-card: #FFFFFF;
+    --v4-bg-section: #FAFAFA;
+    --v4-bg-hover: rgba(0, 0, 0, 0.02);
+    --v4-bg-active: rgba(0, 0, 0, 0.04);
+
+    /* ========== Text Colors ========== */
+    --v4-text-primary: #1D1D1F;
+    --v4-text-secondary: #86868B;
+    --v4-text-tertiary: #AEAEB2;
+    --v4-text-quaternary: #C7C7CC;
+
+    /* ========== Semantic Colors ========== */
+    --v4-color-success: #34C759;
+    --v4-color-success-bg: rgba(52, 199, 89, 0.1);
+    --v4-color-warning: #FF9500;
+    --v4-color-warning-bg: rgba(255, 149, 0, 0.1);
+    --v4-color-error: #FF3B30;
+    --v4-color-error-bg: rgba(255, 59, 48, 0.1);
+    --v4-color-info: #007AFF;
+    --v4-color-info-bg: rgba(0, 122, 255, 0.1);
+
+    /* ========== Accent Colors ========== */
+    --v4-accent-blue: #007AFF;
+    --v4-accent-blue-light: #E5F2FF;
+    --v4-accent-amber: #FF9F0A;
+    --v4-accent-amber-light: #FFF4E5;
+    --v4-accent-purple: #AF52DE;
+    --v4-accent-purple-light: #F5E6FF;
+
+    /* ========== Border & Divider ========== */
+    --v4-border-color: rgba(0, 0, 0, 0.06);
+    --v4-divider-color: rgba(0, 0, 0, 0.08);
+
+    /* ========== Shadows ========== */
+    --v4-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --v4-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+    --v4-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.06);
+
+    /* ========== Border Radius ========== */
+    --v4-radius-xs: 4px;
+    --v4-radius-sm: 8px;
+    --v4-radius-md: 12px;
+    --v4-radius-lg: 16px;
+    --v4-radius-xl: 20px;
+    --v4-radius-full: 9999px;
+
+    /* ========== Spacing ========== */
+    --v4-space-xs: 4px;
+    --v4-space-sm: 8px;
+    --v4-space-md: 12px;
+    --v4-space-lg: 16px;
+    --v4-space-xl: 24px;
+    --v4-space-2xl: 32px;
+
+    /* ========== Typography ========== */
+    --v4-font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    --v4-font-size-xs: 11px;
+    --v4-font-size-sm: 13px;
+    --v4-font-size-md: 15px;
+    --v4-font-size-lg: 17px;
+    --v4-font-size-xl: 22px;
+    --v4-font-size-2xl: 28px;
+    --v4-font-size-3xl: 34px;
+
+    /* ========== Transitions ========== */
+    --v4-transition-fast: 120ms ease-out;
+    --v4-transition-normal: 200ms ease-out;
+    --v4-transition-slow: 300ms ease-out;
+}
+
+/* ==========================================================================
+   Base Container Styles
+   ========================================================================== */
+
+.v4-result-container {
+    font-family: var(--v4-font-family);
+    background: var(--v4-bg-primary);
+    color: var(--v4-text-primary);
+    min-height: 100%;
+    padding: var(--v4-space-xl);
+}
+
+.v4-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--v4-space-xl);
+}
+
+.v4-result-title {
+    font-size: var(--v4-font-size-2xl);
+    font-weight: 600;
+    color: var(--v4-text-primary);
+    margin: 0;
+}
+
+.v4-solve-time-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--v4-space-xs);
+    padding: var(--v4-space-xs) var(--v4-space-md);
+    background: var(--v4-bg-card);
+    border-radius: var(--v4-radius-full);
+    font-size: var(--v4-font-size-sm);
+    color: var(--v4-text-secondary);
+    box-shadow: var(--v4-shadow-sm);
+}
+
+/* ==========================================================================
+   Metric Cards
+   ========================================================================== */
+
+.v4-metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--v4-space-lg);
+    margin-bottom: var(--v4-space-xl);
+}
+
+.v4-metric-card {
+    background: var(--v4-bg-card);
+    border-radius: var(--v4-radius-lg);
+    padding: var(--v4-space-lg) var(--v4-space-xl);
+    box-shadow: var(--v4-shadow-sm);
+    transition: transform var(--v4-transition-fast), box-shadow var(--v4-transition-fast);
+}
+
+.v4-metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--v4-shadow-md);
+}
+
+.v4-metric-label {
+    font-size: var(--v4-font-size-sm);
+    color: var(--v4-text-secondary);
+    margin-bottom: var(--v4-space-xs);
+}
+
+.v4-metric-value {
+    font-size: var(--v4-font-size-2xl);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: var(--v4-space-sm);
+}
+
+.v4-metric-icon {
+    font-size: var(--v4-font-size-xl);
+}
+
+/* ==========================================================================
+   Segmented Control
+   ========================================================================== */
+
+.v4-segmented-control {
+    display: inline-flex;
+    background: var(--v4-bg-card);
+    border-radius: var(--v4-radius-md);
+    padding: var(--v4-space-xs);
+    box-shadow: var(--v4-shadow-sm);
+    margin-bottom: var(--v4-space-xl);
+}
+
+.v4-segment {
+    padding: var(--v4-space-sm) var(--v4-space-xl);
+    border-radius: var(--v4-radius-sm);
+    font-size: var(--v4-font-size-md);
+    font-weight: 500;
+    color: var(--v4-text-secondary);
+    cursor: pointer;
+    transition: all var(--v4-transition-fast);
+    border: none;
+    background: transparent;
+}
+
+.v4-segment:hover {
+    color: var(--v4-text-primary);
+    background: var(--v4-bg-hover);
+}
+
+.v4-segment.active {
+    color: var(--v4-text-primary);
+    background: var(--v4-bg-card);
+    box-shadow: var(--v4-shadow-sm);
+}
+
+/* ==========================================================================
+   Content Cards
+   ========================================================================== */
+
+.v4-content-card {
+    background: var(--v4-bg-card);
+    border-radius: var(--v4-radius-lg);
+    padding: var(--v4-space-xl);
+    box-shadow: var(--v4-shadow-sm);
+}
+
+.v4-section-header {
+    font-size: var(--v4-font-size-sm);
+    font-weight: 600;
+    color: var(--v4-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--v4-space-md);
+    padding: var(--v4-space-sm) var(--v4-space-lg);
+    background: var(--v4-bg-section);
+    border-radius: var(--v4-radius-sm);
+}
+
+/* ==========================================================================
+   Status Badges
+   ========================================================================== */
+
+.v4-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--v4-space-xs);
+    padding: var(--v4-space-xs) var(--v4-space-sm);
+    border-radius: var(--v4-radius-full);
+    font-size: var(--v4-font-size-xs);
+    font-weight: 500;
+}
+
+.v4-badge-success {
+    background: var(--v4-color-success-bg);
+    color: var(--v4-color-success);
+}
+
+.v4-badge-warning {
+    background: var(--v4-color-warning-bg);
+    color: var(--v4-color-warning);
+}
+
+.v4-badge-error {
+    background: var(--v4-color-error-bg);
+    color: var(--v4-color-error);
+}
+
+.v4-badge-info {
+    background: var(--v4-color-info-bg);
+    color: var(--v4-color-info);
+}
+
+/* ==========================================================================
+   Progress Bar
+   ========================================================================== */
+
+.v4-progress-bar {
+    height: 6px;
+    background: var(--v4-bg-section);
+    border-radius: var(--v4-radius-full);
+    overflow: hidden;
+}
+
+.v4-progress-fill {
+    height: 100%;
+    border-radius: var(--v4-radius-full);
+    transition: width var(--v4-transition-normal);
+}
+
+.v4-progress-fill.success {
+    background: var(--v4-color-success);
+}
+
+.v4-progress-fill.warning {
+    background: var(--v4-color-warning);
+}
+
+.v4-progress-fill.error {
+    background: var(--v4-color-error);
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
+
+.v4-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--v4-space-sm);
+    padding: var(--v4-space-sm) var(--v4-space-xl);
+    border-radius: var(--v4-radius-md);
+    font-size: var(--v4-font-size-md);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--v4-transition-fast);
+    border: none;
+}
+
+.v4-btn-primary {
+    background: var(--v4-accent-blue);
+    color: white;
+}
+
+.v4-btn-primary:hover {
+    background: #0066CC;
+    transform: translateY(-1px);
+}
+
+.v4-btn-secondary {
+    background: transparent;
+    color: var(--v4-accent-blue);
+    border: 1px solid var(--v4-accent-blue);
+}
+
+.v4-btn-secondary:hover {
+    background: var(--v4-accent-blue-light);
+}
+
+/* ==========================================================================
+   Gantt Timeline Specific
+   ========================================================================== */
+
+.v4-gantt-container {
+    overflow-x: auto;
+}
+
+.v4-gantt-row {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    border-bottom: 1px solid var(--v4-border-color);
+}
+
+.v4-gantt-employee {
+    width: 120px;
+    flex-shrink: 0;
+    padding-right: var(--v4-space-md);
+    border-right: 1px solid var(--v4-border-color);
+}
+
+.v4-gantt-employee-name {
+    font-size: var(--v4-font-size-sm);
+    font-weight: 500;
+    color: var(--v4-text-primary);
+}
+
+.v4-gantt-employee-code {
+    font-size: var(--v4-font-size-xs);
+    color: var(--v4-text-tertiary);
+}
+
+.v4-gantt-timeline {
+    flex: 1;
+    position: relative;
+    height: 100%;
+}
+
+.v4-shift-block {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    background: var(--v4-accent-blue-light);
+    border: 1px solid var(--v4-accent-blue);
+    border-radius: var(--v4-radius-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--v4-font-size-xs);
+    color: var(--v4-accent-blue);
+}
+
+.v4-task-block {
+    position: absolute;
+    top: 10px;
+    height: 28px;
+    background: var(--v4-accent-amber);
+    border-radius: var(--v4-radius-full);
+    display: flex;
+    align-items: center;
+    padding: 0 var(--v4-space-sm);
+    font-size: var(--v4-font-size-xs);
+    color: white;
+    box-shadow: var(--v4-shadow-sm);
+    cursor: pointer;
+    transition: transform var(--v4-transition-fast);
+    z-index: 2;
+}
+
+.v4-task-block:hover {
+    transform: scale(1.02);
+    box-shadow: var(--v4-shadow-md);
+}
+
+/* ==========================================================================
+   Footer Actions
+   ========================================================================== */
+
+.v4-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--v4-space-md);
+    padding-top: var(--v4-space-xl);
+    margin-top: var(--v4-space-xl);
+    border-top: 1px solid var(--v4-border-color);
+}

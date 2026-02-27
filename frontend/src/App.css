@@ -7,98 +7,6 @@
   min-height: 100vh;
 }
 
-/* WuxiBio Sidebar Styling */
-.ant-layout-sider {
-  overflow: auto;
-  height: 100vh;
-  position: fixed !important;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 1000;
-  transition: all 200ms cubic-bezier(0.8, 0, 0.2, 1);
-  background: #1e293b !important;
-  /* WuxiBio Dark Blue-Gray */
-}
-
-/* Sidebar Group Styling */
-.ant-menu-item-group-title {
-  color: #94a3b8 !important;
-  /* Slate-400 for headers */
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 16px 16px 8px !important;
-  font-weight: 600;
-}
-
-/* Menu Item Styling */
-.fluent-sidebar-menu .ant-menu-item {
-  margin: 4px 8px !important;
-  border-radius: 4px;
-  height: 40px;
-  line-height: 40px;
-  color: #e2e8f0 !important;
-  /* Slate-200 for text */
-  transition: all 0.2s ease-out;
-}
-
-.fluent-sidebar-menu .ant-menu-item:hover {
-  background-color: #334155 !important;
-  /* Slate-700 for hover */
-  color: #ffffff !important;
-}
-
-.fluent-sidebar-menu .ant-menu-item-selected {
-  background-color: rgba(14, 165, 233, 0.1) !important;
-  /* Sky-500 with opacity */
-  color: #38bdf8 !important;
-  /* Sky-400 for active text */
-  font-weight: 500;
-  position: relative;
-}
-
-/* Active Indicator Strip */
-.fluent-sidebar-menu .ant-menu-item-selected::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  background: #0ea5e9;
-  /* Sky-500 */
-  border-radius: 0 2px 2px 0;
-}
-
-/* Group Dividers */
-.ant-menu-item-group+.ant-menu-item-group::before {
-  content: '';
-  display: block;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.06);
-  margin: 8px 16px;
-}
-
-.fluent-sidebar-menu .ant-menu-item-icon {
-  font-size: 16px;
-  min-width: 16px;
-}
-
-.fluent-sidebar-menu .ant-menu-item-selected .ant-menu-item-icon {
-  color: #38bdf8;
-}
-
-/* 主内容区域动态适应侧边栏 */
-.main-layout {
-  margin-left: 250px;
-  transition: all 200ms cubic-bezier(0.8, 0, 0.2, 1);
-}
-
-.main-layout.collapsed {
-  margin-left: 80px;
-}
-
 /* 内容区域 */
 .ant-layout-content {
   overflow: auto;
@@ -209,4 +117,48 @@
   .org-workbench-top-stats {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
+}
+
+/* 
+  Fix for Ant Design v5 Button + Tailwind Preflight conflict.
+  Tailwind preflight resets button background to transparent with higher specificity than Antd's :where() selectors.
+  We enforce the Fluent Blue background for primary buttons.
+*/
+/* 
+  Fix for Ant Design v5 Button + Tailwind Preflight conflict.
+  Tailwind preflight resets button background to transparent with higher specificity than Antd's :where() selectors.
+  We enforce the Fluent Blue background for primary buttons, and Red for dangerous ones.
+*/
+.ant-btn-primary:not(.ant-btn-dangerous) {
+  background-color: #0078D4;
+  border-color: #0078D4;
+  color: #fff;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.045);
+}
+
+.ant-btn-primary:not(.ant-btn-dangerous):not(:disabled):hover {
+  background-color: #106ebe !important;
+  border-color: #106ebe !important;
+  color: #fff !important;
+}
+
+/* Fix Dangerous Buttons (Red) */
+.ant-btn-primary.ant-btn-dangerous {
+  background-color: #D13438;
+  /* Fluent Error Red */
+  border-color: #D13438;
+  color: #fff;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.045);
+}
+
+.ant-btn-primary.ant-btn-dangerous:not(:disabled):hover {
+  background-color: #a80000 !important;
+  border-color: #a80000 !important;
+  color: #fff !important;
+}
+
+.ant-btn-primary:disabled {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-color: #d9d9d9;
+  color: rgba(0, 0, 0, 0.25);
 }

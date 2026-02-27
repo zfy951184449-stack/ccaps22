@@ -51,15 +51,15 @@ export const BatchShareGroupSection: React.FC<BatchShareGroupSectionProps> = ({
     const loadShareGroups = async () => {
         setLoading(true);
         try {
-            // 获取操作所属共享组
+            // 获取操作所属共享组 (批次级别)
             const myResponse = await axios.get<BatchShareGroup[]>(
-                `/api/operation-plans/${operationPlanId}/share-groups`
+                `/api/share-groups/batch-operation/${operationPlanId}`
             );
             setMyGroups(myResponse.data);
 
             // 获取批次所有共享组
             const allResponse = await axios.get<BatchShareGroup[]>(
-                `/api/batches/${batchId}/share-groups`
+                `/api/share-groups/batch/${batchId}`
             );
             setAllGroups(allResponse.data);
         } catch (error) {
@@ -69,7 +69,7 @@ export const BatchShareGroupSection: React.FC<BatchShareGroupSectionProps> = ({
         }
     };
 
-    // 加入共享组
+    // 加入共享组 (批次级别)
     const handleJoin = async () => {
         if (!selectedGroupId) return;
         setJoining(true);
@@ -89,7 +89,7 @@ export const BatchShareGroupSection: React.FC<BatchShareGroupSectionProps> = ({
         }
     };
 
-    // 退出共享组
+    // 退出共享组 (批次级别)
     const handleLeave = async (groupId: number, groupName: string) => {
         Modal.confirm({
             title: '确认退出',

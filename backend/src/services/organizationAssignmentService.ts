@@ -1,16 +1,17 @@
-import type { PoolConnection, RowDataPacket, ResultSetHeader } from 'mysql2/promise';
+import type { PoolConnection, ResultSetHeader } from 'mysql2/promise';
 import pool from '../config/database';
 
 interface AssignmentCreateInput {
   employeeId: number;
-  teamId: number;
+  unitId: number;
   roleId: number;
-  isPrimary?: boolean;
-  effectiveFrom: string;
+  isPrimary?: boolean; // Ignored in single-unit mode (always primary)
+  effectiveFrom?: string; // Stored in employees or ignored if no field? (employees has no effective_from, maybe ignore for now or add column if needed? Schema implies employees has no effective_from. We will ignore date fields for now or just log them as legacy).
   effectiveTo?: string | null;
 }
 
 interface AssignmentUpdateInput {
+  unitId?: number;
   isPrimary?: boolean;
   effectiveFrom?: string | null;
   effectiveTo?: string | null;
@@ -29,94 +30,27 @@ const releaseConnection = (connection?: PoolConnection, managed = false) => {
   }
 };
 
-const syncEmployeePrimary = async (connection: PoolConnection, employeeId: number) => {
-  const [rows] = await connection.execute<RowDataPacket[]>(
-    `SELECT etr.id,
-            etr.is_primary AS isPrimary,
-            etr.team_id AS teamId,
-            etr.role_id AS roleId,
-            t.department_id AS departmentId
-       FROM employee_team_roles etr
-       LEFT JOIN teams t ON t.id = etr.team_id
-      WHERE etr.employee_id = ?
-      ORDER BY etr.is_primary DESC,
-               (etr.effective_to IS NULL) DESC,
-               etr.effective_from DESC,
-               etr.id DESC
-      LIMIT 1`,
-    [employeeId],
-  );
-
-  if (!rows.length || !rows[0].isPrimary) {
-    await connection.execute<ResultSetHeader>(
-      `UPDATE employees
-          SET primary_team_id = NULL,
-              primary_role_id = NULL
-        WHERE id = ?`,
-      [employeeId],
-    );
-    return;
-  }
-
-  const { teamId, roleId, departmentId } = rows[0];
-
-  const params: Array<number | null> = [teamId ?? null, roleId ?? null];
-  let updateSql = `UPDATE employees
-                      SET primary_team_id = ?,
-                          primary_role_id = ?`;
-
-  if (departmentId !== null && departmentId !== undefined) {
-    updateSql += ', department_id = ?';
-    params.push(departmentId);
-  }
-
-  params.push(employeeId);
-
-  updateSql += ' WHERE id = ?';
-
-  await connection.execute<ResultSetHeader>(updateSql, params);
-};
-
-const resetExistingPrimary = async (connection: PoolConnection, employeeId: number) => {
-  await connection.execute<ResultSetHeader>(
-    'UPDATE employee_team_roles SET is_primary = 0 WHERE employee_id = ?',
-    [employeeId],
-  );
-};
-
 export const createAssignment = async (input: AssignmentCreateInput) => {
   const connection = await ensureConnection();
   const managed = true;
 
   try {
-    await connection.beginTransaction();
-
-    if (input.isPrimary) {
-      await resetExistingPrimary(connection, input.employeeId);
-    }
-
+    // In single-unit mode, "creating" an assignment just means updating the employee record
+    // We overwrite whatever was there.
     const [result] = await connection.execute<ResultSetHeader>(
-      `INSERT INTO employee_team_roles (employee_id, team_id, role_id, is_primary, effective_from, effective_to)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        input.employeeId,
-        input.teamId,
-        input.roleId,
-        input.isPrimary ? 1 : 0,
-        input.effectiveFrom,
-        input.effectiveTo ?? null,
-      ],
+      `UPDATE employees
+          SET unit_id = ?,
+              primary_role_id = ?
+        WHERE id = ?`,
+      [input.unitId, input.roleId, input.employeeId]
     );
 
-    if (input.isPrimary) {
-      await syncEmployeePrimary(connection, input.employeeId);
+    if (result.affectedRows === 0) {
+      throw new Error('Employee not found');
     }
 
-    await connection.commit();
-    return result.insertId;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
+    // Return employeeId as the "assignmentId" since they are 1:1
+    return input.employeeId;
   } finally {
     releaseConnection(connection, managed);
   }
@@ -131,67 +65,28 @@ export const updateAssignment = async (
   const managed = true;
 
   try {
-    await connection.beginTransaction();
-
-    let resolvedEmployeeId = employeeId;
-
-    if (!resolvedEmployeeId) {
-      const [infoRows] = await connection.execute<RowDataPacket[]>(
-        `SELECT employee_id AS employeeId
-           FROM employee_team_roles
-          WHERE id = ?
-          LIMIT 1`,
-        [assignmentId],
-      );
-
-      if (!infoRows.length) {
-        await connection.rollback();
-        return { notFound: true } as const;
-      }
-
-      resolvedEmployeeId = Number(infoRows[0].employeeId);
-    }
-
-    const [existingRows] = await connection.execute<RowDataPacket[]>(
-      `SELECT id, is_primary AS isPrimary
-         FROM employee_team_roles
-        WHERE id = ? AND employee_id = ?
-        LIMIT 1`,
-      [assignmentId, resolvedEmployeeId],
-    );
-
-    if (!existingRows.length) {
-      await connection.rollback();
-      return { notFound: true } as const;
-    }
-
-    const wasPrimary = Boolean(existingRows[0].isPrimary);
-    const nextPrimary = updates.isPrimary ?? wasPrimary;
-
-    if (updates.isPrimary) {
-      await resetExistingPrimary(connection, resolvedEmployeeId);
-    }
+    // In single-unit mode, assignmentId IS the employeeId (conceptually)
+    // But if provided employeeId differs, we should respect employeeId.
+    const targetId = employeeId || assignmentId;
 
     const fields: string[] = [];
     const params: Array<number | string | null> = [];
 
-    if (updates.isPrimary !== undefined) {
-      fields.push('is_primary = ?');
-      params.push(updates.isPrimary ? 1 : 0);
-    }
-    if (updates.effectiveFrom !== undefined) {
-      fields.push('effective_from = ?');
-      params.push(updates.effectiveFrom ?? null);
-    }
-    if (updates.effectiveTo !== undefined) {
-      fields.push('effective_to = ?');
-      params.push(updates.effectiveTo ?? null);
+    if (updates.unitId !== undefined) {
+      fields.push('unit_id = ?');
+      params.push(updates.unitId);
     }
 
+    // Note: roleId is not in AssignmentUpdateInput currently (it was passed as separate call or not updatable via this specific function in legacy code?)
+    // The previous implementation didn't update roleId in updateAssignment?
+    // Let's check the interface... The previous interface had unitId, isPrimary, dates. 
+    // If role needs update, it might be separate. 
+    // For now, only update what's passed.
+
     if (fields.length) {
-      params.push(assignmentId);
+      params.push(targetId);
       await connection.execute<ResultSetHeader>(
-        `UPDATE employee_team_roles
+        `UPDATE employees
             SET ${fields.join(', ')}
           WHERE id = ?
           LIMIT 1`,
@@ -199,15 +94,7 @@ export const updateAssignment = async (
       );
     }
 
-    if (wasPrimary || nextPrimary) {
-      await syncEmployeePrimary(connection, resolvedEmployeeId);
-    }
-
-    await connection.commit();
     return { success: true } as const;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
   } finally {
     releaseConnection(connection, managed);
   }
@@ -218,66 +105,24 @@ export const deleteAssignment = async (assignmentId: number, employeeId?: number
   const managed = true;
 
   try {
-    await connection.beginTransaction();
+    const targetId = employeeId || assignmentId;
 
-    let resolvedEmployeeId = employeeId;
-
-    if (!resolvedEmployeeId) {
-      const [infoRows] = await connection.execute<RowDataPacket[]>(
-        `SELECT employee_id AS employeeId
-           FROM employee_team_roles
-          WHERE id = ?
-          LIMIT 1`,
-        [assignmentId],
-      );
-
-      if (!infoRows.length) {
-        await connection.rollback();
-        return { notFound: true } as const;
-      }
-
-      resolvedEmployeeId = Number(infoRows[0].employeeId);
-    }
-
-    const [rows] = await connection.execute<RowDataPacket[]>(
-      `SELECT is_primary AS isPrimary
-         FROM employee_team_roles
-        WHERE id = ? AND employee_id = ?
-        LIMIT 1`,
-      [assignmentId, resolvedEmployeeId],
-    );
-
-    if (!rows.length) {
-      await connection.rollback();
-      return { notFound: true } as const;
-    }
-
+    // Only clear unit_id, preserve primary_role_id (employee's position should be retained)
     await connection.execute<ResultSetHeader>(
-      'DELETE FROM employee_team_roles WHERE id = ? AND employee_id = ? LIMIT 1',
-      [assignmentId, resolvedEmployeeId],
+      `UPDATE employees
+          SET unit_id = NULL
+        WHERE id = ?
+        LIMIT 1`,
+      [targetId],
     );
 
-    if (rows[0].isPrimary) {
-      await syncEmployeePrimary(connection, resolvedEmployeeId);
-    }
-
-    await connection.commit();
     return { success: true } as const;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
   } finally {
     releaseConnection(connection, managed);
   }
 };
 
 export const syncPrimaryForEmployee = async (employeeId: number) => {
-  const connection = await ensureConnection();
-  const managed = true;
-
-  try {
-    await syncEmployeePrimary(connection, employeeId);
-  } finally {
-    releaseConnection(connection, managed);
-  }
+  // No-op in single-unit mode
+  return;
 };

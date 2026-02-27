@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Tree, 
-  Typography, 
-  Space, 
-  Tag, 
+import {
+  Tree,
+  Typography,
+  Space,
+  Tag,
   Button,
   Tooltip,
   message,
@@ -17,14 +17,15 @@ import {
   Input,
   Select,
   Table,
-  Segmented
+  Segmented,
+  Checkbox
 } from 'antd';
 import type { MenuProps } from 'antd';
-import { 
+import {
   CaretRightOutlined,
-  CaretDownOutlined, 
-  UserOutlined, 
-  ClockCircleOutlined, 
+  CaretDownOutlined,
+  UserOutlined,
+  ClockCircleOutlined,
   EditOutlined,
   DeleteOutlined,
   PlusOutlined,
@@ -36,7 +37,10 @@ import {
   SettingOutlined,
   LinkOutlined,
   DisconnectOutlined,
-  ArrowLeftOutlined
+  ArrowLeftOutlined,
+  TeamOutlined,
+  CheckOutlined,
+  CloseOutlined
 } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
@@ -160,9 +164,9 @@ const HOUR_WIDTH = 30; // 每小时的像素宽度
 const ROW_HEIGHT = 36; // 每行的高度
 const DAYS_TO_SHOW = 35; // 显示35天
 
-const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({ 
+const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
   template,
-  onBack 
+  onBack
 }) => {
   const [stages, setStages] = useState<ProcessStage[]>([]);
   const [stageOperations, setStageOperations] = useState<{ [key: number]: StageOperation[] }>({});
@@ -182,6 +186,11 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
   const [loading, setLoading] = useState(false);
   const [activeView, setActiveView] = useState<'structure' | 'table'>('structure');
 
+  // 共享组创建模式状态
+  const [isShareGroupMode, setIsShareGroupMode] = useState(false);
+  const [selectedOperationIds, setSelectedOperationIds] = useState<string[]>([]);
+  const [shareGroupCount, setShareGroupCount] = useState(0);
+
   const [form] = Form.useForm();
   const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -196,11 +205,11 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
       // 获取阶段数据
       const stagesResponse = await axios.get(`${API_BASE_URL}/process-stages/template/${template.id}`);
       setStages(stagesResponse.data);
-      
+
       // 获取可用操作
       const operationsResponse = await axios.get(`${API_BASE_URL}/stage-operations/available`);
       setAvailableOperations(operationsResponse.data);
-      
+
       // 获取每个阶段的操作
       const stageOpsMap: { [key: number]: StageOperation[] } = {};
       for (const stage of stagesResponse.data) {
@@ -208,23 +217,20 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
         stageOpsMap[stage.id] = opsResponse.data;
       }
       setStageOperations(stageOpsMap);
-      
+
       // 构建甘特图节点
       const nodes = buildGanttNodes(stagesResponse.data, stageOpsMap);
       setGanttNodes(nodes);
-      
+
       // 生成时间块
       const blocks = generateTimeBlocks(nodes);
       console.log('Generated time blocks:', blocks); // 调试信息
       setTimeBlocks(blocks);
-      
-      // 默认展开所有节点
+
+      // 默认只展开根节点，阶段节点保持折叠
       const defaultExpandedKeys = [template.id.toString()];
-      nodes[0].children?.forEach(stageNode => {
-        defaultExpandedKeys.push(stageNode.id);
-      });
       setExpandedKeys(defaultExpandedKeys);
-      
+
     } catch (error) {
       message.error('加载模板数据失败');
       console.error(error);
@@ -235,7 +241,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
 
   const buildGanttNodes = (stages: ProcessStage[], stageOpsMap: { [key: number]: StageOperation[] }): GanttNode[] => {
     const nodes: GanttNode[] = [];
-    
+
     // 根节点
     const templateNode: GanttNode = {
       id: template.id.toString(),
@@ -256,7 +262,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
         stage_code: stage.stage_code,
         start_day: stage.start_day,
         start_hour: 0,
-        expanded: true,
+        expanded: false,
         children: [],
         editable: true,
         level: 1,
@@ -293,14 +299,14 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
   const generateTimeBlocks = (nodes: GanttNode[]): TimeBlock[] => {
     const blocks: TimeBlock[] = [];
     const processedNodeIds = new Set<string>(); // 防止重复处理
-    
+
     const processNode = (node: GanttNode) => {
       // 防止重复处理同一个节点
       if (processedNodeIds.has(node.id)) {
         return;
       }
       processedNodeIds.add(node.id);
-      
+
       if (node.type === 'operation' && node.standard_time && node.standard_time > 0) {
         // 获取阶段信息来确定颜色
         let stageCode = 'DEFAULT';
@@ -309,7 +315,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
           const stage = stages.find(s => s.id.toString() === stageId);
           stageCode = stage?.stage_code || 'DEFAULT';
         }
-        
+
         const block: TimeBlock = {
           id: `block_${node.id}`,
           node_id: node.id,
@@ -320,11 +326,11 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
           color: STAGE_COLORS[stageCode] || STAGE_COLORS.DEFAULT,
           dependencies: node.dependencies
         };
-        
+
         blocks.push(block);
         console.log('Adding block:', block); // 调试信息
       }
-      
+
       if (node.children) {
         node.children.forEach(processNode);
       }
@@ -377,7 +383,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
 
   const handleEditNode = (node: GanttNode) => {
     setEditingNode(node);
-    
+
     // 设置表单初始值
     if (node.type === 'stage' && node.data) {
       const stageData = node.data as ProcessStage;
@@ -400,7 +406,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
         window_end_day_offset: operationData.window_end_day_offset ?? 0
       });
     }
-    
+
     setEditModalVisible(true);
   };
 
@@ -417,7 +423,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
             } else if (node.type === 'operation' && node.data) {
               await axios.delete(`${API_BASE_URL}/stage-operations/${(node.data as StageOperation).id}`);
             }
-            
+
             // 重新加载数据
             await loadTemplateData();
             message.success('删除成功');
@@ -453,7 +459,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
             await axios.put(`${API_BASE_URL}/stage-operations/${operationData.id}`, values);
           }
         }
-        
+
         // 重新加载数据
         await loadTemplateData();
         message.success('保存成功');
@@ -469,9 +475,9 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
   };
 
   const handleBlockDrag = (block: TimeBlock, newDay: number, newHour: number) => {
-    setTimeBlocks(blocks => 
-      blocks.map(b => 
-        b.id === block.id 
+    setTimeBlocks(blocks =>
+      blocks.map(b =>
+        b.id === block.id
           ? { ...b, start_day: newDay, start_hour: newHour }
           : b
       )
@@ -517,34 +523,92 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
     message.success('自动布局完成');
   };
 
+  // 共享组操作勾选处理
+  const handleOperationCheck = (operationId: string, checked: boolean) => {
+    setSelectedOperationIds(prev =>
+      checked
+        ? [...prev, operationId]
+        : prev.filter(id => id !== operationId)
+    );
+  };
+
+  // 确认创建共享组
+  const handleConfirmShareGroup = async () => {
+    if (selectedOperationIds.length < 2) {
+      message.warning('请至少选择2个操作');
+      return;
+    }
+
+    try {
+      // 提取 schedule_id（从 operation_X 格式中提取数字）
+      const memberIds = selectedOperationIds.map(id =>
+        parseInt(id.replace('operation_', ''))
+      );
+
+      const groupName = `共享组-${shareGroupCount + 1}`;
+
+      await axios.post(`${API_BASE_URL}/share-groups/template/${template.id}`, {
+        group_name: groupName,
+        share_mode: 'SAME_TEAM',
+        member_ids: memberIds
+      });
+
+      message.success(`${groupName} 创建成功`);
+      setShareGroupCount(prev => prev + 1);
+      handleCancelShareGroup();
+
+      // 刷新数据以显示新的共享组连线
+      await loadTemplateData();
+    } catch (error) {
+      console.error('创建共享组失败:', error);
+      message.error('创建共享组失败');
+    }
+  };
+
+  // 取消共享组创建
+  const handleCancelShareGroup = () => {
+    setIsShareGroupMode(false);
+    setSelectedOperationIds([]);
+  };
+
   const renderTreeNodeTitle = (node: GanttNode) => {
     const isSelected = selectedNode?.id === node.id;
+    const isChecked = selectedOperationIds.includes(node.id);
 
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         width: '100%',
         padding: '4px 0',
         minHeight: '32px',
         overflow: 'hidden'
       }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          flex: 1, 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          flex: 1,
           minWidth: 0,
           gap: '6px'
         }}>
+          {/* 共享组模式下显示勾选框 */}
+          {isShareGroupMode && node.type === 'operation' && (
+            <Checkbox
+              checked={isChecked}
+              onChange={(e) => handleOperationCheck(node.id, e.target.checked)}
+              onClick={(e) => e.stopPropagation()}
+              style={{ flexShrink: 0 }}
+            />
+          )}
           {node.type === 'stage' && (
             <Tag color="blue" style={{ margin: 0, flexShrink: 0 }}>
               {node.stage_code}
             </Tag>
           )}
-          <Text 
-            strong={node.type === 'template'} 
-            style={{ 
+          <Text
+            strong={node.type === 'template'}
+            style={{
               fontSize: node.type === 'template' ? '14px' : '13px',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -624,7 +688,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
 
   const renderTimeAxis = () => {
     const timeHeaders = [];
-    
+
     for (let day = 0; day < DAYS_TO_SHOW; day++) {
       // 日期标题
       timeHeaders.push(
@@ -646,7 +710,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
           Day {day}
         </div>
       );
-      
+
       // 小时标题行
       const hourRow = [];
       for (let hour = 0; hour < 24; hour++) {
@@ -676,7 +740,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
         </div>
       );
     }
-    
+
     return (
       <div>
         {/* 天数标题行 */}
@@ -701,7 +765,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
             </div>
           ))}
         </div>
-        
+
         {/* 小时标题行 */}
         <div style={{ display: 'flex' }}>
           {Array.from({ length: DAYS_TO_SHOW }).map((_, day) => (
@@ -735,14 +799,14 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
   const getNodeRowIndex = (nodeId: string): number => {
     // 计算节点在树形结构中的显示位置
     let rowIndex = 0;
-    
+
     const traverseNodes = (nodes: GanttNode[]): boolean => {
       for (const node of nodes) {
         if (node.id === nodeId) {
           return true; // 找到目标节点
         }
         rowIndex++;
-        
+
         // 如果节点展开并且有子节点，递归遍历
         if (expandedKeys.includes(node.id) && node.children && node.children.length > 0) {
           if (traverseNodes(node.children)) {
@@ -752,7 +816,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
       }
       return false;
     };
-    
+
     traverseNodes(ganttNodes);
     console.log(`Node ${nodeId} row index: ${rowIndex}`); // 调试信息
     return rowIndex;
@@ -775,8 +839,8 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
     const containerHeight = Math.max(totalRows * ROW_HEIGHT + 78, 400);
 
     return (
-      <div style={{ 
-        position: 'relative', 
+      <div style={{
+        position: 'relative',
         minHeight: containerHeight,
         width: DAYS_TO_SHOW * 24 * HOUR_WIDTH * zoom / 100,
         background: '#fafafa'
@@ -815,7 +879,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
         {timeBlocks.map((block) => {
           const left = (block.start_day * 24 + block.start_hour) * HOUR_WIDTH * zoom / 100;
           const width = Math.max(block.duration_hours * HOUR_WIDTH * zoom / 100, 20); // 最小宽度
-          
+
           // 找到对应的节点在树中的位置  
           const rowIndex = getNodeRowIndex(block.node_id);
           // 计算顶部偏移：时间轴标题(约38px) + 天数行(20px) + 小时行(20px) = 78px
@@ -873,9 +937,9 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
               }}
             >
               <Tooltip title={`${block.title}\n开始: Day ${block.start_day} ${block.start_hour}:00\n时长: ${block.duration_hours}小时`}>
-                <span style={{ 
-                  overflow: 'hidden', 
-                  textOverflow: 'ellipsis', 
+                <span style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                   width: '100%'
                 }}>
@@ -1052,9 +1116,9 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 工具栏 */}
-      <div style={{ 
-        padding: '12px 16px', 
-        background: '#fff', 
+      <div style={{
+        padding: '12px 16px',
+        background: '#fff',
         borderBottom: '1px solid #f0f0f0',
         display: 'flex',
         justifyContent: 'space-between',
@@ -1102,6 +1166,38 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
 
               <Divider type="vertical" />
 
+              {/* 共享组创建按钮 */}
+              {!isShareGroupMode ? (
+                <Tooltip title="创建共享组">
+                  <Button
+                    icon={<TeamOutlined />}
+                    onClick={() => setIsShareGroupMode(true)}
+                  >
+                    添加共享组
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Space>
+                  <Tag color="processing">选择操作加入共享组</Tag>
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    onClick={handleConfirmShareGroup}
+                    disabled={selectedOperationIds.length < 2}
+                  >
+                    确认创建 ({selectedOperationIds.length})
+                  </Button>
+                  <Button
+                    icon={<CloseOutlined />}
+                    onClick={handleCancelShareGroup}
+                  >
+                    取消
+                  </Button>
+                </Space>
+              )}
+
+              <Divider type="vertical" />
+
               <Space>
                 <Button
                   icon={<ZoomOutOutlined />}
@@ -1142,22 +1238,22 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
 
       {/* 主体内容 */}
       {activeView === 'structure' ? (
-        <div style={{ 
-          flex: 1, 
-          display: 'flex', 
+        <div style={{
+          flex: 1,
+          display: 'flex',
           overflow: 'hidden',
-          background: '#fafafa' 
+          background: '#fafafa'
         }}>
           {/* 左侧树形结构 */}
-          <div style={{ 
-            width: '35%', 
+          <div style={{
+            width: '35%',
             background: '#fff',
             borderRight: '1px solid #f0f0f0',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <div style={{ 
-              padding: '8px 16px', 
+            <div style={{
+              padding: '8px 16px',
               background: '#fafafa',
               borderBottom: '1px solid #f0f0f0',
               fontWeight: 500
@@ -1167,7 +1263,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
             <div style={{ flex: 1, overflow: 'auto' }}>
               <Tree
                 showLine={{ showLeafIcon: false }}
-                switcherIcon={(props) => {
+                switcherIcon={(props: any) => {
                   const nodeKey = props.data?.key?.toString();
                   // 模板节点不显示展开图标（始终展开）
                   if (nodeKey && !nodeKey.startsWith('stage_')) {
@@ -1184,12 +1280,12 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
                   // 将keys转换为字符串数组
                   const stringKeys = keys.map(k => k.toString());
                   const templateKey = ganttNodes[0]?.id;
-                  
+
                   // 确保模板节点始终在展开列表中
                   if (templateKey && !stringKeys.includes(templateKey)) {
                     stringKeys.unshift(templateKey);
                   }
-                  
+
                   setExpandedKeys(stringKeys);
                 }}
                 onSelect={handleNodeSelect}
@@ -1205,14 +1301,14 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
           </div>
 
           {/* 右侧甘特图 */}
-          <div style={{ 
-            flex: 1, 
+          <div style={{
+            flex: 1,
             display: 'flex',
             flexDirection: 'column',
             background: '#fff'
           }}>
-            <div style={{ 
-              padding: '8px 16px', 
+            <div style={{
+              padding: '8px 16px',
               background: '#fafafa',
               borderBottom: '1px solid #f0f0f0',
               fontWeight: 500
@@ -1255,7 +1351,7 @@ const GanttTemplateEditor: React.FC<GanttTemplateEditorProps> = ({
                 bordered
                 size="middle"
                 rowKey="key"
-                expandable={{ defaultExpandAllRows: true }}
+                expandable={{ defaultExpandAllRows: false }}
                 scroll={{ x: 'max-content' }}
                 sticky
               />

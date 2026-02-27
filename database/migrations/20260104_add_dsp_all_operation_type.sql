@@ -1,0 +1,3 @@
+-- 扩展操作类型，新增 DSP_ALL
+ALTER TABLE operations
+MODIFY COLUMN operation_type ENUM('PREP', 'PROCESS', 'MONITOR', 'DSP_ALL') DEFAULT NULL COMMENT '操作类型：PREP-准备/支撑，PROCESS-工艺/主生产，MONITOR-监控，DSP_ALL-DSP全流程';

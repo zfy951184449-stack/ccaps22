@@ -1,5 +1,46 @@
+/* Cleaned up as per new design using inline styles and GlassCard */
 .dashboard-page {
-    padding: 16px;
-    background: #fafafa;
-    min-height: calc(100vh - 64px);
+    /* Ensure padding for the main content area */
+    padding-bottom: 32px;
+}
+
+/* Custom scrollbar for GlassCards if needed */
+.glass-card ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.glass-card ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.glass-card ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 3px;
+}
+
+.glass-card ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+/* Overwrite Antd Input/Select for Glass Effect */
+.glass-input .ant-select-selector,
+.glass-input.ant-picker,
+.glass-input-range.ant-picker {
+    background: rgba(255, 255, 255, 0.5) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+}
+
+.glass-input .ant-select-selector:hover,
+.glass-input.ant-picker:hover,
+.glass-input-range.ant-picker:hover {
+    background: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Hide Ant Design Card default styles if any leaked */
+.glass-card .ant-card-head,
+.glass-card .ant-card-body {
+    background: transparent;
 }

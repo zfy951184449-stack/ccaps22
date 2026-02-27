@@ -6,62 +6,19 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, DatePicker, Cascader, Select, Spin, Empty, Statistic, Row, Col, Tooltip } from 'antd';
-import { TeamOutlined, WarningOutlined, CheckCircleOutlined, InfoCircleOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { Spin, Empty, Statistic, Row, Col, Tooltip } from 'antd';
+import { TeamOutlined, WarningOutlined, CheckCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
-import axios from 'axios';
+import GlassCard from '../common/GlassCard';
+import { dashboardService } from '../../services/dashboardService';
+import { ManpowerCurveData } from '../../types/dashboard';
 import './ManpowerCurveCard.css';
 
-const API_BASE = '/api';
-
-interface ShiftBreakdown {
-    shift_code: string;
-    shift_name: string;
-    has_operation: boolean;
-    count: number;
-}
-
-interface DailyData {
-    date: string;
-    available_count: number;
-    demand_count: number;
-    gap: number;
-    is_weekend: boolean;
-    is_workday: boolean;
-    holiday_type: string;
-    holiday_name: string | null;
-    salary_multiplier: number | null;
-    shift_breakdown: ShiftBreakdown[];
-}
-
-interface ManpowerCurveData {
-    total_headcount: number;
-    daily_data: DailyData[];
-    summary: {
-        avg_gap: string;
-        max_gap: number;
-        max_gap_date: string;
-        sufficiency_rate: number;
-        gap_days: number;
-    };
-}
-
-interface DepartmentOption {
-    value: number;
-    label: string;
-    children?: TeamOption[];
-}
-
-interface TeamOption {
-    value: number;
-    label: string;
-}
-
-interface ShiftOption {
-    id: number;
-    shift_code: string;
-    shift_name: string;
+interface ManpowerCurveCardProps {
+    date: Dayjs;
+    orgPath: number[];
+    shiftId?: number;
 }
 
 // 班次颜色配置
@@ -77,82 +34,25 @@ const getShiftColor = (shiftCode: string, hasOperation: boolean): string => {
     return hasOperation ? colorConfig.withOp : colorConfig.noOp;
 };
 
-const ManpowerCurveCard: React.FC = () => {
+const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
+    date,
+    orgPath,
+    shiftId
+}) => {
     const [loading, setLoading] = useState(false);
-    const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs());
-    const [orgPath, setOrgPath] = useState<number[]>([]);
-    const [selectedShift, setSelectedShift] = useState<number | undefined>(undefined);
     const [data, setData] = useState<ManpowerCurveData | null>(null);
-    const [orgOptions, setOrgOptions] = useState<DepartmentOption[]>([]);
-    const [shiftOptions, setShiftOptions] = useState<ShiftOption[]>([]);
-
-    // 加载组织结构选项
-    useEffect(() => {
-        const loadOrgOptions = async () => {
-            try {
-                const [deptRes, teamRes] = await Promise.all([
-                    axios.get(`${API_BASE}/organization/departments`),
-                    axios.get(`${API_BASE}/organization/teams`),
-                ]);
-
-                const departments = deptRes.data || [];
-                const teams = teamRes.data || [];
-
-                const options: DepartmentOption[] = departments.map((dept: any) => ({
-                    value: dept.id,
-                    label: dept.dept_name || dept.unit_name,
-                    children: teams
-                        .filter((t: any) => t.department_id === dept.id || t.departmentId === dept.id)
-                        .map((t: any) => ({
-                            value: t.id,
-                            label: t.team_name || t.unit_name,
-                        })),
-                }));
-
-                setOrgOptions(options);
-            } catch (error) {
-                console.error('Failed to load org options:', error);
-            }
-        };
-
-        loadOrgOptions();
-    }, []);
-
-    // 加载班次选项
-    useEffect(() => {
-        const loadShiftOptions = async () => {
-            try {
-                const res = await axios.get(`${API_BASE}/dashboard/shifts`);
-                setShiftOptions(res.data || []);
-            } catch (error) {
-                console.error('Failed to load shift options:', error);
-            }
-        };
-
-        loadShiftOptions();
-    }, []);
 
     // 加载曲线数据
     useEffect(() => {
         const loadData = async () => {
             setLoading(true);
             try {
-                const params: any = {
-                    year_month: selectedMonth.format('YYYY-MM'),
-                };
-
-                if (orgPath.length === 1) {
-                    params.department_id = orgPath[0];
-                } else if (orgPath.length === 2) {
-                    params.team_id = orgPath[1];
-                }
-
-                if (selectedShift) {
-                    params.shift_id = selectedShift;
-                }
-
-                const res = await axios.get(`${API_BASE}/dashboard/manpower-curve`, { params });
-                setData(res.data);
+                const res = await dashboardService.getManpowerCurve(
+                    date.format('YYYY-MM'),
+                    orgPath,
+                    shiftId
+                );
+                setData(res);
             } catch (error) {
                 console.error('Failed to load manpower curve:', error);
                 setData(null);
@@ -162,7 +62,7 @@ const ManpowerCurveCard: React.FC = () => {
         };
 
         loadData();
-    }, [selectedMonth, orgPath, selectedShift]);
+    }, [date, orgPath, shiftId]);
 
     // 定义固定的堆叠顺序（从下到上）
     const CATEGORY_ORDER = [
@@ -425,99 +325,46 @@ const ManpowerCurveCard: React.FC = () => {
     }), [stackedBarData, demandLineData, categoryColors, data, holidayAnnotations]);
 
     return (
-        <Card
-            className="manpower-curve-card"
-            title={
-                <div className="card-header">
-                    <span className="card-title">
-                        <TeamOutlined /> 人力供需曲线
-                        <Tooltip title="堆叠柱状图显示各班次可用人数（深色=有操作任务，浅色=待命），红色折线为需求人数">
-                            <InfoCircleOutlined style={{ marginLeft: 8, color: '#8c8c8c', fontSize: 12 }} />
-                        </Tooltip>
-                    </span>
-                    <div className="card-filters">
-                        <div className="month-navigator">
-                            <button
-                                className="month-nav-btn"
-                                onClick={() => setSelectedMonth(selectedMonth.subtract(1, 'month'))}
-                                title="上一月"
-                            >
-                                <LeftOutlined />
-                            </button>
-                            <DatePicker
-                                picker="month"
-                                value={selectedMonth}
-                                onChange={(date) => date && setSelectedMonth(date)}
-                                allowClear={false}
-                                size="small"
-                                style={{ width: 100 }}
-                            />
-                            <button
-                                className="month-nav-btn"
-                                onClick={() => setSelectedMonth(selectedMonth.add(1, 'month'))}
-                                title="下一月"
-                            >
-                                <RightOutlined />
-                            </button>
-                        </div>
-                        <Cascader
-                            options={orgOptions}
-                            value={orgPath}
-                            onChange={(value) => setOrgPath((value || []) as number[])}
-                            placeholder="全部组织"
-                            changeOnSelect
-                            size="small"
-                            style={{ width: 160 }}
-                        />
-                        <Select
-                            value={selectedShift}
-                            onChange={setSelectedShift}
-                            placeholder="全部班次"
-                            allowClear
-                            size="small"
-                            style={{ width: 120 }}
-                            options={shiftOptions.map((s) => ({
-                                value: s.id,
-                                label: s.shift_name,
-                            }))}
-                        />
+        <GlassCard>
+            <div className="card-header" style={{ marginBottom: 20 }}>
+                <span className="card-title" style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                    <div className="icon-wrapper" style={{
+                        background: 'rgba(24, 144, 255, 0.1)',
+                        padding: 8,
+                        borderRadius: 12,
+                        marginRight: 12,
+                        color: '#1890ff'
+                    }}>
+                        <TeamOutlined />
                     </div>
-                </div>
-            }
-        >
+                    人力供需曲线
+                    <Tooltip title="堆叠柱状图显示各班次可用人数（深色=有操作任务，浅色=待命），红色折线为需求人数">
+                        <InfoCircleOutlined style={{ marginLeft: 8, color: '#bfbfbf', fontSize: 14 }} />
+                    </Tooltip>
+                </span>
+            </div>
+
             <Spin spinning={loading}>
                 {data && data.daily_data.length > 0 ? (
                     <>
-                        <div className="chart-container">
-                            <DualAxes {...chartConfig} />
-                        </div>
-                        <div className="chart-legend-hint">
-                            <span className="legend-item">
-                                <span className="legend-color" style={{ background: 'rgba(255,77,79,0.15)' }}></span>
-                                3倍工资节假日
-                            </span>
-                            <span className="legend-item">
-                                <span className="legend-color" style={{ background: 'rgba(0,0,0,0.04)' }}></span>
-                                周末/调休假
-                            </span>
-                        </div>
-                        <div className="summary-row">
+                        <div className="summary-row" style={{ marginBottom: 24 }}>
                             <Row gutter={24}>
                                 <Col span={6}>
                                     <Statistic
-                                        title="团队总人数"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>团队总人数</span>}
                                         value={data.total_headcount}
                                         suffix="人"
-                                        prefix={<TeamOutlined />}
+                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
                                     />
                                 </Col>
                                 <Col span={6}>
                                     <Statistic
-                                        title="人力充足率"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>人力充足率</span>}
                                         value={data.summary.sufficiency_rate}
                                         suffix="%"
                                         valueStyle={{
-                                            color: data.summary.sufficiency_rate >= 80 ? '#52c41a' : '#faad14'
+                                            color: data.summary.sufficiency_rate >= 80 ? '#52c41a' : '#faad14',
+                                            fontSize: 24, fontWeight: 600
                                         }}
                                         prefix={
                                             data.summary.sufficiency_rate >= 80
@@ -528,32 +375,38 @@ const ManpowerCurveCard: React.FC = () => {
                                 </Col>
                                 <Col span={6}>
                                     <Statistic
-                                        title="平均缺口"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>平均缺口</span>}
                                         value={data.summary.avg_gap}
                                         suffix="人/天"
                                         valueStyle={{
-                                            color: Number(data.summary.avg_gap) > 0 ? '#ff4d4f' : '#52c41a'
+                                            color: Number(data.summary.avg_gap) > 0 ? '#ff4d4f' : '#52c41a',
+                                            fontSize: 24, fontWeight: 600
                                         }}
                                     />
                                 </Col>
                                 <Col span={6}>
                                     <Statistic
-                                        title="峰值缺口"
+                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>峰值缺口</span>}
                                         value={data.summary.max_gap}
                                         suffix={data.summary.max_gap_date ? `人 (${dayjs(data.summary.max_gap_date).format('M/D')})` : '人'}
                                         valueStyle={{
-                                            color: data.summary.max_gap > 0 ? '#ff4d4f' : '#52c41a'
+                                            color: data.summary.max_gap > 0 ? '#ff4d4f' : '#52c41a',
+                                            fontSize: 24, fontWeight: 600
                                         }}
                                     />
                                 </Col>
                             </Row>
+                        </div>
+
+                        <div className="chart-container" style={{ height: 320 }}>
+                            <DualAxes {...chartConfig} />
                         </div>
                     </>
                 ) : (
                     <Empty description="暂无数据" />
                 )}
             </Spin>
-        </Card>
+        </GlassCard>
     );
 };
 

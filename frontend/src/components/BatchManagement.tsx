@@ -546,7 +546,7 @@ const BatchManagement: React.FC = () => {
           <Table
             rowKey="id"
             loading={loading}
-            dataSource={batches}
+            dataSource={Array.isArray(batches) ? batches : []}
             columns={columns}
             pagination={{ pageSize: 5 }}
             size="small"

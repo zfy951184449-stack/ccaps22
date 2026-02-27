@@ -221,7 +221,7 @@ const buildEmployeeData = (
   days: DayColumn[],
   renderChip: (plan: ShiftPlanWithRelations) => React.ReactNode | null,
   filterPlan?: (plan: ShiftPlanWithRelations) => boolean,
-  allEmployees: Array<{id: number, name: string, code: string, org_role?: string, primary_role_name?: string, primary_role_code?: string}> = [],
+  allEmployees: Array<{ id: number, name: string, code: string, org_role?: string, primary_role_name?: string, primary_role_code?: string }> = [],
 ) => {
   const employeeMap = new Map<
     number,
@@ -407,7 +407,7 @@ const PersonnelCalendar: React.FC = () => {
     salaryMultiplier?: number;
   }>>({});
   const [gridWidth, setGridWidth] = useState<number>(0);
-  const [allEmployees, setAllEmployees] = useState<Array<{id: number, name: string, code: string, org_role?: string, primary_role_name?: string, primary_role_code?: string}>>([]);
+  const [allEmployees, setAllEmployees] = useState<Array<{ id: number, name: string, code: string, org_role?: string, primary_role_name?: string, primary_role_code?: string }>>([]);
 
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -772,101 +772,101 @@ const PersonnelCalendar: React.FC = () => {
   const loadShiftPlans = useCallback(async () => {
     setLoading(true);
     try {
-        const normalizePlans = (plans: any[]): ShiftPlan[] => plans.map((plan) => {
-          const rawCategory = (plan.plan_category || 'BASE').toString().toUpperCase();
-          const category = (['BASE', 'REST', 'PRODUCTION', 'OVERTIME'] as const).includes(rawCategory as any)
-            ? (rawCategory as ShiftPlan['plan_category'])
-            : 'BASE';
+      const normalizePlans = (plans: any[]): ShiftPlan[] => plans.map((plan) => {
+        const rawCategory = (plan.plan_category || 'BASE').toString().toUpperCase();
+        const category = (['BASE', 'REST', 'PRODUCTION', 'OVERTIME'] as const).includes(rawCategory as any)
+          ? (rawCategory as ShiftPlan['plan_category'])
+          : 'BASE';
 
-          return {
-            plan_id: plan.plan_id,
-            employee_id: plan.employee_id,
-            employee_name: plan.employee_name,
-            employee_code: plan.employee_code,
-            primary_role_id: plan.primary_role_id !== undefined && plan.primary_role_id !== null ? Number(plan.primary_role_id) : null,
-            primary_role_name: plan.primary_role_name ?? plan.primaryRoleName ?? null,
-            primary_role_code: plan.primary_role_code ?? plan.primaryRoleCode ?? null,
-            employee_org_role: plan.org_role ?? plan.employee_org_role ?? plan.employeeOrgRole ?? null,
-            plan_date: dayjs(plan.plan_date).format('YYYY-MM-DD'),
-            plan_category: category,
-            plan_state: plan.plan_state || 'PLANNED',
-            plan_hours: plan.plan_hours !== null && plan.plan_hours !== undefined ? Number(plan.plan_hours) : undefined,
-            overtime_hours: plan.overtime_hours !== null && plan.overtime_hours !== undefined ? Number(plan.overtime_hours) : undefined,
-            is_generated: Boolean(plan.is_generated),
-            shift_code: plan.shift_code || null,
-            shift_name: plan.shift_name || null,
-            shift_start_time: plan.shift_start_time || null,
-            shift_end_time: plan.shift_end_time || null,
-            shift_nominal_hours: plan.shift_nominal_hours !== null && plan.shift_nominal_hours !== undefined ? Number(plan.shift_nominal_hours) : null,
-            shift_is_cross_day: plan.shift_is_cross_day !== null && plan.shift_is_cross_day !== undefined ? Boolean(plan.shift_is_cross_day) : null,
-            is_locked: plan.is_locked !== undefined && plan.is_locked !== null ? Number(plan.is_locked) : null,
-            lock_reason: plan.lock_reason || null,
-            locked_at: plan.locked_at ? dayjs(plan.locked_at).format('YYYY-MM-DD HH:mm:ss') : null,
-            locked_by: plan.locked_by !== undefined && plan.locked_by !== null ? Number(plan.locked_by) : null,
-            operation_plan_id: plan.operation_plan_id || null,
-            operation_start: plan.operation_start ? dayjs(plan.operation_start).format('YYYY-MM-DD HH:mm') : null,
-            operation_end: plan.operation_end ? dayjs(plan.operation_end).format('YYYY-MM-DD HH:mm') : null,
-            operation_required_people: plan.operation_required_people !== null && plan.operation_required_people !== undefined ? Number(plan.operation_required_people) : null,
-            operation_code: plan.operation_code || null,
-            operation_name: plan.operation_name || null,
-            batch_plan_id: plan.batch_plan_id || null,
-            batch_code: plan.batch_code || null,
-            batch_name: plan.batch_name || null,
-            stage_code: plan.stage_code || null,
-            stage_name: plan.stage_name || null,
-          };
-        });
-
-        const params = {
-          start_date: startOfRange.format('YYYY-MM-DD'),
-          end_date: endOfRange.format('YYYY-MM-DD'),
-          employee_id: selectedEmployee,
+        return {
+          plan_id: plan.plan_id,
+          employee_id: plan.employee_id,
+          employee_name: plan.employee_name,
+          employee_code: plan.employee_code,
+          primary_role_id: plan.primary_role_id !== undefined && plan.primary_role_id !== null ? Number(plan.primary_role_id) : null,
+          primary_role_name: plan.primary_role_name ?? plan.primaryRoleName ?? null,
+          primary_role_code: plan.primary_role_code ?? plan.primaryRoleCode ?? null,
+          employee_org_role: plan.org_role ?? plan.employee_org_role ?? plan.employeeOrgRole ?? null,
+          plan_date: dayjs(plan.plan_date).format('YYYY-MM-DD'),
+          plan_category: category,
+          plan_state: plan.plan_state || 'PLANNED',
+          plan_hours: plan.plan_hours !== null && plan.plan_hours !== undefined ? Number(plan.plan_hours) : undefined,
+          overtime_hours: plan.overtime_hours !== null && plan.overtime_hours !== undefined ? Number(plan.overtime_hours) : undefined,
+          is_generated: Boolean(plan.is_generated),
+          shift_code: plan.shift_code || null,
+          shift_name: plan.shift_name || null,
+          shift_start_time: plan.shift_start_time || null,
+          shift_end_time: plan.shift_end_time || null,
+          shift_nominal_hours: plan.shift_nominal_hours !== null && plan.shift_nominal_hours !== undefined ? Number(plan.shift_nominal_hours) : null,
+          shift_is_cross_day: plan.shift_is_cross_day !== null && plan.shift_is_cross_day !== undefined ? Boolean(plan.shift_is_cross_day) : null,
+          is_locked: plan.is_locked !== undefined && plan.is_locked !== null ? Number(plan.is_locked) : null,
+          lock_reason: plan.lock_reason || null,
+          locked_at: plan.locked_at ? dayjs(plan.locked_at).format('YYYY-MM-DD HH:mm:ss') : null,
+          locked_by: plan.locked_by !== undefined && plan.locked_by !== null ? Number(plan.locked_by) : null,
+          operation_plan_id: plan.operation_plan_id || null,
+          operation_start: plan.operation_start ? dayjs(plan.operation_start).format('YYYY-MM-DD HH:mm') : null,
+          operation_end: plan.operation_end ? dayjs(plan.operation_end).format('YYYY-MM-DD HH:mm') : null,
+          operation_required_people: plan.operation_required_people !== null && plan.operation_required_people !== undefined ? Number(plan.operation_required_people) : null,
+          operation_code: plan.operation_code || null,
+          operation_name: plan.operation_name || null,
+          batch_plan_id: plan.batch_plan_id || null,
+          batch_code: plan.batch_code || null,
+          batch_name: plan.batch_name || null,
+          stage_code: plan.stage_code || null,
+          stage_name: plan.stage_name || null,
         };
+      });
 
-        const [scheduleResponse, workdayResponse] = await Promise.all([
-          axios.get(`${API_BASE_URL}/personnel-schedules/overview`, { params }),
-          axios
-            .get(`${API_BASE_URL}/calendar/workdays`, {
-              params: {
-                start_date: startOfRange.format('YYYY-MM-DD'),
-                end_date: endOfRange.format('YYYY-MM-DD'),
-              },
-            })
-            .catch((error) => {
-              console.error('Error fetching workday information:', error);
-              return { data: [] } as { data: any[] };
-            }),
-        ]);
+      const params = {
+        start_date: startOfRange.format('YYYY-MM-DD'),
+        end_date: endOfRange.format('YYYY-MM-DD'),
+        employee_id: selectedEmployee,
+      };
 
-        const responseData = Array.isArray(scheduleResponse.data) ? scheduleResponse.data : [];
-        setShiftPlans(normalizePlans(responseData));
+      const [scheduleResponse, workdayResponse] = await Promise.all([
+        axios.get(`${API_BASE_URL}/personnel-schedules/overview`, { params }),
+        axios
+          .get(`${API_BASE_URL}/calendar/workdays`, {
+            params: {
+              start_date: startOfRange.format('YYYY-MM-DD'),
+              end_date: endOfRange.format('YYYY-MM-DD'),
+            },
+          })
+          .catch((error) => {
+            console.error('Error fetching workday information:', error);
+            return { data: [] } as { data: any[] };
+          }),
+      ]);
 
-        const workdayRecords = Array.isArray(workdayResponse.data)
-          ? workdayResponse.data
-          : [];
-        const workdayMapPayload: Record<string, {
-          isWorkday: boolean;
-          holidayName?: string | null;
-          isTripleSalary?: boolean;
-          salaryMultiplier?: number;
-        }> = {};
-        workdayRecords.forEach((item: any) => {
-          const dateKey = dayjs(item.calendar_date).format('YYYY-MM-DD');
-          workdayMapPayload[dateKey] = {
-            isWorkday: Number(item.is_workday ?? 1) === 1,
-            holidayName: item.holiday_name ?? null,
-            isTripleSalary: Boolean(item.is_triple_salary),
-            salaryMultiplier: Number(item.salary_multiplier || 0),
-          };
-        });
-        setWorkdayMap(workdayMapPayload);
-      } catch (error) {
-        console.error('Error fetching personnel schedules:', error);
-        message.error('获取排班数据失败');
-        setWorkdayMap({});
-      } finally {
-        setLoading(false);
-      }
+      const responseData = Array.isArray(scheduleResponse.data) ? scheduleResponse.data : [];
+      setShiftPlans(normalizePlans(responseData));
+
+      const workdayRecords = Array.isArray(workdayResponse.data)
+        ? workdayResponse.data
+        : [];
+      const workdayMapPayload: Record<string, {
+        isWorkday: boolean;
+        holidayName?: string | null;
+        isTripleSalary?: boolean;
+        salaryMultiplier?: number;
+      }> = {};
+      workdayRecords.forEach((item: any) => {
+        const dateKey = dayjs(item.calendar_date).format('YYYY-MM-DD');
+        workdayMapPayload[dateKey] = {
+          isWorkday: Number(item.is_workday ?? 1) === 1,
+          holidayName: item.holiday_name ?? null,
+          isTripleSalary: Boolean(item.is_triple_salary),
+          salaryMultiplier: Number(item.salary_multiplier || 0),
+        };
+      });
+      setWorkdayMap(workdayMapPayload);
+    } catch (error) {
+      console.error('Error fetching personnel schedules:', error);
+      message.error('获取排班数据失败');
+      setWorkdayMap({});
+    } finally {
+      setLoading(false);
+    }
   }, [autoCentered, endOfRange, selectedEmployee, startOfRange]);
 
   // 加载员工数据
@@ -1125,11 +1125,11 @@ const PersonnelCalendar: React.FC = () => {
           const monthOver =
             metrics.monthStandardHours > 0 &&
             (metrics.monthHours ?? 0) >
-              metrics.monthStandardHours + monthTolerance;
+            metrics.monthStandardHours + monthTolerance;
           const monthUnder =
             metrics.monthStandardHours > 0 &&
             (metrics.monthHours ?? 0) + monthTolerance <
-              metrics.monthStandardHours;
+            metrics.monthStandardHours;
           const diffClass = (value: number) =>
             value > 0.05 ? 'positive' : value < -0.05 ? 'negative' : 'neutral';
           const quarterDiffText = formatDiff(metrics.quarterDeviation);
@@ -1249,15 +1249,15 @@ const PersonnelCalendar: React.FC = () => {
             )}
           </div>
         ),
-      dataIndex: day.date,
-      key: day.date,
-      width: dynamicDayWidth,
-      render: (_: any, row: any) => {
-        const cell: ShiftCell = row.cells[day.date];
-        return (
-          <div className={`shift-cell cell-${cell.status}`}>{cell.content}</div>
-        );
-      },
+        dataIndex: day.date,
+        key: day.date,
+        width: dynamicDayWidth,
+        render: (_: any, row: any) => {
+          const cell: ShiftCell = row.cells[day.date];
+          return (
+            <div className={`shift-cell cell-${cell.status}`}>{cell.content}</div>
+          );
+        },
       };
     });
 
@@ -1280,7 +1280,7 @@ const PersonnelCalendar: React.FC = () => {
     if (viewType === 'week') {
       setCurrentDate(direction === 'prev' ? currentDate.subtract(1, 'week') : currentDate.add(1, 'week'));
     } else if (viewType === 'custom') {
-      const daysDiff = customDateRange[1] && customDateRange[0] 
+      const daysDiff = customDateRange[1] && customDateRange[0]
         ? customDateRange[1].diff(customDateRange[0], 'day') + 1
         : 14;
       if (direction === 'prev') {
@@ -1294,7 +1294,7 @@ const PersonnelCalendar: React.FC = () => {
       }
     } else {
       // 默认两周视图，按两周移动
-      const newDate = direction === 'prev' 
+      const newDate = direction === 'prev'
         ? currentDate.subtract(2, 'week')
         : currentDate.add(2, 'week');
       setCurrentDate(newDate);
@@ -1370,13 +1370,13 @@ const PersonnelCalendar: React.FC = () => {
         >
           {(shiftPlans.length > 0
             ? Array.from(new Map(shiftPlans.map((plan) => [plan.employee_id, {
-                id: plan.employee_id,
-                name: plan.employee_name,
-                code: plan.employee_code,
-                org_role: plan.employee_org_role,
-                primary_role_name: plan.primary_role_name,
-                primary_role_code: plan.primary_role_code,
-              }])).values())
+              id: plan.employee_id,
+              name: plan.employee_name,
+              code: plan.employee_code,
+              org_role: plan.employee_org_role,
+              primary_role_name: plan.primary_role_name,
+              primary_role_code: plan.primary_role_code,
+            }])).values())
             : allEmployees
           ).map((item) => (
             <Option key={item.id} value={item.id}>
@@ -1442,11 +1442,11 @@ const PersonnelCalendar: React.FC = () => {
         dataSource={dataSource}
         pagination={false}
         loading={false}
-        scroll={{ 
-          x: gridWidth > 0 && days.length > 0 
+        scroll={{
+          x: gridWidth > 0 && days.length > 0
             ? Math.max(gridWidth - 220, Math.min(200 + days.length * (density === 'compact' ? 90 : 150), days.length * (density === 'compact' ? 90 : 150) + 220))
-            : undefined, 
-          y: 600 
+            : undefined,
+          y: 600
         }}
         bordered
         rowClassName={(record: any) =>
@@ -1468,76 +1468,76 @@ const PersonnelCalendar: React.FC = () => {
     >
       {selectedPlan ? (
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
-        <Descriptions column={1} bordered size="small">
-          <Descriptions.Item label="员工">{selectedPlan.employee_name} ({selectedPlan.employee_code})</Descriptions.Item>
-          <Descriptions.Item label="日期">{selectedPlan.plan_date}</Descriptions.Item>
-          <Descriptions.Item label="类别">{selectedPlan.plan_category}</Descriptions.Item>
-          <Descriptions.Item label="班次">
-            {selectedPlan.plan_category === 'REST' ? '休息' : selectedPlan.shift_name || selectedPlan.shift_code || '未定义班次'}
-          </Descriptions.Item>
-          <Descriptions.Item label="班次时间">
-            {selectedPlan.shift_start_time || '--'} ~ {selectedPlan.shift_end_time || '--'}
-          </Descriptions.Item>
-          <Descriptions.Item label="计划工时">{selectedPlan.plan_hours ?? selectedPlan.shift_nominal_hours ?? 0} h</Descriptions.Item>
-          <Descriptions.Item label="状态">
-            <Badge status={stateToBadge(selectedPlan.plan_state)} text={selectedPlan.plan_state} />
-          </Descriptions.Item>
-          <Descriptions.Item label="是否自动生成">{selectedPlan.is_generated ? '是' : '否'}</Descriptions.Item>
-          <Descriptions.Item label="加班小时">{selectedPlan.overtime_hours || 0} h</Descriptions.Item>
-          {(selectedPlan.plan_state === 'LOCKED' || Number(selectedPlan.is_locked) === 1) && (
-            <Descriptions.Item label="锁定信息">
-              <Space direction="vertical" size={2}>
-                <span>状态：已锁定</span>
-                {selectedPlan.lock_reason ? <span>原因：{selectedPlan.lock_reason}</span> : null}
-                {selectedPlan.locked_at ? <span>时间：{selectedPlan.locked_at}</span> : null}
-              </Space>
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="员工">{selectedPlan.employee_name} ({selectedPlan.employee_code})</Descriptions.Item>
+            <Descriptions.Item label="日期">{selectedPlan.plan_date}</Descriptions.Item>
+            <Descriptions.Item label="类别">{selectedPlan.plan_category}</Descriptions.Item>
+            <Descriptions.Item label="班次">
+              {selectedPlan.plan_category === 'REST' ? '休息' : selectedPlan.shift_name || selectedPlan.shift_code || '未定义班次'}
             </Descriptions.Item>
-          )}
-          {selectedPlan.batch_code || selectedPlan.operation_name ? (
-            <Descriptions.Item label="生产任务">
-              <Space direction="vertical" size={4}>
-                {selectedPlan.batch_code ? (
-                  <span>批次：{selectedPlan.batch_code}{selectedPlan.batch_name ? `（${selectedPlan.batch_name}）` : ''}</span>
-                ) : null}
-                {selectedPlan.operation_name ? (
-                  <span>操作：{selectedPlan.stage_name ? `${selectedPlan.stage_name} · ` : ''}{selectedPlan.operation_name}</span>
-                ) : null}
-                {selectedPlan.operation_start || selectedPlan.operation_end ? (
-                  <span>操作时间：{selectedPlan.operation_start || '--'} ~ {selectedPlan.operation_end || '--'}</span>
-                ) : null}
-              </Space>
+            <Descriptions.Item label="班次时间">
+              {selectedPlan.shift_start_time || '--'} ~ {selectedPlan.shift_end_time || '--'}
             </Descriptions.Item>
-          ) : null}
-          {selectedPlan.relatedProduction && selectedPlan.relatedProduction.length ? (
-            <Descriptions.Item label="任务列表">
-              <Space direction="vertical" size={4}>
-                {selectedPlan.relatedProduction.map((prod) => (
-                  <div key={`drawer-task-${prod.plan_id}`}>
-                    {prod.batch_code ? <div>批次：{prod.batch_code}{prod.batch_name ? `（${prod.batch_name}）` : ''}</div> : null}
-                    <div>操作：{prod.stage_name ? `${prod.stage_name} · ` : ''}{prod.operation_name || '生产任务'}</div>
-                    {prod.operation_start || prod.operation_end ? (
-                      <div>时间：{prod.operation_start || '--'} ~ {prod.operation_end || '--'}</div>
-                    ) : null}
-                  </div>
-                ))}
-              </Space>
+            <Descriptions.Item label="计划工时">{selectedPlan.plan_hours ?? selectedPlan.shift_nominal_hours ?? 0} h</Descriptions.Item>
+            <Descriptions.Item label="状态">
+              <Badge status={stateToBadge(selectedPlan.plan_state)} text={selectedPlan.plan_state} />
             </Descriptions.Item>
-          ) : null}
-          {selectedPlan.relatedOvertime && selectedPlan.relatedOvertime.length ? (
-            <Descriptions.Item label="加班明细">
-              <Space direction="vertical" size={4}>
-                {selectedPlan.relatedOvertime.map((ot) => (
-                  <div key={`drawer-ot-${ot.plan_id}`}>
-                    <span>加班：{ot.plan_hours || 0}h</span>
-                    {ot.operation_start || ot.operation_end ? (
-                      <span> （{ot.operation_start || '--'} ~ {ot.operation_end || '--'}）</span>
-                    ) : null}
-                  </div>
-                ))}
-              </Space>
-            </Descriptions.Item>
-          ) : null}
-        </Descriptions>
+            <Descriptions.Item label="是否自动生成">{selectedPlan.is_generated ? '是' : '否'}</Descriptions.Item>
+            <Descriptions.Item label="加班小时">{selectedPlan.overtime_hours || 0} h</Descriptions.Item>
+            {(selectedPlan.plan_state === 'LOCKED' || Number(selectedPlan.is_locked) === 1) && (
+              <Descriptions.Item label="锁定信息">
+                <Space direction="vertical" size={2}>
+                  <span>状态：已锁定</span>
+                  {selectedPlan.lock_reason ? <span>原因：{selectedPlan.lock_reason}</span> : null}
+                  {selectedPlan.locked_at ? <span>时间：{selectedPlan.locked_at}</span> : null}
+                </Space>
+              </Descriptions.Item>
+            )}
+            {selectedPlan.batch_code || selectedPlan.operation_name ? (
+              <Descriptions.Item label="生产任务">
+                <Space direction="vertical" size={4}>
+                  {selectedPlan.batch_code ? (
+                    <span>批次：{selectedPlan.batch_code}{selectedPlan.batch_name ? `（${selectedPlan.batch_name}）` : ''}</span>
+                  ) : null}
+                  {selectedPlan.operation_name ? (
+                    <span>操作：{selectedPlan.stage_name ? `${selectedPlan.stage_name} · ` : ''}{selectedPlan.operation_name}</span>
+                  ) : null}
+                  {selectedPlan.operation_start || selectedPlan.operation_end ? (
+                    <span>操作时间：{selectedPlan.operation_start || '--'} ~ {selectedPlan.operation_end || '--'}</span>
+                  ) : null}
+                </Space>
+              </Descriptions.Item>
+            ) : null}
+            {selectedPlan.relatedProduction && selectedPlan.relatedProduction.length ? (
+              <Descriptions.Item label="任务列表">
+                <Space direction="vertical" size={4}>
+                  {selectedPlan.relatedProduction.map((prod) => (
+                    <div key={`drawer-task-${prod.plan_id}`}>
+                      {prod.batch_code ? <div>批次：{prod.batch_code}{prod.batch_name ? `（${prod.batch_name}）` : ''}</div> : null}
+                      <div>操作：{prod.stage_name ? `${prod.stage_name} · ` : ''}{prod.operation_name || '生产任务'}</div>
+                      {prod.operation_start || prod.operation_end ? (
+                        <div>时间：{prod.operation_start || '--'} ~ {prod.operation_end || '--'}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </Space>
+              </Descriptions.Item>
+            ) : null}
+            {selectedPlan.relatedOvertime && selectedPlan.relatedOvertime.length ? (
+              <Descriptions.Item label="加班明细">
+                <Space direction="vertical" size={4}>
+                  {selectedPlan.relatedOvertime.map((ot) => (
+                    <div key={`drawer-ot-${ot.plan_id}`}>
+                      <span>加班：{ot.plan_hours || 0}h</span>
+                      {ot.operation_start || ot.operation_end ? (
+                        <span> （{ot.operation_start || '--'} ~ {ot.operation_end || '--'}）</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </Space>
+              </Descriptions.Item>
+            ) : null}
+          </Descriptions>
           <Divider style={{ margin: 0 }} />
           <Space>
             <Button
@@ -1564,7 +1564,7 @@ const PersonnelCalendar: React.FC = () => {
             <span>人员排班日历</span>
           </Space>
         }
-        styles={{ body: { padding: 0 } }}
+        bodyStyle={{ padding: 0 }}
       >
         <div className="calendar-principles-alert">
           <Alert

@@ -7,7 +7,10 @@ import {
     ZoomInOutlined,
     SaveOutlined,
     SafetyOutlined,
-    TeamOutlined
+    TeamOutlined,
+    PlusCircleOutlined,
+    CheckOutlined,
+    CloseOutlined
 } from '@ant-design/icons';
 import { ProcessTemplate } from '../types';
 import { TOKENS, TITLE_BAR_HEIGHT } from '../constants';
@@ -29,6 +32,12 @@ interface GanttHeaderProps {
     // 共享组面板控制
     onToggleSharePanel?: () => void;
     shareGroupCount?: number;
+    // 快捷创建共享组模式
+    isShareGroupMode?: boolean;
+    selectedOperationCount?: number;
+    onEnterShareGroupMode?: () => void;
+    onConfirmShareGroup?: () => void;
+    onCancelShareGroup?: () => void;
 }
 
 export const GanttHeader: React.FC<GanttHeaderProps> = ({
@@ -44,7 +53,13 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
     handleAutoSchedule,
     scheduling,
     onToggleSharePanel,
-    shareGroupCount = 0
+    shareGroupCount = 0,
+    // 快捷创建共享组
+    isShareGroupMode = false,
+    selectedOperationCount = 0,
+    onEnterShareGroupMode,
+    onConfirmShareGroup,
+    onCancelShareGroup
 }) => {
     return (
         <div
@@ -80,7 +95,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
 
             <Space size={16} align="center">
                 {/* 共享组面板按钮 */}
-                {onToggleSharePanel && (
+                {onToggleSharePanel && !isShareGroupMode && (
                     <Tooltip title="管理人员共享组">
                         <Button
                             icon={<TeamOutlined />}
@@ -94,6 +109,45 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                             共享组 {shareGroupCount > 0 && <Tag color="blue" style={{ marginLeft: 4, marginRight: 0 }}>{shareGroupCount}</Tag>}
                         </Button>
                     </Tooltip>
+                )}
+
+                {/* 快捷创建共享组按钮 */}
+                {!isShareGroupMode ? (
+                    onEnterShareGroupMode && (
+                        <Tooltip title="快捷创建共享组">
+                            <Button
+                                icon={<PlusCircleOutlined />}
+                                onClick={onEnterShareGroupMode}
+                                style={{
+                                    borderRadius: 8,
+                                    borderColor: '#52c41a',
+                                    color: '#52c41a'
+                                }}
+                            >
+                                添加共享组
+                            </Button>
+                        </Tooltip>
+                    )
+                ) : (
+                    <Space>
+                        <Tag color="processing" style={{ padding: '4px 8px' }}>选择操作加入共享组</Tag>
+                        <Button
+                            type="primary"
+                            icon={<CheckOutlined />}
+                            onClick={onConfirmShareGroup}
+                            disabled={selectedOperationCount < 2}
+                            style={{ borderRadius: 8 }}
+                        >
+                            确认创建 ({selectedOperationCount})
+                        </Button>
+                        <Button
+                            icon={<CloseOutlined />}
+                            onClick={onCancelShareGroup}
+                            style={{ borderRadius: 8 }}
+                        >
+                            取消
+                        </Button>
+                    </Space>
                 )}
 
                 <Space.Compact>

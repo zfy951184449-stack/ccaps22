@@ -374,6 +374,62 @@ export const getBatchConstraintsForGantt = async (req: Request, res: Response) =
   }
 };
 
+export const getBatchConstraintsForGanttBatches = async (req: Request, res: Response) => {
+  try {
+    const { batch_ids } = req.query;
+
+    if (!batch_ids || typeof batch_ids !== 'string') {
+      return res.status(400).json({ error: 'Invalid batch_ids parameter' });
+    }
+
+    const start = Date.now();
+    const ids = batch_ids.split(',').map(Number).filter(id => !Number.isNaN(id));
+
+    if (ids.length === 0) {
+      return res.json([]);
+    }
+
+    // Use string join for IN clause since prepared statement array support varies
+    const placeholders = ids.map(() => '?').join(',');
+
+    // NOTE: Performance Optimization for Bulk Fetch
+    // We fetch constraints for ALL specified batches in one query
+    const query = `
+      SELECT
+        boc.id AS constraint_id,
+        boc.batch_plan_id,
+        boc.batch_operation_plan_id,
+        boc.predecessor_batch_operation_plan_id,
+        boc.constraint_type,
+        boc.time_lag,
+        boc.constraint_level,
+        boc.share_mode,
+        boc.constraint_name,
+        boc.description,
+        bop_current.template_schedule_id AS current_template_schedule_id,
+        bop_predecessor.template_schedule_id AS predecessor_template_schedule_id,
+        COALESCE(ps_current.stage_name, '独立操作') AS current_stage_name,
+        COALESCE(ps_predecessor.stage_name, '独立操作') AS predecessor_stage_name
+      FROM batch_operation_constraints boc
+      JOIN batch_operation_plans bop_current ON boc.batch_operation_plan_id = bop_current.id
+      JOIN batch_operation_plans bop_predecessor ON boc.predecessor_batch_operation_plan_id = bop_predecessor.id
+      LEFT JOIN stage_operation_schedules sos_current ON bop_current.template_schedule_id = sos_current.id
+      LEFT JOIN stage_operation_schedules sos_predecessor ON bop_predecessor.template_schedule_id = sos_predecessor.id
+      LEFT JOIN process_stages ps_current ON sos_current.stage_id = ps_current.id
+      LEFT JOIN process_stages ps_predecessor ON sos_predecessor.stage_id = ps_predecessor.id
+      WHERE boc.batch_plan_id IN (${placeholders})
+      ORDER BY boc.batch_plan_id, boc.batch_operation_plan_id
+    `;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, ids);
+    console.log(`[Performance] Fetched constraints for ${ids.length} batches in ${Date.now() - start}ms. Count: ${rows.length}`);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching batch constraints (bulk):', error);
+    res.status(500).json({ error: 'Failed to fetch batch constraints' });
+  }
+};
+
 // 获取可用的操作列表（用于创建约束时选择）
 export const getAvailableOperations = async (req: Request, res: Response) => {
   try {

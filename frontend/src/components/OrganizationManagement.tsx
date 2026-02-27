@@ -111,14 +111,14 @@ const OrganizationManagement: React.FC = () => {
         leader.employmentStatus === 'ACTIVE'
           ? undefined
           : {
-              color: 'red',
-              text: '停用',
-            },
+            color: 'red',
+            text: '停用',
+          },
       gapTag: leader.hasShiftLeaderGap
         ? {
-            color: 'warning',
-            text: '缺少班组长层级',
-          }
+          color: 'warning',
+          text: '缺少班组长层级',
+        }
         : null,
       leader,
     };
@@ -143,9 +143,9 @@ const OrganizationManagement: React.FC = () => {
         statusTag: unit.isActive
           ? undefined
           : {
-              color: 'red',
-              text: '禁用',
-            },
+            color: 'red',
+            text: '禁用',
+          },
         unit,
         children: children.length ? children : undefined,
       };
@@ -500,7 +500,7 @@ const OrganizationManagement: React.FC = () => {
         title={selectedRow ? `${selectedRow.title} - 详情` : '详情'}
         open={drawerVisible}
         onClose={() => setDrawerVisible(false)}
-        destroyOnHidden
+        destroyOnClose
       >
         {renderDetail()}
       </Drawer>

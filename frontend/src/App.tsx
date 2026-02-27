@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Typography, Button, ConfigProvider } from 'antd';
+import { Layout, Typography, ConfigProvider } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   SafetyOutlined,
   SettingOutlined,
   ProjectOutlined,
   LinkOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   TableOutlined,
   ClockCircleOutlined,
   ApartmentOutlined,
@@ -17,6 +15,7 @@ import {
   ControlOutlined,
   BugOutlined,
   RobotOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
@@ -27,6 +26,7 @@ import OperationsPage from './pages/OperationsPage';
 import ProcessTemplatesPage from './pages/ProcessTemplatesPage';
 import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
 import BatchManagementPage from './pages/BatchManagementPage';
+import BatchManagementV4Page from './pages/BatchManagementV4Page';
 import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
 import OperationConstraintsPage from './pages/OperationConstraintsPage';
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
@@ -36,185 +36,42 @@ import SystemSettingsPage from './pages/SystemSettingsPage';
 import AutoSchedulingDebugPage from './pages/AutoSchedulingDebugPage';
 import AutoSchedulingPage from './pages/AutoSchedulingPage';
 import ModularSchedulingPage from './pages/ModularSchedulingPage';
+import SchedulingV3Page from './pages/SchedulingV3Page';
+import SolverV4Page from './pages/SolverV4Page';
 import Dashboard from './components/Dashboard';
 import OperationTypesPage from './pages/OperationTypesPage';
+import CommandRail from './components/Navigation/CommandRail';
 
-const { Header, Sider, Content } = Layout;
+const { Header, Content } = Layout;
 const { Title } = Typography;
 
-// 路由路径映射到菜单key
-const pathToMenuKey: { [key: string]: string } = {
-  '/': 'dashboard',
-  '/dashboard': 'dashboard',
-  '/organization-workbench': 'organization-workbench',
-  '/qualifications': 'qualifications',
-  '/qualification-matrix': 'qualification-matrix',
-  '/operations': 'operations',
-  '/operation-types': 'operation-types',
-  '/process-templates': 'process-templates',
-  '/batch-management': 'batch-management',
-  '/personnel-scheduling': 'personnel-scheduling',
-  '/auto-scheduling': 'auto-scheduling',
-  '/modular-scheduling': 'modular-scheduling',
-  '/shift-definitions': 'shift-definitions',
-  '/operation-constraints': 'operation-constraints',
-  '/system-monitor': 'system-monitor',
-  '/system-settings': 'system-settings',
-  '/auto-scheduling-debug': 'auto-scheduling-debug',
-};
-
-const findMenuLabel = (items: MenuProps['items'], key: string): React.ReactNode | undefined => {
-  if (!items) {
-    return undefined;
-  }
-  for (const item of items) {
-    if (!item) {
-      continue;
-    }
-    if ('key' in item && item.key === key) {
-      if ('label' in item) {
-        return item.label as React.ReactNode;
-      }
-      return undefined;
-    }
-    if ('children' in item && item.children) {
-      const childLabel = findMenuLabel(item.children, key);
-      if (childLabel) {
-        return childLabel;
-      }
-    }
-  }
-  return undefined;
+// Mapping for title display
+const pathToTitle: { [key: string]: string } = {
+  '/': '调度中心',
+  '/dashboard': '调度中心',
+  '/organization-workbench': '组织与人员',
+  '/qualifications': '资质管理',
+  '/qualification-matrix': '资质矩阵',
+  '/operations': '操作管理',
+  '/operation-types': '操作类型',
+  '/process-templates': '工艺模版',
+  '/batch-management': '批次管理',
+  '/batch-management-v4': '批次管理 V4',
+  '/personnel-scheduling': '人员排班',
+  '/auto-scheduling': '自动排班',
+  '/modular-scheduling': '自动排班（模块化）',
+  '/scheduling-v3': 'V3 自动排班',
+  '/solver-v4': 'V4 自动排班',
+  '/shift-definitions': '班次定义',
+  '/operation-constraints': '操作约束',
+  '/system-monitor': '系统监控',
+  '/system-settings': '系统设置',
+  '/auto-scheduling-debug': '排班调试',
 };
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const [collapsed, setCollapsed] = useState(false);
-
-  const menuItems: MenuProps['items'] = [
-    {
-      key: 'dashboard',
-      icon: <DashboardOutlined />,
-      label: '调度中心',
-    },
-    {
-      type: 'group',
-      label: '基础数据',
-      children: [
-        {
-          key: 'qualifications',
-          icon: <SafetyOutlined />,
-          label: '资质管理',
-        },
-        {
-          key: 'qualification-matrix',
-          icon: <TableOutlined />,
-          label: '资质矩阵',
-        },
-        {
-          key: 'operations',
-          icon: <SettingOutlined />,
-          label: '操作管理',
-        },
-        {
-          key: 'operation-types',
-          icon: <AppstoreOutlined />,
-          label: '操作类型',
-        },
-      ],
-    },
-    {
-      type: 'group',
-      label: '生产计划',
-      children: [
-        {
-          key: 'process-templates',
-          icon: <ProjectOutlined />,
-          label: '工艺模版',
-        },
-        {
-          key: 'batch-management',
-          icon: <AppstoreOutlined />,
-          label: '批次管理',
-        },
-      ],
-    },
-    {
-      type: 'group',
-      label: '人员管理',
-      children: [
-        {
-          key: 'organization-workbench',
-          icon: <ApartmentOutlined />,
-          label: '组织与人员',
-        },
-        {
-          key: 'personnel-scheduling',
-          icon: <ClockCircleOutlined />,
-          label: '人员排班',
-        },
-        {
-          key: 'auto-scheduling',
-          icon: <RobotOutlined />,
-          label: '自动排班',
-        },
-        {
-          key: 'modular-scheduling',
-          icon: <RobotOutlined />,
-          label: '自动排班（模块化）',
-        },
-        {
-          key: 'shift-definitions',
-          icon: <ScheduleOutlined />,
-          label: '班次定义',
-        },
-      ],
-    },
-    {
-      type: 'group',
-      label: '约束配置',
-      children: [
-        {
-          key: 'operation-constraints',
-          icon: <LinkOutlined />,
-          label: '操作约束',
-        },
-      ],
-    },
-    {
-      type: 'group',
-      label: '系统管理',
-      children: [
-        {
-          key: 'system-monitor',
-          icon: <DashboardOutlined />,
-          label: '系统监控',
-        },
-        {
-          key: 'system-settings',
-          icon: <ControlOutlined />,
-          label: '系统设置',
-        },
-        {
-          key: 'auto-scheduling-debug',
-          icon: <BugOutlined />,
-          label: '排班调试',
-        },
-      ],
-    },
-  ];
-
-  // 根据当前路径确定选中的菜单项
-  const selectedMenu = pathToMenuKey[location.pathname] || 'organization-workbench';
-  const currentMenuLabel = findMenuLabel(menuItems, selectedMenu) || '仪表盘';
-
-  // 处理菜单点击
-  const handleMenuClick = ({ key }: { key: string }) => {
-    // 找到对应的路径
-    const path = Object.keys(pathToMenuKey).find(path => pathToMenuKey[path] === key) || '/';
-    navigate(path);
-  };
+  const currentTitle = pathToTitle[location.pathname] || '应用';
 
   return (
     <ConfigProvider
@@ -229,92 +86,27 @@ const AppLayout: React.FC = () => {
       }}
     >
       <Layout style={{ minHeight: '100vh', background: fluentDesignTokens.colors.backgroundAlt }}>
-        <Sider
-          width={250}
-          theme="dark"
-          collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
-          trigger={null}
-          style={{
-            background: '#1e293b',
-            boxShadow: fluentDesignTokens.elevation.level3,
-          }}
-        >
-          <div
-            className="fluent-sidebar-header"
-            style={{
-              padding: collapsed ? `${fluentDesignTokens.spacing.lg} ${fluentDesignTokens.spacing.sm}` : fluentDesignTokens.spacing.lg,
-              color: 'white',
-              textAlign: 'center',
-              borderBottom: `1px solid rgba(255, 255, 255, 0.1)`,
-              transition: `all ${fluentDesignTokens.animation.duration.standard} ${fluentDesignTokens.animation.easing.standard}`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {!collapsed ? (
-              <img
-                src="/wuxibio-logo.svg"
-                alt="WuXi Biologics APS"
-                style={{
-                  height: '50px',
-                  width: 'auto',
-                }}
-              />
-            ) : (
-              <img
-                src="/wuxibio-icon.svg"
-                alt="WuXi Biologics"
-                style={{
-                  height: '32px',
-                  width: '32px',
-                }}
-              />
-            )}
-          </div>
-          <Menu
-            theme="dark"
-            mode="inline"
-            selectedKeys={[selectedMenu]}
-            items={menuItems}
-            onClick={handleMenuClick}
-            inlineCollapsed={collapsed}
-            style={{
-              border: 'none',
-              background: 'transparent',
-            }}
-            className="fluent-sidebar-menu"
-          />
-        </Sider>
+        <CommandRail width={64} />
 
-        <Layout className={`main-layout ${collapsed ? 'collapsed' : ''}`}>
+        <Layout className="main-layout" style={{ marginLeft: 64, transition: 'all 0.3s ease' }}>
           <Header
             className="fluent-header"
             style={{
               padding: `0 ${fluentDesignTokens.spacing.xxl}`,
-              background: fluentDesignTokens.colors.background,
+              background: 'rgba(255, 255, 255, 0.8)',
+              backdropFilter: 'blur(12px)',
               borderBottom: `1px solid ${fluentDesignTokens.colors.border}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              boxShadow: fluentDesignTokens.elevation.level1,
+              boxShadow: 'none', // Removed shadow for cleaner look
               height: 64,
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <Button
-                type="text"
-                icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setCollapsed(!collapsed)}
-                style={{
-                  marginRight: fluentDesignTokens.spacing.lg,
-                  borderRadius: fluentDesignTokens.borderRadius.md,
-                  transition: `all ${fluentDesignTokens.animation.duration.fast} ${fluentDesignTokens.animation.easing.standard}`,
-                }}
-                className="fluent-button"
-              />
               <Title
                 level={3}
                 style={{
@@ -324,7 +116,7 @@ const AppLayout: React.FC = () => {
                   color: fluentDesignTokens.colors.textPrimary,
                 }}
               >
-                {currentMenuLabel}
+                {currentTitle}
               </Title>
             </div>
           </Header>
@@ -350,9 +142,12 @@ const AppLayout: React.FC = () => {
               <Route path="/operation-types" element={<OperationTypesPage />} />
               <Route path="/process-templates" element={<ProcessTemplatesPage />} />
               <Route path="/batch-management" element={<BatchManagementPage />} />
+              <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
               <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
               <Route path="/auto-scheduling" element={<AutoSchedulingPage />} />
               <Route path="/modular-scheduling" element={<ModularSchedulingPage />} />
+              <Route path="/scheduling-v3" element={<SchedulingV3Page />} />
+              <Route path="/solver-v4" element={<SolverV4Page />} />
               <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
               <Route path="/operation-constraints" element={<OperationConstraintsPage />} />
               <Route path="/system-monitor" element={<SystemMonitorPage />} />

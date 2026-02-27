@@ -141,7 +141,7 @@ type BatchPlanPayload = {
 };
 
 export const batchPlanApi = {
-  list: () => api.get<BatchPlan[]>('/batch-plans').then((res) => res.data),
+  list: () => api.get<any>('/batch-plans').then((res) => (res.data.data ? res.data.data : res.data)),
   getTemplates: () => api.get<BatchTemplateSummary[]>('/batch-plans/templates').then((res) => res.data),
   getStatistics: () => api.get<BatchStatistics>('/batch-plans/statistics').then((res) => res.data),
   create: (payload: BatchPlanPayload) => api.post<BatchPlan>('/batch-plans', payload).then((res) => res.data),

@@ -21,7 +21,7 @@ import operationQualificationRequirementRoutes from './routes/operationQualifica
 import processTemplateRoutes from './routes/processTemplates';
 import processStageRoutes from './routes/processStages';
 import stageOperationRoutes from './routes/stageOperations';
-import shiftTypeRoutes from './routes/shiftTypes';
+
 import personnelScheduleRoutes from './routes/personnelSchedules';
 import batchPlanningRoutes from './routes/batchPlanning';
 import calendarRoutes from './routes/calendar';
@@ -36,11 +36,17 @@ import SystemSettingsService from './services/systemSettingsService';
 import systemRoutes from './routes/system';
 import schedulingRunRoutes from './routes/schedulingRuns';
 import schedulingV2Routes from './routes/schedulingV2Routes';
+import schedulingV3Routes from './routes/schedulingV3Routes';
+import schedulingV4Routes from './routes/schedulingV4';
 import independentOperationRoutes from './routes/independentOperations';
 import dashboardRoutes from './routes/dashboard';
 import databaseRoutes from './routes/database';
 import operationTypesRoutes from './routes/operationTypes';
-import batchConstraintRoutes from './routes/batchConstraints';
+import batchConstraintsRoutes from './routes/batchConstraints';
+import batchGanttV4Routes from './routes/batchGanttV4';
+import batchGanttV5Routes from './routes/batchGanttV5';
+import personnelSchedulesV2Routes from './routes/personnelSchedulesV2';
+import unavailabilityRoutes from './routes/unavailabilityRoutes';
 
 dotenv.config();
 
@@ -101,7 +107,7 @@ app.use('/api/operation-qualification-requirements', operationQualificationRequi
 app.use('/api/process-templates', processTemplateRoutes);
 app.use('/api/process-stages', processStageRoutes);
 app.use('/api/stage-operations', stageOperationRoutes);
-app.use('/api/shift-types', shiftTypeRoutes);
+
 app.use('/api/personnel-schedules', personnelScheduleRoutes);
 app.use('/api/batch-plans', batchPlanningRoutes);
 app.use('/api/calendar', calendarRoutes);
@@ -112,11 +118,20 @@ app.use('/api/org-structure', organizationHierarchyRoutes);
 app.use('/api/shift-definitions', shiftDefinitionRoutes);
 app.use('/api/scheduling-runs', schedulingRunRoutes);
 app.use('/api/v2/scheduling', schedulingV2Routes);
+app.use('/api/v3/scheduling', schedulingV3Routes);
+app.use('/api/v4/scheduling', schedulingV4Routes);
 app.use('/api/independent-operations', independentOperationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/database', databaseRoutes);
 app.use('/api/operation-types', operationTypesRoutes);
-app.use('/api', batchConstraintRoutes);
+app.use('/api', batchConstraintsRoutes);
+app.use('/api/personnel-schedules/v2', personnelSchedulesV2Routes);
+app.use('/api/unavailability', unavailabilityRoutes);
+
+// V4 Gantt API
+app.use('/api/v4/gantt', batchGanttV4Routes);
+// V5 Gantt API (Includes Operation Windows)
+app.use('/api/v5/gantt', batchGanttV5Routes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'APS Backend API is running' });
@@ -124,7 +139,8 @@ app.get('/api/health', (req, res) => {
 
 // 测试路由
 app.get('/api/test-calendar', (req, res) => {
-  console.log('测试日历路由被访问');
+  console.log('测试日历路由被访问'); // Original log maintained
+  console.log('Params:', { reference_date: req.query.reference_date, employee_ids: req.query.employee_ids }); // Merging the logging from deleted block which was previously around line 144
   res.json({ message: 'Calendar route works' });
 });
 
@@ -246,7 +262,6 @@ app.get('/api/personnel-schedules/overview', async (req, res) => {
          e.primary_role_id,
          er.role_code AS primary_role_code,
          er.role_name AS primary_role_name,
-         e.org_role,
          esp.plan_date,
          esp.plan_category,
          esp.plan_state,
@@ -293,7 +308,7 @@ app.get('/api/personnel-schedules/overview', async (req, res) => {
       primary_role_id: row.primary_role_id,
       primary_role_code: row.primary_role_code,
       primary_role_name: row.primary_role_name,
-      org_role: row.org_role,
+      org_role: row.primary_role_code || 'FRONTLINE',
       plan_date: row.plan_date,
       plan_category: row.plan_category,
       plan_state: row.plan_state,
