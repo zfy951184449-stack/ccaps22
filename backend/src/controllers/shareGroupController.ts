@@ -32,7 +32,7 @@ export const getTemplateShareGroups = async (req: Request, res: Response) => {
                     psgm.id,
                     psgm.schedule_id,
                     o.operation_name,
-                    1 as required_people,
+                    COALESCE(o.required_people, 1) as required_people,
                     ps.stage_name
                 FROM personnel_share_group_members psgm
                 JOIN stage_operation_schedules sos ON psgm.schedule_id = sos.id
@@ -72,7 +72,7 @@ export const getShareGroup = async (req: Request, res: Response) => {
                 psgm.id,
                 psgm.schedule_id,
                 o.operation_name,
-                1 as required_people,
+                COALESCE(o.required_people, 1) as required_people,
                 ps.stage_name
             FROM personnel_share_group_members psgm
             JOIN stage_operation_schedules sos ON psgm.schedule_id = sos.id
@@ -351,7 +351,7 @@ export const getShareGroupsByOperationId = async (req: Request, res: Response) =
                     psgm.id,
                     psgm.schedule_id,
                     o.operation_name,
-                    1 as required_people,
+                    COALESCE(o.required_people, 1) as required_people,
                     ps.stage_name
                 FROM personnel_share_group_members psgm
                 JOIN stage_operation_schedules sos ON psgm.schedule_id = sos.id
@@ -399,7 +399,7 @@ export const getShareGroupsByBatchOperationId = async (req: Request, res: Respon
                     bsgm.batch_operation_plan_id as operation_plan_id,
                     o.operation_name,
                     o.operation_code,
-                    1 as required_people,
+                    bop.required_people,
                     ps.stage_name
                 FROM batch_share_group_members bsgm
                 JOIN batch_operation_plans bop ON bsgm.batch_operation_plan_id = bop.id

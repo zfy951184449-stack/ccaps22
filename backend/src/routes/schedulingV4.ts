@@ -3,6 +3,14 @@ import * as schedulingV4Controller from '../controllers/schedulingV4Controller';
 
 const router = express.Router();
 
+// 0. List Run History
+/**
+ * @route GET /api/v4/scheduling/runs
+ * @desc List V4 solver run history
+ * @access Private
+ */
+router.get('/runs', schedulingV4Controller.listRunsV4);
+
 // 1. Trigger Solve
 /**
  * @route POST /api/v4/scheduling/solve

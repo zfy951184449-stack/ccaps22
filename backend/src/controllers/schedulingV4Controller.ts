@@ -971,8 +971,48 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             ? JSON.parse(run.result_summary)
             : run.result_summary;
 
-        const assignments: { operation_id: number; position_number: number; employee_id: number }[] = rawResult.assignments || [];
-        const shiftSchedule: { employee_id: number; date: string; shift_id: number }[] = rawResult.shift_schedule || [];
+        // 兼容 Solver V4 统一 schedules 格式 & 旧版 assignments/shift_schedule 格式
+        // Diagnostic: Log the keys present in the rawResult to debug format detection
+        const resultKeys = Object.keys(rawResult);
+        const schedulesPresent = Array.isArray(rawResult.schedules);
+        const schedulesLength = schedulesPresent ? rawResult.schedules.length : 0;
+        const totalTasksInSchedules = schedulesPresent
+            ? rawResult.schedules.reduce((sum: number, s: any) => sum + (s.tasks?.length || 0), 0)
+            : 0;
+        console.log(`[SchedulingV4][Diag] Result keys: [${resultKeys.join(', ')}]`);
+        console.log(`[SchedulingV4][Diag] schedules present: ${schedulesPresent}, count: ${schedulesLength}, total tasks: ${totalTasksInSchedules}`);
+        console.log(`[SchedulingV4][Diag] assignments present: ${Array.isArray(rawResult.assignments)}, shift_schedule present: ${Array.isArray(rawResult.shift_schedule)}`);
+
+        let assignments: { operation_id: number; position_number: number; employee_id: number; is_standalone: boolean; date?: string; shift_id?: number }[] = [];
+        let shiftSchedule: { employee_id: number; date: string; shift_id: number }[] = [];
+
+        if (Array.isArray(rawResult.schedules) && rawResult.schedules.length > 0) {
+            // 统一格式：从 schedules 中展平
+            for (const sched of rawResult.schedules) {
+                if (sched.shift?.shift_id) {
+                    shiftSchedule.push({
+                        employee_id: sched.employee_id,
+                        date: sched.date,
+                        shift_id: sched.shift.shift_id
+                    });
+                }
+                for (const task of (sched.tasks || [])) {
+                    assignments.push({
+                        operation_id: task.operation_id, // For standalone, this is -task.id
+                        position_number: task.position_number,
+                        employee_id: sched.employee_id,
+                        is_standalone: task.batch_code === 'STANDALONE',
+                        date: sched.date,
+                        shift_id: sched.shift?.shift_id
+                    });
+                }
+            }
+            console.log(`[SchedulingV4] 展平 ${rawResult.schedules.length} 条 schedules → ${assignments.length} 条人员分配, ${shiftSchedule.length} 条班次计划`);
+        } else {
+            // 旧格式兜底
+            assignments = rawResult.assignments || [];
+            shiftSchedule = rawResult.shift_schedule || [];
+        }
 
         const windowStart = run.window_start;
         const windowEnd = run.window_end;
@@ -998,26 +1038,65 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                 [windowStart, windowEnd]
             );
             console.log(`[SchedulingV4] Cleaned up old shift plans in window ${windowStart} ~ ${windowEnd}`);
+
+            // Cleanup: standalone task assignments could also be cleaned if they run in this window 
+            // but we might just overwrite them. A strict approach:
+            await connection.execute(
+                `DELETE sta FROM standalone_task_assignments sta
+                 WHERE sta.scheduling_run_id IS NOT NULL 
+                   AND sta.assigned_date >= ? AND sta.assigned_date <= ?`,
+                [windowStart, windowEnd]
+            );
         }
 
-        // 3. Insert new assignments to batch_personnel_assignments
+        // 3. Insert new assignments to batch_personnel_assignments and standalone_task_assignments
         let assignmentsInserted = 0;
+        let standaloneAssignmentsInserted = 0;
+        const assignedStandaloneTaskIds = new Set<number>();
+
         for (const assignment of assignments) {
             try {
-                await connection.execute(
-                    `INSERT INTO batch_personnel_assignments 
-                        (batch_operation_plan_id, employee_id, position_number, role, assignment_status, scheduling_run_id)
-                     VALUES (?, ?, ?, 'OPERATOR', 'PLANNED', ?)
-                     ON DUPLICATE KEY UPDATE
-                        employee_id = VALUES(employee_id),
-                        assignment_status = 'PLANNED',
-                        scheduling_run_id = VALUES(scheduling_run_id)`,
-                    [assignment.operation_id, assignment.employee_id, assignment.position_number, runIdNum]
-                );
-                assignmentsInserted++;
+                if (assignment.is_standalone) {
+                    const taskId = Math.abs(assignment.operation_id);
+                    await connection.execute(
+                        `INSERT INTO standalone_task_assignments 
+                           (task_id, position_number, employee_id, status, scheduling_run_id, assigned_date, assigned_shift_id)
+                         VALUES (?, ?, ?, 'PLANNED', ?, ?, ?)
+                         ON DUPLICATE KEY UPDATE
+                           employee_id = VALUES(employee_id),
+                           status = 'PLANNED',
+                           scheduling_run_id = VALUES(scheduling_run_id),
+                           assigned_date = VALUES(assigned_date),
+                           assigned_shift_id = VALUES(assigned_shift_id)`,
+                        [taskId, assignment.position_number, assignment.employee_id, runIdNum, assignment.date, assignment.shift_id]
+                    );
+                    assignedStandaloneTaskIds.add(taskId);
+                    standaloneAssignmentsInserted++;
+                } else {
+                    await connection.execute(
+                        `INSERT INTO batch_personnel_assignments 
+                            (batch_operation_plan_id, employee_id, position_number, role, assignment_status, scheduling_run_id)
+                         VALUES (?, ?, ?, 'OPERATOR', 'PLANNED', ?)
+                         ON DUPLICATE KEY UPDATE
+                            employee_id = VALUES(employee_id),
+                            assignment_status = 'PLANNED',
+                            scheduling_run_id = VALUES(scheduling_run_id)`,
+                        [assignment.operation_id, assignment.employee_id, assignment.position_number, runIdNum]
+                    );
+                    assignmentsInserted++;
+                }
             } catch (err: any) {
                 console.warn(`[SchedulingV4] Failed to insert assignment: Op ${assignment.operation_id} Pos ${assignment.position_number} -> Emp ${assignment.employee_id}: ${err.message}`);
             }
+        }
+
+        // Update status of standalone tasks to 'SCHEDULED' if they were processed
+        if (assignedStandaloneTaskIds.size > 0) {
+            const placeholders = Array.from(assignedStandaloneTaskIds).map(() => '?').join(',');
+            await connection.execute(
+                `UPDATE standalone_tasks SET status = 'SCHEDULED' WHERE id IN (${placeholders})`,
+                Array.from(assignedStandaloneTaskIds)
+            );
         }
 
         // 4. Insert new shift plans to employee_shift_plans
@@ -1061,12 +1140,13 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         await connection.commit();
 
-        console.log(`[SchedulingV4] Applied result for Run ${runId}: ${assignmentsInserted} assignments, ${shiftPlansInserted} shift plans`);
+        console.log(`[SchedulingV4] Applied result for Run ${runId}: ${assignmentsInserted} batch assignments, ${standaloneAssignmentsInserted} standalone assignments, ${shiftPlansInserted} shift plans`);
 
         res.json({
             success: true,
             data: {
-                assignments_inserted: assignmentsInserted,
+                batch_assignments_inserted: assignmentsInserted,
+                standalone_assignments_inserted: standaloneAssignmentsInserted,
                 shift_plans_inserted: shiftPlansInserted
             }
         });
@@ -1077,6 +1157,64 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         res.status(500).json({ error: error.message });
     } finally {
         connection.release();
+    }
+};
+
+/**
+ * List V4 Solver Run History
+ * GET /api/v4/scheduling/runs
+ */
+export const listRunsV4 = async (req: Request, res: Response) => {
+    try {
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT id, run_code, status, stage, window_start, window_end, 
+                    result_summary, created_at, completed_at
+             FROM scheduling_runs 
+             WHERE run_code LIKE 'V4-%'
+             ORDER BY created_at DESC 
+             LIMIT 50`
+        );
+
+        const data = rows.map(row => {
+            let solverStatus = null;
+            let gap = null;
+            let fillRate = null;
+            let solveTime = null;
+
+            if (row.result_summary) {
+                try {
+                    const summary = typeof row.result_summary === 'string'
+                        ? JSON.parse(row.result_summary)
+                        : row.result_summary;
+                    solverStatus = summary.status || null;
+                    gap = summary.metrics?.gap ?? null;
+                    fillRate = summary.metrics?.fill_rate ?? null;
+                    solveTime = summary.metrics?.solve_time ?? null;
+                } catch (e) {
+                    // Ignore JSON parse errors
+                }
+            }
+
+            return {
+                id: row.id,
+                run_code: row.run_code,
+                status: row.status,
+                stage: row.stage,
+                solver_status: solverStatus,  // OPTIMAL / FEASIBLE / INFEASIBLE
+                gap,                          // 与最优解的理论差距百分比
+                fill_rate: fillRate,           // 岗位填充率
+                solve_time: solveTime,
+                window_start: row.window_start,
+                window_end: row.window_end,
+                created_at: row.created_at,
+                completed_at: row.completed_at,
+            };
+        });
+
+        res.json({ success: true, data });
+    } catch (error: any) {
+        console.error('[SchedulingV4] List Runs Failed:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 

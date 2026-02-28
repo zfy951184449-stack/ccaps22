@@ -50,14 +50,13 @@ export async function updateOrganizationUnit(id: number, data: UpdateUnitDTO) {
 
         let currentParentId: number | null = data.parent_id;
         while (currentParentId !== null) {
-            const result = await pool.execute<RowDataPacket[]>(
+            const [rows]: [RowDataPacket[], any] = await pool.execute<RowDataPacket[]>(
                 'SELECT parent_id FROM organization_units WHERE id = ?',
                 [currentParentId]
             );
-            const refRows = result[0];
-            if (refRows.length === 0) break;
+            if (rows.length === 0) break;
 
-            currentParentId = refRows[0].parent_id;
+            currentParentId = rows[0].parent_id;
             if (currentParentId === id) {
                 throw new Error('Circular reference detected: this unit is an ancestor of the target parent unit.');
             }

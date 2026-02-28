@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DatePicker, Table, Tag, Typography, Space, Button, message } from 'antd';
+import { Card, DatePicker, Table, Tag, Typography, Space, Button, message, Select, Tabs } from 'antd';
 import { MoreOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
@@ -7,7 +7,8 @@ import OperationReviewModal from './OperationReviewModal';
 import SolveProgressV4Modal from './SolveProgressV4Modal';
 import SolveResultV4Page from './SolveResultV4Page';
 import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from './SolverConfigurationModal';
-import { SettingOutlined } from '@ant-design/icons';
+import { SettingOutlined, HistoryOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import RunHistoryTab from './RunHistoryTab';
 
 const { Title } = Typography;
 
@@ -15,13 +16,22 @@ interface BatchPlan {
     id: number;
     batch_code: string;
     template_name: string; // Product in mockup
+    team_id?: number;
+    team_name?: string;
+    team_code?: string;
     plan_status: string;
     planned_start_date: string;
     planned_end_date: string;
 }
 
+interface Team {
+    id: number;
+    teamName: string;
+    teamCode: string;
+}
+
 const MonthlyBatchSelector: React.FC = () => {
-    const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs('2026-01-01')); // Default to Jan 2026 as per mockup request
+    const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs()); // 默认当前月份
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<BatchPlan[]>([]);
     const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -31,10 +41,34 @@ const MonthlyBatchSelector: React.FC = () => {
     const [configVisible, setConfigVisible] = useState(false);
     const [solverConfig, setSolverConfig] = useState<SolverConfig>(DEFAULT_SOLVER_CONFIG);
 
+    // Department Filter State
+    const [teams, setTeams] = useState<Team[]>([]);
+    const [selectedDepartment, setSelectedDepartment] = useState<'all' | string>('all');
+    const [loadingTeams, setLoadingTeams] = useState(false);
+
     // Progress Modal State
     const [progressVis, setProgressVis] = useState(false);
     const [resultVis, setResultVis] = useState(false);
     const [currentRunId, setCurrentRunId] = useState<number | null>(null);
+
+    const fetchTeams = async () => {
+        setLoadingTeams(true);
+        try {
+            const response = await fetch('/api/organization/solver-teams');
+            const result = await response.json();
+            if (Array.isArray(result)) {
+                setTeams(result);
+            }
+        } catch (error) {
+            console.error('Failed to fetch teams:', error);
+        } finally {
+            setLoadingTeams(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchTeams();
+    }, []);
 
     const fetchData = async (month: Dayjs) => {
         setLoading(true);
@@ -63,12 +97,12 @@ const MonthlyBatchSelector: React.FC = () => {
                     setSelectedRowKeys(activatedIds);
                 } else {
                     console.error("Unexpected API response:", result);
-                    message.error('Failed to load batch data');
+                    message.error('加载批次数据失败');
                 }
             }
         } catch (error) {
             console.error('Error fetching batches:', error);
-            message.error('Error fetching batches');
+            message.error('获取批次数据失败');
         } finally {
             setLoading(false);
         }
@@ -85,9 +119,48 @@ const MonthlyBatchSelector: React.FC = () => {
         }
     };
 
+    const handleDepartmentChange = (value: 'all' | string) => {
+        setSelectedDepartment(value);
+        // 自动同步到高级配置
+        if (value === 'all') {
+            setSolverConfig((prev) => ({ ...prev, team_ids: [] }));
+        } else {
+            const matchedTeam = teams.find(t => t.teamName === value);
+            setSolverConfig((prev) => ({
+                ...prev,
+                team_ids: matchedTeam ? [matchedTeam.id] : [],
+            }));
+        }
+        // 自动勾选过滤后的 ACTIVATED 批次
+        const filtered = data.filter(item => value === 'all' || item.team_name === value);
+        const activatedIds = filtered
+            .filter(batch => batch.plan_status === 'ACTIVATED')
+            .map(batch => batch.id);
+        setSelectedRowKeys(activatedIds);
+    };
+
+    // 高级配置关闭时反向同步部门筛选器
+    const handleConfigClose = () => {
+        setConfigVisible(false);
+        const ids = solverConfig.team_ids || [];
+        if (ids.length === 1) {
+            const matchedTeam = teams.find(t => t.id === ids[0]);
+            if (matchedTeam) {
+                setSelectedDepartment(matchedTeam.teamName);
+            }
+        } else {
+            setSelectedDepartment('all');
+        }
+    };
+
+    // 计算过滤后的数据
+    const filteredData = Array.isArray(data)
+        ? data.filter(item => selectedDepartment === 'all' || item.team_name === selectedDepartment)
+        : [];
+
     const handleScheduleSelected = () => {
         if (selectedRowKeys.length === 0) {
-            message.warning('Please select at least one batch to schedule.');
+            message.warning('请至少选择一个批次进行排班。');
             return;
         }
 
@@ -120,19 +193,19 @@ const MonthlyBatchSelector: React.FC = () => {
 
     const columns: ColumnsType<BatchPlan> = [
         {
-            title: 'Batch Code',
+            title: '批次编号',
             dataIndex: 'batch_code',
             key: 'batch_code',
             sorter: (a, b) => a.batch_code.localeCompare(b.batch_code),
         },
         {
-            title: 'Product',
-            dataIndex: 'template_name', // Mapping template_name to Product column
+            title: '产品',
+            dataIndex: 'template_name',
             key: 'template_name',
             render: (text) => text || '-',
         },
         {
-            title: 'Status',
+            title: '状态',
             dataIndex: 'plan_status',
             key: 'plan_status',
             render: (status) => {
@@ -144,13 +217,19 @@ const MonthlyBatchSelector: React.FC = () => {
             },
         },
         {
-            title: 'Start Date',
+            title: '部门',
+            dataIndex: 'team_name',
+            key: 'team_name',
+            render: (text) => text || '-',
+        },
+        {
+            title: '开始日期',
             dataIndex: 'planned_start_date',
             key: 'planned_start_date',
             sorter: (a, b) => dayjs(a.planned_start_date).unix() - dayjs(b.planned_start_date).unix(),
         },
         {
-            title: 'End Date',
+            title: '结束日期',
             dataIndex: 'planned_end_date',
             key: 'planned_end_date',
             sorter: (a, b) => dayjs(a.planned_end_date).unix() - dayjs(b.planned_end_date).unix(),
@@ -169,48 +248,93 @@ const MonthlyBatchSelector: React.FC = () => {
             style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
             bodyStyle={{ padding: '24px' }}
         >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Title level={4} style={{ margin: 0 }}>Production Scheduling</Title>
+                    <Title level={4} style={{ margin: 0 }}>排产调度</Title>
                     <Button
                         icon={<SettingOutlined />}
                         onClick={() => setConfigVisible(true)}
                     >
-                        Advanced Configuration
+                        高级配置
                     </Button>
                 </div>
-
-                <Space>
-                    <DatePicker.MonthPicker
-                        value={selectedMonth}
-                        onChange={handleMonthChange}
-                        allowClear={false}
-                        style={{ width: 150 }}
-                    />
-                </Space>
             </div>
 
-            <Table
-                rowSelection={rowSelection}
-                columns={columns}
-                dataSource={Array.isArray(data) ? data : []}
-                rowKey="id"
-                loading={loading}
-                pagination={{
-                    total: Array.isArray(data) ? data.length : 0,
-                    pageSize: 10,
-                    showSizeChanger: true,
-                    showTotal: (total) => `Showing 1 to ${Math.min(10, Array.isArray(data) ? data.length : 0)} of ${total} entries`
-                }}
+            <Tabs
+                defaultActiveKey="batches"
+                items={[
+                    {
+                        key: 'batches',
+                        label: (
+                            <span><UnorderedListOutlined style={{ marginRight: 6 }} />批次列表</span>
+                        ),
+                        children: (
+                            <>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                                    <Space size="middle">
+                                        <Select
+                                            value={selectedDepartment}
+                                            onChange={handleDepartmentChange}
+                                            loading={loadingTeams}
+                                            style={{
+                                                width: 200,
+                                                borderRadius: '12px',
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                                            }}
+                                            options={[
+                                                { value: 'all', label: '所有部门' },
+                                                ...teams.map(team => ({
+                                                    value: team.teamName,
+                                                    label: team.teamName,
+                                                })),
+                                            ]}
+                                        />
+                                        <DatePicker.MonthPicker
+                                            value={selectedMonth}
+                                            onChange={handleMonthChange}
+                                            allowClear={false}
+                                            style={{ width: 150, borderRadius: '8px' }}
+                                        />
+                                    </Space>
+                                </div>
+
+                                <Table
+                                    rowSelection={rowSelection}
+                                    columns={columns}
+                                    dataSource={filteredData}
+                                    rowKey="id"
+                                    loading={loading}
+                                    pagination={{
+                                        total: filteredData.length,
+                                        pageSize: 10,
+                                        showSizeChanger: true,
+                                        showTotal: (total) => `共 ${total} 条`
+                                    }}
+                                />
+
+                                <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ color: '#86868B', fontSize: 13 }}>
+                                        已选 <strong style={{ color: '#1D1D1F' }}>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
+                                    </span>
+                                    <div style={{ display: 'flex', gap: 12 }}>
+                                        <Button onClick={handleResetSelection}>重置选择</Button>
+                                        <Button type="primary" onClick={handleScheduleSelected}>
+                                            安排选中批次
+                                        </Button>
+                                    </div>
+                                </div>
+                            </>
+                        ),
+                    },
+                    {
+                        key: 'history',
+                        label: (
+                            <span><HistoryOutlined style={{ marginRight: 6 }} />历史记录</span>
+                        ),
+                        children: <RunHistoryTab />,
+                    },
+                ]}
             />
-
-            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                <Button onClick={handleResetSelection}>Reset Selection</Button>
-                <Button type="primary" onClick={handleScheduleSelected}>
-                    Schedule Selected
-                </Button>
-            </div>
-
 
             <OperationReviewModal
                 visible={modalVisible}
@@ -225,7 +349,7 @@ const MonthlyBatchSelector: React.FC = () => {
                 visible={configVisible}
                 config={solverConfig}
                 onConfigChange={setSolverConfig}
-                onClose={() => setConfigVisible(false)}
+                onClose={handleConfigClose}
             />
 
             <SolveProgressV4Modal

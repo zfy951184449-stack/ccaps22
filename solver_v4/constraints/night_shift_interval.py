@@ -7,7 +7,6 @@ Night Shift Interval Constraint Module
 1. 滑动窗口：任意连续 interval 天内，夜班数 <= 1
 2. interval = min_night_shift_interval (默认 7，即间隔 6 天)
 3. 边界处理：使用 historical_shifts 处理求解区间前的夜班
-4. 共享组豁免：如果夜班日期属于共享组关联操作，该日期从滑动窗口中豁免
 
 与 NightRestConstraint 的区别：
 - NightRest: 夜班后禁止所有工作（白班 + 夜班）

@@ -219,7 +219,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
         >
             <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <Typography.Title level={4} style={{ margin: 0 }}>Auto-Scheduling Progress</Typography.Title>
+                    <Typography.Title level={4} style={{ margin: 0 }}>自动排班进度</Typography.Title>
                     <Tag color={status === 'COMPLETED' ? 'green' : (status === 'STOPPING' ? 'orange' : 'blue')}>{status}</Tag>
                 </div>
 
@@ -236,14 +236,14 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                 <Row gutter={16}>
                     <Col span={8}>
                         <Statistic
-                            title="Assigned Shifts"
+                            title="已分配班次"
                             value={metrics.assigned}
                             prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
                         />
                     </Col>
                     <Col span={8}>
                         <Statistic
-                            title="Satisfaction"
+                            title="满意度"
                             value={metrics.satisfaction}
                             suffix="%"
                             precision={0}
@@ -251,7 +251,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                     </Col>
                     <Col span={8}>
                         <Statistic
-                            title="Time Elapsed"
+                            title="已用时"
                             value={metrics.elapsed}
                             prefix={<ClockCircleOutlined />}
                         />
@@ -262,7 +262,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
             {/* Terminal Console */}
             <div style={{ padding: '0 24px 24px' }}>
                 <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                    <CodeOutlined /> Live Logs
+                    <CodeOutlined /> 实时日志
                 </Text>
 
                 <div
@@ -280,7 +280,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                     }}
                 >
                     {logs.length === 0 ? (
-                        <div style={{ color: '#666' }}>Waiting for solver logs...</div>
+                        <div style={{ color: '#666' }}>等待求解器日志...</div>
                     ) : (
                         logs.map((log, index) => (
                             <div key={index} style={{ marginBottom: 4, display: 'flex', alignItems: 'flex-start' }}>
@@ -311,10 +311,10 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                         loading={status === 'STOPPING'}
                         disabled={status === 'STOPPING'}
                     >
-                        {status === 'STOPPING' ? 'Stopping...' : 'Stop Scheduling'}
+                        {status === 'STOPPING' ? '停止中...' : '停止排班'}
                     </Button>
                 ) : (
-                    <Button onClick={onCancel}>Close</Button>
+                    <Button onClick={onCancel}>关闭</Button>
                 )}
 
                 {(isCompleted || (status === 'FAILED' && (metrics.assigned || 0) > 0)) && !isApplied && (
@@ -346,7 +346,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                     disabled={!isCompleted && !((metrics.assigned || 0) > 0)}
                     onClick={() => runId && onViewResults(runId)}
                 >
-                    View Results
+                    查看结果
                 </Button>
             </div>
         </Modal>

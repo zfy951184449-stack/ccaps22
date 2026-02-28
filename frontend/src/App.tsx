@@ -29,6 +29,8 @@ import BatchManagementPage from './pages/BatchManagementPage';
 import BatchManagementV4Page from './pages/BatchManagementV4Page';
 import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
 import OperationConstraintsPage from './pages/OperationConstraintsPage';
+import TaskPoolPage from './pages/TaskPoolPage';
+import ScheduleOverviewPage from './pages/ScheduleOverviewPage';
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
 import SystemMonitorPage from './pages/SystemMonitorPage';
@@ -57,6 +59,8 @@ const pathToTitle: { [key: string]: string } = {
   '/process-templates': '工艺模版',
   '/batch-management': '批次管理',
   '/batch-management-v4': '批次管理 V4',
+  '/task-pool': '任务池',
+  '/schedule-overview': '排班总览',
   '/personnel-scheduling': '人员排班',
   '/auto-scheduling': '自动排班',
   '/modular-scheduling': '自动排班（模块化）',
@@ -143,6 +147,8 @@ const AppLayout: React.FC = () => {
               <Route path="/process-templates" element={<ProcessTemplatesPage />} />
               <Route path="/batch-management" element={<BatchManagementPage />} />
               <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
+              <Route path="/task-pool" element={<TaskPoolPage />} />
+              <Route path="/schedule-overview" element={<ScheduleOverviewPage />} />
               <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
               <Route path="/auto-scheduling" element={<AutoSchedulingPage />} />
               <Route path="/modular-scheduling" element={<ModularSchedulingPage />} />

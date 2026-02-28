@@ -37,6 +37,7 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
         pbp.batch_name,
         pbp.template_id,
         pt.template_name,
+        ou.id as team_id,
         ou.unit_code as team_code,
         ou.unit_name as team_name,
         pbp.project_code,

@@ -40,6 +40,13 @@ interface V4OperationDemand {
     planned_duration_minutes: number;
     required_people: number;
     position_qualifications: V4PositionQualification[];
+    // Extended fields for Task Pool
+    scheduling_mode?: string;
+    earliest_start?: string;
+    deadline?: string;
+    source_type?: string;
+    standalone_task_id?: number | null;
+    preferred_shift_ids?: number[] | null;
 }
 
 interface V4PositionQualification {
@@ -76,6 +83,7 @@ interface V4ShiftDefinition {
 interface V4SharedPreference {
     share_group_id: number;
     share_group_name: string;
+    share_mode: string;
     members: { operation_plan_id: number; required_people: number }[];
 }
 
@@ -113,7 +121,7 @@ export class DataAssemblerV4 {
             this.fetchEmployees(startDate, endDate, teamIds),
             this.fetchShifts(),
             this.fetchCalendar(startDate, endDate),
-            this.fetchShareGroups(startDate, endDate),
+            this.fetchShareGroups(startDate, endDate, batchIds),
             this.fetchHistoricalShifts(startDate)
         ]);
 
@@ -121,12 +129,18 @@ export class DataAssemblerV4 {
         // We perform this here to offload complexity from the Python solver
         const enrichedOperations = await this.enrichOperationsWithCandidates(operationsData, employees);
 
+        // [NEW] Fetch and enrich Standalone Tasks
+        const standaloneTasks = await this.fetchAndEnrichStandaloneTasks(startDate, endDate, employees);
+
+        // Merge operations and standalone tasks
+        const allDemands = [...enrichedOperations, ...standaloneTasks];
+
         console.timeEnd('DataAssemblerV4');
 
         return {
             request_id: requestId,
             window: { start_date: startDate, end_date: endDate },
-            operation_demands: enrichedOperations,
+            operation_demands: allDemands,
             employee_profiles: employees,
             calendar: calendar,
             shift_definitions: shifts,
@@ -137,6 +151,96 @@ export class DataAssemblerV4 {
     }
 
     // --- Private Fetchers ---
+
+    private static async fetchAndEnrichStandaloneTasks(startDate: string, endDate: string, employees: V4EmployeeProfile[]): Promise<V4OperationDemand[]> {
+        // Fetch valid standalone tasks that overlap with the scheduling window
+        const [taskRows] = await pool.execute<RowDataPacket[]>(`
+            SELECT id, task_code, task_name, task_type, earliest_start, deadline, duration_minutes, required_people, preferred_shift_ids, related_batch_id
+            FROM standalone_tasks
+            WHERE status IN ('PENDING', 'SCHEDULED')
+              AND earliest_start <= ? AND deadline >= ?
+        `, [endDate, startDate]);
+
+        if (taskRows.length === 0) return [];
+
+        const taskIds = taskRows.map(r => r.id);
+        const [qualRows] = await pool.execute<RowDataPacket[]>(`
+            SELECT task_id, position_number, qualification_id, min_level, is_mandatory
+            FROM standalone_task_qualifications
+            WHERE task_id IN (${taskIds.join(',')})
+        `);
+
+        // Group qualifications
+        const qualMap = new Map<number, any[]>();
+        qualRows.forEach(q => {
+            if (!qualMap.has(q.task_id)) qualMap.set(q.task_id, []);
+            qualMap.get(q.task_id)!.push(q);
+        });
+
+        const demands: V4OperationDemand[] = [];
+
+        for (const task of taskRows) {
+            const reqs = qualMap.get(task.id) || [];
+            const posQuals: V4PositionQualification[] = [];
+
+            const numPositions = task.required_people || 1;
+
+            // Build candidates just like enrichOperationsWithCandidates but considering earliest_start/deadline for availability loosely.
+            // Since it's a flexible window, we don't do hard availability filtering here. The Python solver handles it.
+            // We just do qualification-based filtering.
+
+            // Group requirements by position
+            const posReqMap = new Map<number, typeof reqs>();
+            reqs.forEach(r => {
+                if (!posReqMap.has(r.position_number)) posReqMap.set(r.position_number, []);
+                posReqMap.get(r.position_number)!.push(r);
+            });
+
+            for (let i = 1; i <= numPositions; i++) {
+                const specificReqs = posReqMap.get(i) || [];
+                const candidates = employees.filter(emp => {
+                    for (const req of specificReqs) {
+                        if (req.is_mandatory) {
+                            const empQual = emp.qualifications.find(q => q.qualification_id === req.qualification_id);
+                            if (!empQual || empQual.level < req.min_level) return false;
+                        }
+                    }
+                    return true;
+                }).map(e => e.employee_id);
+
+                posQuals.push({
+                    position_number: i,
+                    qualifications: specificReqs.map(r => ({
+                        qualification_id: r.qualification_id,
+                        min_level: r.min_level,
+                        is_mandatory: !!r.is_mandatory
+                    })),
+                    candidate_employee_ids: candidates
+                });
+            }
+
+            demands.push({
+                operation_plan_id: -task.id, // Use negative ID to distinguish or just rely on source_type
+                batch_id: task.related_batch_id || 0,
+                batch_code: "STANDALONE",
+                operation_id: 0,
+                operation_name: `${task.task_code} - ${task.task_name}`,
+                planned_start: dayjs().toISOString(), // Dummy dates for flexible
+                planned_end: dayjs().toISOString(),
+                planned_duration_minutes: task.duration_minutes,
+                required_people: task.required_people,
+                position_qualifications: posQuals,
+                scheduling_mode: task.task_type === 'FLEXIBLE' ? 'FLEXIBLE' : 'FIXED', // Simplification
+                earliest_start: task.earliest_start ? dayjs(task.earliest_start).format('YYYY-MM-DD') : undefined,
+                deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : undefined,
+                source_type: 'STANDALONE',
+                standalone_task_id: task.id,
+                preferred_shift_ids: task.preferred_shift_ids ? (typeof task.preferred_shift_ids === 'string' ? JSON.parse(task.preferred_shift_ids) : task.preferred_shift_ids) : null
+            });
+        }
+
+        return demands;
+    }
 
     private static async fetchOperations(startDate: string, endDate: string, batchIds: number[]) {
         if (batchIds.length === 0) return [];
@@ -410,16 +514,20 @@ export class DataAssemblerV4 {
         }));
     }
 
-    private static async fetchShareGroups(startDate: string, endDate: string) {
-        // Fetch share groups relevant to the operations in this window
+    private static async fetchShareGroups(startDate: string, endDate: string, batchIds: number[]) {
+        // Fetch share groups relevant to the operations in this window AND belonging to the target batches
+        if (!batchIds.length) return [];
+
+        const placeholders = batchIds.map(() => '?').join(',');
         const query = `
-            SELECT DISTINCT bsg.id, bsg.group_name, bsgm.batch_operation_plan_id, bop.required_people
+            SELECT DISTINCT bsg.id, bsg.group_name, bsg.share_mode, bsgm.batch_operation_plan_id, bop.required_people
             FROM batch_share_groups bsg
             JOIN batch_share_group_members bsgm ON bsg.id = bsgm.group_id
             JOIN batch_operation_plans bop ON bsgm.batch_operation_plan_id = bop.id
             WHERE bop.planned_start_datetime BETWEEN ? AND ?
+              AND bop.batch_plan_id IN (${placeholders})
         `;
-        const [rows] = await pool.execute<RowDataPacket[]>(query, [startDate + ' 00:00:00', endDate + ' 23:59:59']);
+        const [rows] = await pool.execute<RowDataPacket[]>(query, [startDate + ' 00:00:00', endDate + ' 23:59:59', ...batchIds]);
         return rows;
     }
 
@@ -430,6 +538,7 @@ export class DataAssemblerV4 {
                 map.set(row.id, {
                     share_group_id: row.id,
                     share_group_name: row.group_name,
+                    share_mode: row.share_mode || 'SAME_TEAM',
                     members: []
                 });
             }

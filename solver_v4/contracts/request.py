@@ -24,6 +24,15 @@ class OperationDemand:
     planned_duration_minutes: int
     required_people: int
     position_qualifications: List[PositionQualification]
+    
+    # Task Pool / Flexible Scheduling extensions
+    scheduling_mode: str = "FIXED" # "FIXED" | "FLEXIBLE"
+    earliest_start: Optional[str] = None # For FLEXIBLE mode, e.g. "2026-02-01"
+    deadline: Optional[str] = None       # For FLEXIBLE mode, e.g. "2026-02-07"
+    source_type: str = "BATCH"           # "BATCH" | "STANDALONE"
+    standalone_task_id: Optional[int] = None
+    preferred_shift_ids: Optional[List[int]] = None # Preferred allowed shifts
+
 
 @dataclass
 class EmployeeProfile:
@@ -55,6 +64,7 @@ class SharedPreference:
     share_group_id: int
     share_group_name: str
     members: List[Dict[str, Any]] # {operation_plan_id, required_people}
+    share_mode: str = "SAME_TEAM"
 
 @dataclass
 class HistoricalShift:
@@ -100,7 +110,13 @@ class SolverRequest:
                 planned_end=op["planned_end"],
                 planned_duration_minutes=op["planned_duration_minutes"],
                 required_people=op["required_people"],
-                position_qualifications=pos_quals
+                position_qualifications=pos_quals,
+                scheduling_mode=op.get("scheduling_mode", "FIXED"),
+                earliest_start=op.get("earliest_start"),
+                deadline=op.get("deadline"),
+                source_type=op.get("source_type", "BATCH"),
+                standalone_task_id=op.get("standalone_task_id"),
+                preferred_shift_ids=op.get("preferred_shift_ids")
             ))
 
         mps = [EmployeeProfile(**ep) for ep in data.get("employee_profiles", [])]

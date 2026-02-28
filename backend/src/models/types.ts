@@ -76,7 +76,6 @@ export interface OperationConstraint {
   time_lag: number;
   constraint_level: number;
   description?: string;
-  share_personnel?: boolean;
   constraint_name?: string;
 }
 

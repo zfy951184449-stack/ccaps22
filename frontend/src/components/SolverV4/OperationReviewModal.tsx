@@ -83,11 +83,11 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                 setData(result);
             } else {
                 console.error("Unexpected API response:", result);
-                message.error('Failed to load operation details');
+                message.error('加载操作详情失败');
             }
         } catch (error) {
             console.error('Error fetching operations:', error);
-            message.error('Error fetching operations');
+            message.error('获取操作数据失败');
         } finally {
             setLoading(false);
         }
@@ -117,7 +117,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
             const result = await response.json();
 
             if (result.success) {
-                message.success('Scheduling started!');
+                message.success('排班已启动！');
                 const runId = result.data ? (result.data.id || result.data.runId) : result.runId;
                 if (runId) {
                     onSuccess(runId);
@@ -127,11 +127,11 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                     onSuccess(0);
                 }
             } else {
-                message.error('Failed to start scheduling: ' + result.error);
+                message.error('启动排班失败：' + result.error);
             }
         } catch (error) {
             console.error('Error starting schedule:', error);
-            message.error('Error starting schedule');
+            message.error('启动排班出错');
         } finally {
             setLoading(false);
         }
@@ -139,20 +139,20 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
 
     const columns: ColumnsType<OperationOperation> = [
         {
-            title: 'Batch Code',
+            title: '批次编号',
             dataIndex: 'batch_code',
             key: 'batch_code',
             width: 120,
         },
         {
-            title: 'Operation',
+            title: '操作',
             dataIndex: 'operation_name',
             key: 'operation_name',
             width: 180,
             ellipsis: true,
         },
         {
-            title: 'Time',
+            title: '时间',
             key: 'time',
             width: 200,
             render: (_, record) => (
@@ -163,11 +163,11 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
             ),
         },
         {
-            title: 'Positions & Quals',
+            title: '岗位 & 资质',
             key: 'positions',
             render: (_, record) => {
                 if (!record.positions || record.positions.length === 0) {
-                    return <span style={{ color: '#ccc' }}>No specific reqs</span>;
+                    return <span style={{ color: '#ccc' }}>无特殊要求</span>;
                 }
 
                 return (
@@ -192,7 +192,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                                         requirements: pos.qualifications
                                     })}
                                 >
-                                    Pos {pos.position_number}: {pos.available_count} Qualified
+                                    Pos {pos.position_number}: {pos.available_count} 人合格
                                 </Tag>
                             );
                         })}
@@ -201,7 +201,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
             },
         },
         {
-            title: 'Status',
+            title: '状态',
             dataIndex: 'status',
             key: 'status',
             width: 100,
@@ -243,28 +243,28 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
     return (
         <>
             <Modal
-                title={`Review Operations to Schedule - ${month.format('MMMM YYYY')}`}
+                title={`审查待排班操作 - ${month.format('YYYY年MM月')}`}
                 open={visible}
                 onCancel={onCancel}
                 width={900}
                 footer={[
                     <Button key="cancel" onClick={onCancel}>
-                        Cancel
+                        取消
                     </Button>,
                     <Button key="confirm" type="primary" onClick={handleConfirm} loading={loading}>
-                        Confirm & Schedule
+                        确认并排班
                     </Button>,
                 ]}
                 styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
             >
                 <div style={{ marginBottom: 16 }}>
-                    Selected Batches: <strong>{batchIds.length}</strong> |
-                    Total Operations: <strong>{data.length}</strong> |
-                    Total Positions: <strong>{data.reduce((sum, op) => sum + (op.positions?.length || op.required_people || 1), 0)}</strong>
+                    已选批次：<strong>{batchIds.length}</strong> |
+                    总操作数：<strong>{data.length}</strong> |
+                    总岗位数：<strong>{data.reduce((sum, op) => sum + (op.positions?.length || op.required_people || 1), 0)}</strong>
                 </div>
 
                 {loading && data.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 20 }}>Loading...</div>
+                    <div style={{ textAlign: 'center', padding: 20 }}>加载中...</div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
                         {/* 1. Share Groups */}
@@ -277,7 +277,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                                     borderBottom: '1px solid #f0f0f0',
                                     color: '#666'
                                 }}>
-                                    Share Group: {groupData.name}
+                                    共享组：{groupData.name}
                                 </div>
                                 <Table
                                     columns={columns}
@@ -299,7 +299,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                                     borderBottom: '1px solid #f0f0f0',
                                     color: '#666'
                                 }}>
-                                    Independent Operations
+                                    独立操作
                                 </div>
                                 <Table
                                     columns={columns}
@@ -313,7 +313,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
 
                         {data.length === 0 && !loading && (
                             <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
-                                No operations found for the selected batches in this period.
+                                所选批次在该时段内没有找到操作。
                             </div>
                         )}
                     </div>

@@ -30,6 +30,7 @@ class SolverV4:
     def __init__(self):
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
+        self.solver_context = None
         
         # Performance Parameters (Optimized for Multi-core)
         self.solver.parameters.log_search_progress = True
@@ -215,6 +216,8 @@ class SolverV4:
             vacancy_vars=vacancy_vars or {},
             config=config,
         )
+        # Keep a reference for solution extraction (e.g., flexible task placements).
+        self.solver_context = ctx
 
         # --- Core Constraints (no shift dependency) ---
         from constraints.share_group import ShareGroupConstraint
@@ -256,6 +259,11 @@ class SolverV4:
         shift_count = 0
         if config.get("enable_shift_assignment", True):
             shift_count = ShiftAssignmentConstraint(logger=logger).apply(ctx, req)
+            
+        from constraints.flexible_scheduling import FlexibleSchedulingConstraint
+        flex_count = 0
+        if config.get("enable_flexible_scheduling", True):
+            flex_count = FlexibleSchedulingConstraint(logger=logger).apply(ctx, req)
 
         from constraints.prefer_standard_shift import PreferStandardShiftConstraint
         prefer_std_count = 0
@@ -604,38 +612,76 @@ class SolverV4:
                 op_start = parse_iso_to_unix(op.planned_start)
                 op_end = parse_iso_to_unix(op.planned_end)
 
-                if op_id not in op_coverage_cache:
-                    op_coverage_cache[op_id] = shift_index.get_covering_shifts(op_start, op_end, window_dates)
-
-                valid_keys = op_coverage_cache[op_id]
-
-                attached = False
-                for (date, shift_id) in valid_keys:
-                    if (emp_id, date, shift_id) in schedule_map:
-                        task_entry = {
+                if op.scheduling_mode == 'FLEXIBLE':
+                    attached = False
+                    # For flexible tasks, we read from ctx.task_placements
+                    # Find exactly which (date, shift) was selected for this task
+                    # Only map if this employee also works that specific shift
+                    for (p_op_id, date, shift_id), p_var in getattr(self.solver_context, 'task_placements', {}).items():
+                        if p_op_id == op_id and get_var_value((p_op_id, date, shift_id), p_var) == 1:
+                            if (emp_id, date, shift_id) in schedule_map:
+                                task_entry = {
+                                    "operation_id": op_id,
+                                    "operation_name": op.operation_name,
+                                    "batch_code": op.batch_code,
+                                    "position_number": pos_num,
+                                    # Use the shift's start and end times for the task rendering
+                                    "start": schedule_map[(emp_id, date, shift_id)]["shift"]["start"],
+                                    "end": schedule_map[(emp_id, date, shift_id)]["shift"]["end"]
+                                }
+                                schedule_map[(emp_id, date, shift_id)]["tasks"].append(task_entry)
+                                attached = True
+                            break
+                            
+                    if not attached:
+                        logger.warning(f"⚠️ Flexible Task {op_id} assigned to Emp {emp_id} but NO matching Placement Shift found! (Orphaned Task)")
+                        unassigned_tasks.append({
                             "operation_id": op_id,
-                            "operation_name": op.operation_name,
-                            "batch_code": op.batch_code,
-                            "position_number": pos_num,
-                            "start": op.planned_start,
-                            "end": op.planned_end
-                        }
-                        schedule_map[(emp_id, date, shift_id)]["tasks"].append(task_entry)
-                        attached = True
-                        break
+                            "employee_id": emp_id,
+                            "reason": "No covering placement shift assigned"
+                        })
+                else:
+                    if op_id not in op_coverage_cache:
+                        op_coverage_cache[op_id] = shift_index.get_covering_shifts(op_start, op_end, window_dates)
 
-                if not attached:
-                    logger.warning(f"⚠️ Task {op_id} assigned to Emp {emp_id} but NO matching Shift found! (Orphaned Task)")
-                    unassigned_tasks.append({
-                        "operation_id": op_id,
-                        "employee_id": emp_id,
-                        "reason": "No covering shift assigned"
-                    })
+                    valid_keys = op_coverage_cache[op_id]
+
+                    attached = False
+                    for (date, shift_id) in valid_keys:
+                        if (emp_id, date, shift_id) in schedule_map:
+                            task_entry = {
+                                "operation_id": op_id,
+                                "operation_name": op.operation_name,
+                                "batch_code": op.batch_code,
+                                "position_number": pos_num,
+                                "start": op.planned_start,
+                                "end": op.planned_end
+                            }
+                            schedule_map[(emp_id, date, shift_id)]["tasks"].append(task_entry)
+                            attached = True
+                            break
+
+                    if not attached:
+                        logger.warning(f"⚠️ Task {op_id} assigned to Emp {emp_id} but NO matching Shift found! (Orphaned Task)")
+                        unassigned_tasks.append({
+                            "operation_id": op_id,
+                            "employee_id": emp_id,
+                            "reason": "No covering shift assigned"
+                        })
 
         # 3. Metrics
         status_str = "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE"
 
         objective_value = self.solver.ObjectiveValue()
+        best_bound = self.solver.BestObjectiveBound()
+
+        # Calculate optimality gap
+        gap_percent = 0.0
+        if abs(objective_value) > 1e-6:
+            gap_percent = 100.0 * abs(objective_value - best_bound) / abs(objective_value)
+        else:
+            gap_percent = 0.0 if abs(objective_value - best_bound) < 1e-6 else 100.0
+
         total_deviation = None
         if objective_value is not None and objective_value > 0:
             total_deviation = objective_value / 100.0
@@ -651,15 +697,65 @@ class SolverV4:
         if total_positions > 0:
             fill_rate = ((total_positions - vacant_count) / total_positions) * 100.0
 
+        # 4. Share Group Compliance Check
+        share_group_compliance = []
+        if req.shared_preferences:
+            for group in req.shared_preferences:
+                members = group.members
+                if len(members) < 2:
+                    continue
+
+                member_teams = {}
+                for m in members:
+                    op_id = m["operation_plan_id"]
+                    assigned_emps = set()
+                    for (o, p, e), var in assignments.items():
+                        if o == op_id and get_var_value((o, p, e), var) == 1:
+                            assigned_emps.add(e)
+                    member_teams[op_id] = assigned_emps
+
+                sorted_members = sorted(members, key=lambda x: x.get("required_people", 0))
+                compliant = True
+                violations = []
+
+                for i in range(len(sorted_members)):
+                    for j in range(i + 1, len(sorted_members)):
+                        team_i = member_teams.get(sorted_members[i]["operation_plan_id"], set())
+                        team_j = member_teams.get(sorted_members[j]["operation_plan_id"], set())
+                        size_i = sorted_members[i].get("required_people", 1)
+                        size_j = sorted_members[j].get("required_people", 1)
+
+                        if size_i < size_j:
+                            if not team_i.issubset(team_j):
+                                compliant = False
+                                violations.append(
+                                    f"Op{sorted_members[i]['operation_plan_id']} ⊄ Op{sorted_members[j]['operation_plan_id']}")
+                        else:
+                            if team_i != team_j:
+                                compliant = False
+                                violations.append(
+                                    f"Op{sorted_members[i]['operation_plan_id']} ≠ Op{sorted_members[j]['operation_plan_id']}")
+
+                share_group_compliance.append({
+                    "group_id": group.share_group_id,
+                    "group_name": group.share_group_name,
+                    "compliant": compliant,
+                    "violations": violations,
+                    "teams": {str(op_id): sorted(list(emps)) for op_id, emps in member_teams.items()}
+                })
+
         return {
             "status": status_str,
             "schedules": schedules,
             "unassigned_jobs": unassigned_tasks,
+            "share_group_compliance": share_group_compliance,
             "metrics": {
                 "assigned_count": assigned_count,
                 "scheduled_shifts": len(schedules),
                 "total_deviation_hours": total_deviation,
                 "objective_value": objective_value,
+                "best_bound": best_bound,
+                "gap": round(gap_percent, 2),
                 "vacant_positions": vacant_count,
                 "total_positions": total_positions,
                 "fill_rate": round(fill_rate, 2)

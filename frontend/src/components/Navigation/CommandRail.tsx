@@ -60,6 +60,8 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
                 { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
                 { key: 'batch-management', icon: <AppstoreOutlined />, label: '批次管理', path: '/batch-management' },
                 { key: 'batch-management-v4', icon: <AppstoreOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
+                { key: 'task-pool', icon: <AppstoreOutlined />, label: '任务池', path: '/task-pool' },
+                { key: 'schedule-overview', icon: <AppstoreOutlined />, label: '排班总览', path: '/schedule-overview' },
             ],
         },
         {

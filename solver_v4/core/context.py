@@ -25,5 +25,8 @@ class SolverContext:
     # Vacancy layer
     vacancy_vars: Dict[tuple, cp_model.IntVar] = field(default_factory=dict)
 
+    # Task Placement layer (for Flexible tasks)
+    task_placements: Dict[tuple, cp_model.IntVar] = field(default_factory=dict)
+
     # Parsed config dict (from req.config)
     config: Dict[str, Any] = field(default_factory=dict)

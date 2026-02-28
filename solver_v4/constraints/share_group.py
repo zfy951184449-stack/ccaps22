@@ -68,6 +68,15 @@ class ShareGroupConstraint(BaseConstraint):
         constraints = 0
         members = group.members  # List of {operation_plan_id, required_people}
         
+        # Safety guard: filter out members whose operation is not in this solve request
+        known_op_ids = {op.operation_plan_id for op in data.operation_demands}
+        valid_members = [m for m in members if m["operation_plan_id"] in known_op_ids]
+        orphaned = len(members) - len(valid_members)
+        if orphaned > 0:
+            self.log(f"[WARN] Group [{group.share_group_name}]: "
+                     f"Dropped {orphaned} member(s) not in current operation_demands", level="warning")
+        members = valid_members
+        
         if len(members) < 2:
             return 0
         
@@ -80,57 +89,42 @@ class ShareGroupConstraint(BaseConstraint):
             op_id = m["operation_plan_id"]
             op_candidates[op_id] = self._get_operation_candidates(op_id, data)
         
-        # Apply pairwise constraints
-        for i in range(len(sorted_members)):
-            for j in range(i + 1, len(sorted_members)):
-                op_i = sorted_members[i]
-                op_j = sorted_members[j]
-                
-                op_id_i = op_i["operation_plan_id"]
-                op_id_j = op_j["operation_plan_id"]
-                size_i = op_i.get("required_people", 1)
-                size_j = op_j.get("required_people", 1)
-                
-                # UNIVERSAL IMPLICATION Logic
-                # Instead of intersection, we iterate through ALL candidates of the "smaller" operation (source).
-                # Rule: If Emp is in Source, they MUST be in Target.
-                
-                candidates_i = op_candidates.get(op_id_i, set())
-                candidates_j = op_candidates.get(op_id_j, set())
-                
-                if not candidates_i:
+        # Apply chain constraints (O(n) instead of O(n^2))
+        for i in range(len(sorted_members) - 1):
+            op_i = sorted_members[i]
+            op_j = sorted_members[i + 1]
+            
+            op_id_i = op_i["operation_plan_id"]
+            op_id_j = op_j["operation_plan_id"]
+            size_i = op_i.get("required_people", 1)
+            size_j = op_j.get("required_people", 1)
+            
+            candidates_i = op_candidates.get(op_id_i, set())
+            candidates_j = op_candidates.get(op_id_j, set())
+            
+            if not candidates_i:
+                continue
+            
+            for emp_id in candidates_i:
+                assigned_i = self._get_employee_assigned_var(model, index, op_id_i, emp_id)
+                if assigned_i is None:
                     continue
-                
-                for emp_id in candidates_i:
-                    assigned_i = self._get_employee_assigned_var(model, index, op_id_i, emp_id)
-                    if assigned_i is None:
-                        continue
-                        
-                    # Check if employee is also a candidate for the target operation
-                    is_candidate_for_j = emp_id in candidates_j
                     
-                    if is_candidate_for_j:
-                        # Case 1: Employee is candidate for BOTH.
-                        # Standard Link: If assigned to I -> assigned to J
-                        assigned_j = self._get_employee_assigned_var(model, index, op_id_j, emp_id)
-                        
-                        if assigned_j is not None:
-                            if size_i < size_j:
-                                # Subset rule: assigned_i → assigned_j
-                                model.AddImplication(assigned_i, assigned_j)
-                            else:
-                                # Equal size: assigned_i ↔ assigned_j
-                                model.Add(assigned_i == assigned_j)
-                            constraints += 1
-                    else:
-                        # Case 2: Employee is candidate for I but NOT J.
-                        # Logic: If assigned to I -> assigned to J. But J is impossible (False).
-                        # Implication: assigned_i -> False  ==>  assigned_i MUST be False (0).
-                        # Action: Forbid assignment to I.
-                        model.Add(assigned_i == 0)
+                is_candidate_for_j = emp_id in candidates_j
+                
+                if is_candidate_for_j:
+                    assigned_j = self._get_employee_assigned_var(model, index, op_id_j, emp_id)
+                    if assigned_j is not None:
+                        if size_i < size_j:
+                            model.AddImplication(assigned_i, assigned_j)
+                        else:
+                            model.Add(assigned_i == assigned_j)
                         constraints += 1
-                        # self.log(f"  [Auto-Ban] Emp {emp_id} forbidden from Op{op_id_i} because they cannot serve in Op{op_id_j}", level="debug")
-        
+                else:
+                    # Auto-ban: if cannot be assigned to next in chain, cannot be assigned here
+                    model.Add(assigned_i == 0)
+                    constraints += 1
+                    
         return constraints
     
     def _get_operation_candidates(self, op_id: int, data: SolverRequest) -> Set[int]:

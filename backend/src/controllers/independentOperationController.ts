@@ -144,9 +144,8 @@ export const batchCreateIndependentOperations = async (req: Request, res: Respon
                             predecessor_batch_operation_plan_id,
                             constraint_type,
                             time_lag,
-                            share_personnel,
                             constraint_name
-                        ) VALUES (?, ?, ?, 1, 0, 1, ?)`,
+                        ) VALUES (?, ?, ?, 1, 0, ?)`,
                         [
                             batchPlanId,
                             toOpId,

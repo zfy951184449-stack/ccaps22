@@ -68,6 +68,9 @@ class ShiftAssignmentConstraint(BaseConstraint):
         infeasible_count = 0
         
         for op in data.operation_demands:
+            if getattr(op, 'scheduling_mode', 'FIXED') == 'FLEXIBLE':
+                continue # Handled by FlexibleSchedulingConstraint
+                
             op_id = op.operation_plan_id
             
             # 2a. Calculate valid shifts for this operation
