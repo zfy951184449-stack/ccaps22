@@ -10,7 +10,8 @@ import {
   activateBatchPlan,
   deactivateBatchPlan,
   getTemplateDay0Offset,
-  createBatchPlansInBulk
+  createBatchPlansInBulk,
+  getBatchOperationsTree
 } from '../controllers/batchPlanningController';
 
 const router = express.Router();
@@ -30,6 +31,7 @@ router.post('/bulk', createBatchPlansInBulk);
 // CRUD operations
 router.get('/', getAllBatchPlans);
 router.get('/:id', getBatchPlanById);
+router.get('/:id/operations-tree', getBatchOperationsTree);
 router.post('/', createBatchPlan);
 router.put('/:id', updateBatchPlan);
 router.delete('/:id', deleteBatchPlan);

@@ -67,6 +67,18 @@ class SharedPreference:
     share_mode: str = "SAME_TEAM"
 
 @dataclass
+class LockedOperation:
+    operation_plan_id: int
+    enforced_employee_ids: List[int]
+
+@dataclass
+class LockedShift:
+    employee_id: int
+    date: str
+    plan_category: str = "WORK"
+    shift_id: Optional[int] = None
+
+@dataclass
 class HistoricalShift:
     """历史班次记录，用于边界约束检查"""
     employee_id: int
@@ -84,6 +96,8 @@ class SolverRequest:
     calendar: List[CalendarDay]
     shift_definitions: List[ShiftDefinition]
     shared_preferences: List[SharedPreference]
+    locked_operations: List[LockedOperation] = field(default_factory=list)
+    locked_shifts: List[LockedShift] = field(default_factory=list)
     historical_shifts: List[HistoricalShift] = field(default_factory=list)
     config: Optional[Dict[str, Any]] = None
 
@@ -123,6 +137,8 @@ class SolverRequest:
         cals = [CalendarDay(**c) for c in data.get("calendar", [])]
         shifts = [ShiftDefinition(**s) for s in data.get("shift_definitions", [])]
         shares = [SharedPreference(**sp) for sp in data.get("shared_preferences", [])]
+        locked_ops = [LockedOperation(**lo) for lo in data.get("locked_operations", [])]
+        locked_shifts = [LockedShift(**ls) for ls in data.get("locked_shifts", [])]
         hist_shifts = [HistoricalShift(**hs) for hs in data.get("historical_shifts", [])]
 
         return cls(
@@ -133,6 +149,8 @@ class SolverRequest:
             calendar=cals,
             shift_definitions=shifts,
             shared_preferences=shares,
+            locked_operations=locked_ops,
+            locked_shifts=locked_shifts,
             historical_shifts=hist_shifts,
             config=data.get("config")
         )

@@ -55,8 +55,66 @@ interface ShiftScheduleItem {
     shift_id: number;
 }
 
+interface FlattenedAssignment {
+    operation_id: number;
+    position_number: number;
+    employee_id: number;
+    is_standalone: boolean;
+    date?: string;
+    shift_id?: number;
+}
+
+type ShiftPlanCategory = 'BASE' | 'PRODUCTION' | 'OVERTIME' | 'REST';
+
+interface ShiftDefinitionInfo {
+    code: string;
+    hours: number;
+    category: string;
+}
+
 // V4 Solver Service URL
 const SOLVER_V4_URL = process.env.SOLVER_V4_URL || 'http://localhost:5005';
+
+const buildStoredResult = (result: any) => {
+    const schedules = Array.isArray(result?.schedules) ? result.schedules : [];
+    const assignedTasks = schedules.reduce((total: number, schedule: any) => total + (schedule.tasks?.length || 0), 0);
+    const unassignedJobs = Array.isArray(result?.unassigned_jobs) ? result.unassigned_jobs.length : 0;
+
+    return {
+        ...result,
+        summary: {
+            status: result?.status || 'UNKNOWN',
+            scheduled_shifts: schedules.length,
+            assigned_tasks: assignedTasks,
+            unassigned_jobs: unassignedJobs,
+            fill_rate: result?.metrics?.fill_rate ?? null,
+            saved_at: new Date().toISOString()
+        }
+    };
+};
+
+const buildShiftKey = (employeeId: number, date: string, shiftId?: number) =>
+    `${employeeId}:${date}:${shiftId ?? 'none'}`;
+
+const buildAssignmentKey = (operationId: number, positionNumber: number) =>
+    `${operationId}:${positionNumber}`;
+
+const derivePlanCategory = (
+    shiftInfo: ShiftDefinitionInfo | undefined,
+    hasAssignedTasks: boolean
+): ShiftPlanCategory => {
+    const normalizedCategory = shiftInfo?.category?.toUpperCase();
+
+    if (normalizedCategory === 'REST' || shiftInfo?.code === 'REST' || (shiftInfo?.hours ?? 0) <= 0) {
+        return 'REST';
+    }
+
+    if (normalizedCategory === 'OVERTIME') {
+        return 'OVERTIME';
+    }
+
+    return hasAssignedTasks ? 'PRODUCTION' : 'BASE';
+};
 
 export const createSolveTaskV4 = async (req: Request, res: Response) => {
     try {
@@ -789,13 +847,8 @@ async function updateRunStatus(runId: number, status: string, error?: string | n
 
 async function saveResults(runId: number, result: any) {
     try {
-        // Placeholder for result saving logic specific to V4 structure
-        if (result.assignments) {
-            // ... save assignments ...
-        }
-
-        // For now, just mark as complete
-        await pool.execute('UPDATE scheduling_runs SET result_summary = ? WHERE id = ?', [JSON.stringify(result), runId]);
+        const storedResult = buildStoredResult(result);
+        await pool.execute('UPDATE scheduling_runs SET result_summary = ? WHERE id = ?', [JSON.stringify(storedResult), runId]);
     } catch (error) {
         console.error(`[SchedulingV4] Failed to save results for Run ${runId}:`, error);
         // Don't re-throw, to avoid marking the whole run as FAILED if just saving summary failed?
@@ -835,7 +888,7 @@ export const receiveSolveResultV4 = async (req: Request, res: Response) => {
                  error_message = ?,
                  result_summary = ?
              WHERE id = ?`,
-            [finalStatus, errorMsg, JSON.stringify(result), run_id]
+            [finalStatus, errorMsg, JSON.stringify(buildStoredResult(result)), run_id]
         );
 
         console.log(`[SchedulingV4] Run ${run_id} updated to ${finalStatus} via callback`);
@@ -983,8 +1036,8 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         console.log(`[SchedulingV4][Diag] schedules present: ${schedulesPresent}, count: ${schedulesLength}, total tasks: ${totalTasksInSchedules}`);
         console.log(`[SchedulingV4][Diag] assignments present: ${Array.isArray(rawResult.assignments)}, shift_schedule present: ${Array.isArray(rawResult.shift_schedule)}`);
 
-        let assignments: { operation_id: number; position_number: number; employee_id: number; is_standalone: boolean; date?: string; shift_id?: number }[] = [];
-        let shiftSchedule: { employee_id: number; date: string; shift_id: number }[] = [];
+        let assignments: FlattenedAssignment[] = [];
+        let shiftSchedule: ShiftScheduleItem[] = [];
 
         if (Array.isArray(rawResult.schedules) && rawResult.schedules.length > 0) {
             // 统一格式：从 schedules 中展平
@@ -1016,28 +1069,113 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         const windowStart = run.window_start;
         const windowEnd = run.window_end;
+        const assignmentsByShiftKey = new Map<string, FlattenedAssignment[]>();
+        assignments.forEach(assignment => {
+            if (!assignment.date) {
+                return;
+            }
+            const shiftKey = buildShiftKey(assignment.employee_id, assignment.date, assignment.shift_id);
+            if (!assignmentsByShiftKey.has(shiftKey)) {
+                assignmentsByShiftKey.set(shiftKey, []);
+            }
+            assignmentsByShiftKey.get(shiftKey)!.push(assignment);
+        });
 
         await connection.beginTransaction();
 
-        // 2. Cleanup: Delete existing assignments for operations in this time window
+        const lockedAssignmentKeys = new Map<string, number>();
+        const lockedShiftByEmployeeDate = new Map<string, { id: number; shift_id: number | null; plan_category: string }>();
+
+        // 2. Cleanup: Clear non-locked data in the solve window, but preserve manual locks.
         if (windowStart && windowEnd) {
+            const [lockedAssignmentRows] = await connection.execute<RowDataPacket[]>(
+                `SELECT
+                    bpa.batch_operation_plan_id,
+                    bpa.position_number,
+                    bpa.employee_id
+                 FROM batch_personnel_assignments bpa
+                 JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+                 WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
+                   AND IFNULL(bpa.is_locked, 0) = 1`,
+                [windowStart, windowEnd]
+            );
+            lockedAssignmentRows.forEach(row => {
+                lockedAssignmentKeys.set(
+                    buildAssignmentKey(Number(row.batch_operation_plan_id), Number(row.position_number)),
+                    Number(row.employee_id)
+                );
+            });
+
+            const [lockedShiftRows] = await connection.execute<RowDataPacket[]>(
+                `SELECT id, employee_id, plan_date, shift_id, plan_category
+                 FROM employee_shift_plans
+                 WHERE plan_date BETWEEN ? AND ?
+                   AND IFNULL(is_locked, 0) = 1`,
+                [windowStart, windowEnd]
+            );
+            lockedShiftRows.forEach(row => {
+                const planDate = row.plan_date instanceof Date
+                    ? row.plan_date.toISOString().split('T')[0]
+                    : String(row.plan_date).split('T')[0];
+                lockedShiftByEmployeeDate.set(
+                    `${Number(row.employee_id)}:${planDate}`,
+                    {
+                        id: Number(row.id),
+                        shift_id: row.shift_id ? Number(row.shift_id) : null,
+                        plan_category: String(row.plan_category || 'BASE')
+                    }
+                );
+            });
+
+            const [shiftPlansToDelete] = await connection.execute<RowDataPacket[]>(
+                `SELECT id
+                 FROM employee_shift_plans
+                 WHERE plan_date BETWEEN ? AND ?
+                   AND IFNULL(is_locked, 0) = 0`,
+                [windowStart, windowEnd]
+            );
+
+            if (shiftPlansToDelete.length > 0) {
+                const shiftPlanIds = shiftPlansToDelete.map(row => Number(row.id));
+                const placeholders = shiftPlanIds.map(() => '?').join(',');
+
+                await connection.execute(
+                    `UPDATE batch_personnel_assignments
+                     SET shift_plan_id = NULL
+                     WHERE shift_plan_id IN (${placeholders})
+                       AND IFNULL(is_locked, 0) = 0`,
+                    shiftPlanIds
+                );
+
+                const [lockedRefs] = await connection.execute<RowDataPacket[]>(
+                    `SELECT DISTINCT shift_plan_id
+                     FROM batch_personnel_assignments
+                     WHERE shift_plan_id IN (${placeholders})
+                       AND IFNULL(is_locked, 0) = 1`,
+                    shiftPlanIds
+                );
+
+                const lockedShiftPlanIds = new Set(lockedRefs.map(row => Number(row.shift_plan_id)));
+                const safeToDeleteIds = shiftPlanIds.filter(id => !lockedShiftPlanIds.has(id));
+
+                if (safeToDeleteIds.length > 0) {
+                    const safePlaceholders = safeToDeleteIds.map(() => '?').join(',');
+                    await connection.execute(
+                        `DELETE FROM employee_shift_plans
+                         WHERE id IN (${safePlaceholders})`,
+                        safeToDeleteIds
+                    );
+                }
+            }
+
             await connection.execute(
                 `DELETE bpa FROM batch_personnel_assignments bpa
                  JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
-                 WHERE bop.planned_start_datetime >= ? AND bop.planned_start_datetime < DATE_ADD(?, INTERVAL 1 DAY)
-                   AND bpa.scheduling_run_id IS NOT NULL`,
+                 WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
+                   AND IFNULL(bpa.is_locked, 0) = 0`,
                 [windowStart, windowEnd]
             );
-            console.log(`[SchedulingV4] Cleaned up old assignments in window ${windowStart} ~ ${windowEnd}`);
-
-            // Cleanup: Delete auto-generated shift plans in this window
-            await connection.execute(
-                `DELETE FROM employee_shift_plans 
-                 WHERE plan_date >= ? AND plan_date <= ?
-                   AND is_generated = 1`,
-                [windowStart, windowEnd]
-            );
-            console.log(`[SchedulingV4] Cleaned up old shift plans in window ${windowStart} ~ ${windowEnd}`);
+            console.log(`[SchedulingV4] Cleaned up non-locked assignments in window ${windowStart} ~ ${windowEnd}`);
 
             // Cleanup: standalone task assignments could also be cleaned if they run in this window 
             // but we might just overwrite them. A strict approach:
@@ -1052,6 +1190,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         // 3. Insert new assignments to batch_personnel_assignments and standalone_task_assignments
         let assignmentsInserted = 0;
         let standaloneAssignmentsInserted = 0;
+        let lockedAssignmentsSkipped = 0;
         const assignedStandaloneTaskIds = new Set<number>();
 
         for (const assignment of assignments) {
@@ -1073,6 +1212,18 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                     assignedStandaloneTaskIds.add(taskId);
                     standaloneAssignmentsInserted++;
                 } else {
+                    const assignmentKey = buildAssignmentKey(assignment.operation_id, assignment.position_number);
+                    if (lockedAssignmentKeys.has(assignmentKey)) {
+                        const lockedEmployeeId = lockedAssignmentKeys.get(assignmentKey);
+                        if (lockedEmployeeId !== assignment.employee_id) {
+                            console.warn(
+                                `[SchedulingV4] Skip locked assignment conflict: Op ${assignment.operation_id} Pos ${assignment.position_number} locked to Emp ${lockedEmployeeId}, solver returned Emp ${assignment.employee_id}`
+                            );
+                        }
+                        lockedAssignmentsSkipped++;
+                        continue;
+                    }
+
                     await connection.execute(
                         `INSERT INTO batch_personnel_assignments 
                             (batch_operation_plan_id, employee_id, position_number, role, assignment_status, scheduling_run_id)
@@ -1100,36 +1251,112 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         }
 
         // 4. Insert new shift plans to employee_shift_plans
-        // First, build shift_id -> shift_code mapping for plan_category detection
+        // First, build shift_id metadata for plan_category detection.
         const [shiftDefRows] = await connection.execute<RowDataPacket[]>(
-            'SELECT id, shift_code, nominal_hours FROM shift_definitions WHERE is_active = 1'
+            'SELECT id, shift_code, nominal_hours, category FROM shift_definitions WHERE is_active = 1'
         );
-        const shiftMap = new Map<number, { code: string; hours: number }>();
-        shiftDefRows.forEach(r => shiftMap.set(r.id, { code: r.shift_code, hours: r.nominal_hours }));
+        const shiftMap = new Map<number, ShiftDefinitionInfo>();
+        shiftDefRows.forEach(r => shiftMap.set(Number(r.id), {
+            code: String(r.shift_code),
+            hours: Number(r.nominal_hours),
+            category: String(r.category || 'BASE')
+        }));
 
         let shiftPlansInserted = 0;
+        let shiftPlansReused = 0;
+        let lockedShiftConflicts = 0;
+        const shiftPlanIdByShiftKey = new Map<string, number>();
+
         for (const plan of shiftSchedule) {
             try {
+                const dayKey = `${plan.employee_id}:${plan.date}`;
+                const lockedShiftPlan = lockedShiftByEmployeeDate.get(dayKey);
+                if (lockedShiftPlan) {
+                    if (lockedShiftPlan.shift_id !== plan.shift_id) {
+                        console.warn(
+                            `[SchedulingV4] Skip locked shift conflict: Emp ${plan.employee_id} ${plan.date} locked to Shift ${lockedShiftPlan.shift_id}, solver returned Shift ${plan.shift_id}`
+                        );
+                        lockedShiftConflicts++;
+                        continue;
+                    }
+
+                    shiftPlanIdByShiftKey.set(buildShiftKey(plan.employee_id, plan.date, plan.shift_id), lockedShiftPlan.id);
+                    shiftPlansReused++;
+                    continue;
+                }
+
+                const relatedAssignments = assignmentsByShiftKey.get(buildShiftKey(plan.employee_id, plan.date, plan.shift_id)) || [];
                 const shiftInfo = shiftMap.get(plan.shift_id);
-                const planCategory = 'BASE'; // Default to BASE, can be enhanced later
-                const planHours = shiftInfo?.hours || 8;
+                const firstBatchOperationId = relatedAssignments.find(item => !item.is_standalone)?.operation_id ?? null;
+                const planCategory = derivePlanCategory(shiftInfo, relatedAssignments.length > 0);
+                const planHours = shiftInfo?.hours ?? (planCategory === 'REST' ? 0 : 8);
 
                 await connection.execute(
                     `INSERT INTO employee_shift_plans 
-                        (employee_id, plan_date, shift_id, plan_category, plan_state, plan_hours, scheduling_run_id, is_generated)
-                     VALUES (?, ?, ?, ?, 'PLANNED', ?, ?, 1)
+                        (employee_id, plan_date, shift_id, plan_category, plan_state, plan_hours, batch_operation_plan_id, scheduling_run_id, is_generated)
+                     VALUES (?, ?, ?, ?, 'PLANNED', ?, ?, ?, 1)
                      ON DUPLICATE KEY UPDATE
                         shift_id = VALUES(shift_id),
                         plan_category = VALUES(plan_category),
                         plan_hours = VALUES(plan_hours),
+                        batch_operation_plan_id = COALESCE(VALUES(batch_operation_plan_id), batch_operation_plan_id),
                         scheduling_run_id = VALUES(scheduling_run_id),
                         updated_at = NOW()`,
-                    [plan.employee_id, plan.date, plan.shift_id, planCategory, planHours, runIdNum]
+                    [plan.employee_id, plan.date, plan.shift_id, planCategory, planHours, firstBatchOperationId, runIdNum]
                 );
+
+                const [shiftPlanRows] = await connection.execute<RowDataPacket[]>(
+                    `SELECT id
+                     FROM employee_shift_plans
+                     WHERE employee_id = ?
+                       AND plan_date = ?
+                       AND shift_id <=> ?
+                     ORDER BY id DESC
+                     LIMIT 1`,
+                    [plan.employee_id, plan.date, plan.shift_id]
+                );
+
+                if (shiftPlanRows.length > 0) {
+                    shiftPlanIdByShiftKey.set(
+                        buildShiftKey(plan.employee_id, plan.date, plan.shift_id),
+                        Number(shiftPlanRows[0].id)
+                    );
+                }
+
                 shiftPlansInserted++;
             } catch (err: any) {
                 console.warn(`[SchedulingV4] Failed to insert shift plan: Emp ${plan.employee_id} ${plan.date} -> Shift ${plan.shift_id}: ${err.message}`);
             }
+        }
+
+        for (const [shiftKey, shiftPlanId] of shiftPlanIdByShiftKey.entries()) {
+            const relatedAssignments = assignmentsByShiftKey.get(shiftKey) || [];
+            const batchOperationIds = Array.from(
+                new Set(
+                    relatedAssignments
+                        .filter(item => !item.is_standalone)
+                        .map(item => item.operation_id)
+                )
+            );
+
+            if (!batchOperationIds.length) {
+                continue;
+            }
+
+            const employeeId = relatedAssignments[0]?.employee_id;
+            if (!employeeId) {
+                continue;
+            }
+
+            const placeholders = batchOperationIds.map(() => '?').join(',');
+            await connection.execute(
+                `UPDATE batch_personnel_assignments
+                 SET shift_plan_id = ?
+                 WHERE batch_operation_plan_id IN (${placeholders})
+                   AND employee_id = ?
+                   AND IFNULL(is_locked, 0) = 0`,
+                [shiftPlanId, ...batchOperationIds, employeeId]
+            );
         }
 
         // 5. Update run status to APPLIED
@@ -1140,14 +1367,21 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         await connection.commit();
 
-        console.log(`[SchedulingV4] Applied result for Run ${runId}: ${assignmentsInserted} batch assignments, ${standaloneAssignmentsInserted} standalone assignments, ${shiftPlansInserted} shift plans`);
+        console.log(
+            `[SchedulingV4] Applied result for Run ${runId}: ${assignmentsInserted} batch assignments, ` +
+            `${standaloneAssignmentsInserted} standalone assignments, ${shiftPlansInserted} new shift plans, ` +
+            `${shiftPlansReused} reused locked shift plans`
+        );
 
         res.json({
             success: true,
             data: {
                 batch_assignments_inserted: assignmentsInserted,
                 standalone_assignments_inserted: standaloneAssignmentsInserted,
-                shift_plans_inserted: shiftPlansInserted
+                shift_plans_inserted: shiftPlansInserted,
+                shift_plans_reused: shiftPlansReused,
+                locked_assignments_skipped: lockedAssignmentsSkipped,
+                locked_shift_conflicts: lockedShiftConflicts
             }
         });
 
@@ -1219,4 +1453,3 @@ export const listRunsV4 = async (req: Request, res: Response) => {
 };
 
 // NOTE: deriveShiftAssignments removed - shift_schedule now comes directly from solver output
-

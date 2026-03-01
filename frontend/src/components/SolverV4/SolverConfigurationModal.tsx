@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Switch, List, Typography, Button, Space, Select, Form, Divider, InputNumber } from 'antd';
+import { Modal, Switch, List, Typography, Button, Space, Select, Divider, InputNumber } from 'antd';
 import { SettingOutlined, UndoOutlined, SaveOutlined, TeamOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -9,6 +9,8 @@ export interface SolverConfig {
     enable_share_group: boolean;
     enable_unique_employee: boolean;
     enable_one_position: boolean;
+    enable_locked_operations: boolean;
+    enable_locked_shifts: boolean;
     enable_shift_assignment: boolean;
     enable_max_consecutive_work_days: boolean;
     enable_max_consecutive_rest_days: boolean; // NEW
@@ -42,6 +44,8 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     enable_share_group: true,
     enable_unique_employee: true,
     enable_one_position: true,
+    enable_locked_operations: true,
+    enable_locked_shifts: true,
     enable_shift_assignment: true,
     enable_max_consecutive_work_days: true,
     enable_max_consecutive_rest_days: true,
@@ -145,6 +149,8 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_share_group', title: '共享组约束', description: '同一共享组内人员的排班互斥/共存规则' },
         { key: 'enable_unique_employee', title: '人员唯一性', description: '同一时段内每人仅能分配一个岗位' },
         { key: 'enable_one_position', title: '一人一岗', description: '同一操作内禁止多岗位分配' },
+        { key: 'enable_locked_operations', title: '保留锁定操作', description: '手工锁定的操作人员分配将作为硬约束保留' },
+        { key: 'enable_locked_shifts', title: '保留锁定班次', description: '手工锁定的员工班次将作为硬约束保留' },
         { key: 'enable_shift_assignment', title: '班次分配规则', description: '根据任务需求自动关联班次' },
         { key: 'enable_max_consecutive_work_days', title: '最大连续工作天数', description: '限制连续工作天数上限' },
         { key: 'enable_max_consecutive_rest_days', title: '最大连续休息天数', description: '限制连续休息天数，防止长期缺勤' },

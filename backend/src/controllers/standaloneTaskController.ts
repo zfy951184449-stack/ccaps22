@@ -115,6 +115,8 @@ export const createTask = async (req: Request, res: Response) => {
             deadline,
             preferred_shift_ids,
             related_batch_id,
+            trigger_operation_plan_id,
+            batch_offset_days,
             operation_id,
             recurrence_rule,
             qualifications // array of { position_number, qualification_id, min_level, is_mandatory }
@@ -129,13 +131,15 @@ export const createTask = async (req: Request, res: Response) => {
         const [result] = await connection.execute(
             `INSERT INTO standalone_tasks 
        (task_code, task_name, task_type, required_people, duration_minutes, team_id,
-        earliest_start, deadline, preferred_shift_ids, related_batch_id, operation_id, recurrence_rule)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        earliest_start, deadline, preferred_shift_ids, related_batch_id, 
+        trigger_operation_plan_id, batch_offset_days, operation_id, recurrence_rule)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 task_code, task_name, task_type, required_people || 1, duration_minutes,
                 team_id || null, earliest_start || null, deadline,
                 preferred_shift_ids ? JSON.stringify(preferred_shift_ids) : null,
-                related_batch_id || null, operation_id || null,
+                related_batch_id || null, trigger_operation_plan_id || null, batch_offset_days !== undefined ? batch_offset_days : 7,
+                operation_id || null,
                 recurrence_rule ? JSON.stringify(recurrence_rule) : null
             ]
         ) as any;
@@ -182,6 +186,8 @@ export const updateTask = async (req: Request, res: Response) => {
             deadline,
             preferred_shift_ids,
             related_batch_id,
+            trigger_operation_plan_id,
+            batch_offset_days,
             operation_id,
             recurrence_rule,
             qualifications
@@ -191,14 +197,14 @@ export const updateTask = async (req: Request, res: Response) => {
             `UPDATE standalone_tasks 
        SET task_name = ?, task_type = ?, required_people = ?, duration_minutes = ?, team_id = ?,
            earliest_start = ?, deadline = ?, preferred_shift_ids = ?, related_batch_id = ?, 
-           operation_id = ?, recurrence_rule = ?
+           trigger_operation_plan_id = ?, batch_offset_days = ?, operation_id = ?, recurrence_rule = ?
        WHERE id = ?`,
             [
                 task_name, task_type, required_people, duration_minutes, team_id || null,
                 earliest_start || null, deadline,
                 preferred_shift_ids ? JSON.stringify(preferred_shift_ids) : null,
-                related_batch_id || null, operation_id || null,
-                recurrence_rule ? JSON.stringify(recurrence_rule) : null,
+                related_batch_id || null, trigger_operation_plan_id || null, batch_offset_days !== undefined ? batch_offset_days : 7,
+                operation_id || null, recurrence_rule ? JSON.stringify(recurrence_rule) : null,
                 id
             ]
         ) as any;

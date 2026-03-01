@@ -14,7 +14,9 @@ export interface StandaloneTask {
     deadline: string;
     preferred_shift_ids?: number[];
     related_batch_id?: number;
+    related_batch_code?: string;
     trigger_operation_plan_id?: number;
+    trigger_operation_name?: string;
     batch_offset_days?: number;
     operation_id?: number;
     recurrence_rule?: any;

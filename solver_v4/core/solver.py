@@ -234,11 +234,19 @@ class SolverV4:
         else:
             logger.info("⏩ Skipping UniqueEmployeeConstraint (Disabled)")
 
+        from constraints.locked_operations import LockedOperationsConstraint
+        locked_ops_count = 0
+        if config.get("enable_locked_operations", True):
+            locked_ops_count = LockedOperationsConstraint(logger=logger).apply(ctx, req)
+        else:
+            logger.info("⏩ Skipping LockedOperationsConstraint (Disabled)")
+
         if callback:
             callback.log_section("应用硬约束 (从文件加载)", [
                 f"共享组: {share_count} (Config: {config.get('enable_share_group', 'ON')})",
                 f"一人一岗: {len(req.operation_demands)} Ops (Implicit)",
-                f"人员唯一: {unique_count} (Config: {config.get('enable_unique_employee', 'ON')})"
+                f"人员唯一: {unique_count} (Config: {config.get('enable_unique_employee', 'ON')})",
+                f"锁定操作: {locked_ops_count} (Config: {config.get('enable_locked_operations', 'ON')})"
             ])
 
         from constraints.one_position import OnePositionConstraint
@@ -254,6 +262,13 @@ class SolverV4:
         # --- Shift-Dependent Constraints ---
         if not shift_assignments:
             return
+
+        from constraints.locked_shifts import LockedShiftsConstraint
+        locked_shift_count = 0
+        if config.get("enable_locked_shifts", True):
+            locked_shift_count = LockedShiftsConstraint(logger=logger).apply(ctx, req)
+        else:
+            logger.info("⏩ Skipping LockedShiftsConstraint (Disabled)")
 
         from constraints.shift_assignment import ShiftAssignmentConstraint
         shift_count = 0
@@ -298,6 +313,7 @@ class SolverV4:
         if callback:
             all_employees = {ep.employee_id for ep in req.employee_profiles}
             callback.log_section("排班规则概览", [
+                f"✅ 锁定班次: {locked_shift_count} 条",
                 f"✅ 班次分配: {shift_count} 条 (覆盖 {len(all_employees)} 人)",
                 f"✅ 标准班优先: {prefer_std_count} 条",
                 f"✅ 连续工作限制: {work_limit_count} 条 (Max {req.config.get('max_consecutive_work_days', 6)} 天)",

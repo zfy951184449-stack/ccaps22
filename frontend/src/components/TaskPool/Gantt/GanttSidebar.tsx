@@ -41,21 +41,28 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({ tasks, assignmentsByTask })
                     return (
                         <div
                             key={task.id}
-                            className={`px-3 py-2 border-b border-slate-100 h-14 flex flex-col justify-center
+                            className={`px-3 py-2 border-b border-slate-100 flex flex-col justify-center min-h-[56px]
                                 ${isCompleted ? 'opacity-40' : ''}`}
                         >
                             {/* Row 1: Type dot + Name */}
-                            <div className="flex items-center gap-1.5 overflow-hidden">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${TYPE_DOT[task.task_type]}`} />
-                                <Text
-                                    className="text-sm font-medium truncate leading-tight"
-                                    title={task.task_name}
-                                >
-                                    {task.task_name}
-                                </Text>
+                            <div className="flex items-start gap-1.5 overflow-hidden">
+                                <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${TYPE_DOT[task.task_type]}`} />
+                                <div className="flex flex-col overflow-hidden w-full">
+                                    <Text
+                                        className="text-sm font-medium truncate leading-tight"
+                                        title={task.task_name}
+                                    >
+                                        {task.task_name}
+                                    </Text>
+                                    {task.related_batch_code && (
+                                        <Text type="secondary" className="text-xs truncate opacity-75 leading-none mt-1">
+                                            ← {task.related_batch_code} {task.trigger_operation_name ? `· ${task.trigger_operation_name}后` : ''}
+                                        </Text>
+                                    )}
+                                </div>
                             </div>
                             {/* Row 2: Status + People */}
-                            <div className="flex items-center justify-between mt-0.5 pl-3.5">
+                            <div className="flex items-center justify-between mt-1 pl-3.5">
                                 <Badge status={statusCfg.status} text={<span className="text-xs text-slate-400">{statusCfg.text}</span>} />
                                 <Text type="secondary" className="text-xs">{task.required_people}人</Text>
                             </div>

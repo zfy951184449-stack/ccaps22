@@ -250,7 +250,7 @@ const MonthlyBatchSelector: React.FC = () => {
         >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Title level={4} style={{ margin: 0 }}>排产调度</Title>
+                    <Title level={4} style={{ margin: 0 }}>排班调度</Title>
                     <Button
                         icon={<SettingOutlined />}
                         onClick={() => setConfigVisible(true)}
@@ -319,7 +319,7 @@ const MonthlyBatchSelector: React.FC = () => {
                                     <div style={{ display: 'flex', gap: 12 }}>
                                         <Button onClick={handleResetSelection}>重置选择</Button>
                                         <Button type="primary" onClick={handleScheduleSelected}>
-                                            安排选中批次
+                                            排班选中批次
                                         </Button>
                                     </div>
                                 </div>

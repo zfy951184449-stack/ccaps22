@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Table, Tag, Button, message, Space, Tooltip } from 'antd';
-import { ReloadOutlined, EyeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import SolveResultV4Page from './SolveResultV4Page';
@@ -25,6 +25,10 @@ const SolverQualityTag: React.FC<{ record: RunRecord }> = ({ record }) => {
     // 正在运行
     if (['QUEUED', 'RUNNING'].includes(record.status)) {
         return <Tag color="processing">🔵 求解中</Tag>;
+    }
+
+    if (record.status === 'APPLIED') {
+        return <Tag color="success">✅ 已应用</Tag>;
     }
 
     // 失败 / 无解
@@ -152,7 +156,7 @@ const RunHistoryTab: React.FC = () => {
             width: 150,
             render: (_, record) => (
                 <Space>
-                    {record.status === 'COMPLETED' && (
+                    {['COMPLETED', 'APPLIED'].includes(record.status) && (
                         <Button
                             type="link"
                             size="small"

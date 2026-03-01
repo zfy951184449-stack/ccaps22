@@ -17,3 +17,17 @@ History already uses conventional prefixes (`feat`, `refactor`, `chore`); keep t
 
 ## Configuration & Security Notes
 Store secrets in `backend/.env` (e.g., `MYSQL_USER`, `MYSQL_PASSWORD`) and share updates via sanitized `.env.sample` entries rather than the real values. The CRA dev server proxies to `http://localhost:3001`, so keep backend ports consistent with `start.sh`, and anonymize any sample data pulled from `database/` or archived queries.
+
+## Codex Working Rules
+For Codex sessions, treat repository work as an end-to-end implementation task instead of isolated file editing. Read the affected chain first (`routes/controllers/services/models` for backend, `pages/components/services/types` for frontend, and `assembler/contracts/constraints` for V4 solver work), then make the smallest coherent change that closes the request.
+
+Keep cross-layer contracts aligned whenever API fields, scheduling payloads, or solver inputs change. Use `shift_plan_id` as the source of truth for shift linkage, do not mix Batch/Shift/Run status fields, and serialize `BigInt` values safely in responses. For scheduling or biopharma constraints, prefer explicit validation or `Infeasible` outcomes over silent auto-correction.
+
+Do not treat restarts as verification. Run deterministic checks for the touched area: `cd backend && npm run build`, `cd backend && npm test`, `cd frontend && npm run build`, `cd frontend && npm test -- --watchAll=false`, plus `scripts/verify_v4_archive.sh` for relevant V4 persistence/apply changes. If a check cannot run, state that explicitly in the handoff.
+
+Use the Codex rule split under `.agent/rules/` as the working set:
+- `codex-coding-rules.md`: repository-wide base rules
+- `codex-backend-api-rules.md`: backend/API/database focused tasks
+- `codex-frontend-ui-rules.md`: frontend/UI/interaction focused tasks
+- `codex-solver-v4-rules.md`: solver V4 / assembler / apply-result focused tasks
+- `codex-runtime-restart-rules.md`: runtime sync and restart rules to avoid stale-process manual test results

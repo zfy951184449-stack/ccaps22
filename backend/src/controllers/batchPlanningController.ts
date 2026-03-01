@@ -606,3 +606,52 @@ export const createBatchPlansInBulk = async (req: Request, res: Response) => {
     connection.release();
   }
 };
+
+export const getBatchOperationsTree = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const query = `
+      SELECT 
+        bop.id as operation_plan_id,
+        bop.planned_start_datetime,
+        bop.planned_end_datetime,
+        o.operation_name,
+        COALESCE(ps.id, 0) as stage_id,
+        COALESCE(ps.stage_name, '默认阶段') as stage_name
+      FROM batch_operation_plans bop
+      LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+      LEFT JOIN process_stages ps ON sos.stage_id = ps.id
+      LEFT JOIN operations o ON bop.operation_id = o.id
+      WHERE bop.batch_plan_id = ? AND COALESCE(bop.is_independent, 0) = 0
+      ORDER BY ps.stage_order ASC, bop.planned_start_datetime ASC
+    `;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(query, [id]);
+
+    // Group by stage
+    const stagesMap = new Map<number, any>();
+
+    for (const row of rows) {
+      if (!stagesMap.has(row.stage_id)) {
+        stagesMap.set(row.stage_id, {
+          stage_id: row.stage_id,
+          stage_name: row.stage_name,
+          operations: []
+        });
+      }
+
+      stagesMap.get(row.stage_id).operations.push({
+        operation_plan_id: row.operation_plan_id,
+        operation_name: row.operation_name,
+        planned_start_datetime: row.planned_start_datetime,
+        planned_end_datetime: row.planned_end_datetime
+      });
+    }
+
+    res.json(Array.from(stagesMap.values()));
+  } catch (error) {
+    console.error('Error fetching batch operations tree:', error);
+    res.status(500).json({ error: 'Failed to fetch operations tree' });
+  }
+};

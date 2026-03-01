@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Modal, Form, Input, InputNumber, Select, Checkbox,
-    DatePicker, Button, Space, message, Row, Col, Typography
+    DatePicker, Button, Space, message, Row, Col, Typography, Cascader
 } from 'antd';
 import { ClockCircleOutlined } from '@ant-design/icons';
 import { StandaloneTask, StandaloneTaskQualification, TaskType } from './types';
@@ -30,26 +30,62 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
     const [shifts, setShifts] = useState<any[]>([]);
     const [qualifications, setQualifications] = useState<any[]>([]);
     const [batches, setBatches] = useState<any[]>([]);
+    const [operationsTree, setOperationsTree] = useState<any[]>([]);
+    const [selectedBatchId, setSelectedBatchId] = useState<number | undefined>(undefined);
 
     useEffect(() => {
         if (visible) {
             fetchReferenceData();
             if (initialValues) {
                 setTaskType(initialValues.task_type);
+                setSelectedBatchId(initialValues.related_batch_id);
+                if (initialValues.related_batch_id) {
+                    fetchOperationsTree(initialValues.related_batch_id);
+                }
+
+                // For Cascader, we need array value if it maps to stage -> operation.
+                // However, we only have trigger_operation_plan_id. We need to find the stage_id for it, or we can just make the cascader value an array in state.
+                // It's easier to just let the Form handle it, but Cascader expects an array [stage_id, operation_plan_id].
+                // We will handle the mapping after operationsTree is loaded, or we just write a custom hook.
+
                 form.setFieldsValue({
                     ...initialValues,
                     earliest_start: initialValues.earliest_start ? dayjs(initialValues.earliest_start) : undefined,
                     deadline: dayjs(initialValues.deadline),
-                    // map qualifications back to form
-                    qualifications: initialValues.qualifications?.map(q => q.qualification_id) || []
+                    qualifications: initialValues.qualifications?.map(q => q.qualification_id) || [],
+                    trigger_operation_plan_id: initialValues.trigger_operation_plan_id ? [initialValues.trigger_operation_plan_id] : undefined,
+                    batch_offset_days: initialValues.batch_offset_days ?? 7
                 });
             } else {
                 setTaskType('FLEXIBLE');
+                setSelectedBatchId(undefined);
+                setOperationsTree([]);
                 form.resetFields();
-                form.setFieldsValue({ task_type: 'FLEXIBLE', required_people: 1, duration_minutes: 60 });
+                form.setFieldsValue({ task_type: 'FLEXIBLE', required_people: 1, duration_minutes: 60, batch_offset_days: 7 });
             }
         }
     }, [visible, initialValues, form]);
+
+    const fetchOperationsTree = async (batchId: number) => {
+        try {
+            const res = await axios.get(`/api/batch-plans/${batchId}/operations-tree`);
+            setOperationsTree(res.data);
+        } catch (error) {
+            console.error('Failed to fetch operations tree', error);
+        }
+    };
+
+    // Build the cascader options
+    const cascaderOptions = operationsTree.map(stage => ({
+        value: `stage_\${stage.stage_id}`,
+        label: stage.stage_name,
+        disabled: stage.operations.length === 0,
+        children: stage.operations.map((op: any) => ({
+            value: op.operation_plan_id,
+            label: `\${op.operation_name} (\${dayjs(op.planned_start_datetime).format('MM-DD')} ~ \${dayjs(op.planned_end_datetime).format('MM-DD')})`,
+            end_datetime: op.planned_end_datetime
+        }))
+    }));
 
     const fetchReferenceData = async () => {
         try {
@@ -89,6 +125,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                 ...values,
                 earliest_start: values.earliest_start ? values.earliest_start.format('YYYY-MM-DD') : null,
                 deadline: values.deadline ? values.deadline.format('YYYY-MM-DD') : null,
+                trigger_operation_plan_id: values.trigger_operation_plan_id ? values.trigger_operation_plan_id[1] : null,
                 // Simple qualification mapping for Phase 2: mapping selected IDs to position 1, min_level 1
                 qualifications: values.qualifications?.map((qId: number) => ({
                     position_number: 1,
@@ -99,7 +136,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
             };
 
             if (initialValues?.id) {
-                await axios.put(`/api/standalone-tasks/${initialValues.id}`, payload);
+                await axios.put(`/api/standalone-tasks/\${initialValues.id}`, payload);
                 message.success('任务更新成功');
             } else {
                 await axios.post(`/api/standalone-tasks`, payload);
@@ -232,11 +269,81 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({
                     </Row>
 
                     {taskType === 'FLEXIBLE' && (
-                        <Form.Item name="related_batch_id" label="关联批次（可选）" style={{ marginBottom: 0 }}>
-                            <Select placeholder="选择关联批次" allowClear showSearch optionFilterProp="children">
-                                {batches.map(b => <Select.Option key={b.id} value={b.id}>{b.batch_code}</Select.Option>)}
-                            </Select>
-                        </Form.Item>
+                        <div className="mt-4 p-4 bg-white rounded-lg border border-slate-200">
+                            <Text strong className="block mb-3 text-slate-700">关联批次触发器（可选）</Text>
+                            <Row gutter={16}>
+                                <Col span={8}>
+                                    <Form.Item name="related_batch_id" label="关联批次" className="!mb-0">
+                                        <Select 
+                                            placeholder="选择批次" 
+                                            allowClear 
+                                            showSearch 
+                                            optionFilterProp="children"
+                                            onChange={(val) => {
+                                                setSelectedBatchId(val);
+                                                form.setFieldsValue({ trigger_operation_plan_id: undefined });
+                                                if (val) {
+                                                    fetchOperationsTree(val);
+                                                } else {
+                                                    setOperationsTree([]);
+                                                }
+                                            }}
+                                        >
+                                            {batches.map(b => <Select.Option key={b.id} value={b.id}>{b.batch_code}</Select.Option>)}
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col span={10}>
+                                    <Form.Item name="trigger_operation_plan_id" label="触发阶段 / 操作" className="!mb-0">
+                                        <Cascader 
+                                            options={cascaderOptions} 
+                                            placeholder="选择触发操作" 
+                                            disabled={!selectedBatchId}
+                                            onChange={(value, selectedOptions: any) => {
+                                                if (selectedOptions && selectedOptions.length === 2) {
+                                                    const op = selectedOptions[1];
+                                                    const endDate = dayjs(op.end_datetime);
+                                                    const offsetDays = form.getFieldValue('batch_offset_days') || 7;
+                                                    
+                                                    form.setFieldsValue({
+                                                        earliest_start: endDate,
+                                                        deadline: endDate.add(offsetDays, 'day')
+                                                    });
+                                                    message.success(`时间窗口已自动同步为 \${endDate.format('MM-DD')} 至 \${endDate.add(offsetDays, 'day').format('MM-DD')}`);
+                                                }
+                                            }}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={6}>
+                                    <Form.Item name="batch_offset_days" label="顺延天数" className="!mb-0">
+                                        <InputNumber 
+                                            min={1} 
+                                            max={60} 
+                                            style={{ width: '100%' }} 
+                                            disabled={!selectedBatchId}
+                                            onChange={(val) => {
+                                                const triggerPath = form.getFieldValue('trigger_operation_plan_id');
+                                                if (triggerPath && triggerPath.length === 2 && val !== null) {
+                                                    // Find the operation to re-calculate
+                                                    let opNode: any = null;
+                                                    for (const stage of cascaderOptions) {
+                                                        const found = stage.children.find((c:any) => c.value === triggerPath[1]);
+                                                        if (found) { opNode = found; break; }
+                                                    }
+                                                    if (opNode) {
+                                                        const endDate = dayjs(opNode.end_datetime);
+                                                        form.setFieldsValue({
+                                                            deadline: endDate.add(val as number, 'day')
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                        </div>
                     )}
 
 

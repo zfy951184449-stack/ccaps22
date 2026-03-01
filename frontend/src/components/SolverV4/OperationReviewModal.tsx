@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Button, Badge, message, Tag } from 'antd';
+import { Modal, Table, Button, Badge, message, Tag, Alert } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -262,6 +262,14 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                     总操作数：<strong>{data.length}</strong> |
                     总岗位数：<strong>{data.reduce((sum, op) => sum + (op.positions?.length || op.required_people || 1), 0)}</strong>
                 </div>
+
+                <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="本次 V4 排班会保留已锁定的操作人员和班次"
+                    description="求解器会把锁定数据当作硬约束，应用结果时也不会覆盖这些人工锁定记录。"
+                />
 
                 {loading && data.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 20 }}>加载中...</div>

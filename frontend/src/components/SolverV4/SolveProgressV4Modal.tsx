@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Modal, Progress, Card, Button, Statistic, Row, Col, Space, Typography, Tag, message, Popconfirm } from 'antd';
+import { Modal, Progress, Button, Statistic, Row, Col, Typography, Tag, message, Popconfirm } from 'antd';
 import { StopOutlined, CheckCircleOutlined, ClockCircleOutlined, CodeOutlined, SaveOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -50,6 +50,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
 
     const eventSourceRef = useRef<EventSource | null>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
+    const isTerminalStatus = (value: string) => ['COMPLETED', 'APPLIED', 'FAILED'].includes(value);
 
     useEffect(() => {
         if (visible && runId) {
@@ -89,7 +90,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                 // Update basic info
                 if (data.status) {
                     setStatus(data.status);
-                    if (data.status === 'COMPLETED') {
+                    if (data.status === 'COMPLETED' || data.status === 'APPLIED') {
                         setProgress(100);
                     }
                 }
@@ -147,7 +148,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                     }
                 }
 
-                if (data.status === 'COMPLETED' || data.status === 'FAILED') {
+                if (isTerminalStatus(data.status)) {
                     evtSource.close();
                 }
 
@@ -175,7 +176,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
         }
     };
 
-    const isCompleted = status === 'COMPLETED';
+    const isCompleted = status === 'COMPLETED' || status === 'APPLIED';
 
     const handleStop = async () => {
         if (!runId) return;
@@ -193,8 +194,26 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
             const res = await fetch(`/api/v4/scheduling/runs/${runId}/apply`, { method: 'POST' });
             const data = await res.json();
             if (res.ok && data.success) {
-                message.success(`排程结果已应用：${data.data.assignments_inserted} 条分配，${data.data.shift_plans_inserted} 条班次`);
+                const summary = [
+                    `批次分配 ${data.data.batch_assignments_inserted ?? 0} 条`,
+                    `独立任务 ${data.data.standalone_assignments_inserted ?? 0} 条`,
+                    `新班次 ${data.data.shift_plans_inserted ?? 0} 条`,
+                ];
+
+                if ((data.data.shift_plans_reused ?? 0) > 0) {
+                    summary.push(`复用锁定班次 ${data.data.shift_plans_reused} 条`);
+                }
+                if ((data.data.locked_assignments_skipped ?? 0) > 0) {
+                    summary.push(`跳过锁定岗位 ${data.data.locked_assignments_skipped} 条`);
+                }
+                if ((data.data.locked_shift_conflicts ?? 0) > 0) {
+                    summary.push(`跳过锁定班次冲突 ${data.data.locked_shift_conflicts} 条`);
+                }
+
+                message.success(`排班结果已应用：${summary.join('，')}`);
                 setIsApplied(true);
+                setStatus('APPLIED');
+                setProgress(100);
             } else {
                 message.error(data.error || '应用失败');
             }
@@ -220,13 +239,13 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
             <div style={{ padding: '24px 24px 0' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <Typography.Title level={4} style={{ margin: 0 }}>自动排班进度</Typography.Title>
-                    <Tag color={status === 'COMPLETED' ? 'green' : (status === 'STOPPING' ? 'orange' : 'blue')}>{status}</Tag>
+                    <Tag color={isCompleted ? 'green' : (status === 'STOPPING' ? 'orange' : 'blue')}>{status}</Tag>
                 </div>
 
                 {/* Progress Bar */}
                 <Progress
                     percent={progress}
-                    status={status === 'FAILED' ? 'exception' : (status === 'COMPLETED' ? 'success' : 'active')}
+                    status={status === 'FAILED' ? 'exception' : (isCompleted ? 'success' : 'active')}
                     strokeWidth={12}
                 />
             </div>
@@ -319,8 +338,8 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
 
                 {(isCompleted || (status === 'FAILED' && (metrics.assigned || 0) > 0)) && !isApplied && (
                     <Popconfirm
-                        title="应用排程结果"
-                        description="将覆盖该时间窗口内已有的自动排程数据，是否继续？"
+                        title="应用排班结果"
+                        description="将写入新的自动排班数据，但会保留已锁定的操作分配和班次。是否继续？"
                         onConfirm={handleApplyResult}
                         okText="确认应用"
                         cancelText="取消"
@@ -331,7 +350,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                             icon={<SaveOutlined />}
                             loading={applying}
                         >
-                            应用排程结果
+                            应用排班结果
                         </Button>
                     </Popconfirm>
                 )}

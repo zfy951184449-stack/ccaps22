@@ -20,6 +20,8 @@ export interface V4SolverRequest {
     calendar: V4CalendarDay[];
     shift_definitions: V4ShiftDefinition[];
     shared_preferences: V4SharedPreference[];
+    locked_operations: V4LockedOperation[];
+    locked_shifts: V4LockedShift[];
     historical_shifts: V4HistoricalShift[];
     config?: any;
 }
@@ -87,6 +89,18 @@ interface V4SharedPreference {
     members: { operation_plan_id: number; required_people: number }[];
 }
 
+interface V4LockedOperation {
+    operation_plan_id: number;
+    enforced_employee_ids: number[];
+}
+
+interface V4LockedShift {
+    employee_id: number;
+    date: string;
+    shift_id?: number | null;
+    plan_category: 'WORK' | 'REST';
+}
+
 interface V4HistoricalShift {
     employee_id: number;
     date: string;
@@ -115,6 +129,8 @@ export class DataAssemblerV4 {
             shifts,
             calendar,
             shareGroupsRaw,
+            lockedOperations,
+            lockedShifts,
             historicalShifts
         ] = await Promise.all([
             this.fetchOperations(startDate, endDate, batchIds),
@@ -122,6 +138,8 @@ export class DataAssemblerV4 {
             this.fetchShifts(),
             this.fetchCalendar(startDate, endDate),
             this.fetchShareGroups(startDate, endDate, batchIds),
+            this.fetchLockedOperations(batchIds),
+            this.fetchLockedShifts(startDate, endDate),
             this.fetchHistoricalShifts(startDate)
         ]);
 
@@ -145,6 +163,8 @@ export class DataAssemblerV4 {
             calendar: calendar,
             shift_definitions: shifts,
             shared_preferences: this.formatShareGroups(shareGroupsRaw),
+            locked_operations: lockedOperations,
+            locked_shifts: lockedShifts,
             historical_shifts: historicalShifts,
             config: {} // TODO: Add config if needed
         };
@@ -548,6 +568,63 @@ export class DataAssemblerV4 {
             });
         });
         return Array.from(map.values());
+    }
+
+    private static async fetchLockedOperations(batchIds: number[]): Promise<V4LockedOperation[]> {
+        if (!batchIds.length) {
+            return [];
+        }
+
+        const placeholders = batchIds.map(() => '?').join(',');
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                bop.id AS operation_plan_id,
+                bpa.employee_id
+             FROM batch_operation_plans bop
+             JOIN production_batch_plans pbp ON pbp.id = bop.batch_plan_id
+             JOIN batch_personnel_assignments bpa ON bpa.batch_operation_plan_id = bop.id
+             WHERE pbp.id IN (${placeholders})
+               AND (
+                    IFNULL(bpa.is_locked, 0) = 1
+                    OR IFNULL(bop.is_locked, 0) = 1
+               )
+               AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')`,
+            batchIds
+        );
+
+        const lockedMap = new Map<number, Set<number>>();
+        rows.forEach(row => {
+            if (!lockedMap.has(row.operation_plan_id)) {
+                lockedMap.set(row.operation_plan_id, new Set<number>());
+            }
+            lockedMap.get(row.operation_plan_id)!.add(Number(row.employee_id));
+        });
+
+        return Array.from(lockedMap.entries()).map(([operationPlanId, employeeIds]) => ({
+            operation_plan_id: operationPlanId,
+            enforced_employee_ids: Array.from(employeeIds.values())
+        }));
+    }
+
+    private static async fetchLockedShifts(startDate: string, endDate: string): Promise<V4LockedShift[]> {
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                employee_id,
+                plan_date,
+                plan_category,
+                shift_id
+             FROM employee_shift_plans
+             WHERE plan_date BETWEEN ? AND ?
+               AND IFNULL(is_locked, 0) = 1`,
+            [startDate, endDate]
+        );
+
+        return rows.map(row => ({
+            employee_id: Number(row.employee_id),
+            date: dayjs(row.plan_date).format('YYYY-MM-DD'),
+            shift_id: row.shift_id ? Number(row.shift_id) : null,
+            plan_category: row.plan_category === 'REST' ? 'REST' : 'WORK'
+        }));
     }
 
     /**
