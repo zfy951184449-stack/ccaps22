@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Popover, Menu } from 'antd';
-import type { MenuProps } from 'antd';
+import { Popover } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     SafetyOutlined,
@@ -18,10 +17,6 @@ import {
     RobotOutlined,
     RocketOutlined,
 } from '@ant-design/icons';
-import { fluentDesignTokens } from '../../styles/fluentDesignTokens';
-
-// Define the menu structure
-type MenuItem = Required<MenuProps>['items'][number];
 
 interface CommandRailProps {
     width?: number;
@@ -40,6 +35,19 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             icon: <DashboardOutlined />,
             label: '调度中心',
             path: '/dashboard',
+        },
+        {
+            key: 'platform',
+            icon: <AppstoreOutlined />,
+            label: '平台协同',
+            children: [
+                { key: 'platform-overview', icon: <DashboardOutlined />, label: '平台总览', path: '/platform-overview' },
+                { key: 'resource-center', icon: <SettingOutlined />, label: '资源中心', path: '/resource-center' },
+                { key: 'project-planning-center', icon: <ProjectOutlined />, label: '项目排产中心', path: '/project-planning-center' },
+                { key: 'maintenance-windows', icon: <ControlOutlined />, label: '维护窗口', path: '/maintenance-windows' },
+                { key: 'business-rules-center', icon: <LinkOutlined />, label: '业务规则中心', path: '/business-rules-center' },
+                { key: 'platform-run-monitor', icon: <BugOutlined />, label: '运行监控', path: '/platform-run-monitor' },
+            ],
         },
         {
             key: 'base-data',

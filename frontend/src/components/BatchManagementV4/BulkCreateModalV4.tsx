@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { Modal, Form, Input, DatePicker, Select, InputNumber, Alert, message, Row, Col, Card, Typography, Space, Divider, Badge, Button } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Input, DatePicker, Select, InputNumber, message, Row, Col, Card, Typography, Space, Divider, Badge, Button } from 'antd';
 import { batchPlanApi } from '../../services/api';
 import type { BatchTemplateSummary } from '../../types';
-import { CalendarOutlined, TagOutlined } from '@ant-design/icons';
+import { CalendarOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
@@ -12,19 +12,29 @@ interface BulkCreateModalV4Props {
     visible: boolean;
     onCancel: () => void;
     onSuccess: () => void;
+    templates?: BatchTemplateSummary[];
 }
 
-const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({ visible, onCancel, onSuccess }) => {
+const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({ visible, onCancel, onSuccess, templates: templateOptions }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    const [templates, setTemplates] = useState<BatchTemplateSummary[]>([]);
+    const [templates, setTemplates] = useState<BatchTemplateSummary[]>(templateOptions ?? []);
 
     // Preview state
     const [previewList, setPreviewList] = useState<Array<{ code: string; date: string; name: string }>>([]);
 
     useEffect(() => {
+        if (templateOptions && templateOptions.length > 0) {
+            setTemplates(templateOptions);
+            return;
+        }
+
+        if (!visible) {
+            return;
+        }
+
         batchPlanApi.getTemplates().then(setTemplates).catch(console.error);
-    }, []);
+    }, [templateOptions, visible]);
 
     useEffect(() => {
         if (visible) {
@@ -37,7 +47,7 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({ visible, onCancel
             });
             setPreviewList([]);
         }
-    }, [visible]);
+    }, [form, visible]);
 
     const updatePreview = () => {
         const values = form.getFieldsValue();

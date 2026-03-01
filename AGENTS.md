@@ -31,3 +31,5 @@ Use the Codex rule split under `.agent/rules/` as the working set:
 - `codex-frontend-ui-rules.md`: frontend/UI/interaction focused tasks
 - `codex-solver-v4-rules.md`: solver V4 / assembler / apply-result focused tasks
 - `codex-runtime-restart-rules.md`: runtime sync and restart rules to avoid stale-process manual test results
+
+For biopharma CMO process, scheduling, solver-constraint, QC, CIP/SIP, hold-time, suite-segregation, or qualification-related work, prefer the local Codex skill at `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`.

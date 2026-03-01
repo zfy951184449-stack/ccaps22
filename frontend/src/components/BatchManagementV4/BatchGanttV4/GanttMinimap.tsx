@@ -1,27 +1,17 @@
 import React, { useMemo } from 'react';
 import { GanttBatch } from './types';
 import './BatchGanttV4.css';
-import { useGantt } from './GanttContext';
 import dayjs from 'dayjs';
 
 interface GanttMinimapProps {
     data: GanttBatch[];
     visible?: boolean;
-    scrollLeft: number;
-    dayWidth: number;
+    currentDate: dayjs.Dayjs;
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
 }
 
-const GanttMinimap: React.FC<GanttMinimapProps> = ({ data, visible = false, scrollLeft, dayWidth, onMouseEnter, onMouseLeave }) => {
-    const { startDate } = useGantt();
-
-    // 1. 计算当前可见日期（视窗左侧对应的日期）
-    const currentDate = useMemo(() => {
-        const daysOffset = Math.floor(scrollLeft / dayWidth);
-        return startDate.add(daysOffset, 'day');
-    }, [scrollLeft, dayWidth, startDate]);
-
+const GanttMinimapComponent: React.FC<GanttMinimapProps> = ({ data, visible = false, currentDate, onMouseEnter, onMouseLeave }) => {
     // 2. 筛选在该日期有操作的批次
     const activeBatches = useMemo(() => {
         return data.filter(batch => {
@@ -114,5 +104,6 @@ const GanttMinimap: React.FC<GanttMinimapProps> = ({ data, visible = false, scro
     );
 };
 
-export default GanttMinimap;
+const GanttMinimap = React.memo(GanttMinimapComponent);
 
+export default GanttMinimap;

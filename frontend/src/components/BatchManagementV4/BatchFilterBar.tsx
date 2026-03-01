@@ -40,6 +40,15 @@ const BatchFilterBar: React.FC<BatchFilterBarProps> = ({
     onTeamChange,
     onClear,
 }) => {
+    const selectedTemplateIdSet = useMemo(() => new Set(selectedTemplateIds), [selectedTemplateIds]);
+    const selectedTeamCodeSet = useMemo(() => new Set(selectedTeamCodes), [selectedTeamCodes]);
+    const templateTeamCodeById = useMemo(() => {
+        const entries = templates
+            .filter((template): template is ProcessTemplate & { id: number } => typeof template.id === 'number')
+            .map((template) => [template.id, template.team_code] as const);
+        return new Map<number, string | undefined>(entries);
+    }, [templates]);
+
     // 从模版中提取唯一的 Team 列表
     const teams = useMemo<TeamOption[]>(() => {
         const teamMap = new Map<string, string>();
@@ -56,32 +65,32 @@ const BatchFilterBar: React.FC<BatchFilterBarProps> = ({
 
     // 根据选中的 Team 过滤可选的模版
     const filteredTemplates = useMemo(() => {
-        if (selectedTeamCodes.length === 0) {
+        if (selectedTeamCodeSet.size === 0) {
             return templates;
         }
-        return templates.filter((t) => t.team_code && selectedTeamCodes.includes(t.team_code));
-    }, [templates, selectedTeamCodes]);
+        return templates.filter((t) => t.team_code && selectedTeamCodeSet.has(t.team_code));
+    }, [selectedTeamCodeSet, templates]);
 
     // 根据选中的模版过滤可选的批次
     const filteredBatchOptions = useMemo(() => {
-        if (selectedTemplateIds.length === 0 && selectedTeamCodes.length === 0) {
+        if (selectedTemplateIdSet.size === 0 && selectedTeamCodeSet.size === 0) {
             return batches;
         }
         return batches.filter((b) => {
             // 如果选了模版，批次必须属于选中的模版
-            if (selectedTemplateIds.length > 0 && !selectedTemplateIds.includes(b.template_id)) {
+            if (selectedTemplateIdSet.size > 0 && !selectedTemplateIdSet.has(b.template_id)) {
                 return false;
             }
             // 如果选了 Team（但没选模版），批次的模版必须属于选中的 Team
-            if (selectedTeamCodes.length > 0 && selectedTemplateIds.length === 0) {
-                const template = templates.find((t) => t.id === b.template_id);
-                if (!template || !template.team_code || !selectedTeamCodes.includes(template.team_code)) {
+            if (selectedTeamCodeSet.size > 0 && selectedTemplateIdSet.size === 0) {
+                const batchTeamCode = b.team_code ?? templateTeamCodeById.get(b.template_id);
+                if (!batchTeamCode || !selectedTeamCodeSet.has(batchTeamCode)) {
                     return false;
                 }
             }
             return true;
         });
-    }, [batches, templates, selectedTemplateIds, selectedTeamCodes]);
+    }, [batches, selectedTemplateIdSet, selectedTeamCodeSet, templateTeamCodeById]);
 
     // 是否有任何筛选条件
     const hasFilters = selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0;

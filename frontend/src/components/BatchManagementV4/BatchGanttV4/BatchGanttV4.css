@@ -80,6 +80,10 @@
     /* gray-50 */
 }
 
+.gantt-sidebar-row-lane {
+    padding-left: 20px;
+}
+
 .gantt-text-truncate {
     white-space: nowrap;
     overflow: hidden;
@@ -117,6 +121,38 @@
     /* gray-100 */
     color: #6B7280;
     /* gray-500 */
+}
+
+.gantt-lane-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 18px;
+    margin-right: 8px;
+    border-radius: 9999px;
+    background-color: rgba(255, 255, 255, 0.65);
+    color: #6B7280;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    flex-shrink: 0;
+}
+
+.gantt-lane-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 36px;
+    height: 18px;
+    margin-left: 8px;
+    padding: 0 6px;
+    border-radius: 9999px;
+    background-color: rgba(243, 244, 246, 0.9);
+    color: #6B7280;
+    font-size: 10px;
+    font-weight: 500;
+    flex-shrink: 0;
 }
 
 /* Timeline */
@@ -329,6 +365,10 @@
 .gantt-row-alt {
     /* Use linear-gradient to overlay on top of the inline background-color (tint) */
     background-image: linear-gradient(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.04));
+}
+
+.gantt-row-lane {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.18));
 }
 
 .gantt-bar-op:hover {

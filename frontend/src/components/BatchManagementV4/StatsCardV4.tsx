@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Typography, Space } from 'antd';
+import { Typography } from 'antd';
 import { fluentDesignTokens } from '../../styles/fluentDesignTokens';
 
 const { Text, Title } = Typography;

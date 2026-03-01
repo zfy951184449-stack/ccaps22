@@ -1,18 +1,22 @@
-import React, { useRef, useMemo, useState } from 'react';
-import { GanttBatch, GanttShareGroup, GanttDependency, OffScreenOperation, GanttOperation } from './types';
-import { useGantt } from './GanttContext';
-import ShareGroupConnections from './ShareGroupConnections';
-import ConstraintConnections from './ConstraintConnections'; // Re-import
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { Tooltip } from 'antd';
+import { TeamOutlined } from '@ant-design/icons';
+import { GanttBatch, GanttDependency, GanttOperation, GanttShareGroup, OffScreenOperation } from './types';
+import { useGantt } from './GanttContext';
+import ShareGroupConnections from './ShareGroupConnections';
+import ConstraintConnections from './ConstraintConnections';
 import { BATCH_COLORS } from './constants';
-import { usePeakPersonnelV4 } from './hooks/usePeakPersonnelV4'; // Import Hook
-import { TeamOutlined } from '@ant-design/icons'; // Import Icon
-import { calculateRowLayout, isAlternateRow } from './rowUtils'; // 统一行计算
+import { usePeakPersonnelV4 } from './hooks/usePeakPersonnelV4';
+import { GanttRenderRow, RowCalculationResult, getVisibleOperations, isAlternateRow } from './rowUtils';
+import { useVirtualRows } from './hooks/useVirtualRows';
 import './BatchGanttV4.css';
 
 interface GanttTimelineProps {
-    data: GanttBatch[];
+    batches: GanttBatch[];
+    rows: GanttRenderRow[];
+    rowLayout: RowCalculationResult;
+    rowHeight: number;
     shareGroups?: GanttShareGroup[];
     dependencies?: GanttDependency[];
     offScreenOperations?: OffScreenOperation[];
@@ -22,43 +26,84 @@ interface GanttTimelineProps {
     onOperationDoubleClick?: (operation: GanttOperation) => void;
 }
 
-const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], dependencies = [], offScreenOperations = [], onVerticalScroll, onScrollInteraction, onHorizontalScroll, onOperationDoubleClick }) => {
-    const { startDate, endDate, viewMode, zoomLevel, setStartDate, setEndDate, setZoomLevel, setViewMode, enterSingleDayMode } = useGantt();
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
+const HEADER_HEIGHT = 56;
 
-    // Drag Scroll State
+const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
+    batches,
+    rows,
+    rowLayout,
+    rowHeight,
+    shareGroups = [],
+    dependencies = [],
+    offScreenOperations = [],
+    onVerticalScroll,
+    onScrollInteraction,
+    onHorizontalScroll,
+    onOperationDoubleClick
+}) => {
+    const { startDate, endDate, viewMode, zoomLevel, enterSingleDayMode, expandedBatches, layoutMode, showShareGroupLines } = useGantt();
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [isGrabbing, setIsGrabbing] = useState(false);
+
     const isDragging = useRef(false);
     const startX = useRef(0);
     const scrollLeftStart = useRef(0);
-    const [isGrabbing, setIsGrabbing] = useState(false);
 
-    // Sync scroll
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (onVerticalScroll) {
-            onVerticalScroll(e.currentTarget.scrollTop);
-        }
-        if (onScrollInteraction) {
-            onScrollInteraction();
-        }
-        if (onHorizontalScroll) {
-            onHorizontalScroll(e.currentTarget.scrollLeft);
-        }
+    const dayWidth = zoomLevel;
+    const hourWidth = dayWidth / 24;
+    const totalDays = endDate.diff(startDate, 'day') + 1;
+    const totalWidth = totalDays * dayWidth;
+    const totalBodyHeight = rowLayout.totalRows * rowHeight;
+    const dates = useMemo(
+        () => Array.from({ length: totalDays }, (_, index) => startDate.add(index, 'day')),
+        [startDate, totalDays]
+    );
+    const { startIndex, endIndex } = useVirtualRows(scrollContainerRef, rowLayout.totalRows, rowHeight, { topOffset: HEADER_HEIGHT });
+    const visibleRows = useMemo(
+        () => rows.slice(startIndex, endIndex + 1),
+        [endIndex, rows, startIndex]
+    );
+    const visibleTop = startIndex * rowHeight;
+    const visibleBottom = (endIndex + 1) * rowHeight;
+
+    const getLeftPosition = useCallback((dateStr: string) => {
+        const date = dayjs(dateStr);
+        const diffHours = date.diff(startDate, 'hour', true);
+        return diffHours * hourWidth;
+    }, [hourWidth, startDate]);
+
+    const getWidth = useCallback((start: string, end: string) => {
+        const startTime = dayjs(start);
+        const endTime = dayjs(end);
+        const diffHours = endTime.diff(startTime, 'hour', true);
+        return Math.max(diffHours * hourWidth, 4);
+    }, [hourWidth]);
+
+    const dailyPeaks = usePeakPersonnelV4(batches, shareGroups, startDate, endDate);
+
+    const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+        onVerticalScroll?.(event.currentTarget.scrollTop);
+        onScrollInteraction?.();
+        onHorizontalScroll?.(event.currentTarget.scrollLeft);
     };
 
-    // Drag Handlers
-    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!scrollContainerRef.current) return;
+    const handleMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (!scrollContainerRef.current) {
+            return;
+        }
         isDragging.current = true;
-        startX.current = e.pageX;
+        startX.current = event.pageX;
         scrollLeftStart.current = scrollContainerRef.current.scrollLeft;
         setIsGrabbing(true);
     };
 
-    const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isDragging.current || !scrollContainerRef.current) return;
-        e.preventDefault();
-        const x = e.pageX;
-        const walk = (x - startX.current); // Scroll pixels = drag pixels (1:1)
+    const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (!isDragging.current || !scrollContainerRef.current) {
+            return;
+        }
+        event.preventDefault();
+        const nextX = event.pageX;
+        const walk = nextX - startX.current;
         scrollContainerRef.current.scrollLeft = scrollLeftStart.current - walk;
     };
 
@@ -67,49 +112,248 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
         setIsGrabbing(false);
     };
 
-    // --- Configuration based on Zoom ---
-    const dayWidth = zoomLevel; // Direct mapping: 1 unit = 1px
-    const hourWidth = dayWidth / 24;
+    const renderGanttBarLabel = (text: string, width: number) => {
+        if (width < 30) {
+            return null;
+        }
 
-    const totalDays = endDate.diff(startDate, 'day') + 1;
-    const dates = Array.from({ length: totalDays }, (_, i) => startDate.add(i, 'day'));
+        const charWidth = 7;
+        const textWidth = text.length * charWidth;
+        const gap = 800;
 
-    // --- Styles ---
-    const headerHeight = 56;
-    const rowHeight = 32;
-    const totalWidth = totalDays * dayWidth;
+        if (width > (textWidth + gap) * 1.5) {
+            const repeatCount = Math.floor(width / (textWidth + gap));
+            const labels = [];
+            for (let index = 0; index < repeatCount; index += 1) {
+                labels.push(
+                    <span
+                        key={index}
+                        style={{
+                            color: '#1F2937',
+                            fontWeight: 500,
+                            fontSize: 11,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }}
+                    >
+                        {text}
+                    </span>
+                );
+            }
+            return (
+                <div
+                    style={{
+                        display: 'flex',
+                        width: '100%',
+                        height: '100%',
+                        alignItems: 'center',
+                        justifyContent: 'space-evenly',
+                        overflow: 'hidden'
+                    }}
+                >
+                    {labels}
+                </div>
+            );
+        }
 
-    // --- Helpers ---
-    const getLeftPosition = (dateStr: string) => {
-        const date = dayjs(dateStr);
-        const diffHours = date.diff(startDate, 'hour', true);
-        return diffHours * hourWidth;
+        return (
+            <div
+                style={{
+                    display: 'flex',
+                    width: '100%',
+                    height: '100%',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'hidden',
+                    padding: '0 4px'
+                }}
+            >
+                <span
+                    style={{
+                        color: '#1F2937',
+                        fontWeight: 500,
+                        fontSize: 11,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}
+                >
+                    {text}
+                </span>
+            </div>
+        );
     };
 
-    const getWidth = (start: string, end: string) => {
-        const s = dayjs(start);
-        const e = dayjs(end);
-        const diffHours = e.diff(s, 'hour', true);
-        return Math.max(diffHours * hourWidth, 4); // Min width 4px
+    const renderCompactOperationBar = (operation: GanttOperation, batchId: number, color: { solid?: string; border: string }) => {
+        const operationWidth = getWidth(operation.startDate, operation.endDate);
+
+        return (
+            <Tooltip key={operation.id} title={`${operation.name} (${operation.status})`}>
+                <div
+                    className="gantt-bar-op"
+                    style={{
+                        left: getLeftPosition(operation.startDate),
+                        width: operationWidth,
+                        minWidth: 8,
+                        top: 7,
+                        height: 18,
+                        zIndex: 20,
+                        backgroundColor: color.solid || color.border,
+                        cursor: 'pointer'
+                    }}
+                    onDoubleClick={(event) => {
+                        event.stopPropagation();
+                        onOperationDoubleClick?.({
+                            ...operation,
+                            batch_id: batchId
+                        });
+                    }}
+                >
+                    {renderGanttBarLabel(operation.name, operationWidth)}
+                </div>
+            </Tooltip>
+        );
     };
 
-    // --- Render ---
-    // --- Peak Personnel Calculation ---
-    // Import hook assuming it's available (need to update imports)
-    const dailyPeaks = usePeakPersonnelV4(data, shareGroups, startDate, endDate);
+    const renderDetailedOperationBar = (
+        operation: GanttOperation,
+        batchId: number,
+        color: { solid?: string; border: string },
+        key: string
+    ) => {
+        const operationWidth = getWidth(operation.startDate, operation.endDate);
+        const hasWindow = operation.windowStartDate && operation.windowEndDate;
 
-    // --- Render ---
+        return (
+            <React.Fragment key={key}>
+                {hasWindow && (
+                    <Tooltip title={`窗口: ${dayjs(operation.windowStartDate).format('MM-DD HH:mm')} - ${dayjs(operation.windowEndDate).format('MM-DD HH:mm')}`}>
+                        <div
+                            className="gantt-bar-window"
+                            style={{
+                                left: getLeftPosition(operation.windowStartDate!),
+                                width: getWidth(operation.windowStartDate!, operation.windowEndDate!),
+                                top: 4,
+                                height: 24
+                            }}
+                        />
+                    </Tooltip>
+                )}
+                <Tooltip title={`${operation.name}: ${operation.assignedPeople}/${operation.requiredPeople} people`}>
+                    <div
+                        className="gantt-bar-op"
+                        style={{
+                            left: getLeftPosition(operation.startDate),
+                            width: operationWidth,
+                            top: 4,
+                            height: 24,
+                            padding: '0 4px',
+                            justifyContent: 'center',
+                            zIndex: 20,
+                            backgroundColor: color.solid || color.border,
+                            cursor: 'pointer'
+                        }}
+                        onDoubleClick={(event) => {
+                            event.stopPropagation();
+                            onOperationDoubleClick?.({
+                                ...operation,
+                                batch_id: batchId
+                            });
+                        }}
+                    >
+                        {!hasWindow && operationWidth > 30 ? operation.name : ''}
+                    </div>
+                </Tooltip>
+                {hasWindow && (
+                    <div
+                        className="gantt-text-overlay"
+                        style={{
+                            left: getLeftPosition(operation.windowStartDate!),
+                            width: getWidth(operation.windowStartDate!, operation.windowEndDate!),
+                        }}
+                    >
+                        {operation.name}
+                    </div>
+                )}
+            </React.Fragment>
+        );
+    };
+
+    const operationPositions = useMemo(() => {
+        const positions = new Map<number, { x: number; y: number; width: number }>();
+
+        rows.forEach((row) => {
+            if (row.kind === 'batch') {
+                if (layoutMode === 'compact' && !expandedBatches.has(row.batch.id)) {
+                    row.batch.stages.forEach((stage) => {
+                        getVisibleOperations(stage.operations).forEach((operation) => {
+                            positions.set(operation.id, {
+                                x: getLeftPosition(operation.startDate),
+                                y: row.rowIndex * rowHeight,
+                                width: getWidth(operation.startDate, operation.endDate)
+                            });
+                        });
+                    });
+                }
+                return;
+            }
+
+            if (row.kind === 'stage') {
+                if (layoutMode === 'compact') {
+                    getVisibleOperations(row.stage.operations).forEach((operation) => {
+                        positions.set(operation.id, {
+                            x: getLeftPosition(operation.startDate),
+                            y: row.rowIndex * rowHeight,
+                            width: getWidth(operation.startDate, operation.endDate)
+                        });
+                    });
+                }
+                return;
+            }
+
+            if (row.kind === 'lane') {
+                row.operations.forEach((operation) => {
+                    positions.set(operation.id, {
+                        x: getLeftPosition(operation.startDate),
+                        y: row.rowIndex * rowHeight,
+                        width: getWidth(operation.startDate, operation.endDate)
+                    });
+                });
+                return;
+            }
+
+            positions.set(row.operation.id, {
+                x: getLeftPosition(row.operation.startDate),
+                y: row.rowIndex * rowHeight,
+                width: getWidth(row.operation.startDate, row.operation.endDate)
+            });
+        });
+
+        offScreenOperations.forEach((offscreenOperation) => {
+            const linkedPosition = positions.get(offscreenOperation.linkedToOpId);
+            if (!linkedPosition) {
+                return;
+            }
+
+            positions.set(offscreenOperation.id, {
+                x: offscreenOperation.direction === 'left' ? 0 : totalWidth,
+                y: linkedPosition.y,
+                width: 10
+            });
+        });
+
+        return positions;
+    }, [expandedBatches, getLeftPosition, getWidth, layoutMode, offScreenOperations, rowHeight, rows, totalWidth]);
+
     const renderHeader = () => {
-        // Day View: Date on top, Hours on bottom
         if (viewMode === 'day') {
-            const hourWidth = totalWidth / 24;
-            // Get current day peak for display
+            const singleDayWidth = totalWidth / 24;
             const dayKey = startDate.format('YYYY-MM-DD');
             const dayPeak = dailyPeaks.get(dayKey);
 
             return (
                 <div className="gantt-timeline-header-sticky">
-                    {/* Row 1: Full Date & Peak Info */}
                     <div className="gantt-timeline-header-row gantt-border-b" style={{ justifyContent: 'space-between', paddingRight: 16 }}>
                         <div
                             className="gantt-timeline-cell"
@@ -125,7 +369,10 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
                                 color: '#1F2937'
                             }}
                         >
-                            {startDate.format('MMMM D, YYYY')} <span style={{ color: '#9CA3AF', fontWeight: 400, marginLeft: 8 }}>{startDate.format('dddd')}</span>
+                            {startDate.format('MMMM D, YYYY')}
+                            <span style={{ color: '#9CA3AF', fontWeight: 400, marginLeft: 8 }}>
+                                {startDate.format('dddd')}
+                            </span>
                         </div>
 
                         {dayPeak && dayPeak.peak > 0 && (
@@ -134,15 +381,14 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
                             </div>
                         )}
                     </div>
-                    {/* Row 2: Hours 0-23 */}
                     <div className="gantt-timeline-header-row">
                         {Array.from({ length: 24 }).map((_, hour) => (
                             <div
                                 key={`hour-${hour}`}
                                 className="gantt-timeline-cell"
                                 style={{
-                                    left: hour * hourWidth,
-                                    width: hourWidth,
+                                    left: hour * singleDayWidth,
+                                    width: singleDayWidth,
                                     color: '#6B7280',
                                     fontSize: 11
                                 }}
@@ -155,16 +401,20 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
             );
         }
 
-        // Week/Month View: Month on top, Days on bottom
         return (
             <div className="gantt-timeline-header-sticky">
                 <div className="gantt-timeline-header-row gantt-border-b">
                     {dates.map((date, index) => {
                         const isMonthStart = date.date() === 1 || index === 0;
-                        if (!isMonthStart) return null;
+                        if (!isMonthStart) {
+                            return null;
+                        }
                         return (
-                            <div key={`month-${index}`} className="gantt-timeline-cell"
-                                style={{ left: index * dayWidth, justifyContent: 'flex-start', paddingLeft: 8, border: 'none', fontWeight: 600, color: '#6B7280' }}>
+                            <div
+                                key={`month-${index}`}
+                                className="gantt-timeline-cell"
+                                style={{ left: index * dayWidth, justifyContent: 'flex-start', paddingLeft: 8, border: 'none', fontWeight: 600, color: '#6B7280' }}
+                            >
                                 {date.format('MMMM YYYY')}
                             </div>
                         );
@@ -177,7 +427,8 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
                         const peakData = dailyPeaks.get(dayKey);
 
                         return (
-                            <div key={`day-${index}`}
+                            <div
+                                key={`day-${index}`}
                                 className={`gantt-timeline-cell ${isWeekend ? 'gantt-cell-weekend' : ''}`}
                                 style={{
                                     left: index * dayWidth,
@@ -189,12 +440,13 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
                                     gap: 2
                                 }}
                                 title="Double click to zoom into this day"
-                                onDoubleClick={() => {
-                                    enterSingleDayMode(date, data);
-                                }}
+                                onDoubleClick={() => enterSingleDayMode(date, batches)}
                             >
                                 <div>
-                                    {date.format('D')} <span className="gantt-text-xxs ml-1" style={{ color: '#9CA3AF', marginLeft: 0 }}>{date.format('ddd')}</span>
+                                    {date.format('D')}
+                                    <span className="gantt-text-xxs ml-1" style={{ color: '#9CA3AF', marginLeft: 0 }}>
+                                        {date.format('ddd')}
+                                    </span>
                                 </div>
 
                                 {peakData && peakData.peak > 0 && dayWidth > 50 && (
@@ -213,44 +465,106 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
     };
 
     const renderGridBackground = () => {
+        const backgroundImages = [
+            'linear-gradient(to right, rgba(88, 86, 214, 0.08) 0%, rgba(88, 86, 214, 0.08) 37.5%, rgba(52, 199, 89, 0.08) 37.5%, rgba(52, 199, 89, 0.08) 70.83%, rgba(255, 149, 0, 0.05) 70.83%, rgba(255, 149, 0, 0.05) 87.5%, rgba(88, 86, 214, 0.08) 87.5%, rgba(88, 86, 214, 0.08) 100%)',
+            'linear-gradient(to right, transparent 0, transparent calc(100% - 1px), #F3F4F6 calc(100% - 1px), #F3F4F6 100%)',
+        ];
+        const backgroundSizes = [`${dayWidth}px 100%`, `${dayWidth}px 100%`];
+
+        if (dayWidth > 60) {
+            backgroundImages.push('linear-gradient(to right, transparent 0, transparent calc(100% - 1px), #F9FAFB calc(100% - 1px), #F9FAFB 100%)');
+            backgroundSizes.push(`${hourWidth}px 100%`);
+        }
+
         return (
-            <div className="gantt-grid-bg">
-                {dates.map((date, index) => {
-                    const isWeekend = date.day() === 0 || date.day() === 6;
-                    // Render hour lines if dayWidth > 60px
-                    const showHourLines = dayWidth > 60;
+            <div
+                className="gantt-grid-bg"
+                style={{
+                    backgroundImage: backgroundImages.join(','),
+                    backgroundRepeat: 'repeat',
+                    backgroundSize: backgroundSizes.join(','),
+                }}
+            />
+        );
+    };
 
-                    return (
-                        <div key={`grid-${index}`}
-                            className="gantt-grid-line"
-                            style={{ minWidth: dayWidth, width: dayWidth, backgroundColor: 'transparent', position: 'relative' }}
+    const renderRow = (row: GanttRenderRow) => {
+        const color = BATCH_COLORS[row.batchIndex % BATCH_COLORS.length];
+        const baseClassName = `gantt-relative gantt-border-b ${isAlternateRow(row.rowIndex) ? 'gantt-row-alt' : ''}`;
+        const baseStyle: React.CSSProperties = {
+            position: 'absolute',
+            top: row.rowIndex * rowHeight,
+            left: 0,
+            right: 0,
+            height: rowHeight,
+            backgroundColor: color.tint,
+            overflow: 'hidden'
+        };
+
+        if (row.kind === 'batch') {
+            const batchWidth = getWidth(row.batch.startDate, row.batch.endDate);
+            return (
+                <div key={row.key} className={baseClassName} style={baseStyle}>
+                    <div
+                        className="gantt-bar-batch"
+                        style={{
+                            left: getLeftPosition(row.batch.startDate),
+                            width: batchWidth,
+                            top: 4,
+                            backgroundColor: color.bg,
+                            borderColor: color.border,
+                            borderWidth: 1,
+                            borderStyle: 'solid',
+                            zIndex: 4
+                        }}
+                    >
+                        {renderGanttBarLabel(row.batch.code, batchWidth)}
+                    </div>
+                </div>
+            );
+        }
+
+        if (row.kind === 'stage') {
+            const stageWidth = getWidth(row.stage.startDate, row.stage.endDate);
+            return (
+                <div key={row.key} className={baseClassName} style={baseStyle}>
+                    {layoutMode === 'compact' ? (
+                        getVisibleOperations(row.stage.operations).map((operation) =>
+                            renderCompactOperationBar(operation, row.batch.id, color)
+                        )
+                    ) : (
+                        <div
+                            className="gantt-bar-stage"
+                            style={{
+                                left: getLeftPosition(row.stage.startDate),
+                                width: stageWidth,
+                                backgroundColor: color.bg.replace(/[\d.]+\)$/, '0.4)'),
+                                borderColor: color.border,
+                                borderWidth: 1,
+                                borderStyle: 'solid',
+                                top: 7,
+                                height: 18,
+                                zIndex: 4
+                            }}
                         >
-                            {/* Shift Zones */}
-                            {/* 1. Night (00:00 - 09:00) 9h = 37.5% */}
-                            <div className="gantt-zone-night" style={{ left: 0, width: '37.5%' }} />
-
-                            {/* 2. Normal Day (09:00 - 17:00) 8h = 33.33% starting at 9/24 = 37.5% */}
-                            <div className="gantt-zone-day" style={{ left: '37.5%', width: '33.33%' }} />
-
-                            {/* 3. Long Day (17:00 - 21:00) 4h = 16.66% starting at 17/24 = 70.83% */}
-                            <div className="gantt-zone-long-day" style={{ left: '70.83%', width: '16.66%' }} />
-
-                            {/* 4. Night (21:00 - 24:00) 3h = 12.5% starting at 21/24 = 87.5% */}
-                            <div className="gantt-zone-night" style={{ left: '87.5%', width: '12.5%' }} />
-
-                            {/* Hour Lines */}
-                            {showHourLines && Array.from({ length: 23 }).map((_, hourIndex) => (
-                                <div
-                                    key={`hour-${hourIndex}`}
-                                    className="gantt-grid-hour-line"
-                                    style={{
-                                        left: `${(hourIndex + 1) * (100 / 24)}%`
-                                    }}
-                                />
-                            ))}
+                            {renderGanttBarLabel(row.stage.name, stageWidth)}
                         </div>
-                    );
-                })}
+                    )}
+                </div>
+            );
+        }
+
+        if (row.kind === 'lane') {
+            return (
+                <div key={row.key} className={`${baseClassName} gantt-row-lane`} style={baseStyle}>
+                    {row.operations.map((operation) => renderDetailedOperationBar(operation, row.batch.id, color, `${row.key}-${operation.id}`))}
+                </div>
+            );
+        }
+
+        return (
+            <div key={row.key} className={baseClassName} style={baseStyle}>
+                {renderDetailedOperationBar(row.operation, row.batch.id, color, row.key)}
             </div>
         );
     };
@@ -266,416 +580,38 @@ const GanttTimeline: React.FC<GanttTimelineProps> = ({ data, shareGroups = [], d
             onMouseLeave={handleMouseUpOrLeave}
             style={{
                 cursor: isGrabbing ? 'grabbing' : 'grab',
-                userSelect: 'none' // Prevent text selection while dragging
+                userSelect: 'none'
             }}
         >
-            <div style={{ width: totalWidth, minHeight: '100%' }} className="gantt-relative">
+            <div style={{ width: totalWidth, minHeight: HEADER_HEIGHT + totalBodyHeight }} className="gantt-relative">
                 {renderHeader()}
-                <div className="gantt-relative" style={{ zIndex: 10 }}>
+                <div className="gantt-w-full gantt-relative" style={{ height: totalBodyHeight, overflow: 'hidden' }}>
                     {renderGridBackground()}
-                    <TimelineBody
-                        data={data}
-                        shareGroups={shareGroups}
-                        dependencies={dependencies}
-                        offScreenOperations={offScreenOperations}
-                        rowHeight={rowHeight}
-                        totalWidth={totalWidth}
-                        getPos={getLeftPosition}
-                        getWidth={getWidth}
-                        onOperationDoubleClick={onOperationDoubleClick}
-                    />
+                    {showShareGroupLines && shareGroups.length > 0 && (
+                        <ShareGroupConnections
+                            shareGroups={shareGroups}
+                            operationPositions={operationPositions}
+                            rowHeight={rowHeight}
+                            visibleTop={visibleTop - rowHeight * 4}
+                            visibleBottom={visibleBottom + rowHeight * 4}
+                        />
+                    )}
+                    {dependencies.length > 0 && (
+                        <ConstraintConnections
+                            dependencies={dependencies}
+                            operationPositions={operationPositions}
+                            rowHeight={rowHeight}
+                            visibleTop={visibleTop - rowHeight * 4}
+                            visibleBottom={visibleBottom + rowHeight * 4}
+                        />
+                    )}
+                    {visibleRows.map(renderRow)}
                 </div>
             </div>
         </div>
     );
 };
 
-const TimelineBody: React.FC<{
-    data: GanttBatch[],
-    shareGroups: GanttShareGroup[],
-    dependencies: GanttDependency[],
-    offScreenOperations: OffScreenOperation[],
-    rowHeight: number,
-    totalWidth: number,
-    getPos: (d: string) => number,
-    getWidth: (s: string, e: string) => number,
-    onOperationDoubleClick?: (operation: GanttOperation) => void
-}> = ({ data, shareGroups, dependencies, offScreenOperations, rowHeight, totalWidth, getPos, getWidth, onOperationDoubleClick }) => {
-    const { expandedBatches, expandedStages, layoutMode, showShareGroupLines } = useGantt();
-
-    // 使用统一的行计算逻辑
-    const { rowMap } = useMemo(
-        () => calculateRowLayout(data, expandedBatches, expandedStages, layoutMode),
-        [data, expandedBatches, expandedStages, layoutMode]
-    );
-
-    // 计算操作位置，用于绘制共享组连接线
-    // P0-1: 支持 Compact 模式
-    // P0-3: 添加 rowMap 安全检查
-    const operationPositions = useMemo(() => {
-        const positions = new Map<number, { x: number; y: number; width: number }>();
-
-        data.forEach(batch => {
-            const batchRowIndex = rowMap.get(`batch-${batch.id}`);
-            if (batchRowIndex === undefined) {
-                if (process.env.NODE_ENV === 'development') {
-                    console.warn(`[GanttTimeline] Missing rowMap entry for batch-${batch.id}`);
-                }
-                return;
-            }
-
-            if (!expandedBatches.has(batch.id)) {
-                // Batch 未展开时：Compact 模式下仍需生成位置（指向 Batch 行）
-                // Standard 模式下不生成位置（连接线隐藏）
-                if (layoutMode === 'compact') {
-                    batch.stages.forEach(stage => {
-                        stage.operations.filter(op => !op.isOffScreen).forEach(op => {
-                            positions.set(op.id, {
-                                x: getPos(op.startDate),
-                                y: batchRowIndex * rowHeight,
-                                width: getWidth(op.startDate, op.endDate)
-                            });
-                        });
-                    });
-                }
-                return;
-            }
-
-            // Batch 已展开
-            batch.stages.forEach(stage => {
-                const stageKey = `batch-${batch.id}-stage-${stage.id}`;
-                const stageRowIndex = rowMap.get(stageKey);
-                if (stageRowIndex === undefined) {
-                    if (process.env.NODE_ENV === 'development') {
-                        console.warn(`[GanttTimeline] Missing rowMap entry for ${stageKey}`);
-                    }
-                    return;
-                }
-
-                if (layoutMode === 'compact') {
-                    // Compact 模式 - 所有操作使用 Stage 行的 Y 坐标
-                    stage.operations.filter(op => !op.isOffScreen).forEach(op => {
-                        positions.set(op.id, {
-                            x: getPos(op.startDate),
-                            y: stageRowIndex * rowHeight,
-                            width: getWidth(op.startDate, op.endDate)
-                        });
-                    });
-                } else if (expandedStages.has(stageKey)) {
-                    // Standard 模式 + Stage 展开 - 操作使用独立行
-                    stage.operations.filter(op => !op.isOffScreen).forEach(op => {
-                        const opRowIndex = rowMap.get(`op-${op.id}`);
-                        if (opRowIndex === undefined) {
-                            if (process.env.NODE_ENV === 'development') {
-                                console.warn(`[GanttTimeline] Missing rowMap entry for op-${op.id}`);
-                            }
-                            return;
-                        }
-                        positions.set(op.id, {
-                            x: getPos(op.startDate),
-                            y: opRowIndex * rowHeight,
-                            width: getWidth(op.startDate, op.endDate)
-                        });
-                    });
-                }
-                // Standard 模式 + Stage 折叠：不生成位置，连接线隐藏
-            });
-        });
-
-        // V2: Add off-screen operations with virtual edge positions
-        offScreenOperations.forEach(offOp => {
-            const linkedPos = positions.get(offOp.linkedToOpId);
-            if (linkedPos) {
-                positions.set(offOp.id, {
-                    x: offOp.direction === 'left' ? 0 : totalWidth,
-                    y: linkedPos.y,
-                    width: 10
-                });
-            }
-        });
-
-        return positions;
-    }, [data, expandedBatches, expandedStages, layoutMode, rowHeight, getPos, getWidth, offScreenOperations, totalWidth, rowMap]);
-
-    // Helper to render repeating labels for long bars
-    const renderGanttBarLabel = (text: string, width: number) => {
-        if (width < 30) return null;
-
-        const charWidth = 7; // Approx width per char for 11px font
-        const textWidth = text.length * charWidth;
-        const gap = 800; // Gap between repeating labels
-
-        // If bar is long enough to support repeating labels
-        if (width > (textWidth + gap) * 1.5) {
-            const repeatCount = Math.floor(width / (textWidth + gap));
-            // Create an array of text elements
-            const labels = [];
-            for (let i = 0; i < repeatCount; i++) {
-                labels.push(
-                    <span key={i} style={{
-                        color: '#1F2937', fontWeight: 500, fontSize: 11,
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                    }}>
-                        {text}
-                    </span>
-                );
-            }
-            return (
-                <div style={{
-                    display: 'flex', width: '100%', height: '100%',
-                    alignItems: 'center', justifyContent: 'space-evenly', overflow: 'hidden'
-                }}>
-                    {labels}
-                </div>
-            );
-        }
-
-        // Default: Single centered label
-        return (
-            <div style={{
-                display: 'flex', width: '100%', height: '100%',
-                alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: '0 4px'
-            }}>
-                <span style={{
-                    color: '#1F2937', fontWeight: 500, fontSize: 11,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
-                }}>
-                    {text}
-                </span>
-            </div>
-        );
-    };
-
-    // 构建行渲染
-    const rows: React.ReactNode[] = [];
-
-    // P0-5: DEV 环境下验证渲染顺序与 rowMap 一致
-    if (process.env.NODE_ENV === 'development') {
-        let expectedIndex = 0;
-        data.forEach(batch => {
-            const batchRow = rowMap.get(`batch-${batch.id}`);
-            if (batchRow !== expectedIndex) {
-                console.error(`[GanttTimeline] Row order mismatch: batch-${batch.id} expected index ${expectedIndex}, got ${batchRow}`);
-            }
-            expectedIndex++;
-            if (expandedBatches.has(batch.id)) {
-                batch.stages.forEach(stage => {
-                    const stageKey = `batch-${batch.id}-stage-${stage.id}`;
-                    const stageRow = rowMap.get(stageKey);
-                    if (stageRow !== expectedIndex) {
-                        console.error(`[GanttTimeline] Row order mismatch: ${stageKey} expected index ${expectedIndex}, got ${stageRow}`);
-                    }
-                    expectedIndex++;
-                    if (layoutMode === 'standard' && expandedStages.has(stageKey)) {
-                        stage.operations.filter(op => !op.isOffScreen).forEach(op => {
-                            const opRow = rowMap.get(`op-${op.id}`);
-                            if (opRow !== expectedIndex) {
-                                console.error(`[GanttTimeline] Row order mismatch: op-${op.id} expected index ${expectedIndex}, got ${opRow}`);
-                            }
-                            expectedIndex++;
-                        });
-                    }
-                });
-            }
-        });
-    }
-
-    data.forEach((batch, index) => {
-        // 1. Batch Row
-        const color = BATCH_COLORS[index % BATCH_COLORS.length];
-        const backgroundTint = color.tint;
-        const batchRowIndex = rowMap.get(`batch-${batch.id}`) ?? 0;
-        const batchIsAlt = isAlternateRow(batchRowIndex);
-
-        const batchWidth = getWidth(batch.startDate, batch.endDate);
-
-        rows.push(
-            <div key={`batch-${batch.id}`} className={`gantt-relative gantt-border-b ${batchIsAlt ? 'gantt-row-alt' : ''}`} style={{ height: rowHeight, backgroundColor: backgroundTint, overflow: 'hidden' }}>
-                <div
-                    className="gantt-bar-batch"
-                    style={{
-                        left: getPos(batch.startDate),
-                        width: batchWidth,
-                        top: 4, // (32-24)/2
-                        backgroundColor: color.bg,
-                        borderColor: color.border,
-                        borderWidth: 1,
-                        borderStyle: 'solid',
-                        zIndex: 4 // 高于连接线 (2-3)
-                    }}
-                >
-                    {renderGanttBarLabel(batch.code, batchWidth)}
-                </div>
-            </div>
-        );
-
-        if (expandedBatches.has(batch.id)) {
-            batch.stages.forEach(stage => {
-                // 2. Stage Row
-                const stageKey = `batch-${batch.id}-stage-${stage.id}`;
-                const stageRowIndex = rowMap.get(stageKey) ?? 0;
-                const stageIsAlt = isAlternateRow(stageRowIndex);
-
-                const stageWidth = getWidth(stage.startDate, stage.endDate);
-
-                const stageContent = (
-                    <div key={stageKey} className={`gantt-relative gantt-border-b ${stageIsAlt ? 'gantt-row-alt' : ''}`} style={{ height: rowHeight, backgroundColor: backgroundTint, overflow: 'hidden' }}>
-                        {layoutMode === 'compact' ? (
-                            stage.operations.map(op => {
-                                const opWidth = getWidth(op.startDate, op.endDate);
-                                const opContent = (
-                                    <Tooltip key={op.id} title={`${op.name} (${op.status})`}>
-                                        <div
-                                            className="gantt-bar-op"
-                                            style={{
-                                                left: getPos(op.startDate),
-                                                width: opWidth,
-                                                minWidth: 8,
-                                                top: 7, // Centered in 32px row (ish) - actually row is 32, window is 24(top4), op is 18(top7)
-                                                height: 18,
-                                                zIndex: 20,
-                                                backgroundColor: (color as any).solid || color.border, // Fallback if solid not found
-                                                cursor: 'pointer'
-                                            }}
-                                            onDoubleClick={(e) => {
-                                                e.stopPropagation();
-                                                // Inject batch_id context
-                                                if (onOperationDoubleClick) {
-                                                    onOperationDoubleClick({
-                                                        ...op,
-                                                        batch_id: batch.id
-                                                    });
-                                                }
-                                            }}
-                                        >
-                                            {renderGanttBarLabel(op.name, opWidth)}
-                                        </div>
-                                    </Tooltip>
-                                );
-
-                                return opContent;
-                            })
-                        ) : (
-                            <div
-                                className="gantt-bar-stage"
-                                style={{
-                                    left: getPos(stage.startDate),
-                                    width: stageWidth,
-                                    backgroundColor: color.bg.replace(/[\d.]+\)$/, '0.4)'), // Slightly darker than row bg (0.05) and batch bar (0.2)
-                                    borderColor: color.border,
-                                    borderWidth: 1,
-                                    borderStyle: 'solid',
-                                    top: 7,
-                                    height: 18,
-                                    zIndex: 4 // 高于连接线 (2-3)
-                                }}
-                            >
-                                {renderGanttBarLabel(stage.name, stageWidth)}
-                            </div>
-                        )}
-                    </div>
-                );
-                rows.push(stageContent);
-
-                // 3. Operations Rows (Standard Mode Only)
-                // P0-2: Filter out offScreen ops, P0-3: Safety check for rowMap
-                if (layoutMode === 'standard' && expandedStages.has(stageKey)) {
-                    stage.operations.filter(op => !op.isOffScreen).forEach(op => {
-                        const opRowIndex = rowMap.get(`op-${op.id}`);
-                        if (opRowIndex === undefined) {
-                            if (process.env.NODE_ENV === 'development') {
-                                console.warn(`[GanttTimeline] Missing rowMap entry for op-${op.id} in row rendering`);
-                            }
-                            return;
-                        }
-                        const opIsAlt = isAlternateRow(opRowIndex);
-
-                        const opWidth = getWidth(op.startDate, op.endDate);
-                        const hasWindow = op.windowStartDate && op.windowEndDate;
-
-                        rows.push(
-                            <div key={`op-${op.id}`} className={`gantt-relative gantt-border-b ${opIsAlt ? 'gantt-row-alt' : ''}`} style={{ height: rowHeight, backgroundColor: backgroundTint, overflow: 'hidden' }}>
-                                {hasWindow && (
-                                    <Tooltip title={`窗口: ${dayjs(op.windowStartDate).format('MM-DD HH:mm')} - ${dayjs(op.windowEndDate).format('MM-DD HH:mm')}`}>
-                                        <div
-                                            className="gantt-bar-window"
-                                            style={{
-                                                left: getPos(op.windowStartDate!),
-                                                width: getWidth(op.windowStartDate!, op.windowEndDate!),
-                                                top: 4,
-                                                height: 24
-                                            }}
-                                        />
-                                    </Tooltip>
-                                )}
-                                <Tooltip title={`${op.name}: ${op.assignedPeople}/${op.requiredPeople} people`}>
-                                    <div
-                                        className="gantt-bar-op"
-                                        style={{
-                                            left: getPos(op.startDate),
-                                            width: opWidth,
-                                            top: 4,
-                                            height: 24,
-                                            padding: '0 4px',
-                                            justifyContent: 'center',
-                                            zIndex: 20,
-                                            backgroundColor: (color as any).solid || color.border,
-                                            cursor: 'pointer'
-                                        }}
-                                        onDoubleClick={(e) => {
-                                            e.stopPropagation();
-                                            // Inject batch_id context
-                                            if (onOperationDoubleClick) {
-                                                onOperationDoubleClick({
-                                                    ...op,
-                                                    batch_id: batch.id
-                                                });
-                                            }
-                                        }}
-                                    >
-                                        {!hasWindow && opWidth > 30 ? op.name : ''}
-                                    </div>
-                                </Tooltip>
-                                {hasWindow && (
-                                    <div
-                                        className="gantt-text-overlay"
-                                        style={{
-                                            left: getPos(op.windowStartDate!),
-                                            width: getWidth(op.windowStartDate!, op.windowEndDate!),
-                                        }}
-                                    >
-                                        {op.name}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    });
-                }
-            });
-        }
-    });
-
-    return (
-        <div className="gantt-w-full" style={{ position: 'relative', overflow: 'hidden' }}>
-            {/* 连接线先渲染，位于底层 */}
-            {showShareGroupLines && shareGroups.length > 0 && (
-                <ShareGroupConnections
-                    shareGroups={shareGroups}
-                    operationPositions={operationPositions}
-                    rowHeight={rowHeight}
-                />
-            )}
-            {dependencies.length > 0 && (
-                <ConstraintConnections
-                    dependencies={dependencies}
-                    operationPositions={operationPositions}
-                    rowHeight={rowHeight}
-                />
-            )}
-            {/* 行内容后渲染，覆盖连接线 */}
-            {rows}
-        </div>
-    );
-}
+const GanttTimeline = React.memo(GanttTimelineComponent);
 
 export default GanttTimeline;

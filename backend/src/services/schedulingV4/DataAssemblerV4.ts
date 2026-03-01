@@ -23,6 +23,10 @@ export interface V4SolverRequest {
     locked_operations: V4LockedOperation[];
     locked_shifts: V4LockedShift[];
     historical_shifts: V4HistoricalShift[];
+    resources: V4Resource[];
+    resource_calendars: V4ResourceCalendarEntry[];
+    operation_resource_requirements: V4OperationResourceRequirement[];
+    maintenance_windows: V4MaintenanceWindow[];
     config?: any;
 }
 
@@ -109,6 +113,52 @@ interface V4HistoricalShift {
     consecutive_work_days: number; // 截止该日期的连续工作天数
 }
 
+interface V4Resource {
+    resource_id: number;
+    resource_code: string;
+    resource_name: string;
+    resource_type: string;
+    department_code: string;
+    owner_org_unit_id: number | null;
+    status: string;
+    capacity: number;
+    location: string | null;
+    clean_level: string | null;
+    is_shared: boolean;
+    is_schedulable: boolean;
+    metadata: Record<string, unknown> | null;
+}
+
+interface V4ResourceCalendarEntry {
+    resource_id: number;
+    start_datetime: string;
+    end_datetime: string;
+    event_type: string;
+    source_type: string;
+    source_id?: number | null;
+    notes?: string | null;
+}
+
+interface V4OperationResourceRequirement {
+    operation_plan_id: number;
+    resource_type: string;
+    required_count: number;
+    is_mandatory: boolean;
+    requires_exclusive_use: boolean;
+    prep_minutes: number;
+    changeover_minutes: number;
+    cleanup_minutes: number;
+}
+
+interface V4MaintenanceWindow {
+    resource_id: number;
+    start_datetime: string;
+    end_datetime: string;
+    window_type: string;
+    is_hard_block: boolean;
+    notes?: string | null;
+}
+
 
 export class DataAssemblerV4 {
 
@@ -153,6 +203,18 @@ export class DataAssemblerV4 {
         // Merge operations and standalone tasks
         const allDemands = [...enrichedOperations, ...standaloneTasks];
 
+        const [
+            resources,
+            resourceCalendars,
+            maintenanceWindows,
+            operationResourceRequirements
+        ] = await Promise.all([
+            this.fetchResources(teamIds),
+            this.fetchResourceCalendars(startDate, endDate, teamIds),
+            this.fetchMaintenanceWindows(startDate, endDate, teamIds),
+            this.fetchOperationResourceRequirements(enrichedOperations)
+        ]);
+
         console.timeEnd('DataAssemblerV4');
 
         return {
@@ -166,6 +228,10 @@ export class DataAssemblerV4 {
             locked_operations: lockedOperations,
             locked_shifts: lockedShifts,
             historical_shifts: historicalShifts,
+            resources: resources,
+            resource_calendars: resourceCalendars,
+            operation_resource_requirements: operationResourceRequirements,
+            maintenance_windows: maintenanceWindows,
             config: {} // TODO: Add config if needed
         };
     }
@@ -568,6 +634,185 @@ export class DataAssemblerV4 {
             });
         });
         return Array.from(map.values());
+    }
+
+    private static async fetchResources(teamIds: number[] = []): Promise<V4Resource[]> {
+        let query = `
+            SELECT
+                r.id,
+                r.resource_code,
+                r.resource_name,
+                r.resource_type,
+                r.department_code,
+                r.owner_org_unit_id,
+                r.status,
+                r.capacity,
+                r.location,
+                r.clean_level,
+                r.is_shared,
+                r.is_schedulable,
+                r.metadata
+            FROM resources r
+            WHERE r.is_schedulable = 1
+        `;
+        const params: number[] = [];
+
+        if (teamIds.length > 0) {
+            const placeholders = teamIds.map(() => '?').join(',');
+            query = `
+                WITH RECURSIVE unit_tree AS (
+                    SELECT id FROM organization_units WHERE id IN (${placeholders})
+                    UNION ALL
+                    SELECT ou.id FROM organization_units ou
+                    INNER JOIN unit_tree ut ON ou.parent_id = ut.id
+                )
+                SELECT
+                    r.id,
+                    r.resource_code,
+                    r.resource_name,
+                    r.resource_type,
+                    r.department_code,
+                    r.owner_org_unit_id,
+                    r.status,
+                    r.capacity,
+                    r.location,
+                    r.clean_level,
+                    r.is_shared,
+                    r.is_schedulable,
+                    r.metadata
+                FROM resources r
+                WHERE r.is_schedulable = 1
+                  AND r.owner_org_unit_id IN (SELECT id FROM unit_tree)
+            `;
+            params.push(...teamIds);
+        }
+
+        query += ' ORDER BY r.department_code, r.resource_type, r.resource_name';
+
+        const [rows] = await pool.execute<RowDataPacket[]>(query, params);
+        return rows.map((row) => ({
+            resource_id: row.id,
+            resource_code: row.resource_code,
+            resource_name: row.resource_name,
+            resource_type: row.resource_type,
+            department_code: row.department_code,
+            owner_org_unit_id: row.owner_org_unit_id ?? null,
+            status: row.status,
+            capacity: Number(row.capacity ?? 1),
+            location: row.location ?? null,
+            clean_level: row.clean_level ?? null,
+            is_shared: !!row.is_shared,
+            is_schedulable: !!row.is_schedulable,
+            metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null
+        }));
+    }
+
+    private static async fetchResourceCalendars(startDate: string, endDate: string, teamIds: number[] = []): Promise<V4ResourceCalendarEntry[]> {
+        const resourceFilter = await this.buildResourceIdFilter(teamIds);
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT resource_id, start_datetime, end_datetime, event_type, source_type, source_id, notes
+             FROM resource_calendars
+             WHERE start_datetime <= ? AND end_datetime >= ?
+             ${resourceFilter.clause}
+             ORDER BY start_datetime`,
+            [endDate + ' 23:59:59', startDate + ' 00:00:00', ...resourceFilter.params]
+        );
+
+        return rows.map((row) => ({
+            resource_id: row.resource_id,
+            start_datetime: dayjs(row.start_datetime).toISOString(),
+            end_datetime: dayjs(row.end_datetime).toISOString(),
+            event_type: row.event_type,
+            source_type: row.source_type,
+            source_id: row.source_id ?? null,
+            notes: row.notes ?? null
+        }));
+    }
+
+    private static async fetchMaintenanceWindows(startDate: string, endDate: string, teamIds: number[] = []): Promise<V4MaintenanceWindow[]> {
+        const resourceFilter = await this.buildResourceIdFilter(teamIds);
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT resource_id, start_datetime, end_datetime, window_type, is_hard_block, notes
+             FROM maintenance_windows
+             WHERE start_datetime <= ? AND end_datetime >= ?
+             ${resourceFilter.clause}
+             ORDER BY start_datetime`,
+            [endDate + ' 23:59:59', startDate + ' 00:00:00', ...resourceFilter.params]
+        );
+
+        return rows.map((row) => ({
+            resource_id: row.resource_id,
+            start_datetime: dayjs(row.start_datetime).toISOString(),
+            end_datetime: dayjs(row.end_datetime).toISOString(),
+            window_type: row.window_type,
+            is_hard_block: !!row.is_hard_block,
+            notes: row.notes ?? null
+        }));
+    }
+
+    private static async fetchOperationResourceRequirements(operations: V4OperationDemand[]): Promise<V4OperationResourceRequirement[]> {
+        const operationIds = [...new Set(operations.map((operation) => operation.operation_id).filter((operationId) => operationId > 0))];
+        if (operationIds.length === 0) {
+            return [];
+        }
+
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT operation_id, resource_type, required_count, is_mandatory, requires_exclusive_use, prep_minutes, changeover_minutes, cleanup_minutes
+             FROM operation_resource_requirements
+             WHERE operation_id IN (${operationIds.join(',')})`
+        );
+
+        const grouped = new Map<number, RowDataPacket[]>();
+        rows.forEach((row) => {
+            if (!grouped.has(row.operation_id)) {
+                grouped.set(row.operation_id, []);
+            }
+            grouped.get(row.operation_id)!.push(row);
+        });
+
+        return operations.flatMap((operation) =>
+            (grouped.get(operation.operation_id) || []).map((row) => ({
+                operation_plan_id: operation.operation_plan_id,
+                resource_type: row.resource_type,
+                required_count: Number(row.required_count ?? 1),
+                is_mandatory: !!row.is_mandatory,
+                requires_exclusive_use: !!row.requires_exclusive_use,
+                prep_minutes: Number(row.prep_minutes ?? 0),
+                changeover_minutes: Number(row.changeover_minutes ?? 0),
+                cleanup_minutes: Number(row.cleanup_minutes ?? 0)
+            }))
+        );
+    }
+
+    private static async buildResourceIdFilter(teamIds: number[]): Promise<{ clause: string; params: number[] }> {
+        if (teamIds.length === 0) {
+            return { clause: '', params: [] };
+        }
+
+        const placeholders = teamIds.map(() => '?').join(',');
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `WITH RECURSIVE unit_tree AS (
+                SELECT id FROM organization_units WHERE id IN (${placeholders})
+                UNION ALL
+                SELECT ou.id FROM organization_units ou
+                INNER JOIN unit_tree ut ON ou.parent_id = ut.id
+             )
+             SELECT id FROM resources WHERE owner_org_unit_id IN (SELECT id FROM unit_tree)`,
+            teamIds
+        );
+
+        const resourceIds = rows
+            .map((row) => Number(row.id))
+            .filter((resourceId) => Number.isFinite(resourceId));
+
+        if (resourceIds.length === 0) {
+            return { clause: ' AND 1 = 0', params: [] };
+        }
+
+        return {
+            clause: ` AND resource_id IN (${resourceIds.map(() => '?').join(',')})`,
+            params: resourceIds
+        };
     }
 
     private static async fetchLockedOperations(batchIds: number[]): Promise<V4LockedOperation[]> {

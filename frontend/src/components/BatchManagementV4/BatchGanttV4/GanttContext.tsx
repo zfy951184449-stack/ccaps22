@@ -11,7 +11,7 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // View Settings
     const [viewMode, setViewMode] = useState<ViewMode>('week');
-    const [layoutModeInternal, setLayoutModeInternal] = useState<LayoutMode>('standard');
+    const [layoutModeInternal, setLayoutModeInternal] = useState<LayoutMode>('dense');
     const [zoomLevel, setZoomLevel] = useState(100); // Default 100px per day
 
     // Wrapper to clear expandedStages when switching to compact mode

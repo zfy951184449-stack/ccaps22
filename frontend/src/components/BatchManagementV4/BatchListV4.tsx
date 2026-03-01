@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Table, Tag, Space, Button, Typography, Tooltip, Popconfirm } from 'antd';
+import React, { useMemo } from 'react';
+import { Table, Space, Button, Typography, Tooltip, Popconfirm } from 'antd';
 import {
     EditOutlined,
     DeleteOutlined,
@@ -7,9 +7,7 @@ import {
     StopOutlined,
     CalendarOutlined
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import type { BatchPlan } from '../../types';
-import { fluentDesignTokens } from '../../styles/fluentDesignTokens';
 
 const { Text } = Typography;
 
@@ -30,9 +28,6 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
     onActivate,
     onDeactivate
 }) => {
-    // Custom row styles for "striped" effect or hover focus
-    const [hoveredRow, setHoveredRow] = useState<number | null>(null);
-
     const getStatusConfig = (status: string) => {
         switch (status) {
             case 'ACTIVATED': return { color: '#34C759', bg: 'rgba(52, 199, 89, 0.1)', text: 'Activated' };
@@ -43,7 +38,7 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
         }
     };
 
-    const columns = [
+    const columns = useMemo(() => [
         {
             title: '批次编码',
             dataIndex: 'batch_code',
@@ -66,7 +61,7 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
         {
             title: '计划日期',
             key: 'dates',
-            render: (_: any, record: BatchPlan) => (
+            render: (_: unknown, record: BatchPlan) => (
                 <div style={{ display: 'flex', alignItems: 'center', color: '#666' }}>
                     <CalendarOutlined style={{ marginRight: 6 }} />
                     <Text style={{ fontSize: '13px' }}>
@@ -101,8 +96,8 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
             title: '操作',
             key: 'actions',
             width: 150,
-            render: (_: any, record: BatchPlan) => (
-                <Space size="small" style={{ opacity: hoveredRow === record.id ? 1 : 0.6, transition: 'opacity 0.2s' }}>
+            render: (_: unknown, record: BatchPlan) => (
+                <Space size="small" className="batch-actions">
                     {record.plan_status === 'DRAFT' ? (
                         <Tooltip title="激活">
                             <Button
@@ -149,7 +144,7 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                 </Space>
             ),
         },
-    ];
+    ], [onActivate, onDeactivate, onDelete, onEdit]);
 
     return (
         <div className="batch-list-v4-container">
@@ -174,6 +169,13 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                     .batch-list-v4 .ant-table-tbody > tr:hover > td {
                         background: rgba(255, 255, 255, 0.4) !important;
                     }
+                    .batch-list-v4 .batch-actions {
+                        opacity: 0.6;
+                        transition: opacity 0.2s;
+                    }
+                    .batch-list-v4 .ant-table-tbody > tr:hover .batch-actions {
+                        opacity: 1;
+                    }
                     .batch-list-v4 .ant-pagination-item-active {
                         border-color: transparent !important;
                         background: #007AFF !important;
@@ -193,10 +195,6 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                     pageSize: 8,
                     size: 'small',
                 }}
-                onRow={(record) => ({
-                    onMouseEnter: () => setHoveredRow(record.id),
-                    onMouseLeave: () => setHoveredRow(null),
-                })}
             />
         </div>
     );

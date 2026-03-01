@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, DatePicker, Select, Button, Alert, message, Typography, Row, Col, Divider, Card, Tag, Space } from 'antd';
+import { Modal, Form, Input, DatePicker, Select, Button, message, Typography, Row, Col, Divider, Card, Tag, Space } from 'antd';
 import dayjs from 'dayjs';
 import { batchPlanApi } from '../../services/api';
 import type { BatchPlan, BatchTemplateSummary } from '../../types';
-import { CalendarOutlined, InfoCircleFilled, RocketOutlined } from '@ant-design/icons';
+import { InfoCircleFilled, RocketOutlined } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
 
@@ -12,24 +12,34 @@ interface CreateBatchModalV4Props {
     onCancel: () => void;
     onSuccess: () => void;
     initialValues?: BatchPlan | null; // For editing
+    templates?: BatchTemplateSummary[];
 }
 
 const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     visible,
     onCancel,
     onSuccess,
-    initialValues
+    initialValues,
+    templates: templateOptions
 }) => {
     const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
-    const [templates, setTemplates] = useState<BatchTemplateSummary[]>([]);
+    const [templates, setTemplates] = useState<BatchTemplateSummary[]>(templateOptions ?? []);
 
     const [day0Offset, setDay0Offset] = useState<{ offset: number; has_pre_day0: boolean; pre_day0_count: number } | null>(null);
 
     useEffect(() => {
-        // Load templates
+        if (templateOptions && templateOptions.length > 0) {
+            setTemplates(templateOptions);
+            return;
+        }
+
+        if (!visible) {
+            return;
+        }
+
         batchPlanApi.getTemplates().then(setTemplates).catch(console.error);
-    }, []);
+    }, [templateOptions, visible]);
 
     useEffect(() => {
         if (visible) {
@@ -51,7 +61,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
                 });
             }
         }
-    }, [visible, initialValues]);
+    }, [form, initialValues, visible]);
 
     const handleTemplateChange = async (templateId: number) => {
         try {

@@ -11,12 +11,16 @@ interface ConstraintConnectionsProps {
     dependencies: GanttDependency[];
     operationPositions: Map<number, OperationPosition>;
     rowHeight: number;
+    visibleTop?: number;
+    visibleBottom?: number;
 }
 
 const ConstraintConnections: React.FC<ConstraintConnectionsProps> = ({
     dependencies,
     operationPositions,
-    rowHeight
+    rowHeight,
+    visibleTop = 0,
+    visibleBottom = Number.POSITIVE_INFINITY
 }) => {
     if (!dependencies || dependencies.length === 0) return null;
 
@@ -61,6 +65,12 @@ const ConstraintConnections: React.FC<ConstraintConnectionsProps> = ({
                 const toPos = operationPositions.get(dep.to);
 
                 if (!fromPos || !toPos) return null;
+
+                const minY = Math.min(fromPos.y, toPos.y);
+                const maxY = Math.max(fromPos.y, toPos.y) + rowHeight;
+                if (maxY < visibleTop || minY > visibleBottom) {
+                    return null;
+                }
 
                 const type = Number(dep.type) || 1;
 

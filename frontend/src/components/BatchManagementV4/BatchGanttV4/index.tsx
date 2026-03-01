@@ -1,24 +1,43 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { GanttProvider, useGantt } from './GanttContext';
 import GanttSidebar from './GanttSidebar';
 import GanttTimeline from './GanttTimeline';
 import GanttMinimap from './GanttMinimap';
 import EditOperationModal from './EditOperationModal';
-import { GanttBatch, GanttDependency, GanttShareGroup, OffScreenOperation, GanttOperation } from './types';
+import { GanttBatch, GanttDependency, GanttShareGroup, OffScreenOperation, GanttOperation, LayoutMode } from './types';
+import { calculateRowLayout } from './rowUtils';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { DatePicker, Tooltip, Slider, message, Tag } from 'antd';
-import { ShareAltOutlined, ZoomInOutlined, ZoomOutOutlined, DragOutlined, ArrowLeftOutlined, LeftOutlined, RightOutlined, PlusCircleOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { ShareAltOutlined, ZoomInOutlined, ZoomOutOutlined, ArrowLeftOutlined, LeftOutlined, RightOutlined, PlusCircleOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import './BatchGanttV4.css';
 
 const { RangePicker } = DatePicker;
 
 interface BatchGanttV4ContentProps {
     filteredBatchIds?: number[];
+    onCreateBatch?: () => void;
 }
 
-const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatchIds }) => {
-    const { startDate, endDate, viewMode, setViewMode, setLayoutMode, layoutMode, setStartDate, setEndDate, showShareGroupLines, setShowShareGroupLines, zoomLevel, setZoomLevel, exitSingleDayMode, navigateSingleDay, expandAll } = useGantt();
+const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatchIds, onCreateBatch }) => {
+    const {
+        startDate,
+        endDate,
+        viewMode,
+        setLayoutMode,
+        layoutMode,
+        setStartDate,
+        setEndDate,
+        showShareGroupLines,
+        setShowShareGroupLines,
+        zoomLevel,
+        setZoomLevel,
+        exitSingleDayMode,
+        navigateSingleDay,
+        expandAll,
+        expandedBatches,
+        expandedStages,
+    } = useGantt();
     const [batches, setBatches] = useState<GanttBatch[]>([]);
     const [dependencies, setDependencies] = useState<GanttDependency[]>([]);
     const [shareGroups, setShareGroups] = useState<GanttShareGroup[]>([]);
@@ -32,13 +51,13 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
     const [isShareGroupMode, setIsShareGroupMode] = useState(false);
     const [selectedOperationIds, setSelectedOperationIds] = useState<number[]>([]);
 
-    const handleEditOperation = (operation: GanttOperation) => {
+    const handleEditOperation = useCallback((operation: GanttOperation) => {
         setEditingOperation(operation);
-    };
+    }, []);
 
-    const handleEditCancel = () => {
+    const handleEditCancel = useCallback(() => {
         setEditingOperation(null);
-    };
+    }, []);
 
     const handleSaveOperation = async (id: number, values: any) => {
         try {
@@ -84,31 +103,6 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         );
     }, []);
 
-    const handleConfirmShareGroup = useCallback(async () => {
-        if (selectedOperationIds.length < 2) {
-            message.warning('请至少选择2个操作');
-            return;
-        }
-
-        try {
-            const groupName = `共享组-${shareGroups.length + 1}`;
-
-            await axios.post('/api/share-groups/batch-operations/bulk', {
-                operation_ids: selectedOperationIds,
-                group_name: groupName,
-                share_mode: 'SAME_TEAM'
-            });
-
-            message.success(`${groupName} 创建成功`);
-            handleCancelShareGroup();
-            // 刷新数据
-            fetchData();
-        } catch (error) {
-            console.error('创建共享组失败:', error);
-            message.error('创建共享组失败');
-        }
-    }, [selectedOperationIds, shareGroups.length, handleCancelShareGroup]);
-
     // Full Screen State
     const [isFullScreen, setIsFullScreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -119,9 +113,19 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
     // Minimap Visibility State
     const [minimapVisible, setMinimapVisible] = useState(false);
     const minimapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const [currentScrollLeft, setCurrentScrollLeft] = useState(0);
+    const skipNextFetchRef = useRef(false);
+    const currentScrollLeftRef = useRef(0);
+    const currentVisibleDayIndexRef = useRef(0);
+    const [minimapDate, setMinimapDate] = useState(startDate);
+    const filterBatchIdsKey = useMemo(() => (filteredBatchIds ? filteredBatchIds.join(',') : ''), [filteredBatchIds]);
+    const hasExplicitBatchFilter = filteredBatchIds !== undefined;
+    const rowHeight = 32;
+    const rowLayout = useMemo(
+        () => calculateRowLayout(batches, expandedBatches, expandedStages, layoutMode),
+        [batches, expandedBatches, expandedStages, layoutMode]
+    );
 
-    const handleScrollInteraction = () => {
+    const handleScrollInteraction = useCallback(() => {
         setMinimapVisible(true);
         if (minimapTimeoutRef.current) {
             clearTimeout(minimapTimeoutRef.current);
@@ -129,22 +133,23 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         minimapTimeoutRef.current = setTimeout(() => {
             setMinimapVisible(false);
         }, 2000);
-    };
+    }, []);
 
-    const handleHorizontalScroll = (scrollLeft: number) => {
-        setCurrentScrollLeft(scrollLeft);
-    };
+    const handleHorizontalScroll = useCallback((scrollLeft: number) => {
+        currentScrollLeftRef.current = scrollLeft;
+        const nextDayIndex = Math.max(0, Math.floor(scrollLeft / Math.max(zoomLevel, 1)));
+        if (nextDayIndex !== currentVisibleDayIndexRef.current) {
+            currentVisibleDayIndexRef.current = nextDayIndex;
+            setMinimapDate(startDate.add(nextDayIndex, 'day'));
+        }
+    }, [startDate, zoomLevel]);
 
-    const handleTimelineScroll = (scrollTop: number) => {
+    const handleTimelineScroll = useCallback((scrollTop: number) => {
         if (sidebarBodyRef.current) {
             sidebarBodyRef.current.scrollTop = scrollTop;
         }
         // Also trigger visibility on vertical scroll from sidebar sync (if needed, but mainly Timeline drives it)
-    };
-
-    useEffect(() => {
-        fetchData();
-    }, [startDate, endDate, filteredBatchIds]);
+    }, []);
 
     useEffect(() => {
         const handleFullScreenChange = () => {
@@ -156,6 +161,33 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
             document.removeEventListener('fullscreenchange', handleFullScreenChange);
         };
     }, []);
+
+    useEffect(() => {
+        currentVisibleDayIndexRef.current = Math.max(0, Math.floor(currentScrollLeftRef.current / Math.max(zoomLevel, 1)));
+        setMinimapDate(startDate.add(currentVisibleDayIndexRef.current, 'day'));
+    }, [startDate, zoomLevel]);
+
+    useEffect(() => {
+        return () => {
+            if (minimapTimeoutRef.current) {
+                clearTimeout(minimapTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (layoutMode !== 'standard' && isShareGroupMode) {
+            handleCancelShareGroup();
+        }
+    }, [layoutMode, isShareGroupMode, handleCancelShareGroup]);
+
+    const handleLayoutModeChange = useCallback((mode: LayoutMode) => {
+        if (mode !== 'standard') {
+            setIsShareGroupMode(false);
+            setSelectedOperationIds([]);
+        }
+        setLayoutMode(mode);
+    }, [setLayoutMode]);
 
     const toggleFullScreen = () => {
         if (!document.fullscreenElement) {
@@ -171,7 +203,16 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
 
     const [hasAutoFit, setHasAutoFit] = useState(false);
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
+        if (hasExplicitBatchFilter && filteredBatchIds.length === 0) {
+            setBatches([]);
+            setDependencies([]);
+            setShareGroups([]);
+            setOffScreenOps([]);
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             // On initial auto-fit, we look back further (e.g., 6 months) to find the true "First Project"
@@ -179,13 +220,18 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
             const fetchStart = !hasAutoFit ? dayjs().subtract(6, 'month') : startDate;
             // Ensure we cover enough future for initial load too
             const fetchEnd = !hasAutoFit ? dayjs().add(6, 'month') : endDate;
+            const hierarchyParams: Record<string, string> = {
+                start_date: fetchStart.format('YYYY-MM-DD HH:mm:ss'),
+                end_date: fetchEnd.format('YYYY-MM-DD HH:mm:ss'),
+                status: 'DRAFT,ACTIVATED,PLANNED'
+            };
+
+            if (filterBatchIdsKey) {
+                hierarchyParams.batch_ids = filterBatchIdsKey;
+            }
 
             const res = await axios.get('/api/v5/gantt/hierarchy', {
-                params: {
-                    start_date: fetchStart.format('YYYY-MM-DD HH:mm:ss'),
-                    end_date: fetchEnd.format('YYYY-MM-DD HH:mm:ss'),
-                    status: 'DRAFT,ACTIVATED,PLANNED'
-                }
+                params: hierarchyParams
             });
 
             // V2: API now returns { batches, offScreenOperations }
@@ -207,13 +253,14 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                 });
 
                 // Snap view. This will likely trigger a re-fetch via useEffect dependency.
+                skipNextFetchRef.current = true;
                 setHasAutoFit(true);
                 setStartDate(minDate.startOf('day'));
                 // Option B: Adaptive End Date + 1 week buffer
                 setEndDate(maxDate.add(1, 'week').endOf('week'));
 
                 // Apply filter from parent component if provided
-                const displayBatches = filteredBatchIds && filteredBatchIds.length > 0
+                const displayBatches = hasExplicitBatchFilter
                     ? fetchedData.filter(b => filteredBatchIds.includes(b.id))
                     : fetchedData;
 
@@ -222,7 +269,7 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                 setOffScreenOps(fetchedOffScreen || []);
             } else {
                 // Apply filter from parent component if provided
-                const displayBatches = filteredBatchIds && filteredBatchIds.length > 0
+                const displayBatches = hasExplicitBatchFilter
                     ? fetchedData.filter(b => filteredBatchIds.includes(b.id))
                     : fetchedData;
 
@@ -238,16 +285,17 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
             // 获取共享组数据
             if (fetchedData.length > 0) {
                 const batchIds = fetchedData.map(b => b.id);
+                const batchIdsParam = batchIds.join(',');
                 try {
                     const [sgRes, depRes] = await Promise.all([
                         axios.get('/api/share-groups/batches/gantt', {
-                            params: { batch_ids: batchIds.join(',') }
+                            params: { batch_ids: batchIdsParam }
                         }),
                         axios.get('/api/v5/gantt/dependencies', {
                             params: {
                                 start_date: fetchStart.format('YYYY-MM-DD'),
-                                end_date: fetchEnd.format('YYYY-MM-DD')
-                                // batch_ids: batchIds.join(',') // Optional optimization
+                                end_date: fetchEnd.format('YYYY-MM-DD'),
+                                batch_ids: batchIdsParam
                             }
                         })
                     ]);
@@ -269,7 +317,39 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         } finally {
             setLoading(false);
         }
-    };
+    }, [endDate, expandAll, filterBatchIdsKey, filteredBatchIds, hasAutoFit, hasExplicitBatchFilter, setEndDate, setStartDate, startDate, viewMode]);
+
+    useEffect(() => {
+        if (skipNextFetchRef.current) {
+            skipNextFetchRef.current = false;
+            return;
+        }
+        fetchData();
+    }, [fetchData]);
+
+    const handleConfirmShareGroup = useCallback(async () => {
+        if (selectedOperationIds.length < 2) {
+            message.warning('请至少选择2个操作');
+            return;
+        }
+
+        try {
+            const groupName = `共享组-${shareGroups.length + 1}`;
+
+            await axios.post('/api/share-groups/batch-operations/bulk', {
+                operation_ids: selectedOperationIds,
+                group_name: groupName,
+                share_mode: 'SAME_TEAM'
+            });
+
+            message.success(`${groupName} 创建成功`);
+            handleCancelShareGroup();
+            await fetchData();
+        } catch (error) {
+            console.error('创建共享组失败:', error);
+            message.error('创建共享组失败');
+        }
+    }, [selectedOperationIds, shareGroups.length, handleCancelShareGroup, fetchData]);
 
     return (
         <div
@@ -362,17 +442,27 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                     )}
                     <h2 style={{ fontSize: 18, fontWeight: 600, color: '#1F2937' }}>Batch Schedule</h2>
                     <span style={{ color: '#D1D5DB', padding: '0 8px' }}>|</span>
+                    <Tooltip title="密集模式适合快速浏览整体排程">
+                        <button
+                            onClick={() => handleLayoutModeChange('dense')}
+                            className={`gantt-btn-mode ${layoutMode === 'dense' ? 'gantt-btn-mode-active' : ''}`}
+                        >
+                            密集
+                        </button>
+                    </Tooltip>
+                    <Tooltip title="明细模式适合逐操作检查与共享组选择">
+                        <button
+                            onClick={() => handleLayoutModeChange('standard')}
+                            className={`gantt-btn-mode ${layoutMode === 'standard' ? 'gantt-btn-mode-active' : ''}`}
+                        >
+                            明细
+                        </button>
+                    </Tooltip>
                     <button
-                        onClick={() => setLayoutMode('standard')}
-                        className={`gantt-btn-mode ${layoutMode === 'standard' ? 'gantt-btn-mode-active' : ''}`}
-                    >
-                        Standard
-                    </button>
-                    <button
-                        onClick={() => setLayoutMode('compact')}
+                        onClick={() => handleLayoutModeChange('compact')}
                         className={`gantt-btn-mode ${layoutMode === 'compact' ? 'gantt-btn-mode-active' : ''}`}
                     >
-                        Compact
+                        概览
                     </button>
                     <Tooltip title={showShareGroupLines ? '隐藏共享组连接线' : '显示共享组连接线'}>
                         <button
@@ -457,7 +547,9 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                         </svg>
                     </button>
                     <div style={{ height: 32, width: 1, backgroundColor: '#E5E5E5', margin: '0 8px' }}></div>
-                    <button style={{
+                    <button
+                        onClick={onCreateBatch}
+                        style={{
                         padding: '6px 16px',
                         backgroundColor: '#000',
                         color: 'white',
@@ -467,8 +559,9 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                         boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
                         border: 'none',
                         cursor: 'pointer'
-                    }}>
-                        Create Batch
+                    }}
+                    >
+                        新建批次
                     </button>
                     <div style={{ marginRight: 12 }}>
                         <RangePicker
@@ -498,14 +591,19 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
 
                 <GanttSidebar
                     ref={sidebarBodyRef}
-                    data={batches}
+                    data={rowLayout.rows}
+                    rowLayout={rowLayout}
+                    rowHeight={rowHeight}
                     onOperationDoubleClick={handleEditOperation}
                     isShareGroupMode={isShareGroupMode}
                     selectedOperationIds={selectedOperationIds}
                     onOperationCheck={handleOperationCheck}
                 />
                 <GanttTimeline
-                    data={batches}
+                    batches={batches}
+                    rows={rowLayout.rows}
+                    rowLayout={rowLayout}
+                    rowHeight={rowHeight}
                     shareGroups={shareGroups}
                     dependencies={dependencies}
                     offScreenOperations={offScreenOps}
@@ -519,8 +617,7 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                 <GanttMinimap
                     data={batches}
                     visible={minimapVisible}
-                    scrollLeft={currentScrollLeft}
-                    dayWidth={zoomLevel}
+                    currentDate={minimapDate}
                     onMouseEnter={() => {
                         if (minimapTimeoutRef.current) clearTimeout(minimapTimeoutRef.current);
                         setMinimapVisible(true);
@@ -548,12 +645,13 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
 
 interface BatchGanttV4Props {
     filteredBatchIds?: number[];
+    onCreateBatch?: () => void;
 }
 
-const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds }) => {
+const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateBatch }) => {
     return (
         <GanttProvider>
-            <BatchGanttV4Content filteredBatchIds={filteredBatchIds} />
+            <BatchGanttV4Content filteredBatchIds={filteredBatchIds} onCreateBatch={onCreateBatch} />
         </GanttProvider>
     );
 };

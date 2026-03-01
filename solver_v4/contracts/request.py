@@ -88,6 +88,52 @@ class HistoricalShift:
     consecutive_work_days: int = 0  # 截止该日期的连续工作天数
 
 @dataclass
+class Resource:
+    resource_id: int
+    resource_code: str
+    resource_name: str
+    resource_type: str
+    department_code: str
+    is_shared: bool
+    is_schedulable: bool
+    owner_org_unit_id: Optional[int] = None
+    status: Optional[str] = None
+    capacity: Optional[int] = None
+    location: Optional[str] = None
+    clean_level: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+@dataclass
+class ResourceCalendarEntry:
+    resource_id: int
+    start_datetime: str
+    end_datetime: str
+    event_type: str
+    source_type: Optional[str] = None
+    source_id: Optional[int] = None
+    notes: Optional[str] = None
+
+@dataclass
+class OperationResourceRequirement:
+    operation_plan_id: int
+    resource_type: str
+    required_count: int
+    is_mandatory: bool
+    requires_exclusive_use: bool
+    prep_minutes: int = 0
+    changeover_minutes: int = 0
+    cleanup_minutes: int = 0
+
+@dataclass
+class MaintenanceWindow:
+    resource_id: int
+    start_datetime: str
+    end_datetime: str
+    window_type: str
+    is_hard_block: bool
+    notes: Optional[str] = None
+
+@dataclass
 class SolverRequest:
     request_id: str
     window: Dict[str, str] # {start_date, end_date}
@@ -99,6 +145,10 @@ class SolverRequest:
     locked_operations: List[LockedOperation] = field(default_factory=list)
     locked_shifts: List[LockedShift] = field(default_factory=list)
     historical_shifts: List[HistoricalShift] = field(default_factory=list)
+    resources: List[Resource] = field(default_factory=list)
+    resource_calendars: List[ResourceCalendarEntry] = field(default_factory=list)
+    operation_resource_requirements: List[OperationResourceRequirement] = field(default_factory=list)
+    maintenance_windows: List[MaintenanceWindow] = field(default_factory=list)
     config: Optional[Dict[str, Any]] = None
 
     @classmethod
@@ -140,6 +190,13 @@ class SolverRequest:
         locked_ops = [LockedOperation(**lo) for lo in data.get("locked_operations", [])]
         locked_shifts = [LockedShift(**ls) for ls in data.get("locked_shifts", [])]
         hist_shifts = [HistoricalShift(**hs) for hs in data.get("historical_shifts", [])]
+        resources = [Resource(**resource) for resource in data.get("resources", [])]
+        resource_calendars = [ResourceCalendarEntry(**entry) for entry in data.get("resource_calendars", [])]
+        operation_resource_requirements = [
+            OperationResourceRequirement(**requirement)
+            for requirement in data.get("operation_resource_requirements", [])
+        ]
+        maintenance_windows = [MaintenanceWindow(**window) for window in data.get("maintenance_windows", [])]
 
         return cls(
             request_id=data.get("request_id"),
@@ -152,5 +209,9 @@ class SolverRequest:
             locked_operations=locked_ops,
             locked_shifts=locked_shifts,
             historical_shifts=hist_shifts,
+            resources=resources,
+            resource_calendars=resource_calendars,
+            operation_resource_requirements=operation_resource_requirements,
+            maintenance_windows=maintenance_windows,
             config=data.get("config")
         )

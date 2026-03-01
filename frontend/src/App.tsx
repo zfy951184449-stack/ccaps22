@@ -1,51 +1,41 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Layout, Typography, ConfigProvider } from 'antd';
-import type { MenuProps } from 'antd';
-import {
-  SafetyOutlined,
-  SettingOutlined,
-  ProjectOutlined,
-  LinkOutlined,
-  TableOutlined,
-  ClockCircleOutlined,
-  ApartmentOutlined,
-  ScheduleOutlined,
-  AppstoreOutlined,
-  DashboardOutlined,
-  ControlOutlined,
-  BugOutlined,
-  RobotOutlined,
-  RocketOutlined,
-} from '@ant-design/icons';
 import zhCN from 'antd/locale/zh_CN';
-import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
-import OrganizationWorkbenchPage from './pages/OrganizationWorkbenchPage';
-import QualificationsPage from './pages/QualificationsPage';
-import QualificationMatrixPage from './pages/QualificationMatrixPage';
-import OperationsPage from './pages/OperationsPage';
-import ProcessTemplatesPage from './pages/ProcessTemplatesPage';
-import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
-import BatchManagementPage from './pages/BatchManagementPage';
-import BatchManagementV4Page from './pages/BatchManagementV4Page';
-import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
-import OperationConstraintsPage from './pages/OperationConstraintsPage';
-import TaskPoolPage from './pages/TaskPoolPage';
-import ScheduleOverviewPage from './pages/ScheduleOverviewPage';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
-import SystemMonitorPage from './pages/SystemMonitorPage';
-import SystemSettingsPage from './pages/SystemSettingsPage';
-import AutoSchedulingDebugPage from './pages/AutoSchedulingDebugPage';
-import AutoSchedulingPage from './pages/AutoSchedulingPage';
-import ModularSchedulingPage from './pages/ModularSchedulingPage';
-import SchedulingV3Page from './pages/SchedulingV3Page';
-import SolverV4Page from './pages/SolverV4Page';
-import Dashboard from './components/Dashboard';
-import OperationTypesPage from './pages/OperationTypesPage';
 import CommandRail from './components/Navigation/CommandRail';
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
+
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const OrganizationWorkbenchPage = lazy(() => import('./pages/OrganizationWorkbenchPage'));
+const QualificationsPage = lazy(() => import('./pages/QualificationsPage'));
+const QualificationMatrixPage = lazy(() => import('./pages/QualificationMatrixPage'));
+const OperationsPage = lazy(() => import('./pages/OperationsPage'));
+const OperationTypesPage = lazy(() => import('./pages/OperationTypesPage'));
+const ProcessTemplatesPage = lazy(() => import('./pages/ProcessTemplatesPage'));
+const BatchManagementPage = lazy(() => import('./pages/BatchManagementPage'));
+const BatchManagementV4Page = lazy(() => import('./pages/BatchManagementV4Page'));
+const TaskPoolPage = lazy(() => import('./pages/TaskPoolPage'));
+const ScheduleOverviewPage = lazy(() => import('./pages/ScheduleOverviewPage'));
+const PersonnelSchedulingPage = lazy(() => import('./pages/PersonnelSchedulingPage'));
+const AutoSchedulingPage = lazy(() => import('./pages/AutoSchedulingPage'));
+const ModularSchedulingPage = lazy(() => import('./pages/ModularSchedulingPage'));
+const SchedulingV3Page = lazy(() => import('./pages/SchedulingV3Page'));
+const SolverV4Page = lazy(() => import('./pages/SolverV4Page'));
+const ShiftDefinitionsPage = lazy(() => import('./pages/ShiftDefinitionsPage'));
+const OperationConstraintsPage = lazy(() => import('./pages/OperationConstraintsPage'));
+const SystemMonitorPage = lazy(() => import('./pages/SystemMonitorPage'));
+const SystemSettingsPage = lazy(() => import('./pages/SystemSettingsPage'));
+const AutoSchedulingDebugPage = lazy(() => import('./pages/AutoSchedulingDebugPage'));
+const PlatformOverviewPage = lazy(() => import('./pages/PlatformOverviewPage'));
+const ResourceCenterPage = lazy(() => import('./pages/ResourceCenterPage'));
+const ProjectPlanningCenterPage = lazy(() => import('./pages/ProjectPlanningCenterPage'));
+const MaintenanceWindowsPage = lazy(() => import('./pages/MaintenanceWindowsPage'));
+const BusinessRulesCenterPage = lazy(() => import('./pages/BusinessRulesCenterPage'));
+const PlatformRunMonitorPage = lazy(() => import('./pages/PlatformRunMonitorPage'));
 
 // Mapping for title display
 const pathToTitle: { [key: string]: string } = {
@@ -71,7 +61,28 @@ const pathToTitle: { [key: string]: string } = {
   '/system-monitor': '系统监控',
   '/system-settings': '系统设置',
   '/auto-scheduling-debug': '排班调试',
+  '/platform-overview': '平台总览',
+  '/resource-center': '资源中心',
+  '/project-planning-center': '项目排产中心',
+  '/maintenance-windows': '维护窗口',
+  '/business-rules-center': '业务规则中心',
+  '/platform-run-monitor': '运行监控',
 };
+
+const RouteFallback: React.FC = () => (
+  <div
+    style={{
+      minHeight: 320,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: fluentDesignTokens.colors.textSecondary,
+      fontSize: fluentDesignTokens.typography.fontSize.body,
+    }}
+  >
+    页面加载中...
+  </div>
+);
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
@@ -136,30 +147,38 @@ const AppLayout: React.FC = () => {
               minHeight: 'calc(100vh - 64px - 32px)',
             }}
           >
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/organization-workbench" element={<OrganizationWorkbenchPage />} />
-              <Route path="/qualifications" element={<QualificationsPage />} />
-              <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
-              <Route path="/operations" element={<OperationsPage />} />
-              <Route path="/operation-types" element={<OperationTypesPage />} />
-              <Route path="/process-templates" element={<ProcessTemplatesPage />} />
-              <Route path="/batch-management" element={<BatchManagementPage />} />
-              <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
-              <Route path="/task-pool" element={<TaskPoolPage />} />
-              <Route path="/schedule-overview" element={<ScheduleOverviewPage />} />
-              <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
-              <Route path="/auto-scheduling" element={<AutoSchedulingPage />} />
-              <Route path="/modular-scheduling" element={<ModularSchedulingPage />} />
-              <Route path="/scheduling-v3" element={<SchedulingV3Page />} />
-              <Route path="/solver-v4" element={<SolverV4Page />} />
-              <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
-              <Route path="/operation-constraints" element={<OperationConstraintsPage />} />
-              <Route path="/system-monitor" element={<SystemMonitorPage />} />
-              <Route path="/system-settings" element={<SystemSettingsPage />} />
-              <Route path="/auto-scheduling-debug" element={<AutoSchedulingDebugPage />} />
-            </Routes>
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/organization-workbench" element={<OrganizationWorkbenchPage />} />
+                <Route path="/qualifications" element={<QualificationsPage />} />
+                <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
+                <Route path="/operations" element={<OperationsPage />} />
+                <Route path="/operation-types" element={<OperationTypesPage />} />
+                <Route path="/process-templates" element={<ProcessTemplatesPage />} />
+                <Route path="/batch-management" element={<BatchManagementPage />} />
+                <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
+                <Route path="/task-pool" element={<TaskPoolPage />} />
+                <Route path="/schedule-overview" element={<ScheduleOverviewPage />} />
+                <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
+                <Route path="/auto-scheduling" element={<AutoSchedulingPage />} />
+                <Route path="/modular-scheduling" element={<ModularSchedulingPage />} />
+                <Route path="/scheduling-v3" element={<SchedulingV3Page />} />
+                <Route path="/solver-v4" element={<SolverV4Page />} />
+                <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
+                <Route path="/operation-constraints" element={<OperationConstraintsPage />} />
+                <Route path="/system-monitor" element={<SystemMonitorPage />} />
+                <Route path="/system-settings" element={<SystemSettingsPage />} />
+                <Route path="/auto-scheduling-debug" element={<AutoSchedulingDebugPage />} />
+                <Route path="/platform-overview" element={<PlatformOverviewPage />} />
+                <Route path="/resource-center" element={<ResourceCenterPage />} />
+                <Route path="/project-planning-center" element={<ProjectPlanningCenterPage />} />
+                <Route path="/maintenance-windows" element={<MaintenanceWindowsPage />} />
+                <Route path="/business-rules-center" element={<BusinessRulesCenterPage />} />
+                <Route path="/platform-run-monitor" element={<PlatformRunMonitorPage />} />
+              </Routes>
+            </Suspense>
           </Content>
         </Layout>
       </Layout>

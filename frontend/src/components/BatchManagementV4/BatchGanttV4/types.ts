@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 
 export type ViewMode = 'day' | 'week' | 'month';
-export type LayoutMode = 'standard' | 'compact';
+export type LayoutMode = 'dense' | 'standard' | 'compact';
 
 export interface GanttOperation {
     id: number;

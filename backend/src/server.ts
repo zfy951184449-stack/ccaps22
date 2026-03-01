@@ -49,6 +49,10 @@ import personnelSchedulesV2Routes from './routes/personnelSchedulesV2';
 import unavailabilityRoutes from './routes/unavailabilityRoutes';
 import standaloneTaskRoutes from './routes/standaloneTaskRoutes';
 import scheduleOverviewRoutes from './routes/scheduleOverviewRoutes';
+import resourcesRoutes from './routes/resources';
+import maintenanceWindowRoutes from './routes/maintenanceWindows';
+import operationResourceRequirementRoutes from './routes/operationResourceRequirements';
+import platformRoutes from './routes/platform';
 
 dotenv.config();
 
@@ -131,6 +135,10 @@ app.use('/api/personnel-schedules/v2', personnelSchedulesV2Routes);
 app.use('/api/unavailability', unavailabilityRoutes);
 app.use('/api/standalone-tasks', standaloneTaskRoutes);
 app.use('/api/schedule-overview', scheduleOverviewRoutes);
+app.use('/api/resources', resourcesRoutes);
+app.use('/api/maintenance-windows', maintenanceWindowRoutes);
+app.use('/api/operation-resource-requirements', operationResourceRequirementRoutes);
+app.use('/api/platform', platformRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

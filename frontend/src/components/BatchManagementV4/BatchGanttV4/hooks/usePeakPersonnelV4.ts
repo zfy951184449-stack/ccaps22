@@ -9,6 +9,13 @@ export interface DailyPeak {
     color: string;      // Heatmap color
 }
 
+interface PersonnelEvent {
+    time: number;
+    type: 'start' | 'end';
+    rootId: number;
+    requiredPeople: number;
+}
+
 // Helper: Union-Find for Share Groups
 class UnionFind {
     parent: Map<number, number>;
@@ -58,6 +65,8 @@ export const usePeakPersonnelV4 = (
     return useMemo(() => {
         const dailyPeaks = new Map<string, DailyPeak>();
         const uf = new UnionFind();
+        const viewStart = startDate.startOf('day');
+        const viewEndExclusive = endDate.add(1, 'day').startOf('day');
 
         // 1. Build Union-Find for SAME_TEAM share groups
         shareGroups.forEach(group => {
@@ -69,90 +78,117 @@ export const usePeakPersonnelV4 = (
             }
         });
 
-        // 2. Collect all operations with time windows
-        interface FlattenedOp {
-            id: number;
-            requiredPeople: number;
-            start: dayjs.Dayjs;
-            end: dayjs.Dayjs;
-            rootId: number;
-        }
+        const dayEvents = new Map<string, PersonnelEvent[]>();
 
-        const allOps: FlattenedOp[] = [];
         batches.forEach(batch => {
             batch.stages.forEach(stage => {
                 stage.operations.forEach(op => {
                     const start = dayjs(op.startDate);
                     const end = dayjs(op.endDate);
-                    // Filter out operations outside the view range (optimization)
-                    // Expanded range: check if op overlaps with [startDate, endDate]
-                    if (start.isBefore(endDate.endOf('day')) && end.isAfter(startDate.startOf('day'))) {
-                        allOps.push({
-                            id: op.id,
-                            requiredPeople: op.requiredPeople,
-                            start,
-                            end,
-                            rootId: uf.find(op.id)
-                        });
+                    const overlapStart = start.isAfter(viewStart) ? start : viewStart;
+                    const overlapEnd = end.isBefore(viewEndExclusive) ? end : viewEndExclusive;
+
+                    if (!overlapStart.isBefore(overlapEnd)) {
+                        return;
+                    }
+
+                    const rootId = uf.find(op.id);
+                    let dayCursor = overlapStart.startOf('day');
+
+                    while (dayCursor.isBefore(overlapEnd)) {
+                        const nextDay = dayCursor.add(1, 'day');
+                        const dayKey = dayCursor.format('YYYY-MM-DD');
+                        const eventStart = overlapStart.isAfter(dayCursor) ? overlapStart : dayCursor;
+                        const eventEnd = overlapEnd.isBefore(nextDay) ? overlapEnd : nextDay;
+
+                        if (eventStart.isBefore(eventEnd)) {
+                            const events = dayEvents.get(dayKey) || [];
+                            events.push(
+                                {
+                                    time: eventStart.valueOf(),
+                                    type: 'start',
+                                    rootId,
+                                    requiredPeople: op.requiredPeople,
+                                },
+                                {
+                                    time: eventEnd.valueOf(),
+                                    type: 'end',
+                                    rootId,
+                                    requiredPeople: op.requiredPeople,
+                                }
+                            );
+                            dayEvents.set(dayKey, events);
+                        }
+
+                        dayCursor = nextDay;
                     }
                 });
             });
         });
-
-        if (allOps.length === 0) return dailyPeaks;
-
-        // 3. Sweep line / Sampling per day
-        // Since operations are discrete and we want 15min granularity, sampling is robust.
         const totalDays = endDate.diff(startDate, 'day') + 1;
 
         for (let i = 0; i < totalDays; i++) {
             const currentDay = startDate.add(i, 'day');
             const dayKey = currentDay.format('YYYY-MM-DD');
+            const events = dayEvents.get(dayKey);
 
-            // Find ops active on this day
-            const dayStart = currentDay.startOf('day');
-            const dayEnd = currentDay.endOf('day');
-
-            const activeOps = allOps.filter(op =>
-                op.start.isBefore(dayEnd) && op.end.isAfter(dayStart)
-            );
-
-            if (activeOps.length === 0) {
+            if (!events || events.length === 0) {
                 dailyPeaks.set(dayKey, { dayKey, peak: 0, peakHour: 0, color: 'transparent' });
                 continue;
             }
 
+            events.sort((left, right) => {
+                if (left.time !== right.time) {
+                    return left.time - right.time;
+                }
+
+                if (left.type === right.type) {
+                    return left.rootId - right.rootId;
+                }
+
+                return left.type === 'end' ? -1 : 1;
+            });
+
+            const dayStart = currentDay.startOf('day');
+            const groupLoads = new Map<number, Map<number, number>>();
             let maxPeople = 0;
             let peakHour = 0;
+            let currentTotal = 0;
+            let index = 0;
 
-            // Sample every 15 minutes (0.25 hour)
-            for (let hour = 0; hour < 24; hour += 0.25) {
-                const sampleTime = dayStart.add(hour, 'hour'); // auto-handles minutes if hour is float
+            while (index < events.length) {
+                const currentTime = events[index].time;
 
-                // Find ops active at this sample time
-                const concurrentOps = activeOps.filter(op =>
-                    (op.start.isBefore(sampleTime) || op.start.isSame(sampleTime)) &&
-                    op.end.isAfter(sampleTime)
-                );
+                while (index < events.length && events[index].time === currentTime) {
+                    const event = events[index];
+                    const loadCounts = groupLoads.get(event.rootId) || new Map<number, number>();
+                    const previousMax = loadCounts.size > 0 ? Math.max(...Array.from(loadCounts.keys())) : 0;
 
-                if (concurrentOps.length === 0) continue;
+                    if (event.type === 'start') {
+                        loadCounts.set(event.requiredPeople, (loadCounts.get(event.requiredPeople) || 0) + 1);
+                    } else {
+                        const nextCount = (loadCounts.get(event.requiredPeople) || 0) - 1;
+                        if (nextCount <= 0) {
+                            loadCounts.delete(event.requiredPeople);
+                        } else {
+                            loadCounts.set(event.requiredPeople, nextCount);
+                        }
+                    }
 
-                // Calculate max considering share groups
-                // Map<rootId, max_required_people>
-                const groupMaxMap = new Map<number, number>();
+                    if (loadCounts.size === 0) {
+                        groupLoads.delete(event.rootId);
+                    } else {
+                        groupLoads.set(event.rootId, loadCounts);
+                    }
 
-                concurrentOps.forEach(op => {
-                    const currentMax = groupMaxMap.get(op.rootId) || 0;
-                    groupMaxMap.set(op.rootId, Math.max(currentMax, op.requiredPeople));
-                });
-
-                // Sum up the maxes of each group
-                let currentTotal = 0;
-                groupMaxMap.forEach(val => currentTotal += val);
+                    const nextMax = loadCounts.size > 0 ? Math.max(...Array.from(loadCounts.keys())) : 0;
+                    currentTotal += nextMax - previousMax;
+                    index += 1;
+                }
 
                 if (currentTotal > maxPeople) {
                     maxPeople = currentTotal;
-                    peakHour = Math.floor(hour);
+                    peakHour = Math.min(23, Math.max(0, dayjs(currentTime).diff(dayStart, 'hour')));
                 }
             }
 

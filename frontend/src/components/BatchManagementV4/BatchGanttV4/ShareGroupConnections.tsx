@@ -11,12 +11,16 @@ interface ShareGroupConnectionsProps {
     shareGroups: GanttShareGroup[];
     operationPositions: Map<number, OperationPosition>;
     rowHeight: number;
+    visibleTop?: number;
+    visibleBottom?: number;
 }
 
 const ShareGroupConnections: React.FC<ShareGroupConnectionsProps> = ({
     shareGroups,
     operationPositions,
-    rowHeight
+    rowHeight,
+    visibleTop = 0,
+    visibleBottom = Number.POSITIVE_INFINITY
 }) => {
     if (!shareGroups || shareGroups.length === 0) return null;
 
@@ -59,6 +63,12 @@ const ShareGroupConnections: React.FC<ShareGroupConnectionsProps> = ({
                 for (let i = 0; i < memberPositions.length - 1; i++) {
                     const from = memberPositions[i];
                     const to = memberPositions[i + 1];
+                    const minY = Math.min(from.y, to.y);
+                    const maxY = Math.max(from.y, to.y) + rowHeight;
+
+                    if (maxY < visibleTop || minY > visibleBottom) {
+                        continue;
+                    }
 
                     const x1 = from.x + from.width / 2;
                     const y1 = from.y + halfRow;

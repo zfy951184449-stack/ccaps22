@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { Suspense, useCallback, useMemo } from 'react';
 import { Typography, Empty, Button, Segmented } from 'antd';
 import { PlusOutlined, AppstoreOutlined, FileTextOutlined, RocketOutlined, CopyOutlined, BarsOutlined, BarChartOutlined } from '@ant-design/icons';
 import { message } from 'antd';
@@ -7,11 +7,11 @@ import BatchListV4 from './BatchListV4';
 import BatchFilterBar from './BatchFilterBar';
 import CreateBatchModalV4 from './CreateBatchModalV4';
 import BulkCreateModalV4 from './BulkCreateModalV4';
-import BatchGanttV4 from './BatchGanttV4';
 import { batchPlanApi, processTemplateApi } from '../../services/api';
-import type { BatchStatistics, BatchPlan, ProcessTemplate } from '../../types';
+import type { BatchStatistics, BatchPlan, BatchTemplateSummary, ProcessTemplate } from '../../types';
 
 const { Title, Text } = Typography;
+const BatchGanttV4 = React.lazy(() => import('./BatchGanttV4'));
 
 /**
  * BatchManagementV4
@@ -49,7 +49,7 @@ const BatchManagementV4: React.FC = () => {
     const [selectedTeamCodes, setSelectedTeamCodes] = React.useState<string[]>([]);
 
     // Initial data load
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const [statsData, batchesData, templatesData] = await Promise.all([
@@ -66,68 +66,84 @@ const BatchManagementV4: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     React.useEffect(() => {
         loadData();
-    }, []);
+    }, [loadData]);
+
+    const selectedBatchIdSet = useMemo(() => new Set(selectedBatchIds), [selectedBatchIds]);
+    const selectedTemplateIdSet = useMemo(() => new Set(selectedTemplateIds), [selectedTemplateIds]);
+    const selectedTeamCodeSet = useMemo(() => new Set(selectedTeamCodes), [selectedTeamCodes]);
+    const templateTeamCodeById = useMemo(() => {
+        const entries = templates
+            .filter((template): template is ProcessTemplate & { id: number } => typeof template.id === 'number')
+            .map((template) => [template.id, template.team_code] as const);
+        return new Map<number, string | undefined>(entries);
+    }, [templates]);
+    const templateSummaries = useMemo<BatchTemplateSummary[]>(() => {
+        return templates
+            .filter((template): template is ProcessTemplate & { id: number } => typeof template.id === 'number')
+            .map((template) => ({
+                id: template.id,
+                template_code: template.template_code,
+                template_name: template.template_name,
+                total_days: template.total_days ?? null,
+            }));
+    }, [templates]);
 
     // Filtered batches based on filter criteria
     const filteredBatches = useMemo(() => {
         return batches.filter(batch => {
             // Filter by batch IDs
-            if (selectedBatchIds.length > 0 && !selectedBatchIds.includes(batch.id)) {
+            if (selectedBatchIdSet.size > 0 && !selectedBatchIdSet.has(batch.id)) {
                 return false;
             }
             // Filter by template IDs
-            if (selectedTemplateIds.length > 0 && !selectedTemplateIds.includes(batch.template_id)) {
+            if (selectedTemplateIdSet.size > 0 && !selectedTemplateIdSet.has(batch.template_id)) {
                 return false;
             }
             // Filter by team codes (via batch's team_code or template lookup)
-            if (selectedTeamCodes.length > 0) {
-                // First try using batch's own team_code (from API)
-                if (batch.team_code) {
-                    if (!selectedTeamCodes.includes(batch.team_code)) {
-                        return false;
-                    }
-                } else {
-                    // Fallback: lookup from templates
-                    const template = templates.find(t => t.id === batch.template_id);
-                    if (!template || !template.team_code || !selectedTeamCodes.includes(template.team_code)) {
-                        return false;
-                    }
+            if (selectedTeamCodeSet.size > 0) {
+                const batchTeamCode = batch.team_code ?? templateTeamCodeById.get(batch.template_id);
+                if (!batchTeamCode || !selectedTeamCodeSet.has(batchTeamCode)) {
+                    return false;
                 }
             }
             return true;
         });
-    }, [batches, templates, selectedBatchIds, selectedTemplateIds, selectedTeamCodes]);
+    }, [batches, selectedBatchIdSet, selectedTemplateIdSet, selectedTeamCodeSet, templateTeamCodeById]);
+
+    const hasActiveFilters = selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0;
+    const filteredBatchIds = useMemo(() => filteredBatches.map((batch) => batch.id), [filteredBatches]);
+    const ganttFilteredBatchIds = hasActiveFilters ? filteredBatchIds : undefined;
 
     // Clear all filters
-    const handleClearFilters = () => {
+    const handleClearFilters = useCallback(() => {
         setSelectedBatchIds([]);
         setSelectedTemplateIds([]);
         setSelectedTeamCodes([]);
-    };
+    }, []);
 
     // Handlers
-    const handleCreate = () => {
+    const handleCreate = useCallback(() => {
         setEditingBatch(null);
         setCreateModalVisible(true);
-    };
+    }, []);
 
-    const handleEdit = (batch: BatchPlan) => {
+    const handleEdit = useCallback((batch: BatchPlan) => {
         setEditingBatch(batch);
         setCreateModalVisible(true);
-    };
+    }, []);
 
-    const handleSuccess = () => {
+    const handleSuccess = useCallback(() => {
         setCreateModalVisible(false);
         setBulkModalVisible(false);
         setEditingBatch(null);
         loadData();
-    };
+    }, [loadData]);
 
-    const handleDelete = async (batch: BatchPlan) => {
+    const handleDelete = useCallback(async (batch: BatchPlan) => {
         try {
             await batchPlanApi.remove(batch.id);
             message.success('批次已删除');
@@ -135,9 +151,9 @@ const BatchManagementV4: React.FC = () => {
         } catch (error) {
             message.error('删除批次失败');
         }
-    };
+    }, [loadData]);
 
-    const handleActivate = async (batch: BatchPlan) => {
+    const handleActivate = useCallback(async (batch: BatchPlan) => {
         try {
             await batchPlanApi.activate(batch.id);
             message.success('批次已激活');
@@ -145,9 +161,9 @@ const BatchManagementV4: React.FC = () => {
         } catch (error) {
             message.error('激活失败');
         }
-    };
+    }, [loadData]);
 
-    const handleDeactivate = async (batch: BatchPlan) => {
+    const handleDeactivate = useCallback(async (batch: BatchPlan) => {
         try {
             await batchPlanApi.deactivate(batch.id);
             message.success('批次已撤销激活');
@@ -155,7 +171,7 @@ const BatchManagementV4: React.FC = () => {
         } catch (error) {
             message.error('撤销激活失败');
         }
-    };
+    }, [loadData]);
 
     // Apple HIG style constants that override/extend the base tokens for this specific new look
     const styles = {
@@ -305,7 +321,7 @@ const BatchManagementV4: React.FC = () => {
 
             <div style={styles.content}>
                 {viewMode === 'list' ? (
-                    filteredBatches.length > 0 ? (
+                    loading || filteredBatches.length > 0 ? (
                         <BatchListV4
                             data={filteredBatches}
                             loading={loading}
@@ -351,25 +367,36 @@ const BatchManagementV4: React.FC = () => {
                     )
                 ) : (
                     // Gantt View
-                    <BatchGanttV4 filteredBatchIds={filteredBatches.map(b => b.id)} />
+                    <Suspense fallback={<div style={{ padding: 24, color: '#8E8E93' }}>甘特图加载中...</div>}>
+                        <BatchGanttV4
+                            filteredBatchIds={ganttFilteredBatchIds}
+                            onCreateBatch={handleCreate}
+                        />
+                    </Suspense>
                 )}
             </div>
 
-            <CreateBatchModalV4
-                visible={createModalVisible}
-                initialValues={editingBatch}
-                onCancel={() => {
-                    setCreateModalVisible(false);
-                    setEditingBatch(null);
-                }}
-                onSuccess={handleSuccess}
-            />
+            {createModalVisible && (
+                <CreateBatchModalV4
+                    visible={createModalVisible}
+                    templates={templateSummaries}
+                    initialValues={editingBatch}
+                    onCancel={() => {
+                        setCreateModalVisible(false);
+                        setEditingBatch(null);
+                    }}
+                    onSuccess={handleSuccess}
+                />
+            )}
 
-            <BulkCreateModalV4
-                visible={bulkModalVisible}
-                onCancel={() => setBulkModalVisible(false)}
-                onSuccess={handleSuccess}
-            />
+            {bulkModalVisible && (
+                <BulkCreateModalV4
+                    visible={bulkModalVisible}
+                    templates={templateSummaries}
+                    onCancel={() => setBulkModalVisible(false)}
+                    onSuccess={handleSuccess}
+                />
+            )}
         </div>
     );
 };

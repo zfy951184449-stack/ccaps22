@@ -1,9 +1,8 @@
 import React from 'react';
-import { Layout, Typography } from 'antd';
+import { Typography } from 'antd';
 import BatchManagementV4 from '../components/BatchManagementV4';
 import { fluentDesignTokens } from '../styles/fluentDesignTokens';
 
-const { Content } = Layout;
 const { Title } = Typography;
 
 const BatchManagementV4Page: React.FC = () => {

@@ -44,20 +44,52 @@ interface GanttBatch {
     stages: GanttStage[];
 }
 
+const DEFAULT_BATCH_STATUSES = ['DRAFT', 'ACTIVATED', 'PLANNED'];
+const ALLOWED_BATCH_STATUSES = new Set([
+    ...DEFAULT_BATCH_STATUSES,
+    'PAUSED',
+    'COMPLETED'
+]);
+
+const parseCsvNumberList = (value: unknown): number[] => {
+    const rawValue = Array.isArray(value) ? value.join(',') : String(value ?? '');
+    return rawValue
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isInteger(item) && item > 0);
+};
+
+const parseStatusFilter = (value: unknown): string[] => {
+    const rawValue = Array.isArray(value) ? value.join(',') : String(value ?? '');
+    const statuses = rawValue
+        .split(',')
+        .map((item) => item.trim().toUpperCase())
+        .filter((item) => ALLOWED_BATCH_STATUSES.has(item));
+
+    return statuses.length > 0 ? statuses : DEFAULT_BATCH_STATUSES;
+};
+
 export const getGanttHierarchy = async (req: Request, res: Response) => {
     try {
         const { start_date, end_date, status } = req.query;
+        const statuses = parseStatusFilter(status);
+        const batchIds = parseCsvNumberList(req.query.batch_ids);
 
         // Validate params
         if (!start_date || !end_date) {
             return res.status(400).json({ error: 'Start date and end date are required' });
         }
 
-        // Filter by status (default to DRAFT,ACTIVATED if not specified)
-        let statusFilter = "pbp.plan_status IN ('DRAFT', 'ACTIVATED')";
-        if (status) {
-            const statuses = String(status).split(',').map(s => `'${s.trim()}'`).join(',');
-            statusFilter = `pbp.plan_status IN (${statuses})`;
+        const hierarchyWhereClauses = [
+            'bop.planned_start_datetime <= ?',
+            'bop.planned_end_datetime >= ?',
+            `pbp.plan_status IN (${statuses.map(() => '?').join(',')})`
+        ];
+        const hierarchyParams: Array<string | number> = [String(end_date), String(start_date), ...statuses];
+
+        if (batchIds.length > 0) {
+            hierarchyWhereClauses.push(`pbp.id IN (${batchIds.map(() => '?').join(',')})`);
+            hierarchyParams.push(...batchIds);
         }
 
         // 1. Fetch Hierarchy Data (Join Batch -> Op -> Stage)
@@ -97,14 +129,12 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
       LEFT JOIN batch_personnel_assignments bpa ON bop.id = bpa.batch_operation_plan_id 
         AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')
       WHERE 
-        bop.planned_start_datetime <= ? 
-        AND bop.planned_end_datetime >= ?
-        AND ${statusFilter}
+        ${hierarchyWhereClauses.join('\n        AND ')}
       GROUP BY bop.id
       ORDER BY pbp.id, ps.id, bop.planned_start_datetime
     `;
 
-        const [rows] = await pool.execute<RowDataPacket[]>(query, [end_date, start_date]);
+        const [rows] = await pool.execute<RowDataPacket[]>(query, hierarchyParams);
 
         // 2. Reconstruct Tree Structure
         const batchMap = new Map<number, GanttBatch>();
@@ -210,11 +240,15 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
                     (boc.predecessor_batch_operation_plan_id IN (${visibleOpIds.join(',')}) 
                      OR boc.batch_operation_plan_id IN (${visibleOpIds.join(',')}))
                     AND bop.id NOT IN (${visibleOpIds.join(',')})
-                    AND ${statusFilter.replace(/pbp\./g, 'pbp.')}
+                    AND pbp.plan_status IN (${statuses.map(() => '?').join(',')})
+                    ${batchIds.length > 0 ? `AND pbp.id IN (${batchIds.map(() => '?').join(',')})` : ''}
             `;
 
             try {
-                const [offScreenRows] = await pool.execute<RowDataPacket[]>(offScreenQuery);
+                const [offScreenRows] = await pool.execute<RowDataPacket[]>(
+                    offScreenQuery,
+                    batchIds.length > 0 ? [...statuses, ...batchIds] : statuses
+                );
 
                 offScreenRows.forEach(row => {
                     const opStart = dayjs(row.planned_start_datetime);
@@ -258,10 +292,14 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
                 WHERE 
                     bop_visible.id IN (${visibleOpIds.join(',')})
                     AND bop_offscreen.id NOT IN (${visibleOpIds.join(',')})
+                    ${batchIds.length > 0 ? `AND bop_offscreen.batch_plan_id IN (${batchIds.map(() => '?').join(',')})` : ''}
             `;
 
             try {
-                const [shareGroupRows] = await pool.execute<RowDataPacket[]>(shareGroupQuery);
+                const [shareGroupRows] = await pool.execute<RowDataPacket[]>(
+                    shareGroupQuery,
+                    batchIds
+                );
 
                 shareGroupRows.forEach(row => {
                     // Skip if already added from constraint query
@@ -302,24 +340,35 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
 
 export const getGanttDependencies = async (req: Request, res: Response) => {
     try {
-        const { batch_ids } = req.query;
+        const batchIds = parseCsvNumberList(req.query.batch_ids);
+        const statuses = parseStatusFilter(req.query.status);
+        const whereClauses = [
+            `successor_batch.plan_status IN (${statuses.map(() => '?').join(',')})`,
+            `predecessor_batch.plan_status IN (${statuses.map(() => '?').join(',')})`
+        ];
+        const params: Array<string | number> = [...statuses, ...statuses];
 
-        // If no batch_ids provided, look for all relevant constraints
-        // This could be optimized later to only fetch constraints for visible batches
+        if (batchIds.length > 0) {
+            whereClauses.push(`(successor_batch.id IN (${batchIds.map(() => '?').join(',')}) OR predecessor_batch.id IN (${batchIds.map(() => '?').join(',')}))`);
+            params.push(...batchIds, ...batchIds);
+        }
+
         const query = `
-            SELECT 
+            SELECT DISTINCT
                 boc.id,
                 boc.batch_operation_plan_id AS successor_id,
                 boc.predecessor_batch_operation_plan_id AS predecessor_id,
                 boc.constraint_type,
                 boc.time_lag
             FROM batch_operation_constraints boc
-            JOIN batch_operation_plans bop ON boc.batch_operation_plan_id = bop.id
-            JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
-            WHERE pbp.plan_status IN ('DRAFT', 'ACTIVATED', 'PLANNED')
+            JOIN batch_operation_plans successor_bop ON boc.batch_operation_plan_id = successor_bop.id
+            JOIN production_batch_plans successor_batch ON successor_bop.batch_plan_id = successor_batch.id
+            JOIN batch_operation_plans predecessor_bop ON boc.predecessor_batch_operation_plan_id = predecessor_bop.id
+            JOIN production_batch_plans predecessor_batch ON predecessor_bop.batch_plan_id = predecessor_batch.id
+            WHERE ${whereClauses.join('\n            AND ')}
         `;
 
-        const [rows] = await pool.execute<RowDataPacket[]>(query);
+        const [rows] = await pool.execute<RowDataPacket[]>(query, params);
 
         const dependencies = rows.map(row => ({
             id: row.id,
