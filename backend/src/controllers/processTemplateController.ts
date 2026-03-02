@@ -1,7 +1,14 @@
 import { Request, Response } from 'express';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import { scheduleTemplateOperations } from '../services/templateSchedulingService';
 import { computePersonnelLoad } from '../services/personnelLoadService';
+import {
+  copyTemplateRuleOverrides,
+  getEffectiveRulesForSchedules,
+  loadTemplateRuleMetadataForStageOperations,
+} from '../services/templateResourceRuleService';
+import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
 
 // 生成下一个模版编码
 const generateNextTemplateCode = async (): Promise<string> => {
@@ -110,6 +117,7 @@ export const getAllTemplates = async (req: Request, res: Response) => {
 export const getTemplateById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const templateResourceRulesEnabled = isTemplateResourceRulesEnabled();
 
     // 获取模版基础信息
     const [templateRows] = await pool.execute(
@@ -122,7 +130,7 @@ export const getTemplateById = async (req: Request, res: Response) => {
     }
 
     // 获取模版的所有阶段
-    const [stages] = await pool.execute(`
+    const [stages] = await pool.execute<RowDataPacket[]>(`
       SELECT 
         ps.*,
         COUNT(DISTINCT sos.id) as operation_count
@@ -135,7 +143,7 @@ export const getTemplateById = async (req: Request, res: Response) => {
 
     // 获取每个阶段的操作安排
     const stagesWithOperations = await Promise.all((stages as any[]).map(async (stage) => {
-      const [operations] = await pool.execute(`
+      const [operations] = await pool.execute<RowDataPacket[]>(`
         SELECT 
           sos.*,
           o.operation_code,
@@ -148,15 +156,42 @@ export const getTemplateById = async (req: Request, res: Response) => {
         ORDER BY sos.operation_day, sos.operation_order
       `, [stage.id]);
 
+      const hydratedOperations = templateResourceRulesEnabled
+        ? await loadTemplateRuleMetadataForStageOperations(operations as Array<Record<string, unknown>>)
+        : operations;
+
       return {
         ...stage,
-        operations
+        operations: hydratedOperations
       };
     }));
 
+    let resourceReadiness = undefined;
+    if (templateResourceRulesEnabled) {
+      const scheduleRows = stagesWithOperations.flatMap((stage) =>
+        ((stage.operations as Array<Record<string, unknown>>) ?? []).map((operation) => ({
+          schedule_id: Number(operation.id),
+          operation_id: Number(operation.operation_id),
+        })),
+      );
+      const effectiveMap = await getEffectiveRulesForSchedules(scheduleRows);
+      const totalOperations = scheduleRows.length;
+      const operationsWithRequirements = scheduleRows.filter((row) => {
+        const effective = effectiveMap.get(row.schedule_id);
+        return Boolean(effective?.requirements.length);
+      }).length;
+
+      resourceReadiness = {
+        total_operations: totalOperations,
+        operations_with_requirements: operationsWithRequirements,
+        operations_missing_requirements: Math.max(totalOperations - operationsWithRequirements, 0),
+      };
+    }
+
     res.json({
       ...templateRows[0],
-      stages: stagesWithOperations
+      stages: stagesWithOperations,
+      ...(templateResourceRulesEnabled ? { resource_readiness: resourceReadiness } : {}),
     });
   } catch (error) {
     console.error('Error fetching template:', error);
@@ -307,22 +342,49 @@ export const copyTemplate = async (req: Request, res: Response) => {
       [id]
     ) as any;
 
+    const scheduleIdMap = new Map<number, number>();
+
     for (const stage of stages) {
       const [newStageResult] = await connection.execute(
         'INSERT INTO process_stages (template_id, stage_code, stage_name, stage_order, start_day, description) VALUES (?, ?, ?, ?, ?, ?)',
         [newTemplateId, stage.stage_code, stage.stage_name, stage.stage_order, stage.start_day, stage.description]
-      ) as any;
+      ) as [ResultSetHeader, unknown];
 
       const newStageId = newStageResult.insertId;
 
       // 复制该阶段的操作安排
-      await connection.execute(`
-        INSERT INTO stage_operation_schedules 
-        (stage_id, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order)
-        SELECT ?, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order
-        FROM stage_operation_schedules
-        WHERE stage_id = ?
-      `, [newStageId, stage.id]);
+      const [sourceSchedules] = await connection.execute<RowDataPacket[]>(
+        `SELECT *
+         FROM stage_operation_schedules
+         WHERE stage_id = ?
+         ORDER BY operation_day, operation_order, id`,
+        [stage.id],
+      );
+
+      for (const schedule of sourceSchedules) {
+        const [newScheduleResult] = await connection.execute<ResultSetHeader>(
+          `INSERT INTO stage_operation_schedules 
+          (stage_id, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newStageId,
+            schedule.operation_id,
+            schedule.operation_day,
+            schedule.recommended_time,
+            schedule.recommended_day_offset,
+            schedule.window_start_time,
+            schedule.window_start_day_offset,
+            schedule.window_end_time,
+            schedule.window_end_day_offset,
+            schedule.operation_order,
+          ],
+        );
+        scheduleIdMap.set(Number(schedule.id), newScheduleResult.insertId);
+      }
+    }
+
+    if (isTemplateResourceRulesEnabled()) {
+      await copyTemplateRuleOverrides(connection, scheduleIdMap);
     }
 
     // 复制完成后，重新计算新模版的总天数

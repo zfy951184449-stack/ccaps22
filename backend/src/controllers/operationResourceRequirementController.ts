@@ -2,19 +2,13 @@ import { Request, Response } from 'express';
 import pool from '../config/database';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import {
+  replaceCandidateMappings,
+  toCandidateResourceIds,
+  validateCandidateResources,
+} from '../services/operationResourceBindingService';
 
 const toBoolean = (value: unknown): boolean => value === true || value === 1 || value === '1';
-type SqlExecutor = {
-  execute: typeof pool.execute;
-};
-
-const toCandidateResourceIds = (value: unknown): number[] => {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(new Set(value.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0)));
-};
 
 const loadCandidateMap = async (requirementIds: number[]) => {
   if (!requirementIds.length) {
@@ -59,51 +53,6 @@ const loadCandidateMap = async (requirementIds: number[]) => {
     }
     throw error;
   }
-};
-
-const validateCandidateResources = async (
-  connection: SqlExecutor,
-  candidateResourceIds: number[],
-  resourceType: unknown,
-): Promise<{ valid: true } | { valid: false; message: string }> => {
-  if (!candidateResourceIds.length) {
-    return { valid: true };
-  }
-
-  const placeholders = candidateResourceIds.map(() => '?').join(', ');
-  const [resourceRows] = await connection.execute<RowDataPacket[]>(
-    `SELECT id, resource_type
-     FROM resources
-     WHERE id IN (${placeholders})`,
-    candidateResourceIds,
-  );
-
-  if (resourceRows.length !== candidateResourceIds.length) {
-    return { valid: false, message: 'Some candidate resources do not exist' };
-  }
-
-  const invalidRow = resourceRows.find((row) => String(row.resource_type) !== String(resourceType));
-  if (invalidRow) {
-    return { valid: false, message: 'Candidate resources must match the selected resource_type' };
-  }
-
-  return { valid: true };
-};
-
-const replaceCandidateMappings = async (connection: SqlExecutor, requirementId: number, candidateResourceIds: number[]) => {
-  await connection.execute('DELETE FROM operation_resource_candidates WHERE requirement_id = ?', [requirementId]);
-
-  if (!candidateResourceIds.length) {
-    return;
-  }
-
-  const valuesClause = candidateResourceIds.map(() => '(?, ?)').join(', ');
-  const params = candidateResourceIds.flatMap((resourceId) => [requirementId, resourceId]);
-  await connection.execute(
-    `INSERT INTO operation_resource_candidates (requirement_id, resource_id)
-     VALUES ${valuesClause}`,
-    params,
-  );
 };
 
 export const getOperationResourceRequirements = async (req: Request, res: Response) => {

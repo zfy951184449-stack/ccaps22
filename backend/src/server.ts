@@ -53,6 +53,8 @@ import resourcesRoutes from './routes/resources';
 import maintenanceWindowRoutes from './routes/maintenanceWindows';
 import operationResourceRequirementRoutes from './routes/operationResourceRequirements';
 import platformRoutes from './routes/platform';
+import templateStageOperationResourceRoutes from './routes/templateStageOperationResources';
+import batchOperationResourceRoutes from './routes/batchOperationResources';
 
 dotenv.config();
 
@@ -139,6 +141,8 @@ app.use('/api/resources', resourcesRoutes);
 app.use('/api/maintenance-windows', maintenanceWindowRoutes);
 app.use('/api/operation-resource-requirements', operationResourceRequirementRoutes);
 app.use('/api/platform', platformRoutes);
+app.use('/api/template-stage-operations', templateStageOperationResourceRoutes);
+app.use('/api/batch-operations', batchOperationResourceRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

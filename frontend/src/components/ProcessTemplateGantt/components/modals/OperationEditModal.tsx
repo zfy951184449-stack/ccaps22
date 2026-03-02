@@ -42,6 +42,7 @@ interface OperationEditModalProps {
     validationResult: ConstraintValidationResult | null;
     onValidate: () => void;
     onConflictClick?: (conflict: any) => void;
+    onResourceRulesChanged?: () => Promise<void> | void;
 }
 
 export const OperationEditModal: React.FC<OperationEditModalProps> = ({
@@ -65,6 +66,7 @@ export const OperationEditModal: React.FC<OperationEditModalProps> = ({
     validationResult,
     onValidate,
     onConflictClick,
+    onResourceRulesChanged,
 }) => {
     const [isDirty, setIsDirty] = useState(false);
 
@@ -185,6 +187,8 @@ export const OperationEditModal: React.FC<OperationEditModalProps> = ({
                         validationResult={validationResult}
                         onValidate={onValidate}
                         onConflictClick={onConflictClick}
+                        scheduleId={editingNode?.type === 'operation' && editingNode?.data ? Number((editingNode.data as any).id) : undefined}
+                        onResourceRulesChanged={onResourceRulesChanged}
                     />
                 </div>
             ) : null}

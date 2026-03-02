@@ -5,14 +5,15 @@
 
 import React, { useState } from 'react';
 import { Badge } from 'antd';
-import { LinkOutlined, TeamOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { LinkOutlined, TeamOutlined, CheckCircleOutlined, ApartmentOutlined } from '@ant-design/icons';
 import { ConstraintTabContent } from './ConstraintTabContent';
 import { ShareGroupTabContent } from './ShareGroupTabContent';
 import { ValidationTabContent } from './ValidationTabContent';
+import { TemplateResourceRulesTabContent } from './TemplateResourceRulesTabContent';
 import { Constraint, ShareGroup, ConstraintValidationResult } from '../../types';
 
 // Tab 类型
-type DrawerTab = 'constraints' | 'sharegroup' | 'validate';
+type DrawerTab = 'constraints' | 'sharegroup' | 'resources' | 'validate';
 
 interface OperationDrawerProps {
     predecessors: Constraint[];
@@ -29,6 +30,8 @@ interface OperationDrawerProps {
     validationResult: ConstraintValidationResult | null;
     onValidate: () => void;
     onConflictClick?: (conflict: any) => void;
+    scheduleId?: number;
+    onResourceRulesChanged?: () => Promise<void> | void;
 }
 
 // 设计 tokens
@@ -95,6 +98,8 @@ export const OperationDrawer: React.FC<OperationDrawerProps> = ({
     validationResult,
     onValidate,
     onConflictClick,
+    scheduleId,
+    onResourceRulesChanged,
 }) => {
     const [activeTab, setActiveTab] = useState<DrawerTab>('constraints');
 
@@ -131,6 +136,12 @@ export const OperationDrawer: React.FC<OperationDrawerProps> = ({
                     onClick={() => setActiveTab('sharegroup')}
                 />
                 <TabButton
+                    icon={<ApartmentOutlined />}
+                    label="资源"
+                    active={activeTab === 'resources'}
+                    onClick={() => setActiveTab('resources')}
+                />
+                <TabButton
                     icon={<CheckCircleOutlined />}
                     label="校验"
                     active={activeTab === 'validate'}
@@ -158,6 +169,16 @@ export const OperationDrawer: React.FC<OperationDrawerProps> = ({
                         onRemove={onRemoveShareGroup}
                         onAddOrCreate={onAddOrCreateShareGroup}
                     />
+                )}
+
+                {activeTab === 'resources' && (
+                    <div style={{ padding: 12 }}>
+                        <TemplateResourceRulesTabContent
+                            scheduleId={scheduleId}
+                            visible={activeTab === 'resources'}
+                            onRulesChanged={onResourceRulesChanged}
+                        />
+                    </div>
                 )}
 
                 {activeTab === 'validate' && (

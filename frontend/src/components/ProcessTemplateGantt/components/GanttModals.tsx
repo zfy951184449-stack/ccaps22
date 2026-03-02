@@ -64,6 +64,7 @@ interface GanttModalsProps {
     operationSubmitting: boolean;
     templateId: number;
     loadShareGroups: () => Promise<void>;
+    onResourceRulesChanged?: () => Promise<void>;
 }
 
 export const GanttModals: React.FC<GanttModalsProps> = ({
@@ -105,7 +106,8 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
     handleOperationSubmit,
     operationSubmitting,
     templateId,
-    loadShareGroups
+    loadShareGroups,
+    onResourceRulesChanged,
 }) => {
     // State for operation selection modals
     const [predecessorSelectVisible, setPredecessorSelectVisible] = React.useState(false);
@@ -195,6 +197,7 @@ export const GanttModals: React.FC<GanttModalsProps> = ({
                 validationResult={validationResult}
                 onValidate={handleValidateConstraints}
                 onConflictClick={handleConflictHighlight}
+                onResourceRulesChanged={onResourceRulesChanged}
             />
 
             {/* Create Operation Modal */}

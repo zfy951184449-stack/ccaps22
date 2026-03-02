@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import BatchLifecycleService, { BatchLifecycleError } from '../services/batchLifecycleService';
+import { generateBatchOperationPlansWithResources } from '../services/batchOperationGenerationService';
 
 // 只有 DRAFT 状态的批次可以通过 API 直接修改，ACTIVATED 需要通过生命周期接口
 const MUTABLE_BATCH_STATUSES = new Set(['DRAFT']);
@@ -165,8 +166,7 @@ export const createBatchPlan = async (req: Request, res: Response) => {
 
     const batchPlanId = result.insertId;
 
-    // Call stored procedure to generate batch operation plans
-    await connection.execute('CALL generate_batch_operation_plans(?)', [batchPlanId]);
+    await generateBatchOperationPlansWithResources(connection, batchPlanId);
 
     await connection.commit();
 
@@ -287,7 +287,7 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
     }
 
     if (templateChanged || plannedStartChanged) {
-      await connection.execute('CALL generate_batch_operation_plans(?)', [id]);
+      await generateBatchOperationPlansWithResources(connection, Number(id));
     }
 
     await connection.commit();
@@ -573,8 +573,7 @@ export const createBatchPlansInBulk = async (req: Request, res: Response) => {
 
       const batchPlanId = result.insertId;
 
-      // 生成批次操作计划
-      await connection.execute('CALL generate_batch_operation_plans(?)', [batchPlanId]);
+      await generateBatchOperationPlansWithResources(connection, batchPlanId);
 
       createdBatches.push({
         id: batchPlanId,

@@ -96,6 +96,26 @@ export interface PlatformRunSummary {
   solveTime?: number | null;
 }
 
+export interface PlatformReadinessSummary {
+  domainCode: DepartmentCode;
+  projectCount: number;
+  resourceCount: number;
+  resourceRequirementCoverage: number;
+  candidateBindingCoverage: number;
+  conflictCount: number;
+  maintenanceBlockCount: number;
+  readinessStatus: 'READY' | 'AT_RISK' | 'MODELING_GAP' | 'NOT_READY';
+}
+
+export interface PlatformRiskItem {
+  id: string;
+  label: string;
+  sublabel?: string;
+  domainCode?: string | null;
+  metric: number;
+  metricLabel: string;
+}
+
 export interface PlatformOverview {
   projectCount: number;
   activeBatchCount: number;
@@ -104,8 +124,13 @@ export interface PlatformOverview {
   personnelConflictCount: number;
   maintenanceBlockCount: number;
   missingMasterDataCount: number;
+  ruleCoverageRate: number;
   departments: PlatformDepartmentSummary[];
   recentRuns: PlatformRunSummary[];
+  readiness: PlatformReadinessSummary[];
+  topResources: PlatformRiskItem[];
+  topProjects: PlatformRiskItem[];
+  warnings: string[];
 }
 
 export interface PlatformProject {
@@ -118,6 +143,7 @@ export interface PlatformProject {
   activatedBatchCount: number;
   teamCount: number;
   departmentCodes: string[];
+  missingResourceRequirementCount: number;
 }
 
 export interface PlatformProjectBatch {
@@ -149,10 +175,155 @@ export interface PlatformConflict {
   departmentCode?: string | null;
   projectCode?: string | null;
   resourceName?: string | null;
+  resourceId?: number | null;
   employeeName?: string | null;
   windowStart: string;
   windowEnd: string;
   details: string;
+}
+
+export interface PlatformConflictRecommendedRoute {
+  key: string;
+  path: string;
+  label: string;
+}
+
+export interface PlatformConflictDetail extends PlatformConflict {
+  relatedProjects: Array<{ projectCode: string }>;
+  relatedBatches: Array<{ id: number; batchCode: string; batchName: string }>;
+  relatedOperations: Array<{ id: number; operationId: number; operationCode: string; operationName: string }>;
+  relatedResources: Array<{ id: number; resourceCode: string; resourceName: string }>;
+  relatedMaintenanceWindows: Array<{ id: number; windowType: string; notes?: string | null }>;
+  recommendedRoutes: PlatformConflictRecommendedRoute[];
+}
+
+export interface PlatformTimelineLane {
+  id: string;
+  label: string;
+  groupLabel?: string | null;
+  domainCode?: string | null;
+  laneType?: string | null;
+}
+
+export interface PlatformTimelineItem {
+  id: string;
+  laneId: string;
+  itemType: string;
+  title: string;
+  subtitle?: string | null;
+  startDatetime: string;
+  endDatetime: string;
+  color: string;
+  status?: string | null;
+  domainCode?: string | null;
+  isConflicted?: boolean;
+  maintenanceBlocked?: boolean;
+  resourceConflicted?: boolean;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PlatformTimelineDependency {
+  id: number;
+  fromItemId: string;
+  toItemId: string;
+  type: string;
+  label?: string | null;
+}
+
+export interface PlatformProjectTimelineResponse {
+  project: {
+    id: string;
+    projectCode: string;
+    projectName: string;
+    plannedStartDate: string | null;
+    plannedEndDate: string | null;
+  };
+  lanes: PlatformTimelineLane[];
+  items: PlatformTimelineItem[];
+  dependencies: PlatformTimelineDependency[];
+  conflicts: PlatformConflict[];
+  windowStart: string;
+  windowEnd: string;
+}
+
+export interface PlatformResourceTimelineResponse {
+  resources: Resource[];
+  lanes: PlatformTimelineLane[];
+  items: PlatformTimelineItem[];
+  conflicts: PlatformConflict[];
+  windowStart: string;
+  windowEnd: string;
+}
+
+export interface PlatformMaintenanceImpact {
+  affectedProjects: Array<{ projectCode: string }>;
+  affectedBatches: Array<{ id: number; batchCode: string }>;
+  affectedOperations: Array<{
+    operationPlanId: number;
+    operationCode: string;
+    operationName: string;
+    batchCode: string;
+    projectCode: string;
+    startDatetime: string;
+    endDatetime: string;
+  }>;
+  affectedResources: Array<{ resourceId: number; overlappingEvents: number }>;
+}
+
+export interface PlatformBusinessRulesCoverage {
+  coverageByDomain: PlatformReadinessSummary[];
+  missingRuleOperations: Array<{
+    operationPlanId: number;
+    operationId: number;
+    operationCode: string;
+    operationName: string;
+    batchCode: string;
+    projectCode: string;
+    domainCode: string;
+  }>;
+  missingCandidateBindings: Array<{
+    requirementId: number;
+    operationId: number;
+    operationCode: string;
+    operationName: string;
+    resourceType: ResourceType;
+    requiredCount: number;
+  }>;
+  mismatchedCandidates: Array<{
+    requirementId: number;
+    operationId: number;
+    operationCode: string;
+    operationName: string;
+    resourceType: ResourceType;
+    candidateResourceTypes: ResourceType[];
+  }>;
+}
+
+export interface PlatformRunDetail {
+  id: number;
+  runCode: string;
+  status: string;
+  stage: string;
+  createdAt: string;
+  completedAt: string | null;
+  windowStart: string | null;
+  windowEnd: string | null;
+  solverSummary: Record<string, unknown> | null;
+  applySummary: Record<string, unknown> | null;
+  warnings: string[];
+  errorMessage: string | null;
+  targetBatchIds: number[];
+  relatedProjects: Array<{ projectCode: string; batches?: string[] }>;
+  relatedConflicts: PlatformConflict[];
+  events: Array<{
+    id: number;
+    eventKey: string;
+    stage: string;
+    status: string;
+    message: string;
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+  }>;
 }
 
 export interface ResourceInput {
@@ -199,4 +370,21 @@ export interface MaintenanceWindowInput {
   isHardBlock: boolean;
   ownerDeptCode: 'MAINT';
   notes?: string | null;
+}
+
+export interface PlatformOperationUpdateInput {
+  plannedStartDatetime?: string;
+  plannedEndDatetime?: string;
+  notes?: string | null;
+}
+
+export interface PlatformOperationResourceBindingInput {
+  resourceType: ResourceType;
+  requiredCount: number;
+  candidateResourceIds?: number[];
+  prepMinutes: number;
+  changeoverMinutes: number;
+  cleanupMinutes: number;
+  isMandatory: boolean;
+  requiresExclusiveUse: boolean;
 }

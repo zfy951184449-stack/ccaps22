@@ -663,6 +663,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
                 operationSubmitting={interaction.operationSubmitting}
                 templateId={template.id} // [New] Pass templateId
                 loadShareGroups={interaction.loadShareGroups}
+                onResourceRulesChanged={refreshData}
             />
 
             {/* 共享组管理抽屉 */}

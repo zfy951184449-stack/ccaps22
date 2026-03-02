@@ -1,308 +1,223 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
   Card,
   Col,
-  DatePicker,
   Descriptions,
-  Drawer,
-  Form,
+  Empty,
   Input,
-  InputNumber,
-  Modal,
   Row,
   Select,
   Space,
   Spin,
-  Switch,
-  Table,
+  Tabs,
   Tag,
   Typography,
   message,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import dayjs, { Dayjs } from 'dayjs';
+import { useSearchParams } from 'react-router-dom';
 import { organizationApi, operationApi } from '../services/api';
-import { operationResourceRequirementsApi, resourcesApi } from '../services/platformApi';
-import { Team, Operation } from '../types';
+import { operationResourceRequirementsApi, platformApi, resourcesApi } from '../services/platformApi';
+import { Operation, Team } from '../types';
 import {
   OperationResourceRequirement,
-  OperationResourceRequirementInput,
+  PlatformTimelineItem,
+  PlatformResourceTimelineResponse,
   Resource,
   ResourceCalendarEntry,
-  ResourceInput,
-  ResourceType,
 } from '../types/platform';
+import PlatformTimelineBoard from '../components/Platform/PlatformTimelineBoard';
+import { ResourceBindingPanel } from '../components/Platform/PlatformPanels';
+import { RequirementEditDrawer, ResourceEventDrawer, ResourceFormModal } from '../components/Platform/PlatformEditors';
 
-const { Paragraph } = Typography;
-
-const resourceTypeOptions: Array<{ label: string; value: ResourceType }> = [
-  { label: '房间', value: 'ROOM' },
-  { label: '设备', value: 'EQUIPMENT' },
-  { label: '容器/储罐', value: 'VESSEL_CONTAINER' },
-  { label: '器具', value: 'TOOLING' },
-  { label: '灭菌资源', value: 'STERILIZATION_RESOURCE' },
-];
-
-const resourceColumns: ColumnsType<Resource> = [
-  { title: '资源编码', dataIndex: 'resourceCode', key: 'resourceCode' },
-  { title: '资源名称', dataIndex: 'resourceName', key: 'resourceName' },
-  { title: '类型', dataIndex: 'resourceType', key: 'resourceType' },
-  { title: '部门', dataIndex: 'departmentCode', key: 'departmentCode' },
-  { title: '归属单元', dataIndex: 'ownerUnitName', key: 'ownerUnitName', render: (value?: string | null) => value ?? '-' },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
-    render: (value: string) => <Tag color={value === 'ACTIVE' ? 'success' : value === 'MAINTENANCE' ? 'warning' : 'default'}>{value}</Tag>,
-  },
-];
-
-const calendarColumns: ColumnsType<ResourceCalendarEntry> = [
-  {
-    title: '事件',
-    dataIndex: 'eventType',
-    key: 'eventType',
-    render: (value: string) => <Tag color={value === 'MAINTENANCE' ? 'gold' : value === 'OCCUPIED' ? 'blue' : 'default'}>{value}</Tag>,
-  },
-  {
-    title: '时间',
-    key: 'window',
-    render: (_, record) => `${dayjs(record.startDatetime).format('MM-DD HH:mm')} - ${dayjs(record.endDatetime).format('MM-DD HH:mm')}`,
-  },
-  { title: '来源', dataIndex: 'sourceType', key: 'sourceType' },
-  { title: '备注', dataIndex: 'notes', key: 'notes', render: (value?: string | null) => value ?? '-' },
-];
-
-const requirementColumns: ColumnsType<OperationResourceRequirement> = [
-  { title: '操作', key: 'operation', render: (_, record) => record.operationName ?? record.operationCode ?? record.operationId },
-  { title: '资源类型', dataIndex: 'resourceType', key: 'resourceType' },
-  { title: '数量', dataIndex: 'requiredCount', key: 'requiredCount' },
-  {
-    title: '候选资源',
-    key: 'candidateResources',
-    render: (_, record) => (
-      <Space wrap>
-        {record.candidateResources.length ? (
-          record.candidateResources.map((resource) => (
-            <Tag key={resource.id}>{resource.resourceCode ?? resource.resourceName ?? resource.id}</Tag>
-          ))
-        ) : (
-          <Tag>按类型匹配</Tag>
-        )}
-      </Space>
-    ),
-  },
-  { title: '前置', dataIndex: 'prepMinutes', key: 'prepMinutes' },
-  { title: '切换', dataIndex: 'changeoverMinutes', key: 'changeoverMinutes' },
-  { title: '清理', dataIndex: 'cleanupMinutes', key: 'cleanupMinutes' },
-];
-
-interface ResourceCalendarFormValues {
-  window: [Dayjs, Dayjs];
-  eventType: ResourceCalendarEntry['eventType'];
-  sourceType: ResourceCalendarEntry['sourceType'];
-  notes?: string;
-}
-
-interface ResourceFormValues {
-  resourceCode: string;
-  resourceName: string;
-  resourceType: ResourceType;
-  departmentCode: Resource['departmentCode'];
-  ownerOrgUnitId: number | null;
-  status: Resource['status'];
-  capacity: number;
-  location?: string;
-  cleanLevel?: string;
-  isShared: boolean;
-  isSchedulable: boolean;
-  metadataText?: string;
-}
-
-interface RequirementFormValues {
-  operationId: number;
-  resourceType: ResourceType;
-  requiredCount: number;
-  candidateResourceIds?: number[];
-  isMandatory: boolean;
-  requiresExclusiveUse: boolean;
-  prepMinutes: number;
-  changeoverMinutes: number;
-  cleanupMinutes: number;
-}
+const { Search } = Input;
+const { Text } = Typography;
 
 const ResourceCenterPage: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [resources, setResources] = useState<Resource[]>([]);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
-  const [calendarEntries, setCalendarEntries] = useState<ResourceCalendarEntry[]>([]);
-  const [requirements, setRequirements] = useState<OperationResourceRequirement[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
-  const [resourceModalOpen, setResourceModalOpen] = useState(false);
-  const [calendarModalOpen, setCalendarModalOpen] = useState(false);
-  const [requirementDrawerOpen, setRequirementDrawerOpen] = useState(false);
+  const [requirements, setRequirements] = useState<OperationResourceRequirement[]>([]);
+  const [timeline, setTimeline] = useState<PlatformResourceTimelineResponse | null>(null);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  const [selectedTimelineItem, setSelectedTimelineItem] = useState<PlatformTimelineItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [resourceForm] = Form.useForm<ResourceFormValues>();
-  const [calendarForm] = Form.useForm<ResourceCalendarFormValues>();
-  const [requirementForm] = Form.useForm<RequirementFormValues>();
-  const selectedResourceId = selectedResource?.id;
-  const selectedRequirementResourceType = Form.useWatch('resourceType', requirementForm);
+  const [searchValue, setSearchValue] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string | undefined>();
+  const [domainFilter, setDomainFilter] = useState<string | undefined>();
+  const [conflictOnly, setConflictOnly] = useState(false);
+  const [resourceModalOpen, setResourceModalOpen] = useState(false);
+  const [editingResource, setEditingResource] = useState<Resource | null>(null);
+  const [requirementDrawerOpen, setRequirementDrawerOpen] = useState(false);
+  const [editingRequirement, setEditingRequirement] = useState<OperationResourceRequirement | null>(null);
+  const [eventDrawerOpen, setEventDrawerOpen] = useState(false);
 
-  const candidateResourceOptions = useMemo(
-    () =>
-      resources
-        .filter((resource) => resource.resourceType === selectedRequirementResourceType && resource.isSchedulable)
-        .map((resource) => ({
-          value: resource.id,
-          label: `${resource.resourceCode} - ${resource.resourceName}`,
-        })),
-    [resources, selectedRequirementResourceType],
-  );
-
-  const loadResources = async () => {
+  const loadBase = useCallback(async () => {
     const [resourceData, requirementData, teamData, operationData] = await Promise.all([
       resourcesApi.list(),
       operationResourceRequirementsApi.list(),
       organizationApi.getTeams(),
-      operationApi.getAll().then((res) => res.data),
+      operationApi.getAll().then((response) => response.data),
     ]);
     setResources(resourceData);
     setRequirements(requirementData);
     setTeams(teamData);
     setOperations(operationData);
-    if (resourceData.length > 0) {
-      setSelectedResource((current) => current ?? resourceData[0]);
-    }
-  };
+    const fromQuery = searchParams.get('resourceId');
+    const initial = resourceData.find((resource) => String(resource.id) === fromQuery) ?? resourceData[0] ?? null;
+    setSelectedResource(initial);
+  }, [searchParams]);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
         setErrorMessage(null);
-        await loadResources();
+        await loadBase();
       } catch (error) {
         console.error('Failed to load resource center:', error);
         setResources([]);
         setRequirements([]);
-        setCalendarEntries([]);
+        setTimeline(null);
         setSelectedResource(null);
         setErrorMessage('资源中心暂时不可用，请先确认平台资源迁移是否已执行。');
       } finally {
         setLoading(false);
       }
     };
+
     void load();
-  }, []);
+  }, [loadBase]);
 
   useEffect(() => {
-    if (!selectedResourceId) {
-      setCalendarEntries([]);
-      return;
-    }
-
-    const loadCalendar = async () => {
-      try {
-        const [detail, entries] = await Promise.all([
-          resourcesApi.getById(selectedResourceId),
-          resourcesApi.getCalendar(selectedResourceId),
-        ]);
-        setSelectedResource(detail);
-        setCalendarEntries(entries);
-      } catch (error) {
-        console.error('Failed to load resource calendar:', error);
-        setCalendarEntries([]);
-        message.warning('资源详情或资源日历暂时不可用。');
-      }
-    };
-
-    void loadCalendar();
-  }, [selectedResourceId]);
-
-  useEffect(() => {
-    const selectedCandidateIds = requirementForm.getFieldValue('candidateResourceIds') as number[] | undefined;
-    if (!selectedCandidateIds?.length) {
-      return;
-    }
-
-    const validIds = new Set(candidateResourceOptions.map((option) => option.value));
-    const nextIds = selectedCandidateIds.filter((candidateId) => validIds.has(candidateId));
-    if (nextIds.length !== selectedCandidateIds.length) {
-      requirementForm.setFieldsValue({ candidateResourceIds: nextIds });
-    }
-  }, [candidateResourceOptions, requirementForm]);
-
-  const handleCreateResource = async () => {
-    const values = await resourceForm.validateFields();
-    let metadata: Record<string, unknown> | null = null;
-    try {
-      if (values.metadataText?.trim()) {
-        metadata = JSON.parse(values.metadataText);
-      }
-    } catch (_error) {
-      message.error('扩展信息必须是合法 JSON');
-      return;
-    }
-    const payload: ResourceInput = {
-      resourceCode: values.resourceCode,
-      resourceName: values.resourceName,
-      resourceType: values.resourceType,
-      departmentCode: values.departmentCode,
-      ownerOrgUnitId: values.ownerOrgUnitId ?? null,
-      status: values.status,
-      capacity: values.capacity,
-      location: values.location ?? null,
-      cleanLevel: values.cleanLevel ?? null,
-      isShared: values.isShared,
-      isSchedulable: values.isSchedulable,
-      metadata,
-    };
-    await resourcesApi.create(payload);
-    message.success('资源已创建');
-    setResourceModalOpen(false);
-    resourceForm.resetFields();
-    await loadResources();
-  };
-
-  const handleCreateCalendarEntry = async () => {
     if (!selectedResource) {
+      setTimeline(null);
       return;
     }
-    const values = await calendarForm.validateFields();
-    await resourcesApi.createCalendarEntry(selectedResource.id, {
-      startDatetime: values.window[0].toISOString(),
-      endDatetime: values.window[1].toISOString(),
-      eventType: values.eventType,
-      sourceType: values.sourceType,
-      notes: values.notes ?? null,
+
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('resourceId', String(selectedResource.id));
+      return next;
     });
-    message.success('资源日历已更新');
-    setCalendarModalOpen(false);
-    calendarForm.resetFields();
-    setCalendarEntries(await resourcesApi.getCalendar(selectedResource.id));
+
+    const loadTimeline = async () => {
+      try {
+        setTimelineLoading(true);
+        setTimeline(
+          await platformApi.getResourceTimeline({
+            resource_id: selectedResource.id,
+            resource_type: typeFilter ?? '',
+            department_code: domainFilter ?? '',
+            conflict_only: conflictOnly,
+          }),
+        );
+      } finally {
+        setTimelineLoading(false);
+      }
+    };
+
+    void loadTimeline();
+  }, [conflictOnly, domainFilter, selectedResource, setSearchParams, typeFilter]);
+
+  const filteredResources = useMemo(() => {
+    return resources.filter((resource) => {
+      if (searchValue) {
+        const query = searchValue.toLowerCase();
+        const matched = resource.resourceCode.toLowerCase().includes(query) || resource.resourceName.toLowerCase().includes(query);
+        if (!matched) {
+          return false;
+        }
+      }
+      if (typeFilter && resource.resourceType !== typeFilter) {
+        return false;
+      }
+      if (domainFilter && resource.departmentCode !== domainFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [domainFilter, resources, searchValue, typeFilter]);
+
+  const selectedResourceRequirements = useMemo(() => {
+    if (!selectedResource) {
+      return [];
+    }
+
+    return requirements.filter(
+      (requirement) =>
+        requirement.candidateResourceIds.includes(selectedResource.id) || requirement.resourceType === selectedResource.resourceType,
+    );
+  }, [requirements, selectedResource]);
+
+  const orgUnitOptions = useMemo(
+    () =>
+      teams.map((team) => ({
+        value: Number(team.id),
+        label: team.unit_name ?? team.unitName ?? team.team_name ?? team.teamName ?? `Unit ${team.id}`,
+      })),
+    [teams],
+  );
+
+  const handleCreateOrUpdateResource = async (payload: any) => {
+    if (editingResource) {
+      await resourcesApi.update(editingResource.id, payload);
+      message.success('资源已更新');
+    } else {
+      await resourcesApi.create(payload);
+      message.success('资源已创建');
+    }
+    setResourceModalOpen(false);
+    setEditingResource(null);
+    await loadBase();
   };
 
-  const handleCreateRequirement = async () => {
-    const values = await requirementForm.validateFields();
-    const payload: OperationResourceRequirementInput = {
-      operationId: values.operationId,
-      resourceType: values.resourceType,
-      requiredCount: values.requiredCount,
-      candidateResourceIds: values.candidateResourceIds ?? [],
-      isMandatory: values.isMandatory,
-      requiresExclusiveUse: values.requiresExclusiveUse,
-      prepMinutes: values.prepMinutes,
-      changeoverMinutes: values.changeoverMinutes,
-      cleanupMinutes: values.cleanupMinutes,
-    };
-    await operationResourceRequirementsApi.create(payload);
-    message.success('资源需求规则已创建');
+  const handleSaveRequirement = async (payload: any) => {
+    if (editingRequirement) {
+      await operationResourceRequirementsApi.update(editingRequirement.id, payload);
+      message.success('资源规则已更新');
+    } else {
+      await operationResourceRequirementsApi.create(payload);
+      message.success('资源规则已创建');
+    }
     setRequirementDrawerOpen(false);
-    requirementForm.resetFields();
+    setEditingRequirement(null);
     setRequirements(await operationResourceRequirementsApi.list());
+  };
+
+  const handleUpdateEvent = async (payload: ResourceCalendarEntry) => {
+    await resourcesApi.updateCalendarEntry(payload.resourceId, payload.id, {
+      startDatetime: payload.startDatetime,
+      endDatetime: payload.endDatetime,
+      eventType: payload.eventType,
+      sourceType: payload.sourceType,
+      sourceId: payload.sourceId,
+      notes: payload.notes,
+    });
+    message.success('资源事件已更新');
+    setEventDrawerOpen(false);
+    if (selectedResource) {
+      setTimeline(await platformApi.getResourceTimeline({ resource_id: selectedResource.id, conflict_only: conflictOnly }));
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    const metadata = selectedTimelineItem?.metadata ?? {};
+    const resourceId = Number(metadata.resourceId ?? 0);
+    const eventId = Number(metadata.eventId ?? 0);
+    if (!resourceId || !eventId) {
+      return;
+    }
+    await resourcesApi.deleteCalendarEntry(resourceId, eventId);
+    message.success('资源事件已删除');
+    setEventDrawerOpen(false);
+    if (selectedResource) {
+      setTimeline(await platformApi.getResourceTimeline({ resource_id: selectedResource.id, conflict_only: conflictOnly }));
+    }
   };
 
   if (loading) {
@@ -316,224 +231,212 @@ const ResourceCenterPage: React.FC = () => {
         type="info"
         showIcon
         message="资源中心"
-        description="该页面是平台资源层的前台承接页面，用于管理设备、房间、器具、储罐和灭菌资源，并查看资源日历与操作资源需求。"
+        description="统一管理设备、房间、容器、器具和灭菌资源，并在同一页面查看占用时间轴、候选资源绑定和资源主数据缺口。"
       />
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} xl={11}>
+        <Col xs={24} xl={8}>
           <Card
             title="资源列表"
             extra={
-              <Button type="primary" onClick={() => setResourceModalOpen(true)}>
+              <Button
+                type="primary"
+                onClick={() => {
+                  setEditingResource(null);
+                  setResourceModalOpen(true);
+                }}
+              >
                 新增资源
               </Button>
             }
           >
-            <Table
-              rowKey="id"
-              columns={resourceColumns}
-              dataSource={resources}
-              pagination={false}
-              rowSelection={{
-                type: 'radio',
-                selectedRowKeys: selectedResource ? [selectedResource.id] : [],
-                onChange: (keys) => {
-                  const next = resources.find((item) => item.id === Number(keys[0])) ?? null;
-                  setSelectedResource(next);
-                },
-              }}
-            />
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Search placeholder="搜索资源编码 / 名称" allowClear value={searchValue} onChange={(event) => setSearchValue(event.target.value)} />
+              <Space wrap>
+                <Select
+                  allowClear
+                  placeholder="资源类型"
+                  value={typeFilter}
+                  onChange={setTypeFilter}
+                  style={{ width: 160 }}
+                  options={[
+                    { value: 'ROOM', label: '房间' },
+                    { value: 'EQUIPMENT', label: '设备' },
+                    { value: 'VESSEL_CONTAINER', label: '容器/储罐' },
+                    { value: 'TOOLING', label: '器具' },
+                    { value: 'STERILIZATION_RESOURCE', label: '灭菌资源' },
+                  ]}
+                />
+                <Select
+                  allowClear
+                  placeholder="部门"
+                  value={domainFilter}
+                  onChange={setDomainFilter}
+                  style={{ width: 140 }}
+                  options={[{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }]}
+                />
+                <Select
+                  value={conflictOnly ? 'RISK' : 'ALL'}
+                  onChange={(value) => setConflictOnly(value === 'RISK')}
+                  options={[
+                    { value: 'ALL', label: '全部' },
+                    { value: 'RISK', label: '仅冲突' },
+                  ]}
+                  style={{ width: 120 }}
+                />
+              </Space>
+
+              <div>
+                {filteredResources.length === 0 ? (
+                  <Empty description="暂无资源" />
+                ) : (
+                  filteredResources.map((resource) => (
+                    <Card
+                      key={resource.id}
+                      size="small"
+                      hoverable
+                      style={{
+                        marginBottom: 8,
+                        borderColor: selectedResource?.id === resource.id ? '#1677ff' : undefined,
+                      }}
+                      onClick={() => setSelectedResource(resource)}
+                    >
+                      <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+                        <Space direction="vertical" size={0}>
+                          <Text strong>{resource.resourceCode}</Text>
+                          <Text>{resource.resourceName}</Text>
+                        </Space>
+                        <Space wrap>
+                          <Tag>{resource.resourceType}</Tag>
+                          <Tag color="blue">{resource.departmentCode}</Tag>
+                        </Space>
+                      </Space>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </Space>
           </Card>
         </Col>
-        <Col xs={24} xl={13}>
-          <Card
-            title="资源详情"
-            extra={
-              <Space>
-                <Button disabled={!selectedResource} onClick={() => setCalendarModalOpen(true)}>
-                  新增日历事件
-                </Button>
-                <Button onClick={() => setRequirementDrawerOpen(true)}>新增资源需求</Button>
-              </Space>
-            }
-          >
-            {!selectedResource ? (
-              <Alert type="warning" message="请选择一个资源查看详情" />
-            ) : (
-              <Descriptions bordered column={2}>
-                <Descriptions.Item label="资源编码">{selectedResource.resourceCode}</Descriptions.Item>
-                <Descriptions.Item label="资源名称">{selectedResource.resourceName}</Descriptions.Item>
-                <Descriptions.Item label="类型">{selectedResource.resourceType}</Descriptions.Item>
-                <Descriptions.Item label="部门">{selectedResource.departmentCode}</Descriptions.Item>
-                <Descriptions.Item label="状态">{selectedResource.status}</Descriptions.Item>
-                <Descriptions.Item label="容量">{selectedResource.capacity}</Descriptions.Item>
-                <Descriptions.Item label="位置">{selectedResource.location ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="洁净级别">{selectedResource.cleanLevel ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="共享资源">{selectedResource.isShared ? '是' : '否'}</Descriptions.Item>
-                <Descriptions.Item label="可排资源">{selectedResource.isSchedulable ? '是' : '否'}</Descriptions.Item>
-                <Descriptions.Item label="日历条目">{selectedResource.stats?.calendarCount ?? 0}</Descriptions.Item>
-                <Descriptions.Item label="维护窗口">{selectedResource.stats?.maintenanceCount ?? 0}</Descriptions.Item>
-              </Descriptions>
-            )}
-            <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-              资源详情与资源日历是后续把设备/房间/器具约束送入求解器的基础。
-            </Paragraph>
-          </Card>
 
-          <Card title="资源日历 / 占用时间轴" style={{ marginTop: 16 }}>
-            <Table rowKey="id" columns={calendarColumns} dataSource={calendarEntries} pagination={false} locale={{ emptyText: '暂无资源日历事件' }} />
-          </Card>
+        <Col xs={24} xl={16}>
+          {!selectedResource ? (
+            <Card><Empty description="请选择资源查看详情" /></Card>
+          ) : (
+            <Tabs
+              items={[
+                {
+                  key: 'detail',
+                  label: '资源详情',
+                  children: (
+                    <Card
+                      title={selectedResource.resourceName}
+                      extra={
+                        <Button
+                          onClick={() => {
+                            setEditingResource(selectedResource);
+                            setResourceModalOpen(true);
+                          }}
+                        >
+                          编辑资源
+                        </Button>
+                      }
+                    >
+                      <Descriptions bordered column={2}>
+                        <Descriptions.Item label="资源编码">{selectedResource.resourceCode}</Descriptions.Item>
+                        <Descriptions.Item label="资源类型">{selectedResource.resourceType}</Descriptions.Item>
+                        <Descriptions.Item label="部门">{selectedResource.departmentCode}</Descriptions.Item>
+                        <Descriptions.Item label="状态">{selectedResource.status}</Descriptions.Item>
+                        <Descriptions.Item label="容量">{selectedResource.capacity}</Descriptions.Item>
+                        <Descriptions.Item label="位置">{selectedResource.location ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="洁净等级">{selectedResource.cleanLevel ?? '-'}</Descriptions.Item>
+                        <Descriptions.Item label="归属单元">{selectedResource.ownerUnitName ?? '-'}</Descriptions.Item>
+                      </Descriptions>
+                    </Card>
+                  ),
+                },
+                {
+                  key: 'timeline',
+                  label: '占用时间轴',
+                  children: (
+                    <Spin spinning={timelineLoading}>
+                      <PlatformTimelineBoard
+                        lanes={timeline?.lanes ?? []}
+                        items={timeline?.items ?? []}
+                        windowStart={timeline?.windowStart}
+                        windowEnd={timeline?.windowEnd}
+                        selectedItemId={selectedTimelineItem?.id ?? null}
+                        onItemClick={(item) => {
+                          setSelectedTimelineItem(item);
+                          setEventDrawerOpen(true);
+                        }}
+                        emptyDescription="当前资源暂无占用事件"
+                      />
+                    </Spin>
+                  ),
+                },
+                {
+                  key: 'binding',
+                  label: '候选绑定',
+                  children: (
+                    <ResourceBindingPanel
+                      title="资源参与的规则"
+                      requirements={selectedResourceRequirements}
+                      onEditRequirement={(requirement) => {
+                        setEditingRequirement(requirement);
+                        setRequirementDrawerOpen(true);
+                      }}
+                    />
+                  ),
+                },
+              ]}
+              tabBarExtraContent={
+                <Space>
+                  <Button
+                    onClick={() => {
+                      setEditingRequirement(null);
+                      setRequirementDrawerOpen(true);
+                    }}
+                  >
+                    新增资源规则
+                  </Button>
+                </Space>
+              }
+            />
+          )}
         </Col>
       </Row>
 
-      <Card title="操作资源需求">
-        <Table rowKey="id" columns={requirementColumns} dataSource={requirements} pagination={{ pageSize: 8 }} />
-      </Card>
-
-      <Modal
-        title="新增资源"
+      <ResourceFormModal
         open={resourceModalOpen}
-        onCancel={() => setResourceModalOpen(false)}
-        onOk={() => void handleCreateResource()}
-        destroyOnClose
-      >
-        <Form form={resourceForm} layout="vertical" initialValues={{ capacity: 1, status: 'ACTIVE', isShared: false, isSchedulable: true }}>
-          <Form.Item name="resourceCode" label="资源编码" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="resourceName" label="资源名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="resourceType" label="资源类型" rules={[{ required: true }]}>
-            <Select options={resourceTypeOptions} />
-          </Form.Item>
-          <Form.Item name="departmentCode" label="部门" rules={[{ required: true }]}>
-            <Select options={[{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }]} />
-          </Form.Item>
-          <Form.Item name="ownerOrgUnitId" label="归属组织单元">
-            <Select allowClear options={teams.map((team) => ({ value: team.id, label: team.team_name ?? team.team_code }))} />
-          </Form.Item>
-          <Form.Item name="status" label="状态" rules={[{ required: true }]}>
-            <Select options={[{ value: 'ACTIVE' }, { value: 'INACTIVE' }, { value: 'MAINTENANCE' }, { value: 'RETIRED' }]} />
-          </Form.Item>
-          <Form.Item name="capacity" label="容量" rules={[{ required: true }]}>
-            <InputNumber min={1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="location" label="位置">
-            <Input />
-          </Form.Item>
-          <Form.Item name="cleanLevel" label="洁净级别">
-            <Input />
-          </Form.Item>
-          <Form.Item name="metadataText" label="扩展信息(JSON)">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-          <Form.Item name="isShared" label="共享资源" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="isSchedulable" label="参与排程" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Modal>
+        resource={editingResource}
+        orgUnitOptions={orgUnitOptions}
+        onCancel={() => {
+          setResourceModalOpen(false);
+          setEditingResource(null);
+        }}
+        onSubmit={handleCreateOrUpdateResource}
+      />
 
-      <Modal
-        title="新增资源日历事件"
-        open={calendarModalOpen}
-        onCancel={() => setCalendarModalOpen(false)}
-        onOk={() => void handleCreateCalendarEntry()}
-        destroyOnClose
-      >
-        <Form form={calendarForm} layout="vertical">
-          <Form.Item name="window" label="时间窗口" rules={[{ required: true }]}>
-            <DatePicker.RangePicker showTime style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="eventType" label="事件类型" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { value: 'OCCUPIED' },
-                { value: 'CHANGEOVER' },
-                { value: 'LOCKED' },
-                { value: 'UNAVAILABLE' },
-              ]}
-            />
-          </Form.Item>
-          <Form.Item name="sourceType" label="来源" rules={[{ required: true }]}>
-            <Select options={[{ value: 'MANUAL' }, { value: 'SCHEDULING' }, { value: 'MAINTENANCE' }]} />
-          </Form.Item>
-          <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      <Drawer
-        title="新增操作资源需求"
+      <RequirementEditDrawer
         open={requirementDrawerOpen}
-        onClose={() => setRequirementDrawerOpen(false)}
-        width={420}
-        extra={
-          <Button type="primary" onClick={() => void handleCreateRequirement()}>
-            保存
-          </Button>
-        }
-      >
-        <Form
-          form={requirementForm}
-          layout="vertical"
-          initialValues={{
-            requiredCount: 1,
-            candidateResourceIds: [],
-            isMandatory: true,
-            requiresExclusiveUse: true,
-            prepMinutes: 0,
-            changeoverMinutes: 0,
-            cleanupMinutes: 0,
-          }}
-        >
-          <Form.Item name="operationId" label="操作" rules={[{ required: true }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              options={operations.map((operation) => ({
-                value: operation.id,
-                label: `${operation.operation_code} - ${operation.operation_name}`,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name="resourceType" label="资源类型" rules={[{ required: true }]}>
-            <Select options={resourceTypeOptions} />
-          </Form.Item>
-          <Form.Item name="candidateResourceIds" label="候选资源">
-            <Select
-              mode="multiple"
-              allowClear
-              disabled={!selectedRequirementResourceType}
-              optionFilterProp="label"
-              options={candidateResourceOptions}
-              placeholder={selectedRequirementResourceType ? '不选则按资源类型匹配，选择后将精确绑定到具体资源' : '请先选择资源类型'}
-            />
-          </Form.Item>
-          <Form.Item name="requiredCount" label="数量" rules={[{ required: true }]}>
-            <InputNumber min={1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="prepMinutes" label="前置准备时间(分钟)">
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="changeoverMinutes" label="切换时间(分钟)">
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="cleanupMinutes" label="清洁时间(分钟)">
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="isMandatory" label="是否硬约束" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-          <Form.Item name="requiresExclusiveUse" label="是否独占资源" valuePropName="checked">
-            <Switch />
-          </Form.Item>
-        </Form>
-      </Drawer>
+        requirement={editingRequirement}
+        operations={operations}
+        resources={resources}
+        onClose={() => {
+          setRequirementDrawerOpen(false);
+          setEditingRequirement(null);
+        }}
+        onSubmit={handleSaveRequirement}
+      />
+
+      <ResourceEventDrawer
+        open={eventDrawerOpen}
+        item={selectedTimelineItem}
+        onClose={() => setEventDrawerOpen(false)}
+        onUpdate={handleUpdateEvent}
+        onDelete={selectedTimelineItem?.metadata?.sourceType === 'MANUAL' ? handleDeleteEvent : undefined}
+      />
     </Space>
   );
 };

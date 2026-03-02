@@ -9,6 +9,7 @@
 import { RowDataPacket } from 'mysql2';
 import pool from '../../config/database';
 import dayjs from 'dayjs';
+import { isBatchResourceSnapshotsEnabled, isRuntimeResourceSnapshotReadEnabled } from '../../utils/featureFlags';
 
 // --- Interfaces matching Solver V4 Contracts (to be defined in Python) ---
 
@@ -751,6 +752,67 @@ export class DataAssemblerV4 {
     }
 
     private static async fetchOperationResourceRequirements(operations: V4OperationDemand[]): Promise<V4OperationResourceRequirement[]> {
+        const operationPlanIds = [...new Set(operations.map((operation) => operation.operation_plan_id).filter((operationPlanId) => operationPlanId > 0))];
+        if (operationPlanIds.length === 0) {
+            return [];
+        }
+
+        if (isBatchResourceSnapshotsEnabled() && isRuntimeResourceSnapshotReadEnabled()) {
+            const [rows] = await pool.execute<RowDataPacket[]>(
+                `SELECT
+                    bop.id AS operation_plan_id,
+                    effective.resource_type,
+                    effective.required_count,
+                    effective.is_mandatory,
+                    effective.requires_exclusive_use,
+                    effective.prep_minutes,
+                    effective.changeover_minutes,
+                    effective.cleanup_minutes
+                 FROM batch_operation_plans bop
+                 JOIN (
+                    SELECT
+                      brr.batch_operation_plan_id,
+                      brr.resource_type,
+                      brr.required_count,
+                      brr.is_mandatory,
+                      brr.requires_exclusive_use,
+                      brr.prep_minutes,
+                      brr.changeover_minutes,
+                      brr.cleanup_minutes
+                    FROM batch_operation_resource_requirements brr
+                    UNION ALL
+                    SELECT
+                      bop2.id AS batch_operation_plan_id,
+                      orr.resource_type,
+                      orr.required_count,
+                      orr.is_mandatory,
+                      orr.requires_exclusive_use,
+                      orr.prep_minutes,
+                      orr.changeover_minutes,
+                      orr.cleanup_minutes
+                    FROM batch_operation_plans bop2
+                    JOIN operation_resource_requirements orr ON orr.operation_id = bop2.operation_id
+                    WHERE NOT EXISTS (
+                      SELECT 1
+                      FROM batch_operation_resource_requirements brrx
+                      WHERE brrx.batch_operation_plan_id = bop2.id
+                    )
+                 ) effective ON effective.batch_operation_plan_id = bop.id
+                 WHERE bop.id IN (${operationPlanIds.join(',')})`
+            );
+
+            return rows.map((row) => ({
+                operation_plan_id: Number(row.operation_plan_id),
+                resource_type: row.resource_type,
+                required_count: Number(row.required_count ?? 1),
+                is_mandatory: !!row.is_mandatory,
+                requires_exclusive_use: !!row.requires_exclusive_use,
+                prep_minutes: Number(row.prep_minutes ?? 0),
+                changeover_minutes: Number(row.changeover_minutes ?? 0),
+                cleanup_minutes: Number(row.cleanup_minutes ?? 0)
+            }));
+        }
+
         const operationIds = [...new Set(operations.map((operation) => operation.operation_id).filter((operationId) => operationId > 0))];
         if (operationIds.length === 0) {
             return [];

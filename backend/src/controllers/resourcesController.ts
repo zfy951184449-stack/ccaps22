@@ -286,3 +286,54 @@ export const createResourceCalendarEntry = async (req: Request, res: Response) =
     res.status(500).json({ error: 'Failed to create resource calendar entry' });
   }
 };
+
+export const updateResourceCalendarEntry = async (req: Request, res: Response) => {
+  try {
+    const { id, eventId } = req.params;
+    const allowedFields = ['start_datetime', 'end_datetime', 'event_type', 'source_type', 'source_id', 'notes'] as const;
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates.push(`${field} = ?`);
+        params.push(req.body[field]);
+      }
+    });
+
+    if (!updates.length) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    params.push(id, eventId);
+    await pool.execute(
+      `UPDATE resource_calendars
+       SET ${updates.join(', ')}
+       WHERE resource_id = ?
+         AND id = ?`,
+      params,
+    );
+
+    res.json({ message: 'Resource calendar entry updated successfully' });
+  } catch (error) {
+    console.error('Error updating resource calendar entry:', error);
+    res.status(500).json({ error: 'Failed to update resource calendar entry' });
+  }
+};
+
+export const deleteResourceCalendarEntry = async (req: Request, res: Response) => {
+  try {
+    const { id, eventId } = req.params;
+    await pool.execute(
+      `DELETE FROM resource_calendars
+       WHERE resource_id = ?
+         AND id = ?`,
+      [id, eventId],
+    );
+
+    res.json({ message: 'Resource calendar entry deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting resource calendar entry:', error);
+    res.status(500).json({ error: 'Failed to delete resource calendar entry' });
+  }
+};

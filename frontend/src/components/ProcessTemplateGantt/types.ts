@@ -1,5 +1,28 @@
 import { ConstraintValidationResult, ConstraintConflict } from '../../types';
 
+export type ResourceRuleSourceScope = 'GLOBAL_DEFAULT' | 'TEMPLATE_OVERRIDE' | 'BATCH_OVERRIDE' | 'NONE';
+
+export interface ResourceCandidateSummary {
+    id: number;
+    resource_code: string;
+    resource_name: string;
+    resource_type: string;
+}
+
+export interface ResourceRequirementRule {
+    id: number | null;
+    resource_type: 'ROOM' | 'EQUIPMENT' | 'VESSEL_CONTAINER' | 'TOOLING' | 'STERILIZATION_RESOURCE';
+    required_count: number;
+    is_mandatory: boolean;
+    requires_exclusive_use: boolean;
+    prep_minutes: number;
+    changeover_minutes: number;
+    cleanup_minutes: number;
+    candidate_resource_ids: number[];
+    candidate_resources: ResourceCandidateSummary[];
+    source_scope?: ResourceRuleSourceScope;
+}
+
 export interface ProcessTemplate {
     id: number;
     template_code: string;
@@ -34,6 +57,9 @@ export interface StageOperation {
     operation_order: number;
     standard_time?: number;
     required_people?: number;
+    resource_rule_source_scope?: ResourceRuleSourceScope;
+    resource_requirements?: ResourceRequirementRule[];
+    resource_summary?: string | null;
 }
 
 export interface Operation {

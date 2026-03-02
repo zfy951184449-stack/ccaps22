@@ -1,5 +1,5 @@
 import React from 'react';
-import { Button, Space, Typography, Checkbox } from 'antd';
+import { Button, Space, Typography, Checkbox, Tag } from 'antd';
 import {
     CaretDownOutlined,
     CaretRightOutlined,
@@ -107,6 +107,13 @@ export const GanttSidebar: React.FC<GanttSidebarProps> = ({
                 {/* 辅助信息降噪：使用纯文本+图标，去除 Tag 背景 */}
                 {node.type === 'operation' && (
                     <Space size={8} style={{ flexShrink: 0, marginLeft: 4 }}>
+                        {(node.data as any)?.resource_summary ? (
+                            <Tag color={(node.data as any)?.resource_rule_source_scope === 'TEMPLATE_OVERRIDE' ? 'blue' : 'default'}>
+                                {(node.data as any).resource_summary}
+                            </Tag>
+                        ) : (node.data as any)?.resource_rule_source_scope === 'NONE' ? (
+                            <Tag>未定义资源</Tag>
+                        ) : null}
                         {(node.data as any)?._consolidatedCount ? (
                             <span style={{ fontSize: 11, color: '#7c3aed', fontWeight: 500 }}>
                                 {(node.data as any)._consolidatedCount} items

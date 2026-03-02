@@ -102,3 +102,14 @@ export const updateMaintenanceWindow = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to update maintenance window' });
   }
 };
+
+export const deleteMaintenanceWindow = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await pool.execute('DELETE FROM maintenance_windows WHERE id = ?', [id]);
+    res.json({ message: 'Maintenance window deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting maintenance window:', error);
+    res.status(500).json({ error: 'Failed to delete maintenance window' });
+  }
+};

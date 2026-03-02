@@ -322,6 +322,11 @@ const GanttBarsComponent: React.FC<GanttBarsProps> = ({
                         <div>开始: Day {blockStartDay} {startHourOfDay.toString().padStart(2, '0')}:{startMinute.toString().padStart(2, '0')}</div>
                         <div>结束: Day {endDayNum} {endHourOfDay.toString().padStart(2, '0')}:{endMinute.toString().padStart(2, '0')}</div>
                         <div>时长: {block.duration_hours.toFixed(1)} 小时</div>
+                        {!isStageBlock && !isTimeWindowBlock && node?.data && (
+                            <div>
+                                资源: {(node.data as StageOperation).resource_summary || '未定义资源'}
+                            </div>
+                        )}
                     </div>
                 );
 

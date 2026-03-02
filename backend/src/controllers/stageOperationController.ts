@@ -1,13 +1,16 @@
 import { Request, Response } from 'express';
+import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import { updateTemplateTotalDays } from './processTemplateController';
+import { loadTemplateRuleMetadataForStageOperations } from '../services/templateResourceRuleService';
+import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
 
 // 获取阶段的所有操作安排
 export const getStageOperations = async (req: Request, res: Response) => {
   try {
     const { stageId } = req.params;
     
-    const [operations] = await pool.execute(`
+    const [operations] = await pool.execute<RowDataPacket[]>(`
       SELECT 
         sos.*,
         o.operation_code,
@@ -20,8 +23,12 @@ export const getStageOperations = async (req: Request, res: Response) => {
       WHERE sos.stage_id = ?
       ORDER BY sos.operation_day, sos.operation_order
     `, [stageId]);
-    
-    res.json(operations);
+
+    const responseRows = isTemplateResourceRulesEnabled()
+      ? await loadTemplateRuleMetadataForStageOperations(operations as Array<Record<string, unknown>>)
+      : operations;
+
+    res.json(responseRows);
   } catch (error) {
     console.error('Error fetching stage operations:', error);
     res.status(500).json({ error: 'Failed to fetch stage operations' });
