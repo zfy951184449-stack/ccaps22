@@ -425,6 +425,8 @@ export interface ScheduleV2GridShift {
   shiftName?: string;
   hours?: number;
   isOvertime?: boolean;
+  specialCoverageCount?: number;
+  specialCoverageCodes?: string[];
 }
 
 export interface ScheduleV2GridEmployee {

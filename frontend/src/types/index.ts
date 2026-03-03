@@ -213,6 +213,104 @@ export interface ShiftDefinition {
   updated_at?: string;
 }
 
+export type SpecialShiftWindowStatus = 'DRAFT' | 'ACTIVE' | 'CANCELLED' | 'ARCHIVED';
+export type SpecialShiftPlanCategory = 'BASE' | 'OVERTIME';
+
+export interface SpecialShiftWindowRule {
+  id?: number;
+  shift_id: number;
+  shift_name?: string;
+  shift_code?: string;
+  required_people: number;
+  plan_category: SpecialShiftPlanCategory;
+  qualification_id?: number | null;
+  qualification_name?: string | null;
+  min_level?: number | null;
+  is_mandatory?: boolean;
+  days_of_week: number[];
+  notes?: string | null;
+  allow_employee_ids?: number[];
+  deny_employee_ids?: number[];
+}
+
+export interface SpecialShiftWindow {
+  id: number;
+  window_code: string;
+  window_name: string;
+  org_unit_id: number;
+  org_unit_name: string;
+  start_date: string;
+  end_date: string;
+  status: SpecialShiftWindowStatus;
+  lock_after_apply: boolean;
+  notes?: string | null;
+  created_by?: number | null;
+  updated_by?: number | null;
+  rule_count: number;
+  occurrence_count: number;
+  scheduled_count: number;
+  applied_count: number;
+  latest_scheduling_run_id?: number | null;
+}
+
+export interface SpecialShiftWindowPreviewRow {
+  occurrence_id: number;
+  rule_id: number;
+  date: string;
+  shift_id: number;
+  shift_name: string;
+  required_people: number;
+  eligible_employee_count: number;
+  eligible_employee_ids: number[];
+  blocking_issues: string[];
+}
+
+export interface SpecialShiftWindowPreview {
+  window_id: number;
+  can_activate: boolean;
+  occurrence_count: number;
+  rows: SpecialShiftWindowPreviewRow[];
+  warnings: string[];
+}
+
+export interface SpecialShiftOccurrenceAssignment {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_code: string;
+  position_number: number;
+  shift_plan_id: number;
+  assignment_status: string;
+  is_locked: boolean;
+}
+
+export interface SpecialShiftOccurrence {
+  occurrence_id: number;
+  date: string;
+  shift_id: number;
+  shift_name: string;
+  required_people: number;
+  filled_people: number;
+  status: string;
+  assignments: SpecialShiftOccurrenceAssignment[];
+  scheduling_run_id?: number | null;
+}
+
+export interface SpecialShiftWindowDetail {
+  window: SpecialShiftWindow;
+  rules: SpecialShiftWindowRule[];
+  occurrence_summary: {
+    occurrence_count: number;
+    required_headcount_total: number;
+    scheduled_count: number;
+    applied_count: number;
+    cancelled_count: number;
+    infeasible_count: number;
+  };
+  preview_summary: SpecialShiftWindowPreview;
+  latest_scheduling_run_id?: number | null;
+}
+
 export interface BatchPlan {
   id: number;
   batch_code: string;

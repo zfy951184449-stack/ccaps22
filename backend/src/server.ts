@@ -38,6 +38,7 @@ import schedulingRunRoutes from './routes/schedulingRuns';
 import schedulingV2Routes from './routes/schedulingV2Routes';
 import schedulingV3Routes from './routes/schedulingV3Routes';
 import schedulingV4Routes from './routes/schedulingV4';
+import schedulingRoutes from './routes/scheduling';
 import independentOperationRoutes from './routes/independentOperations';
 import dashboardRoutes from './routes/dashboard';
 import databaseRoutes from './routes/database';
@@ -55,6 +56,7 @@ import operationResourceRequirementRoutes from './routes/operationResourceRequir
 import platformRoutes from './routes/platform';
 import templateStageOperationResourceRoutes from './routes/templateStageOperationResources';
 import batchOperationResourceRoutes from './routes/batchOperationResources';
+import specialShiftWindowRoutes from './routes/specialShiftWindows';
 
 dotenv.config();
 
@@ -128,6 +130,7 @@ app.use('/api/scheduling-runs', schedulingRunRoutes);
 app.use('/api/v2/scheduling', schedulingV2Routes);
 app.use('/api/v3/scheduling', schedulingV3Routes);
 app.use('/api/v4/scheduling', schedulingV4Routes);
+app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/independent-operations', independentOperationRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/database', databaseRoutes);
@@ -143,6 +146,7 @@ app.use('/api/operation-resource-requirements', operationResourceRequirementRout
 app.use('/api/platform', platformRoutes);
 app.use('/api/template-stage-operations', templateStageOperationResourceRoutes);
 app.use('/api/batch-operations', batchOperationResourceRoutes);
+app.use('/api/special-shift-windows', specialShiftWindowRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

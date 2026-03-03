@@ -3,12 +3,12 @@ import request from 'supertest'
 import pool from '../config/database'
 import app from '../server'
 
-async function createApprovedBatch() {
+async function createDraftBatch() {
   const batchCode = `TEST-${Date.now()}`
   const [planResult] = await pool.execute<any>(
     `INSERT INTO production_batch_plans
       (batch_code, batch_name, template_id, project_code, planned_start_date, plan_status)
-     VALUES (?, '自动化测试批次', 1, 'TEST', CURDATE(), 'APPROVED')`,
+     VALUES (?, '自动化测试批次', 1, 'TEST', CURDATE(), 'DRAFT')`,
     [batchCode]
   )
 
@@ -84,7 +84,7 @@ describe('Batch Lifecycle Integration', () => {
   })
 
   test('activate -> deactivate -> delete flow', async () => {
-    const batchId = await createApprovedBatch()
+    const batchId = await createDraftBatch()
 
     const activateRes = await request(app)
       .post(`/api/calendar/batch/${batchId}/activate`)
@@ -109,22 +109,18 @@ describe('Batch Lifecycle Integration', () => {
   })
 
   test('prevent delete when residual exists without force', async () => {
-    const batchId = await createApprovedBatch()
-
-    await request(app).post(`/api/calendar/batch/${batchId}/activate`).send()
+    const batchId = await createDraftBatch()
 
     const deleteRes = await request(app)
       .delete(`/api/batch-plans/${batchId}`)
 
-    expect(deleteRes.status).toBe(200)
-    expect(deleteRes.body.status).toBe('SUCCESS')
-    expect(deleteRes.body.warnings).toBeDefined()
+    expect(deleteRes.status).toBe(409)
+    expect(deleteRes.body.code).toBe('RESIDUAL_DATA')
+    expect(deleteRes.body.details).toBeDefined()
   })
 
   test('force delete clears residuals', async () => {
-    const batchId = await createApprovedBatch()
-
-    await request(app).post(`/api/calendar/batch/${batchId}/activate`).send()
+    const batchId = await createDraftBatch()
 
     const deleteRes = await request(app)
       .delete(`/api/batch-plans/${batchId}?force=true`)

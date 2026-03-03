@@ -310,6 +310,11 @@ class SolverV4:
         if config.get("enable_night_shift_interval", True):
             night_interval_count = NightShiftIntervalConstraint(logger=logger).apply(ctx, req)
 
+        from constraints.special_shift_coverage import SpecialShiftCoverageConstraint
+        special_shift_coverage_count = 0
+        if config.get("enable_special_shift_coverage", True):
+            special_shift_coverage_count = SpecialShiftCoverageConstraint(logger=logger).apply(ctx, req)
+
         if callback:
             all_employees = {ep.employee_id for ep in req.employee_profiles}
             callback.log_section("排班规则概览", [
@@ -320,7 +325,8 @@ class SolverV4:
                 f"✅ 连续休息限制: {rest_limit_count} 条 (Max {req.config.get('max_consecutive_rest_days', 4)} 天)",
                 f"✅ 标准工时: {standard_hours_count} 条",
                 f"✅ 夜班休息: {night_rest_count} 条 (Blocks Enabled)",
-                f"✅ 夜班间隔: {night_interval_count} 条 (Min {req.config.get('min_night_shift_interval', 7) - 1} 天)"
+                f"✅ 夜班间隔: {night_interval_count} 条 (Min {req.config.get('min_night_shift_interval', 7) - 1} 天)",
+                f"✅ 专项班次覆盖: {special_shift_coverage_count} 条"
             ])
 
     # ──────────────────────────────────────────────

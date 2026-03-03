@@ -8,8 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest",
-    "migrate:metrics": "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE < ../database/create_personnel_scheduling_tables.sql",
-    "migrate:personnel": "mysql -u$MYSQL_USER -p$MYSQL_PASSWORD $MYSQL_DATABASE < ../database/update_personnel_scheduling_schema.sql"
+    "migrate:metrics": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/create_personnel_scheduling_tables.sql'",
+    "migrate:personnel": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/update_personnel_scheduling_schema.sql'",
+    "migrate:special-shifts": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/migrations/20260303_create_special_shift_window_tables.sql'"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -17,11 +18,11 @@
     "axios": "^1.13.2",
     "cors": "^2.8.5",
     "dayjs": "^1.11.18",
-    "dotenv": "^16.3.0",
+    "dotenv": "^16.6.1",
     "eventsource": "^4.1.0",
     "express": "^4.18.0",
     "http-proxy-middleware": "^3.0.5",
-    "mysql2": "^3.6.0",
+    "mysql2": "^3.18.2",
     "ws": "^8.18.3"
   },
   "devDependencies": {

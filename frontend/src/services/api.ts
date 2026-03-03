@@ -24,6 +24,11 @@ import {
   BatchStatistics,
   HolidayServiceStatus,
   SchedulingSettings,
+  SpecialShiftOccurrence,
+  SpecialShiftWindow,
+  SpecialShiftWindowDetail,
+  SpecialShiftWindowPreview,
+  SpecialShiftWindowRule,
 } from '../types';
 
 const api = axios.create({
@@ -191,6 +196,39 @@ export const shiftDefinitionApi = {
   update: (id: number, data: Partial<ShiftDefinition>) =>
     api.put(`/shift-definitions/${id}`, data).then((res) => res.data),
   remove: (id: number) => api.delete(`/shift-definitions/${id}`).then((res) => res.data),
+};
+
+export const specialShiftWindowApi = {
+  list: (params?: { status?: string; org_unit_id?: number; start_date?: string; end_date?: string }) =>
+    api.get<SpecialShiftWindow[]>('/special-shift-windows', { params }).then((res) => res.data),
+  get: (id: number) =>
+    api.get<SpecialShiftWindowDetail>(`/special-shift-windows/${id}`).then((res) => res.data),
+  create: (payload: {
+    window_name: string;
+    org_unit_id: number;
+    start_date: string;
+    end_date: string;
+    lock_after_apply?: boolean;
+    notes?: string | null;
+    rules: SpecialShiftWindowRule[];
+  }) => api.post<SpecialShiftWindowDetail>('/special-shift-windows', payload).then((res) => res.data),
+  update: (id: number, payload: {
+    window_name: string;
+    org_unit_id: number;
+    start_date: string;
+    end_date: string;
+    lock_after_apply?: boolean;
+    notes?: string | null;
+    rules: SpecialShiftWindowRule[];
+  }) => api.put<SpecialShiftWindowDetail>(`/special-shift-windows/${id}`, payload).then((res) => res.data),
+  preview: (id: number) =>
+    api.post<SpecialShiftWindowPreview>(`/special-shift-windows/${id}/preview`).then((res) => res.data),
+  activate: (id: number) =>
+    api.post<SpecialShiftWindowDetail>(`/special-shift-windows/${id}/activate`).then((res) => res.data),
+  cancel: (id: number) =>
+    api.post<SpecialShiftWindowDetail>(`/special-shift-windows/${id}/cancel`).then((res) => res.data),
+  getOccurrences: (id: number, params?: { start_date?: string; end_date?: string; status?: string }) =>
+    api.get<SpecialShiftOccurrence[]>(`/special-shift-windows/${id}/occurrences`, { params }).then((res) => res.data),
 };
 
 export const organizationApi = {

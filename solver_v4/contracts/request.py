@@ -43,6 +43,18 @@ class EmployeeProfile:
     unavailable_periods: List[Dict[str, str]] # {start_datetime, end_datetime}
 
 @dataclass
+class SpecialShiftRequirement:
+    occurrence_id: int
+    window_id: int
+    date: str
+    shift_id: int
+    required_people: int
+    eligible_employee_ids: List[int]
+    window_code: Optional[str] = None
+    plan_category: str = "BASE"
+    lock_after_apply: bool = True
+
+@dataclass
 class CalendarDay:
     date: str
     is_workday: bool
@@ -142,6 +154,7 @@ class SolverRequest:
     calendar: List[CalendarDay]
     shift_definitions: List[ShiftDefinition]
     shared_preferences: List[SharedPreference]
+    special_shift_requirements: List[SpecialShiftRequirement] = field(default_factory=list)
     locked_operations: List[LockedOperation] = field(default_factory=list)
     locked_shifts: List[LockedShift] = field(default_factory=list)
     historical_shifts: List[HistoricalShift] = field(default_factory=list)
@@ -184,6 +197,10 @@ class SolverRequest:
             ))
 
         mps = [EmployeeProfile(**ep) for ep in data.get("employee_profiles", [])]
+        special_shift_requirements = [
+            SpecialShiftRequirement(**requirement)
+            for requirement in data.get("special_shift_requirements", [])
+        ]
         cals = [CalendarDay(**c) for c in data.get("calendar", [])]
         shifts = [ShiftDefinition(**s) for s in data.get("shift_definitions", [])]
         shares = [SharedPreference(**sp) for sp in data.get("shared_preferences", [])]
@@ -202,6 +219,7 @@ class SolverRequest:
             request_id=data.get("request_id"),
             window=data.get("window"),
             operation_demands=op_demands,
+            special_shift_requirements=special_shift_requirements,
             employee_profiles=mps,
             calendar=cals,
             shift_definitions=shifts,

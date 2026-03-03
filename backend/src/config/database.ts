@@ -1,9 +1,22 @@
-import mysql from 'mysql2/promise';
+import mysql, { FieldPacket, Pool, PoolOptions, QueryResult } from 'mysql2/promise';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const dbConfig = {
+type DbPool = Omit<Pool, 'execute' | 'query'> & {
+  execute<T extends QueryResult = QueryResult>(
+    sql: string,
+    values?: any,
+  ): Promise<[T, FieldPacket[]]>;
+  query<T extends QueryResult = QueryResult>(
+    sql: string,
+    values?: any,
+  ): Promise<[T, FieldPacket[]]>;
+};
+
+export type DbExecutor = Pick<DbPool, 'execute'>;
+
+const dbConfig: PoolOptions = {
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
@@ -15,6 +28,6 @@ const dbConfig = {
   queueLimit: 0
 };
 
-export const pool = mysql.createPool(dbConfig);
+export const pool = mysql.createPool(dbConfig) as DbPool;
 
 export default pool;

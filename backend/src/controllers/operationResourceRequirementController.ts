@@ -64,7 +64,7 @@ export const getOperationResourceRequirements = async (req: Request, res: Respon
       JOIN operations o ON o.id = orr.operation_id
       WHERE 1 = 1
     `;
-    const params: unknown[] = [];
+    const params: any[] = [];
 
     if (operation_id) {
       query += ' AND orr.operation_id = ?';
@@ -192,7 +192,7 @@ export const updateOperationResourceRequirement = async (req: Request, res: Resp
       : null;
 
     const updates: string[] = [];
-    const params: unknown[] = [];
+    const params: any[] = [];
 
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) {
@@ -234,7 +234,7 @@ export const updateOperationResourceRequirement = async (req: Request, res: Resp
 
       if (updates.length) {
         params.push(id);
-        await connection.execute(`UPDATE operation_resource_requirements SET ${updates.join(', ')} WHERE id = ?`, params);
+        await connection.execute(`UPDATE operation_resource_requirements SET ${updates.join(', ')} WHERE id = ?`, params as any[]);
       }
 
       if (candidateResourceIds !== null) {

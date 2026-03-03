@@ -8,6 +8,8 @@
 
 import { Request, Response } from 'express';
 import { DataAssemblerV4 } from '../services/schedulingV4/DataAssemblerV4';
+import ShiftPlanLinkService from '../services/shiftPlanLinkService';
+import SpecialShiftWindowService from '../services/specialShiftWindowService';
 import pool from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import { EventEmitter } from 'events';
@@ -66,6 +68,18 @@ interface FlattenedAssignment {
 
 type ShiftPlanCategory = 'BASE' | 'PRODUCTION' | 'OVERTIME' | 'REST';
 
+interface SpecialShiftRunRequirement {
+    occurrence_id: number;
+    window_id: number;
+    window_code?: string;
+    date: string;
+    shift_id: number;
+    required_people: number;
+    eligible_employee_ids: number[];
+    plan_category: 'BASE' | 'OVERTIME';
+    lock_after_apply?: boolean;
+}
+
 interface ShiftDefinitionInfo {
     code: string;
     hours: number;
@@ -99,6 +113,102 @@ const buildShiftKey = (employeeId: number, date: string, shiftId?: number) =>
 const buildAssignmentKey = (operationId: number, positionNumber: number) =>
     `${operationId}:${positionNumber}`;
 
+const isSuccessfulSolverResult = (result: any) => ['OPTIMAL', 'FEASIBLE', 'FEASIBLE (Forced)'].includes(result?.status || '');
+
+const normalizeSpecialShiftRequirements = (value: unknown): SpecialShiftRunRequirement[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item: any) => {
+            const planCategory: 'BASE' | 'OVERTIME' =
+                String(item?.plan_category || 'BASE') === 'OVERTIME' ? 'OVERTIME' : 'BASE';
+
+            return {
+                occurrence_id: Number(item?.occurrence_id),
+                window_id: Number(item?.window_id),
+                window_code: item?.window_code ? String(item.window_code) : undefined,
+                date: String(item?.date || ''),
+                shift_id: Number(item?.shift_id),
+                required_people: Number(item?.required_people),
+                eligible_employee_ids: Array.isArray(item?.eligible_employee_ids)
+                    ? item.eligible_employee_ids.map((employeeId: unknown) => Number(employeeId)).filter((employeeId: number) => Number.isFinite(employeeId) && employeeId > 0)
+                    : [],
+                plan_category: planCategory,
+                lock_after_apply: item?.lock_after_apply !== undefined ? Boolean(item.lock_after_apply) : true,
+            };
+        })
+        .filter((item) =>
+            Number.isFinite(item.occurrence_id) &&
+            item.occurrence_id > 0 &&
+            Number.isFinite(item.window_id) &&
+            item.window_id > 0 &&
+            item.date &&
+            Number.isFinite(item.shift_id) &&
+            item.shift_id > 0 &&
+            Number.isFinite(item.required_people) &&
+            item.required_people > 0,
+        );
+};
+
+const buildSpecialShiftRunSummary = (requirements: SpecialShiftRunRequirement[]) => ({
+    special_shift_requirement_count: requirements.length,
+    special_shift_occurrence_count: requirements.length,
+    special_shift_required_headcount_total: requirements.reduce((sum, requirement) => sum + requirement.required_people, 0),
+    special_shift_assigned_headcount_total: 0,
+    special_shift_requirements: requirements,
+});
+
+const parseRunSummary = (summary: any) => {
+    if (!summary) {
+        return {};
+    }
+    if (typeof summary === 'string') {
+        try {
+            return JSON.parse(summary);
+        } catch (error) {
+            return {};
+        }
+    }
+    return summary;
+};
+
+const updateRunSummary = async (runId: number, patch: Record<string, any>) => {
+    const [rows] = await pool.execute<RowDataPacket[]>(
+        'SELECT summary_json FROM scheduling_runs WHERE id = ?',
+        [runId],
+    );
+    const current = rows.length > 0 ? parseRunSummary(rows[0].summary_json) : {};
+    const nextSummary = {
+        ...current,
+        ...patch,
+    };
+    await pool.execute(
+        'UPDATE scheduling_runs SET summary_json = ? WHERE id = ?',
+        [JSON.stringify(nextSummary), runId],
+    );
+};
+
+const markSpecialShiftOccurrencesScheduled = async (runId: number) => {
+    const [rows] = await pool.execute<RowDataPacket[]>(
+        'SELECT summary_json FROM scheduling_runs WHERE id = ?',
+        [runId],
+    );
+    if (!rows.length) {
+        return;
+    }
+
+    const summary = parseRunSummary(rows[0].summary_json);
+    const specialShiftRequirements = normalizeSpecialShiftRequirements(summary.special_shift_requirements);
+    const occurrenceIds = Array.from(new Set(specialShiftRequirements.map((requirement) => requirement.occurrence_id)));
+    if (!occurrenceIds.length) {
+        return;
+    }
+
+    await SpecialShiftWindowService.markOccurrencesScheduled(runId, occurrenceIds);
+};
+
 const derivePlanCategory = (
     shiftInfo: ShiftDefinitionInfo | undefined,
     hasAssignedTasks: boolean
@@ -114,6 +224,142 @@ const derivePlanCategory = (
     }
 
     return hasAssignedTasks ? 'PRODUCTION' : 'BASE';
+};
+
+const applySpecialShiftCoverage = async (
+    connection: any,
+    runId: number,
+    requirements: SpecialShiftRunRequirement[],
+    shiftSchedule: ShiftScheduleItem[],
+    shiftPlanIdByShiftKey: Map<string, number>,
+) => {
+    if (!requirements.length) {
+        return {
+            assignmentsInserted: 0,
+            lockedShiftPlans: 0,
+        };
+    }
+
+    const occurrenceIds = Array.from(new Set(requirements.map((requirement) => requirement.occurrence_id)));
+    const placeholders = occurrenceIds.map(() => '?').join(',');
+    await connection.execute(
+        `DELETE FROM special_shift_occurrence_assignments WHERE occurrence_id IN (${placeholders})`,
+        occurrenceIds,
+    );
+
+    const employeesByDateShift = new Map<string, number[]>();
+    shiftSchedule.forEach((plan) => {
+        const key = `${plan.date}:${plan.shift_id}`;
+        if (!employeesByDateShift.has(key)) {
+            employeesByDateShift.set(key, []);
+        }
+        employeesByDateShift.get(key)!.push(plan.employee_id);
+    });
+
+    let assignmentsInserted = 0;
+    let lockedShiftPlans = 0;
+
+    for (const requirement of requirements) {
+        const dateShiftKey = `${requirement.date}:${requirement.shift_id}`;
+        const eligibleSet = new Set(requirement.eligible_employee_ids);
+        const selectedEmployeeIds = (employeesByDateShift.get(dateShiftKey) || [])
+            .filter((employeeId) => eligibleSet.has(employeeId))
+            .sort((a, b) => a - b);
+
+        const selectedAssignments: Array<{ employeeId: number; shiftPlanId: number }> = [];
+        for (const employeeId of selectedEmployeeIds) {
+            const shiftPlanId = shiftPlanIdByShiftKey.get(buildShiftKey(employeeId, requirement.date, requirement.shift_id));
+            if (!shiftPlanId) {
+                continue;
+            }
+            selectedAssignments.push({ employeeId, shiftPlanId });
+            if (selectedAssignments.length >= requirement.required_people) {
+                break;
+            }
+        }
+
+        if (selectedAssignments.length < requirement.required_people) {
+            throw new Error(
+                `Special shift occurrence ${requirement.occurrence_id} 未满足覆盖要求: 需要 ${requirement.required_people} 人, 实际 ${selectedAssignments.length} 人`,
+            );
+        }
+
+        for (const [index, assignment] of selectedAssignments.entries()) {
+            await connection.execute(
+                `
+                    INSERT INTO special_shift_occurrence_assignments
+                      (
+                        occurrence_id,
+                        position_number,
+                        employee_id,
+                        shift_plan_id,
+                        scheduling_run_id,
+                        assignment_status,
+                        is_locked
+                      )
+                    VALUES (?, ?, ?, ?, ?, 'PLANNED', ?)
+                    ON DUPLICATE KEY UPDATE
+                      shift_plan_id = VALUES(shift_plan_id),
+                      scheduling_run_id = VALUES(scheduling_run_id),
+                      assignment_status = VALUES(assignment_status),
+                      is_locked = VALUES(is_locked),
+                      assigned_at = NOW()
+                `,
+                [
+                    requirement.occurrence_id,
+                    index + 1,
+                    assignment.employeeId,
+                    assignment.shiftPlanId,
+                    runId,
+                    requirement.lock_after_apply ? 1 : 0,
+                ],
+            );
+            assignmentsInserted++;
+        }
+
+        const shiftPlanIds = selectedAssignments.map((assignment) => assignment.shiftPlanId);
+        const shiftPlanPlaceholders = shiftPlanIds.map(() => '?').join(',');
+
+        if (requirement.plan_category === 'OVERTIME') {
+            await connection.execute(
+                `UPDATE employee_shift_plans
+                 SET plan_category = 'OVERTIME'
+                 WHERE id IN (${shiftPlanPlaceholders})`,
+                shiftPlanIds,
+            );
+        }
+
+        if (requirement.lock_after_apply) {
+            await connection.execute(
+                `UPDATE employee_shift_plans
+                 SET plan_state = 'LOCKED',
+                     is_locked = 1,
+                     locked_at = NOW(),
+                     lock_reason = CASE
+                       WHEN lock_reason IS NULL OR lock_reason = '' THEN ?
+                       ELSE lock_reason
+                     END
+                 WHERE id IN (${shiftPlanPlaceholders})`,
+                [`SPECIAL_SHIFT_WINDOW:${requirement.window_id}`, ...shiftPlanIds],
+            );
+            lockedShiftPlans += shiftPlanIds.length;
+        }
+
+        await connection.execute(
+            `
+                UPDATE special_shift_occurrences
+                SET status = 'APPLIED',
+                    scheduling_run_id = ?
+                WHERE id = ?
+            `,
+            [runId, requirement.occurrence_id],
+        );
+    }
+
+    return {
+        assignmentsInserted,
+        lockedShiftPlans,
+    };
 };
 
 export const createSolveTaskV4 = async (req: Request, res: Response) => {
@@ -170,6 +416,12 @@ async function triggerSolveAsync(runId: number, startDate: string, endDate: stri
 
         console.log(`[SchedulingV4] Data Assembled for Run ${runId}. RequestID: ${solverRequest.request_id}`);
         console.log(`[SchedulingV4] Candidate Stats: ${solverRequest.operation_demands.length} ops, ${solverRequest.employee_profiles.length} employees`);
+        await updateRunSummary(
+            runId,
+            buildSpecialShiftRunSummary(
+                normalizeSpecialShiftRequirements(solverRequest.special_shift_requirements || []),
+            ),
+        );
 
         // B. Call Solver
         await updateRunStatus(runId, 'RUNNING', null, 'SOLVING');
@@ -211,8 +463,7 @@ async function triggerSolveAsync(runId: number, startDate: string, endDate: stri
         const result = await response.json() as { status?: string; message?: string;[key: string]: any };
 
         // Determine Run Status based on Solver Result
-        const validStatuses = ['OPTIMAL', 'FEASIBLE', 'FEASIBLE (Forced)'];
-        const isSuccess = validStatuses.includes(result.status || '');
+        const isSuccess = isSuccessfulSolverResult(result);
         const finalStatus = isSuccess ? 'COMPLETED' : 'FAILED';
         const errorMsg = isSuccess ? null : (result.message || `Solver returned status: ${result.status}`);
 
@@ -847,8 +1098,25 @@ async function updateRunStatus(runId: number, status: string, error?: string | n
 
 async function saveResults(runId: number, result: any) {
     try {
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            'SELECT summary_json FROM scheduling_runs WHERE id = ?',
+            [runId],
+        );
+        const runSummary = rows.length > 0 ? parseRunSummary(rows[0].summary_json) : {};
         const storedResult = buildStoredResult(result);
+        if (storedResult.summary) {
+            storedResult.summary = {
+                ...storedResult.summary,
+                special_shift_requirement_count: Number(runSummary.special_shift_requirement_count || 0),
+                special_shift_occurrence_count: Number(runSummary.special_shift_occurrence_count || 0),
+                special_shift_required_headcount_total: Number(runSummary.special_shift_required_headcount_total || 0),
+                special_shift_assigned_headcount_total: Number(runSummary.special_shift_assigned_headcount_total || 0),
+            };
+        }
         await pool.execute('UPDATE scheduling_runs SET result_summary = ? WHERE id = ?', [JSON.stringify(storedResult), runId]);
+        if (isSuccessfulSolverResult(result)) {
+            await markSpecialShiftOccurrencesScheduled(runId);
+        }
     } catch (error) {
         console.error(`[SchedulingV4] Failed to save results for Run ${runId}:`, error);
         // Don't re-throw, to avoid marking the whole run as FAILED if just saving summary failed?
@@ -875,21 +1143,12 @@ export const receiveSolveResultV4 = async (req: Request, res: Response) => {
         console.log(`[SchedulingV4] Received final result via callback for Run ${run_id}`);
 
         // Determine final status
-        const validStatuses = ['OPTIMAL', 'FEASIBLE', 'FEASIBLE (Forced)'];
-        const isSuccess = validStatuses.includes(result.status);
+        const isSuccess = isSuccessfulSolverResult(result);
         const finalStatus = isSuccess ? 'COMPLETED' : 'FAILED';
         const errorMsg = isSuccess ? null : (result.message || `Solver returned status: ${result.status}`);
 
-        // Save result_summary and update status
-        await pool.execute<any>(
-            `UPDATE scheduling_runs 
-             SET status = ?, 
-                 stage = 'DONE',
-                 error_message = ?,
-                 result_summary = ?
-             WHERE id = ?`,
-            [finalStatus, errorMsg, JSON.stringify(buildStoredResult(result)), run_id]
-        );
+        await saveResults(Number(run_id), result);
+        await updateRunStatus(Number(run_id), finalStatus, errorMsg, 'DONE');
 
         console.log(`[SchedulingV4] Run ${run_id} updated to ${finalStatus} via callback`);
 
@@ -1002,7 +1261,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         // 1. Fetch Run Record & Raw Result
         const [runRows] = await connection.execute<RowDataPacket[]>(
-            'SELECT result_summary, window_start, window_end, status FROM scheduling_runs WHERE id = ?',
+            'SELECT result_summary, summary_json, window_start, window_end, status FROM scheduling_runs WHERE id = ?',
             [runId]
         );
 
@@ -1023,6 +1282,8 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         const rawResult = typeof run.result_summary === 'string'
             ? JSON.parse(run.result_summary)
             : run.result_summary;
+        const runSummary = parseRunSummary(run.summary_json);
+        const specialShiftRequirements = normalizeSpecialShiftRequirements(runSummary.special_shift_requirements);
 
         // 兼容 Solver V4 统一 schedules 格式 & 旧版 assignments/shift_schedule 格式
         // Diagnostic: Log the keys present in the rawResult to debug format detection
@@ -1197,6 +1458,14 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             try {
                 if (assignment.is_standalone) {
                     const taskId = Math.abs(assignment.operation_id);
+                    const standaloneAssignmentParams: any[] = [
+                        taskId,
+                        assignment.position_number,
+                        assignment.employee_id,
+                        runIdNum,
+                        assignment.date ?? null,
+                        assignment.shift_id ?? null,
+                    ];
                     await connection.execute(
                         `INSERT INTO standalone_task_assignments 
                            (task_id, position_number, employee_id, status, scheduling_run_id, assigned_date, assigned_shift_id)
@@ -1207,7 +1476,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                            scheduling_run_id = VALUES(scheduling_run_id),
                            assigned_date = VALUES(assigned_date),
                            assigned_shift_id = VALUES(assigned_shift_id)`,
-                        [taskId, assignment.position_number, assignment.employee_id, runIdNum, assignment.date, assignment.shift_id]
+                        standaloneAssignmentParams
                     );
                     assignedStandaloneTaskIds.add(taskId);
                     standaloneAssignmentsInserted++;
@@ -1359,10 +1628,33 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             );
         }
 
-        // 5. Update run status to APPLIED
+        const shiftLinkBackfill = await ShiftPlanLinkService.backfillMissingShiftPlanLinks(connection, {
+            runId: runIdNum,
+        });
+        if (shiftLinkBackfill.updatedAssignments > 0 || shiftLinkBackfill.ambiguousAssignments > 0 || shiftLinkBackfill.missingAssignments > 0) {
+            console.log(
+                `[SchedulingV4] Reconciled shift links for Run ${runId}: ` +
+                `updated=${shiftLinkBackfill.updatedAssignments}, ` +
+                `ambiguous=${shiftLinkBackfill.ambiguousAssignments}, ` +
+                `missing=${shiftLinkBackfill.missingAssignments}`
+            );
+        }
+
+        const specialShiftApplyResult = await applySpecialShiftCoverage(
+            connection,
+            runIdNum,
+            specialShiftRequirements,
+            shiftSchedule,
+            shiftPlanIdByShiftKey,
+        );
+
+        const nextRunSummary = {
+            ...runSummary,
+            special_shift_assigned_headcount_total: specialShiftApplyResult.assignmentsInserted,
+        };
         await connection.execute(
-            'UPDATE scheduling_runs SET status = ? WHERE id = ?',
-            ['APPLIED', runIdNum]
+            'UPDATE scheduling_runs SET status = ?, summary_json = ? WHERE id = ?',
+            ['APPLIED', JSON.stringify(nextRunSummary), runIdNum]
         );
 
         await connection.commit();
@@ -1370,7 +1662,8 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         console.log(
             `[SchedulingV4] Applied result for Run ${runId}: ${assignmentsInserted} batch assignments, ` +
             `${standaloneAssignmentsInserted} standalone assignments, ${shiftPlansInserted} new shift plans, ` +
-            `${shiftPlansReused} reused locked shift plans`
+            `${shiftPlansReused} reused locked shift plans, ` +
+            `${specialShiftApplyResult.assignmentsInserted} special coverage assignments`
         );
 
         res.json({
@@ -1381,7 +1674,12 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                 shift_plans_inserted: shiftPlansInserted,
                 shift_plans_reused: shiftPlansReused,
                 locked_assignments_skipped: lockedAssignmentsSkipped,
-                locked_shift_conflicts: lockedShiftConflicts
+                locked_shift_conflicts: lockedShiftConflicts,
+                backfilled_shift_links: shiftLinkBackfill.updatedAssignments,
+                shift_link_backfill_ambiguous: shiftLinkBackfill.ambiguousAssignments,
+                shift_link_backfill_missing: shiftLinkBackfill.missingAssignments,
+                special_shift_assignments_inserted: specialShiftApplyResult.assignmentsInserted,
+                special_shift_locked_plans: specialShiftApplyResult.lockedShiftPlans,
             }
         });
 

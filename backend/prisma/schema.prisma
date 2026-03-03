@@ -267,6 +267,7 @@ model employee_shift_plans {
   employees_employee_shift_plans_locked_byToemployees   employees?                         @relation("employee_shift_plans_locked_byToemployees", fields: [locked_by], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "employee_shift_plans_ibfk_6")
   scheduling_runs                                       scheduling_runs?                   @relation(fields: [scheduling_run_id], references: [id], onUpdate: NoAction, map: "fk_esp_scheduling_run")
   overtime_records                                      overtime_records[]
+  special_shift_occurrence_assignments                  special_shift_occurrence_assignments[]
   shift_change_logs                                     shift_change_logs[]
 
   @@index([batch_operation_plan_id], map: "batch_operation_plan_id")
@@ -277,6 +278,120 @@ model employee_shift_plans {
   @@index([locked_by], map: "locked_by")
   @@index([shift_id], map: "shift_id")
   @@index([updated_by], map: "updated_by")
+}
+
+model special_shift_windows {
+  id                                                           Int                        @id @default(autoincrement())
+  window_code                                                  String                     @unique(map: "uk_special_shift_window_code") @db.VarChar(50)
+  window_name                                                  String                     @db.VarChar(200)
+  org_unit_id                                                  Int
+  start_date                                                   DateTime                   @db.Date
+  end_date                                                     DateTime                   @db.Date
+  status                                                       special_shift_windows_status @default(DRAFT)
+  lock_after_apply                                             Boolean                    @default(true)
+  notes                                                        String?                    @db.Text
+  created_by                                                   Int?
+  updated_by                                                   Int?
+  created_at                                                   DateTime                   @default(now()) @db.Timestamp(0)
+  updated_at                                                   DateTime                   @default(now()) @db.Timestamp(0)
+  organization_units                                           organization_units         @relation(fields: [org_unit_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_special_shift_windows_org_unit")
+  employees_special_shift_windows_created_byToemployees        employees?                 @relation("special_shift_windows_created_byToemployees", fields: [created_by], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_special_shift_windows_created_by")
+  employees_special_shift_windows_updated_byToemployees        employees?                 @relation("special_shift_windows_updated_byToemployees", fields: [updated_by], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_special_shift_windows_updated_by")
+  special_shift_occurrences                                    special_shift_occurrences[]
+  special_shift_window_rules                                   special_shift_window_rules[]
+
+  @@index([org_unit_id], map: "idx_special_shift_windows_org_unit")
+  @@index([status], map: "idx_special_shift_windows_status")
+  @@index([start_date, end_date], map: "idx_special_shift_windows_dates")
+}
+
+model special_shift_window_rules {
+  id                                        Int                                       @id @default(autoincrement())
+  window_id                                 Int
+  shift_id                                  Int
+  required_people                           Int
+  plan_category                             special_shift_window_rules_plan_category   @default(BASE)
+  qualification_id                          Int?
+  min_level                                 Int?                                      @db.TinyInt
+  is_mandatory                              Boolean                                   @default(true)
+  days_of_week                              Json
+  notes                                     String?                                   @db.Text
+  created_at                                DateTime                                  @default(now()) @db.Timestamp(0)
+  updated_at                                DateTime                                  @default(now()) @db.Timestamp(0)
+  special_shift_windows                     special_shift_windows                      @relation(fields: [window_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_window_rules_window")
+  shift_definitions                         shift_definitions                         @relation(fields: [shift_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_special_shift_window_rules_shift")
+  qualifications                            qualifications?                           @relation(fields: [qualification_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_special_shift_window_rules_qualification")
+  special_shift_occurrences                 special_shift_occurrences[]
+  special_shift_window_employee_scopes      special_shift_window_employee_scopes[]
+
+  @@index([window_id], map: "idx_special_shift_window_rules_window")
+  @@index([shift_id], map: "idx_special_shift_window_rules_shift")
+  @@index([qualification_id], map: "idx_special_shift_window_rules_qualification")
+}
+
+model special_shift_window_employee_scopes {
+  id                                        Int                                             @id @default(autoincrement())
+  rule_id                                   Int
+  employee_id                               Int
+  scope_type                                special_shift_window_employee_scopes_scope_type
+  created_at                                DateTime                                        @default(now()) @db.Timestamp(0)
+  special_shift_window_rules                special_shift_window_rules                      @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_window_employee_scopes_rule")
+  employees                                 employees                                       @relation("special_shift_window_employee_scopes_employee_idToemployees", fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_window_employee_scopes_employee")
+
+  @@unique([rule_id, employee_id, scope_type], map: "uk_special_shift_window_scope")
+  @@index([rule_id], map: "idx_special_shift_window_employee_scopes_rule")
+  @@index([employee_id], map: "idx_special_shift_window_employee_scopes_employee")
+  @@index([scope_type], map: "idx_special_shift_window_employee_scopes_type")
+}
+
+model special_shift_occurrences {
+  id                                        Int                                    @id @default(autoincrement())
+  window_id                                 Int
+  rule_id                                   Int
+  occurrence_date                           DateTime                               @db.Date
+  shift_id                                  Int
+  required_people                           Int
+  plan_category                             special_shift_occurrences_plan_category
+  qualification_id                          Int?
+  min_level                                 Int?                                   @db.TinyInt
+  status                                    special_shift_occurrences_status       @default(PENDING)
+  scheduling_run_id                         BigInt?                                @db.UnsignedBigInt
+  created_at                                DateTime                               @default(now()) @db.Timestamp(0)
+  updated_at                                DateTime                               @default(now()) @db.Timestamp(0)
+  special_shift_windows                     special_shift_windows                   @relation(fields: [window_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_occurrences_window")
+  special_shift_window_rules                special_shift_window_rules              @relation(fields: [rule_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_occurrences_rule")
+  shift_definitions                         shift_definitions                      @relation(fields: [shift_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_special_shift_occurrences_shift")
+  qualifications                            qualifications?                        @relation(fields: [qualification_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_special_shift_occurrences_qualification")
+  scheduling_runs                           scheduling_runs?                       @relation(fields: [scheduling_run_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_special_shift_occurrences_run")
+  special_shift_occurrence_assignments      special_shift_occurrence_assignments[]
+
+  @@unique([window_id, rule_id, occurrence_date], map: "uk_special_shift_occurrence")
+  @@index([window_id, occurrence_date], map: "idx_special_shift_occurrences_window_date")
+  @@index([status], map: "idx_special_shift_occurrences_status")
+  @@index([scheduling_run_id], map: "idx_special_shift_occurrences_run")
+}
+
+model special_shift_occurrence_assignments {
+  id                                        Int                                                     @id @default(autoincrement())
+  occurrence_id                             Int
+  position_number                           Int
+  employee_id                               Int
+  shift_plan_id                             Int
+  scheduling_run_id                         BigInt?                                                 @db.UnsignedBigInt
+  assignment_status                         special_shift_occurrence_assignments_assignment_status  @default(PLANNED)
+  is_locked                                 Boolean                                                 @default(false)
+  assigned_at                               DateTime                                                @default(now()) @db.Timestamp(0)
+  special_shift_occurrences                 special_shift_occurrences                               @relation(fields: [occurrence_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_occurrence_assignments_occurrence")
+  employees                                 employees                                               @relation("special_shift_occurrence_assignments_employee_idToemployees", fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_occurrence_assignments_employee")
+  employee_shift_plans                      employee_shift_plans                                    @relation(fields: [shift_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_special_shift_occurrence_assignments_shift_plan")
+  scheduling_runs                           scheduling_runs?                                        @relation(fields: [scheduling_run_id], references: [id], onDelete: SetNull, onUpdate: NoAction, map: "fk_special_shift_occurrence_assignments_run")
+
+  @@unique([occurrence_id, position_number], map: "uk_special_shift_occurrence_position")
+  @@unique([occurrence_id, employee_id], map: "uk_special_shift_occurrence_employee")
+  @@index([occurrence_id], map: "idx_special_shift_occurrence_assignments_occurrence")
+  @@index([shift_plan_id], map: "idx_special_shift_occurrence_assignments_shift_plan")
+  @@index([employee_id], map: "idx_special_shift_occurrence_assignments_employee")
+  @@index([scheduling_run_id], map: "idx_special_shift_occurrence_assignments_run")
 }
 
 
@@ -325,9 +440,12 @@ model employees {
   employee_shift_plans_employee_shift_plans_created_byToemployees                     employee_shift_plans[]         @relation("employee_shift_plans_created_byToemployees")
   employee_shift_plans_employee_shift_plans_updated_byToemployees                     employee_shift_plans[]         @relation("employee_shift_plans_updated_byToemployees")
   employee_shift_plans_employee_shift_plans_locked_byToemployees                      employee_shift_plans[]         @relation("employee_shift_plans_locked_byToemployees")
-
   employee_unavailability_employee_unavailability_created_byToemployees               employee_unavailability[]      @relation("employee_unavailability_created_byToemployees")
   employee_unavailability_employee_unavailability_employee_idToemployees              employee_unavailability[]      @relation("employee_unavailability_employee_idToemployees")
+  special_shift_occurrence_assignments_special_shift_occurrence_assignments_employee_idToemployees special_shift_occurrence_assignments[] @relation("special_shift_occurrence_assignments_employee_idToemployees")
+  special_shift_window_employee_scopes_special_shift_window_employee_scopes_employee_idToemployees special_shift_window_employee_scopes[] @relation("special_shift_window_employee_scopes_employee_idToemployees")
+  special_shift_windows_special_shift_windows_created_byToemployees                   special_shift_windows[]        @relation("special_shift_windows_created_byToemployees")
+  special_shift_windows_special_shift_windows_updated_byToemployees                   special_shift_windows[]        @relation("special_shift_windows_updated_byToemployees")
   organization_units                                                                  organization_units?            @relation(fields: [unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_emp_unit")
   employee_roles                                                                      employee_roles?                @relation(fields: [primary_role_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_employees_primary_role")
   shifts                                                                              shifts?                        @relation(fields: [primary_shift_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_employees_primary_shift")
@@ -519,6 +637,7 @@ model organization_units {
   organization_units       organization_units?          @relation("organization_unitsToorganization_units", fields: [parent_id], references: [id], onUpdate: NoAction, map: "fk_org_parent")
   other_organization_units organization_units[]         @relation("organization_unitsToorganization_units")
   process_templates        process_templates[]
+  special_shift_windows    special_shift_windows[]
 
   @@unique([unit_type, unit_code], map: "uk_org_type_code")
   @@index([parent_id], map: "idx_org_parent")
@@ -663,6 +782,8 @@ model qualifications {
   qualification_name                   String                                 @db.VarChar(100)
   employee_qualifications              employee_qualifications[]
   operation_qualification_requirements operation_qualification_requirements[]
+  special_shift_occurrences            special_shift_occurrences[]
+  special_shift_window_rules           special_shift_window_rules[]
 }
 
 model scheduling_metrics_snapshots {
@@ -772,6 +893,8 @@ model scheduling_runs {
   scheduling_results          scheduling_results[]
   scheduling_run_batches      scheduling_run_batches[]
   scheduling_run_events       scheduling_run_events[]
+  special_shift_occurrence_assignments special_shift_occurrence_assignments[]
+  special_shift_occurrences   special_shift_occurrences[]
 
   @@index([period_start, period_end], map: "idx_period")
   @@index([status], map: "idx_status")
@@ -820,6 +943,8 @@ model shift_definitions {
   is_night_shift              Boolean                       @default(false)
   batch_personnel_assignments batch_personnel_assignments[]
   employee_shift_plans        employee_shift_plans[]
+  special_shift_occurrences   special_shift_occurrences[]
+  special_shift_window_rules  special_shift_window_rules[]
   employees                   employees?                    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "shift_definitions_ibfk_1")
 
   @@index([created_by], map: "created_by")
@@ -1130,4 +1255,40 @@ enum batch_personnel_assignments_assignment_origin {
   AUTO
   MANUAL
   ADJUSTED
+}
+
+enum special_shift_windows_status {
+  DRAFT
+  ACTIVE
+  CANCELLED
+  ARCHIVED
+}
+
+enum special_shift_window_rules_plan_category {
+  BASE
+  OVERTIME
+}
+
+enum special_shift_window_employee_scopes_scope_type {
+  ALLOW
+  DENY
+}
+
+enum special_shift_occurrences_plan_category {
+  BASE
+  OVERTIME
+}
+
+enum special_shift_occurrences_status {
+  PENDING
+  SCHEDULED
+  APPLIED
+  CANCELLED
+  INFEASIBLE
+}
+
+enum special_shift_occurrence_assignments_assignment_status {
+  PLANNED
+  CONFIRMED
+  CANCELLED
 }

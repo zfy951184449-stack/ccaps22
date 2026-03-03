@@ -66,6 +66,7 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             label: '生产计划',
             children: [
                 { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
+                { key: 'process-templates-v2', icon: <ProjectOutlined />, label: '工艺模版 V2', path: '/process-templates-v2' },
                 { key: 'batch-management', icon: <AppstoreOutlined />, label: '批次管理', path: '/batch-management' },
                 { key: 'batch-management-v4', icon: <AppstoreOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
                 { key: 'task-pool', icon: <AppstoreOutlined />, label: '任务池', path: '/task-pool' },
@@ -79,6 +80,7 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             children: [
                 { key: 'organization-workbench', icon: <ApartmentOutlined />, label: '组织与人员', path: '/organization-workbench' },
                 { key: 'personnel-scheduling', icon: <ClockCircleOutlined />, label: '人员排班', path: '/personnel-scheduling' },
+                { key: 'special-shift-windows', icon: <ScheduleOutlined />, label: '专项班次窗口', path: '/special-shift-windows' },
                 { key: 'auto-scheduling', icon: <RobotOutlined />, label: '自动排班', path: '/auto-scheduling' },
                 { key: 'modular-scheduling', icon: <RobotOutlined />, label: '自动排班（模块化）', path: '/modular-scheduling' },
                 { key: 'scheduling-v3', icon: <RocketOutlined />, label: 'V3 自动排班', path: '/scheduling-v3' },

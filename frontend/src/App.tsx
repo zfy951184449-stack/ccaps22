@@ -16,11 +16,13 @@ const QualificationMatrixPage = lazy(() => import('./pages/QualificationMatrixPa
 const OperationsPage = lazy(() => import('./pages/OperationsPage'));
 const OperationTypesPage = lazy(() => import('./pages/OperationTypesPage'));
 const ProcessTemplatesPage = lazy(() => import('./pages/ProcessTemplatesPage'));
+const ProcessTemplatesV2Page = lazy(() => import('./pages/ProcessTemplatesV2Page'));
 const BatchManagementPage = lazy(() => import('./pages/BatchManagementPage'));
 const BatchManagementV4Page = lazy(() => import('./pages/BatchManagementV4Page'));
 const TaskPoolPage = lazy(() => import('./pages/TaskPoolPage'));
 const ScheduleOverviewPage = lazy(() => import('./pages/ScheduleOverviewPage'));
 const PersonnelSchedulingPage = lazy(() => import('./pages/PersonnelSchedulingPage'));
+const SpecialShiftWindowsPage = lazy(() => import('./pages/SpecialShiftWindowsPage'));
 const AutoSchedulingPage = lazy(() => import('./pages/AutoSchedulingPage'));
 const ModularSchedulingPage = lazy(() => import('./pages/ModularSchedulingPage'));
 const SchedulingV3Page = lazy(() => import('./pages/SchedulingV3Page'));
@@ -47,11 +49,13 @@ const pathToTitle: { [key: string]: string } = {
   '/operations': '操作管理',
   '/operation-types': '操作类型',
   '/process-templates': '工艺模版',
+  '/process-templates-v2': '工艺模版 V2',
   '/batch-management': '批次管理',
   '/batch-management-v4': '批次管理 V4',
   '/task-pool': '任务池',
   '/schedule-overview': '排班总览',
   '/personnel-scheduling': '人员排班',
+  '/special-shift-windows': '专项班次窗口',
   '/auto-scheduling': '自动排班',
   '/modular-scheduling': '自动排班（模块化）',
   '/scheduling-v3': 'V3 自动排班',
@@ -157,11 +161,13 @@ const AppLayout: React.FC = () => {
                 <Route path="/operations" element={<OperationsPage />} />
                 <Route path="/operation-types" element={<OperationTypesPage />} />
                 <Route path="/process-templates" element={<ProcessTemplatesPage />} />
+                <Route path="/process-templates-v2" element={<ProcessTemplatesV2Page />} />
                 <Route path="/batch-management" element={<BatchManagementPage />} />
                 <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
                 <Route path="/task-pool" element={<TaskPoolPage />} />
                 <Route path="/schedule-overview" element={<ScheduleOverviewPage />} />
                 <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
+                <Route path="/special-shift-windows" element={<SpecialShiftWindowsPage />} />
                 <Route path="/auto-scheduling" element={<AutoSchedulingPage />} />
                 <Route path="/modular-scheduling" element={<ModularSchedulingPage />} />
                 <Route path="/scheduling-v3" element={<SchedulingV3Page />} />

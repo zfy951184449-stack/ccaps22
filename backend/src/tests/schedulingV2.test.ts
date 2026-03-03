@@ -179,8 +179,8 @@ describe('Scheduling V2 Services', () => {
 
   describe('SolverConfig', () => {
     it('should have correct default values', () => {
-      expect(DEFAULT_SOLVER_CONFIG.monthly_hours_lower_offset).toBe(16);
-      expect(DEFAULT_SOLVER_CONFIG.monthly_hours_upper_offset).toBe(16);
+      expect(DEFAULT_SOLVER_CONFIG.monthly_hours_lower_offset).toBe(4);
+      expect(DEFAULT_SOLVER_CONFIG.monthly_hours_upper_offset).toBe(32);
       expect(DEFAULT_SOLVER_CONFIG.max_consecutive_workdays).toBe(6);
       expect(DEFAULT_SOLVER_CONFIG.night_rest_soft_days).toBe(2);
       expect(DEFAULT_SOLVER_CONFIG.enforce_monthly_hours).toBe(true);
@@ -200,7 +200,7 @@ describe('Scheduling V2 Services', () => {
 
       expect(merged.monthly_hours_lower_offset).toBe(20);
       expect(merged.max_consecutive_workdays).toBe(5);
-      expect(merged.monthly_hours_upper_offset).toBe(16); // unchanged
+      expect(merged.monthly_hours_upper_offset).toBe(32); // unchanged
     });
   });
 });
@@ -288,4 +288,3 @@ describe('Integration Tests', () => {
     });
   });
 });
-

@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import app from '../server';
 import axios from 'axios';
+import pool from '../config/database';
 
 // Mock 数据库连接
 vi.mock('../config/database', () => {
@@ -41,6 +42,7 @@ const mockAxios = axios as unknown as {
   get: ReturnType<typeof vi.fn>;
   post: ReturnType<typeof vi.fn>;
 };
+const mockPool = pool as any;
 
 describe('Scheduling V2 API Integration', () => {
   beforeEach(() => {
@@ -74,8 +76,7 @@ describe('Scheduling V2 API Integration', () => {
 
     it('should accept valid request and return run info', async () => {
       // Mock database insert
-      const pool = require('../config/database').default;
-      pool.execute.mockResolvedValueOnce([{ insertId: 1 }, null]);
+      mockPool.execute.mockResolvedValueOnce([{ insertId: 1 }, null]);
 
       const response = await request(app)
         .post('/api/v2/scheduling/solve')
@@ -98,8 +99,7 @@ describe('Scheduling V2 API Integration', () => {
 
   describe('GET /api/v2/scheduling/runs/:runId', () => {
     it('should return 404 for non-existent run', async () => {
-      const pool = require('../config/database').default;
-      pool.execute.mockResolvedValueOnce([[], null]);
+      mockPool.execute.mockResolvedValueOnce([[], null]);
 
       const response = await request(app)
         .get('/api/v2/scheduling/runs/999999');
@@ -109,8 +109,7 @@ describe('Scheduling V2 API Integration', () => {
     });
 
     it('should return run status for existing run', async () => {
-      const pool = require('../config/database').default;
-      pool.execute.mockResolvedValueOnce([[{
+      mockPool.execute.mockResolvedValueOnce([[{
         id: 1,
         run_code: 'SCH-TEST-001',
         status: 'RUNNING',
@@ -137,8 +136,7 @@ describe('Scheduling V2 API Integration', () => {
 
   describe('POST /api/v2/scheduling/runs/:runId/cancel', () => {
     it('should cancel running task', async () => {
-      const pool = require('../config/database').default;
-      pool.execute
+      mockPool.execute
         .mockResolvedValueOnce([[{
           id: 1,
           status: 'RUNNING',
@@ -154,8 +152,7 @@ describe('Scheduling V2 API Integration', () => {
     });
 
     it('should reject cancel for completed task', async () => {
-      const pool = require('../config/database').default;
-      pool.execute.mockResolvedValueOnce([[{
+      mockPool.execute.mockResolvedValueOnce([[{
         id: 1,
         status: 'COMPLETED',
       }], null]);
@@ -243,4 +240,3 @@ describe('Data Flow Validation', () => {
     });
   });
 });
-

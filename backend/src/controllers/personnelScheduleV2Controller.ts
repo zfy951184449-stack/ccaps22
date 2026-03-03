@@ -178,9 +178,22 @@ export const getGridData = async (req: Request, res: Response) => {
 
         const shiftSql = `
       SELECT esp.employee_id, esp.plan_date, esp.shift_id, esp.plan_category, esp.plan_hours,
-             sd.shift_name, esp.is_locked
+             sd.shift_name, esp.is_locked,
+             COALESCE(ssc.special_coverage_count, 0) AS special_coverage_count,
+             ssc.special_coverage_codes
       FROM employee_shift_plans esp
       LEFT JOIN shift_definitions sd ON esp.shift_id = sd.id
+      LEFT JOIN (
+        SELECT
+          ssoa.shift_plan_id,
+          COUNT(*) AS special_coverage_count,
+          GROUP_CONCAT(DISTINCT ssw.window_code ORDER BY ssw.window_code SEPARATOR ',') AS special_coverage_codes
+        FROM special_shift_occurrence_assignments ssoa
+        JOIN special_shift_occurrences sso ON sso.id = ssoa.occurrence_id
+        JOIN special_shift_windows ssw ON ssw.id = sso.window_id
+        WHERE ssoa.assignment_status <> 'CANCELLED'
+        GROUP BY ssoa.shift_plan_id
+      ) ssc ON ssc.shift_plan_id = esp.id
       WHERE esp.plan_date BETWEEN ? AND ?
         AND esp.employee_id IN (${placeHolders})
     `;
@@ -215,7 +228,14 @@ export const getGridData = async (req: Request, res: Response) => {
                         shiftId: shiftData.shift_id,
                         shiftName: shiftData.shift_name,
                         hours: shiftData.plan_hours,
-                        isOvertime: shiftData.plan_category === 'OVERTIME'
+                        isOvertime: shiftData.plan_category === 'OVERTIME',
+                        specialCoverageCount: Number(shiftData.special_coverage_count || 0),
+                        specialCoverageCodes: shiftData.special_coverage_codes
+                            ? String(shiftData.special_coverage_codes)
+                                .split(',')
+                                .map((code: string) => code.trim())
+                                .filter(Boolean)
+                            : [],
                     };
                 });
             }

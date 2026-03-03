@@ -107,6 +107,8 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
          esp.lock_reason,
          esp.locked_at,
          esp.locked_by,
+         COALESCE(ssc.special_coverage_count, 0) AS special_coverage_count,
+         ssc.special_coverage_codes,
          sd.shift_code,
          sd.shift_name,
          sd.start_time AS shift_start_time,
@@ -129,6 +131,17 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
        LEFT JOIN employee_roles er ON er.id = e.primary_role_id
        LEFT JOIN organization_units u_unit ON u_unit.id = e.unit_id -- Join Unit (Team)
        LEFT JOIN organization_units u_dept ON u_dept.id = u_unit.parent_id -- Join Parent (Dept)
+       LEFT JOIN (
+         SELECT
+           ssoa.shift_plan_id,
+           COUNT(*) AS special_coverage_count,
+           GROUP_CONCAT(DISTINCT ssw.window_code ORDER BY ssw.window_code SEPARATOR ',') AS special_coverage_codes
+         FROM special_shift_occurrence_assignments ssoa
+         JOIN special_shift_occurrences sso ON sso.id = ssoa.occurrence_id
+         JOIN special_shift_windows ssw ON ssw.id = sso.window_id
+         WHERE ssoa.assignment_status <> 'CANCELLED'
+         GROUP BY ssoa.shift_plan_id
+       ) ssc ON ssc.shift_plan_id = esp.id
        LEFT JOIN shift_definitions sd ON esp.shift_id = sd.id
        LEFT JOIN batch_personnel_assignments bpa ON esp.id = bpa.shift_plan_id
        LEFT JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id

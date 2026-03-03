@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import { ScheduleV2GridEmployee, ShiftStyleV2, ScheduleV2GridShift } from '../types';
@@ -248,8 +248,16 @@ const PersonnelScheduleTable: React.FC<PersonnelScheduleTableProps> = ({
                                             style={{ gridColumn: `${dayIndex + 2} / ${dayIndex + 3}`, gridRow: `${rowIndex} / ${rowIndex + 1}` }}
                                         >
                                             {shiftStyle && (
-                                                <div className={shiftStyle.className}>
-                                                    {shiftStyle.label}
+                                                <div className="relative w-full">
+                                                    <div className={shiftStyle.className}>
+                                                        {shiftStyle.label}
+                                                    </div>
+                                                    {(shift.specialCoverageCount || 0) > 0 && (
+                                                        <span
+                                                            className="absolute -top-1 -right-1 inline-flex h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white"
+                                                            title={(shift.specialCoverageCodes || []).join(', ')}
+                                                        />
+                                                    )}
                                                 </div>
                                             )}
                                         </div>

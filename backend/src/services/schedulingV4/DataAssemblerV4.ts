@@ -10,6 +10,7 @@ import { RowDataPacket } from 'mysql2';
 import pool from '../../config/database';
 import dayjs from 'dayjs';
 import { isBatchResourceSnapshotsEnabled, isRuntimeResourceSnapshotReadEnabled } from '../../utils/featureFlags';
+import SpecialShiftWindowService from '../specialShiftWindowService';
 
 // --- Interfaces matching Solver V4 Contracts (to be defined in Python) ---
 
@@ -17,6 +18,7 @@ export interface V4SolverRequest {
     request_id: string;
     window: V4SchedulingWindow;
     operation_demands: V4OperationDemand[];
+    special_shift_requirements: V4SpecialShiftRequirement[];
     employee_profiles: V4EmployeeProfile[];
     calendar: V4CalendarDay[];
     shift_definitions: V4ShiftDefinition[];
@@ -60,6 +62,18 @@ interface V4PositionQualification {
     position_number: number;
     qualifications: { qualification_id: number; min_level: number; is_mandatory: boolean }[];
     candidate_employee_ids: number[]; // [OPTIMIZATION] Pre-filtered candidates
+}
+
+interface V4SpecialShiftRequirement {
+    occurrence_id: number;
+    window_id: number;
+    window_code?: string;
+    date: string;
+    shift_id: number;
+    required_people: number;
+    eligible_employee_ids: number[];
+    plan_category: string;
+    lock_after_apply?: boolean;
 }
 
 interface V4EmployeeProfile {
@@ -182,7 +196,8 @@ export class DataAssemblerV4 {
             shareGroupsRaw,
             lockedOperations,
             lockedShifts,
-            historicalShifts
+            historicalShifts,
+            specialShiftRequirements,
         ] = await Promise.all([
             this.fetchOperations(startDate, endDate, batchIds),
             this.fetchEmployees(startDate, endDate, teamIds),
@@ -191,7 +206,8 @@ export class DataAssemblerV4 {
             this.fetchShareGroups(startDate, endDate, batchIds),
             this.fetchLockedOperations(batchIds),
             this.fetchLockedShifts(startDate, endDate),
-            this.fetchHistoricalShifts(startDate)
+            this.fetchHistoricalShifts(startDate),
+            this.fetchSpecialShiftRequirements(startDate, endDate),
         ]);
 
         // [OPTIMIZATION] Calculate Candidate Lists
@@ -222,6 +238,7 @@ export class DataAssemblerV4 {
             request_id: requestId,
             window: { start_date: startDate, end_date: endDate },
             operation_demands: allDemands,
+            special_shift_requirements: specialShiftRequirements,
             employee_profiles: employees,
             calendar: calendar,
             shift_definitions: shifts,
@@ -327,6 +344,25 @@ export class DataAssemblerV4 {
         }
 
         return demands;
+    }
+
+    private static async fetchSpecialShiftRequirements(
+        startDate: string,
+        endDate: string,
+    ): Promise<V4SpecialShiftRequirement[]> {
+        const requirements = await SpecialShiftWindowService.fetchSolverRequirements(startDate, endDate);
+
+        return requirements.map((requirement) => ({
+            occurrence_id: requirement.occurrence_id,
+            window_id: requirement.window_id,
+            window_code: requirement.window_code,
+            date: requirement.date,
+            shift_id: requirement.shift_id,
+            required_people: requirement.required_people,
+            eligible_employee_ids: requirement.eligible_employee_ids,
+            plan_category: requirement.plan_category,
+            lock_after_apply: requirement.lock_after_apply,
+        }));
     }
 
     private static async fetchOperations(startDate: string, endDate: string, batchIds: number[]) {

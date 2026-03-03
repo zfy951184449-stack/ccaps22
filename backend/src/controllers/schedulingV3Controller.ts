@@ -521,7 +521,7 @@ async function saveResultsV3(runId: number, solverResponse: any): Promise<void> 
                 `DELETE FROM batch_personnel_assignments 
                  WHERE batch_operation_plan_id IN (${placeholders})
                  AND (is_locked IS NULL OR is_locked = 0)`,
-                operationIds
+                operationIds as any[]
             );
             console.log(`[SchedulingV3] 已删除 ${operationIds.length} 个操作的旧分配记录 (保留锁定记录)`);
         }
@@ -746,4 +746,3 @@ function parseTime(timeStr: string): number {
     const [h, m] = timeStr.split(':').map(Number);
     return h * 60 + m;
 }
-
