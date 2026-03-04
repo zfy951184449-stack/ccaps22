@@ -9,6 +9,7 @@ import {
   loadTemplateRuleMetadataForStageOperations,
 } from '../services/templateResourceRuleService';
 import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
+import { copyTemplateScheduleBindings } from '../services/resourceNodeService';
 
 // 生成下一个模版编码
 const generateNextTemplateCode = async (): Promise<string> => {
@@ -121,7 +122,13 @@ export const getTemplateById = async (req: Request, res: Response) => {
 
     // 获取模版基础信息
     const [templateRows] = await pool.execute(
-      'SELECT * FROM process_templates WHERE id = ?',
+      `SELECT
+          pt.*,
+          ou.unit_code AS team_code,
+          ou.unit_name AS team_name
+       FROM process_templates pt
+       LEFT JOIN organization_units ou ON ou.id = pt.team_id
+       WHERE pt.id = ?`,
       [id]
     ) as any;
 
@@ -238,12 +245,12 @@ export const createTemplate = async (req: Request, res: Response) => {
 export const updateTemplate = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { template_name, description } = req.body;
+    const { template_name, description, team_id } = req.body;
 
-    // 只更新名称和描述，不更新总天数
+    // 只更新名称、描述和团队，不更新总天数
     const [result] = await pool.execute(
-      'UPDATE process_templates SET template_name = ?, description = ? WHERE id = ?',
-      [template_name, description || null, id]
+      'UPDATE process_templates SET template_name = ?, description = ?, team_id = ? WHERE id = ?',
+      [template_name, description || null, team_id || null, id]
     ) as any;
 
     if (result.affectedRows === 0) {
@@ -325,12 +332,13 @@ export const copyTemplate = async (req: Request, res: Response) => {
     // 创建新模版
     const template_code = await generateNextTemplateCode();
     const [newTemplateResult] = await connection.execute(
-      'INSERT INTO process_templates (template_code, template_name, description, total_days) VALUES (?, ?, ?, ?)',
+      'INSERT INTO process_templates (template_code, template_name, description, total_days, team_id) VALUES (?, ?, ?, ?, ?)',
       [
         template_code,
         new_name || `${originalTemplate[0].template_name} - 副本`,
         originalTemplate[0].description,
-        originalTemplate[0].total_days
+        originalTemplate[0].total_days,
+        originalTemplate[0].team_id ?? null,
       ]
     ) as any;
 
@@ -386,6 +394,8 @@ export const copyTemplate = async (req: Request, res: Response) => {
     if (isTemplateResourceRulesEnabled()) {
       await copyTemplateRuleOverrides(connection, scheduleIdMap);
     }
+
+    await copyTemplateScheduleBindings(connection, scheduleIdMap);
 
     // 复制完成后，重新计算新模版的总天数
     await updateTemplateTotalDays(newTemplateId, connection);

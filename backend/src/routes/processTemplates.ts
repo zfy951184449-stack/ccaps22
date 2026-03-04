@@ -10,6 +10,7 @@ import {
   autoScheduleTemplate,
   getTemplatePersonnelCurve
 } from '../controllers/processTemplateController';
+import { getTemplateResourcePlanner } from '../controllers/templateResourcePlannerController';
 
 const router = express.Router();
 
@@ -23,5 +24,6 @@ router.delete('/:id', deleteTemplate);
 router.post('/:id/copy', copyTemplate);
 router.post('/:id/auto-schedule', autoScheduleTemplate);
 router.get('/:id/personnel-curve', getTemplatePersonnelCurve);
+router.get('/:id/resource-planner', getTemplateResourcePlanner);
 
 export default router;

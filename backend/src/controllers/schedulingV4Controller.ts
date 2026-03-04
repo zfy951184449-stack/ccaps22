@@ -38,6 +38,13 @@ interface ResultSummaryV4 {
         coverage_rate: number;
         satisfaction: number;
         solve_time: number;
+        special_shift_requirement_count?: number;
+        special_shift_occurrence_count?: number;
+        special_shift_required_headcount_total?: number;
+        special_shift_assigned_headcount_total?: number;
+        special_shift_shortage_total?: number;
+        special_shift_unmet_occurrence_count?: number;
+        special_shift_partial_occurrence_count?: number;
     };
     details: {
         total_positions: number;
@@ -48,6 +55,8 @@ interface ResultSummaryV4 {
     assignments: EnrichedAssignment[];
     shift_schedule: ShiftScheduleItem[] | null;  // From solver, null if not provided
     operations?: any[];
+    special_shift_assignments?: SpecialShiftSolverAssignment[];
+    special_shift_shortages?: SpecialShiftSolverShortage[];
 }
 
 // Shift schedule item from solver output (reserved for future)
@@ -807,7 +816,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
 
         // 1. Fetch Run Record & Raw Result (including solve window)
         const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT result_summary, target_batch_ids, window_start, window_end FROM scheduling_runs WHERE id = ?',
+            'SELECT result_summary, summary_json, target_batch_ids, window_start, window_end FROM scheduling_runs WHERE id = ?',
             [runId]
         );
 
@@ -823,6 +832,9 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
         const rawResult = typeof run.result_summary === 'string'
             ? JSON.parse(run.result_summary)
             : run.result_summary;
+        const runSummary = parseRunSummary(run.summary_json);
+        const specialShiftAssignments = normalizeSpecialShiftAssignments(rawResult.special_shift_assignments);
+        const specialShiftShortages = normalizeSpecialShiftShortages(rawResult.special_shift_shortages);
 
         const rawAssignments: any[] = rawResult.assignments || [];
 
@@ -1132,7 +1144,14 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                 completion_rate: totalPositionsCount > 0 ? Math.round((assignedCount / totalPositionsCount) * 100) : 0,
                 coverage_rate: totalOpsCount > 0 ? Math.round((coveredOps.size / totalOpsCount) * 100) : 0,
                 satisfaction: 100,
-                solve_time: rawResult.metrics?.solve_time || 0
+                solve_time: rawResult.metrics?.solve_time || 0,
+                special_shift_requirement_count: Number(runSummary.special_shift_requirement_count || rawResult.summary?.special_shift_requirement_count || 0),
+                special_shift_occurrence_count: Number(runSummary.special_shift_occurrence_count || rawResult.summary?.special_shift_occurrence_count || 0),
+                special_shift_required_headcount_total: Number(runSummary.special_shift_required_headcount_total || rawResult.summary?.special_shift_required_headcount_total || 0),
+                special_shift_assigned_headcount_total: specialShiftAssignments.length,
+                special_shift_shortage_total: specialShiftShortages.reduce((sum, item) => sum + item.shortage_people, 0),
+                special_shift_unmet_occurrence_count: specialShiftShortages.length,
+                special_shift_partial_occurrence_count: specialShiftShortages.length,
             },
             details: {
                 total_positions: totalPositionsCount,
@@ -1155,6 +1174,8 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                 nominal_hours: sp.shift_nominal_hours
             })),
             operations: Array.from(operationsMap.values()),
+            special_shift_assignments: specialShiftAssignments,
+            special_shift_shortages: specialShiftShortages,
             // 日历数据（用于前端计算标准工时和连续天数）
             calendar_days: calendarDays,
             workday_count: workdayCount,
@@ -1224,7 +1245,19 @@ async function saveResults(runId: number, result: any) {
         }
         storedResult.special_shift_assignments = specialShiftAssignments;
         storedResult.special_shift_shortages = specialShiftShortages;
-        await pool.execute('UPDATE scheduling_runs SET result_summary = ? WHERE id = ?', [JSON.stringify(storedResult), runId]);
+        const nextRunSummary = {
+            ...runSummary,
+            special_shift_assigned_headcount_total: specialShiftAssignments.length,
+            special_shift_shortage_total: specialShiftShortages.reduce((sum, item) => sum + item.shortage_people, 0),
+            special_shift_unmet_occurrence_count: specialShiftShortages.length,
+            special_shift_partial_occurrence_count: specialShiftShortages.length,
+            special_shift_assignments: specialShiftAssignments,
+            special_shift_shortages: specialShiftShortages,
+        };
+        await pool.execute(
+            'UPDATE scheduling_runs SET result_summary = ?, summary_json = ? WHERE id = ?',
+            [JSON.stringify(storedResult), JSON.stringify(nextRunSummary), runId]
+        );
         if (isSuccessfulSolverResult(result)) {
             await markSpecialShiftOccurrencesScheduled(runId);
         }

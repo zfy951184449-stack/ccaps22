@@ -57,6 +57,7 @@ import platformRoutes from './routes/platform';
 import templateStageOperationResourceRoutes from './routes/templateStageOperationResources';
 import batchOperationResourceRoutes from './routes/batchOperationResources';
 import specialShiftWindowRoutes from './routes/specialShiftWindows';
+import resourceNodeRoutes from './routes/resourceNodes';
 
 dotenv.config();
 
@@ -147,6 +148,7 @@ app.use('/api/platform', platformRoutes);
 app.use('/api/template-stage-operations', templateStageOperationResourceRoutes);
 app.use('/api/batch-operations', batchOperationResourceRoutes);
 app.use('/api/special-shift-windows', specialShiftWindowRoutes);
+app.use('/api/resource-nodes', resourceNodeRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

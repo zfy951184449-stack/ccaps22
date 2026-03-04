@@ -39,6 +39,14 @@ const MaintenanceWindowsPage = lazy(() => import('./pages/MaintenanceWindowsPage
 const BusinessRulesCenterPage = lazy(() => import('./pages/BusinessRulesCenterPage'));
 const PlatformRunMonitorPage = lazy(() => import('./pages/PlatformRunMonitorPage'));
 
+const getPageTitle = (pathname: string) => {
+  if (pathname.startsWith('/process-templates-v2/')) {
+    return '工艺模版 V2';
+  }
+
+  return pathToTitle[pathname] || '应用';
+};
+
 // Mapping for title display
 const pathToTitle: { [key: string]: string } = {
   '/': '调度中心',
@@ -90,7 +98,7 @@ const RouteFallback: React.FC = () => (
 
 const AppLayout: React.FC = () => {
   const location = useLocation();
-  const currentTitle = pathToTitle[location.pathname] || '应用';
+  const currentTitle = getPageTitle(location.pathname);
 
   return (
     <ConfigProvider
@@ -162,6 +170,7 @@ const AppLayout: React.FC = () => {
                 <Route path="/operation-types" element={<OperationTypesPage />} />
                 <Route path="/process-templates" element={<ProcessTemplatesPage />} />
                 <Route path="/process-templates-v2" element={<ProcessTemplatesV2Page />} />
+                <Route path="/process-templates-v2/:templateId" element={<ProcessTemplatesV2Page />} />
                 <Route path="/batch-management" element={<BatchManagementPage />} />
                 <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
                 <Route path="/task-pool" element={<TaskPoolPage />} />
