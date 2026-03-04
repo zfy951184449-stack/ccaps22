@@ -25,6 +25,10 @@ class SolverContext:
     # Vacancy layer
     vacancy_vars: Dict[tuple, cp_model.IntVar] = field(default_factory=dict)
 
+    # Special shift coverage layer
+    special_cover_vars: Dict[tuple, cp_model.IntVar] = field(default_factory=dict)
+    special_shortage_vars: Dict[int, cp_model.IntVar] = field(default_factory=dict)
+
     # Task Placement layer (for Flexible tasks)
     task_placements: Dict[tuple, cp_model.IntVar] = field(default_factory=dict)
 

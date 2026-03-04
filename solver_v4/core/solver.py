@@ -58,18 +58,26 @@ class SolverV4:
         if isinstance(result_or_vars, dict):
             # Early exit (INFEASIBLE due to no candidates)
             return result_or_vars
-        assignments, vacancy_vars, shift_assignments, index, shift_index = result_or_vars
+        assignments, vacancy_vars, shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index = result_or_vars
 
         # Phase 3: Constraints
         self._apply_constraints(req, config, callback, assignments, vacancy_vars,
-                                shift_assignments, index, shift_index)
+                                shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index)
 
         # Phase 4: Objectives
         self._build_objectives(req, config, callback, assignments, vacancy_vars,
-                               shift_assignments)
+                               shift_assignments, special_cover_vars, special_shortage_vars)
 
         # Phase 5: Solve
-        status = self._run_solver(config, callback, assignments, shift_assignments, vacancy_vars)
+        status = self._run_solver(
+            config,
+            callback,
+            assignments,
+            shift_assignments,
+            vacancy_vars,
+            special_cover_vars,
+            special_shortage_vars,
+        )
 
         # Phase 6: Result handling
         return self._handle_result(status, callback, assignments, shift_assignments,
@@ -123,11 +131,13 @@ class SolverV4:
         Create assignment, vacancy, and shift variables.
         
         Returns:
-            (assignments, vacancy_vars, shift_assignments, index, shift_index)
+            (assignments, vacancy_vars, shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index)
             OR a dict (early exit result) if infeasible.
         """
         assignments = {}
         vacancy_vars = {}
+        special_cover_vars = {}
+        special_shortage_vars = {}
         mandatory_ops = set(config.get("mandatory_operation_ids", []))
         total_vars = 0
 
@@ -196,14 +206,38 @@ class SolverV4:
             if callback:
                 callback.log_metric("班次变量", f"Days {len(dates)} x Emps {len(all_employees)} x Shifts {len(req.shift_definitions)}")
 
-        return assignments, vacancy_vars, shift_assignments, index, shift_index
+        for requirement in req.special_shift_requirements:
+            special_shortage_vars[requirement.occurrence_id] = self.model.NewIntVar(
+                0,
+                requirement.required_people,
+                f"SpecialShortage_{requirement.occurrence_id}",
+            )
+            total_vars += 1
+
+            candidate_ids = [
+                candidate.employee_id for candidate in getattr(requirement, "candidates", [])
+            ] or list(requirement.eligible_employee_ids)
+            for employee_id in candidate_ids:
+                key = (requirement.occurrence_id, employee_id)
+                special_cover_vars[key] = self.model.NewBoolVar(
+                    f"SpecialCover_{requirement.occurrence_id}_Emp{employee_id}"
+                )
+                total_vars += 1
+
+        if callback and req.special_shift_requirements:
+            callback.log_metric(
+                "专项变量",
+                f"Coverage {len(special_cover_vars)} / Shortage {len(special_shortage_vars)}",
+            )
+
+        return assignments, vacancy_vars, shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index
 
     # ──────────────────────────────────────────────
     # Phase 3: Constraint Application
     # ──────────────────────────────────────────────
 
     def _apply_constraints(self, req, config, callback, assignments, vacancy_vars,
-                           shift_assignments, index, shift_index):
+                           shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index):
         """Load and apply all constraint modules based on config toggles."""
 
         # Build unified context
@@ -214,6 +248,8 @@ class SolverV4:
             shift_assignments=shift_assignments or {},
             shift_index=shift_index,
             vacancy_vars=vacancy_vars or {},
+            special_cover_vars=special_cover_vars or {},
+            special_shortage_vars=special_shortage_vars or {},
             config=config,
         )
         # Keep a reference for solution extraction (e.g., flexible task placements).
@@ -280,11 +316,6 @@ class SolverV4:
         if config.get("enable_flexible_scheduling", True):
             flex_count = FlexibleSchedulingConstraint(logger=logger).apply(ctx, req)
 
-        from constraints.prefer_standard_shift import PreferStandardShiftConstraint
-        prefer_std_count = 0
-        if config.get("enable_prefer_standard_shift", True):
-            prefer_std_count = PreferStandardShiftConstraint(logger=logger).apply(ctx, req)
-
         from constraints.work_days_limit import MaxConsecutiveWorkDaysConstraint
         work_limit_count = 0
         if config.get("enable_max_consecutive_work_days", True):
@@ -310,17 +341,16 @@ class SolverV4:
         if config.get("enable_night_shift_interval", True):
             night_interval_count = NightShiftIntervalConstraint(logger=logger).apply(ctx, req)
 
-        from constraints.special_shift_coverage import SpecialShiftCoverageConstraint
+        from constraints.special_shift_joint_coverage import SpecialShiftJointCoverageConstraint
         special_shift_coverage_count = 0
         if config.get("enable_special_shift_coverage", True):
-            special_shift_coverage_count = SpecialShiftCoverageConstraint(logger=logger).apply(ctx, req)
+            special_shift_coverage_count = SpecialShiftJointCoverageConstraint(logger=logger).apply(ctx, req)
 
         if callback:
             all_employees = {ep.employee_id for ep in req.employee_profiles}
             callback.log_section("排班规则概览", [
                 f"✅ 锁定班次: {locked_shift_count} 条",
                 f"✅ 班次分配: {shift_count} 条 (覆盖 {len(all_employees)} 人)",
-                f"✅ 标准班优先: {prefer_std_count} 条",
                 f"✅ 连续工作限制: {work_limit_count} 条 (Max {req.config.get('max_consecutive_work_days', 6)} 天)",
                 f"✅ 连续休息限制: {rest_limit_count} 条 (Max {req.config.get('max_consecutive_rest_days', 4)} 天)",
                 f"✅ 标准工时: {standard_hours_count} 条",
@@ -334,12 +364,25 @@ class SolverV4:
     # ──────────────────────────────────────────────
 
     def _build_objectives(self, req, config, callback, assignments, vacancy_vars,
-                          shift_assignments):
+                          shift_assignments, special_cover_vars, special_shortage_vars):
         """Build multi-objective weighted sum and apply to model."""
         objective_terms = []
         objective_desc = []
 
-        # O0: Vacancy Minimization (highest priority, built-in weights)
+        # O0: Special Coverage Shortage (highest priority among soft terms)
+        if special_shortage_vars and req.special_shift_requirements:
+            from objectives.minimize_special_coverage_shortage import MinimizeSpecialCoverageShortageObjective
+
+            expr_special_shortage = MinimizeSpecialCoverageShortageObjective(logger=logger).build_expression(
+                self.model,
+                special_shortage_vars,
+                req,
+            )
+            if expr_special_shortage is not None and not isinstance(expr_special_shortage, int):
+                objective_terms.append(expr_special_shortage)
+                objective_desc.append("专项欠配(优先)")
+
+        # O1: Vacancy Minimization
         if config.get("allow_position_vacancy", False) and vacancy_vars:
             from objectives.minimize_vacancies import MinimizeVacanciesObjective
             
@@ -364,11 +407,25 @@ class SolverV4:
                 objective_desc.append(f"岗位填报(优先)")
 
         # Weights
+        w_impact = int(config.get("objective_weight_special_coverage_impact", 1))
         w1 = int(config.get("objective_weight_deviation", 1))
         w2 = int(config.get("objective_weight_special_shifts", 100))
         w3 = int(config.get("objective_weight_night_balance", 5))
 
-        # O1: Hours Deviation
+        # O2: Special Coverage Impact
+        if special_cover_vars and req.special_shift_requirements:
+            from objectives.minimize_special_coverage_impact import MinimizeSpecialCoverageImpactObjective
+
+            expr_impact = MinimizeSpecialCoverageImpactObjective(logger=logger).build_expression(
+                self.model,
+                special_cover_vars,
+                req,
+            )
+            if expr_impact is not None and not isinstance(expr_impact, int):
+                objective_terms.append(w_impact * expr_impact)
+                objective_desc.append(f"专项工艺影响(×{w_impact})")
+
+        # O3: Hours Deviation
         if config.get("enable_minimize_deviation", True) and shift_assignments:
             from objectives.minimize_deviation import MinimizeHoursDeviationObjective
             expr1 = MinimizeHoursDeviationObjective(logger=logger).build_expression(
@@ -377,7 +434,7 @@ class SolverV4:
                 objective_terms.append(w1 * expr1)
                 objective_desc.append(f"工时偏差(×{w1})")
 
-        # O2: Special Shifts Count
+        # O4: Special Shifts Count
         if config.get("enable_minimize_special_shifts", True) and shift_assignments:
             from objectives.minimize_special_shifts import MinimizeSpecialShiftsObjective
             expr2 = MinimizeSpecialShiftsObjective(logger=logger).build_expression(
@@ -386,7 +443,7 @@ class SolverV4:
                 objective_terms.append(w2 * expr2)
                 objective_desc.append(f"特殊班次(×{w2})")
 
-        # O3: Balance Night Shifts
+        # O5: Balance Night Shifts
         if config.get("enable_balance_night_shifts", True) and shift_assignments:
             from objectives.balance_night_shifts import BalanceNightShiftsObjective
             expr3 = BalanceNightShiftsObjective(logger=logger).build_expression(
@@ -408,7 +465,8 @@ class SolverV4:
     # Phase 5: Run Solver
     # ──────────────────────────────────────────────
 
-    def _run_solver(self, config, callback, assignments, shift_assignments, vacancy_vars):
+    def _run_solver(self, config, callback, assignments, shift_assignments, vacancy_vars,
+                    special_cover_vars, special_shortage_vars):
         """Register variables, start monitor thread, and run CP-SAT."""
         max_time_s = float(config.get("max_time_seconds", 300))
         stagnation_s = float(config.get("stagnation_limit", 300))
@@ -424,6 +482,10 @@ class SolverV4:
                 callback.register_variables(shift_assignments)
             if vacancy_vars:
                 callback.register_variables(vacancy_vars)
+            if special_cover_vars:
+                callback.register_variables(special_cover_vars)
+            if special_shortage_vars:
+                callback.register_variables(special_shortage_vars)
 
             self.stopping_event = threading.Event()
             monitor_thread = threading.Thread(
@@ -719,6 +781,34 @@ class SolverV4:
         if total_positions > 0:
             fill_rate = ((total_positions - vacant_count) / total_positions) * 100.0
 
+        special_cover_vars = getattr(self.solver_context, "special_cover_vars", {}) or {}
+        special_shortage_vars = getattr(self.solver_context, "special_shortage_vars", {}) or {}
+        special_shift_assignments = []
+        special_shift_shortages = []
+        requirement_map = {requirement.occurrence_id: requirement for requirement in req.special_shift_requirements}
+
+        for (occurrence_id, employee_id), var in special_cover_vars.items():
+            if get_var_value((occurrence_id, employee_id), var) != 1:
+                continue
+            requirement = requirement_map.get(occurrence_id)
+            if requirement is None:
+                continue
+            special_shift_assignments.append({
+                "occurrence_id": occurrence_id,
+                "employee_id": employee_id,
+                "date": requirement.date,
+                "shift_id": requirement.shift_id,
+            })
+
+        for occurrence_id, var in special_shortage_vars.items():
+            shortage_people = int(get_var_value(occurrence_id, var))
+            if shortage_people <= 0:
+                continue
+            special_shift_shortages.append({
+                "occurrence_id": occurrence_id,
+                "shortage_people": shortage_people,
+            })
+
         # 4. Share Group Compliance Check
         share_group_compliance = []
         if req.shared_preferences:
@@ -770,6 +860,8 @@ class SolverV4:
             "status": status_str,
             "schedules": schedules,
             "unassigned_jobs": unassigned_tasks,
+            "special_shift_assignments": special_shift_assignments,
+            "special_shift_shortages": special_shift_shortages,
             "share_group_compliance": share_group_compliance,
             "metrics": {
                 "assigned_count": assigned_count,
@@ -780,6 +872,7 @@ class SolverV4:
                 "gap": round(gap_percent, 2),
                 "vacant_positions": vacant_count,
                 "total_positions": total_positions,
-                "fill_rate": round(fill_rate, 2)
+                "fill_rate": round(fill_rate, 2),
+                "special_shift_shortage_total": sum(item["shortage_people"] for item in special_shift_shortages),
             }
         }

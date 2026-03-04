@@ -29,6 +29,9 @@ export interface ProcessTemplate {
     template_name: string;
     description: string;
     total_days: number;
+    team_id?: number | null;
+    team_code?: string | null;
+    team_name?: string | null;
 }
 
 export interface ProcessStage {

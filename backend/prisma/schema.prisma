@@ -311,6 +311,8 @@ model special_shift_window_rules {
   shift_id                                  Int
   required_people                           Int
   plan_category                             special_shift_window_rules_plan_category   @default(BASE)
+  fulfillment_mode                          special_shift_fulfillment_mode             @default(HARD)
+  priority_level                            special_shift_priority_level               @default(HIGH)
   qualification_id                          Int?
   min_level                                 Int?                                      @db.TinyInt
   is_mandatory                              Boolean                                   @default(true)
@@ -352,6 +354,8 @@ model special_shift_occurrences {
   shift_id                                  Int
   required_people                           Int
   plan_category                             special_shift_occurrences_plan_category
+  fulfillment_mode                          special_shift_fulfillment_mode         @default(HARD)
+  priority_level                            special_shift_priority_level           @default(HIGH)
   qualification_id                          Int?
   min_level                                 Int?                                   @db.TinyInt
   status                                    special_shift_occurrences_status       @default(PENDING)
@@ -1283,8 +1287,20 @@ enum special_shift_occurrences_status {
   PENDING
   SCHEDULED
   APPLIED
+  PARTIAL
   CANCELLED
   INFEASIBLE
+}
+
+enum special_shift_fulfillment_mode {
+  HARD
+  SOFT
+}
+
+enum special_shift_priority_level {
+  CRITICAL
+  HIGH
+  NORMAL
 }
 
 enum special_shift_occurrence_assignments_assignment_status {

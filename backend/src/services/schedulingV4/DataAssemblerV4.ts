@@ -72,8 +72,16 @@ interface V4SpecialShiftRequirement {
     shift_id: number;
     required_people: number;
     eligible_employee_ids: number[];
+    fulfillment_mode: 'HARD' | 'SOFT';
+    priority_level: 'CRITICAL' | 'HIGH' | 'NORMAL';
+    candidates: V4SpecialShiftCandidate[];
     plan_category: string;
     lock_after_apply?: boolean;
+}
+
+interface V4SpecialShiftCandidate {
+    employee_id: number;
+    impact_cost: number;
 }
 
 interface V4EmployeeProfile {
@@ -197,7 +205,7 @@ export class DataAssemblerV4 {
             lockedOperations,
             lockedShifts,
             historicalShifts,
-            specialShiftRequirements,
+            rawSpecialShiftRequirements,
         ] = await Promise.all([
             this.fetchOperations(startDate, endDate, batchIds),
             this.fetchEmployees(startDate, endDate, teamIds),
@@ -219,6 +227,11 @@ export class DataAssemblerV4 {
 
         // Merge operations and standalone tasks
         const allDemands = [...enrichedOperations, ...standaloneTasks];
+        const specialShiftRequirements = this.enrichSpecialShiftRequirements(
+            rawSpecialShiftRequirements,
+            enrichedOperations,
+            shifts,
+        );
 
         const [
             resources,
@@ -360,9 +373,94 @@ export class DataAssemblerV4 {
             shift_id: requirement.shift_id,
             required_people: requirement.required_people,
             eligible_employee_ids: requirement.eligible_employee_ids,
+            fulfillment_mode: requirement.fulfillment_mode,
+            priority_level: requirement.priority_level,
+            candidates: [],
             plan_category: requirement.plan_category,
             lock_after_apply: requirement.lock_after_apply,
         }));
+    }
+
+    private static enrichSpecialShiftRequirements(
+        requirements: V4SpecialShiftRequirement[],
+        operationDemands: V4OperationDemand[],
+        shifts: V4ShiftDefinition[],
+    ): V4SpecialShiftRequirement[] {
+        if (!requirements.length) {
+            return [];
+        }
+
+        const shiftMap = new Map<number, V4ShiftDefinition>();
+        shifts.forEach((shift) => {
+            shiftMap.set(shift.shift_id, shift);
+        });
+
+        return requirements.map((requirement) => ({
+            ...requirement,
+            candidates: requirement.eligible_employee_ids.map((employeeId) => ({
+                employee_id: employeeId,
+                impact_cost: this.calculateSpecialCoverageImpactCost(
+                    employeeId,
+                    requirement.date,
+                    requirement.shift_id,
+                    operationDemands,
+                    shiftMap,
+                ),
+            })),
+        }));
+    }
+
+    private static calculateSpecialCoverageImpactCost(
+        employeeId: number,
+        occurrenceDate: string,
+        shiftId: number,
+        operationDemands: V4OperationDemand[],
+        shiftMap: Map<number, V4ShiftDefinition>,
+    ): number {
+        const shift = shiftMap.get(shiftId);
+        if (!shift) {
+            return 0;
+        }
+
+        let impact = 0;
+        for (const demand of operationDemands) {
+            if (demand.scheduling_mode === 'FLEXIBLE' || demand.source_type === 'STANDALONE') {
+                continue;
+            }
+
+            if (!this.shiftCoversOperationOnDate(shift, occurrenceDate, demand)) {
+                continue;
+            }
+
+            for (const position of demand.position_qualifications) {
+                if (!position.candidate_employee_ids.includes(employeeId)) {
+                    continue;
+                }
+                impact += 1000 / Math.max(position.candidate_employee_ids.length, 1);
+            }
+        }
+
+        return Math.round(impact);
+    }
+
+    private static shiftCoversOperationOnDate(
+        shift: V4ShiftDefinition,
+        occurrenceDate: string,
+        demand: V4OperationDemand,
+    ): boolean {
+        const opStart = dayjs(demand.planned_start);
+        const opEnd = dayjs(demand.planned_end);
+        if (!opStart.isValid() || !opEnd.isValid()) {
+            return false;
+        }
+
+        const shiftStart = dayjs(`${occurrenceDate}T${shift.start_time}`);
+        let shiftEnd = dayjs(`${occurrenceDate}T${shift.end_time}`);
+        if (shift.is_night_shift || shiftEnd.valueOf() <= shiftStart.valueOf()) {
+            shiftEnd = shiftEnd.add(1, 'day');
+        }
+
+        return shiftStart.valueOf() <= opStart.valueOf() && opEnd.valueOf() <= shiftEnd.valueOf();
     }
 
     private static async fetchOperations(startDate: string, endDate: string, batchIds: number[]) {

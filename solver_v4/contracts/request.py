@@ -51,8 +51,16 @@ class SpecialShiftRequirement:
     required_people: int
     eligible_employee_ids: List[int]
     window_code: Optional[str] = None
+    fulfillment_mode: str = "HARD"
+    priority_level: str = "HIGH"
+    candidates: List["SpecialShiftCandidate"] = field(default_factory=list)
     plan_category: str = "BASE"
     lock_after_apply: bool = True
+
+@dataclass
+class SpecialShiftCandidate:
+    employee_id: int
+    impact_cost: int = 0
 
 @dataclass
 class CalendarDay:
@@ -198,7 +206,15 @@ class SolverRequest:
 
         mps = [EmployeeProfile(**ep) for ep in data.get("employee_profiles", [])]
         special_shift_requirements = [
-            SpecialShiftRequirement(**requirement)
+            SpecialShiftRequirement(
+                **{
+                    **requirement,
+                    "candidates": [
+                        SpecialShiftCandidate(**candidate)
+                        for candidate in requirement.get("candidates", [])
+                    ],
+                }
+            )
             for requirement in data.get("special_shift_requirements", [])
         ]
         cals = [CalendarDay(**c) for c in data.get("calendar", [])]

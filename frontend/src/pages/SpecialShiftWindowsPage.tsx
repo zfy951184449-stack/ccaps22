@@ -29,7 +29,9 @@ import {
   Qualification,
   ShiftDefinition,
   SpecialShiftOccurrence,
+  SpecialShiftFulfillmentMode,
   SpecialShiftPlanCategory,
+  SpecialShiftPriorityLevel,
   SpecialShiftWindow,
   SpecialShiftWindowDetail,
   SpecialShiftWindowPreview,
@@ -62,9 +64,10 @@ type EditorFormValues = {
     shift_id: number;
     required_people: number;
     plan_category: SpecialShiftPlanCategory;
+    fulfillment_mode: SpecialShiftFulfillmentMode;
+    priority_level: SpecialShiftPriorityLevel;
     qualification_id?: number | null;
     min_level?: number | null;
-    is_mandatory: boolean;
     days_of_week: number[];
     notes?: string;
     allow_employee_ids?: number[];
@@ -113,6 +116,7 @@ const statusColorMap: Record<string, string> = {
   PENDING: 'default',
   SCHEDULED: 'processing',
   APPLIED: 'success',
+  PARTIAL: 'warning',
   INFEASIBLE: 'error',
 };
 
@@ -289,7 +293,8 @@ const SpecialShiftWindowsPage: React.FC = () => {
         {
           required_people: 1,
           plan_category: 'BASE',
-          is_mandatory: true,
+          fulfillment_mode: 'HARD',
+          priority_level: 'HIGH',
           days_of_week: [1, 2, 3, 4, 5, 6, 7],
           allow_employee_ids: [],
           deny_employee_ids: [],
@@ -314,9 +319,10 @@ const SpecialShiftWindowsPage: React.FC = () => {
           shift_id: rule.shift_id,
           required_people: rule.required_people,
           plan_category: rule.plan_category,
+          fulfillment_mode: rule.fulfillment_mode || 'HARD',
+          priority_level: rule.priority_level || 'HIGH',
           qualification_id: rule.qualification_id ?? undefined,
           min_level: rule.min_level ?? undefined,
-          is_mandatory: rule.is_mandatory ?? true,
           days_of_week: rule.days_of_week,
           notes: rule.notes || undefined,
           allow_employee_ids: rule.allow_employee_ids || [],
@@ -345,9 +351,10 @@ const SpecialShiftWindowsPage: React.FC = () => {
           shift_id: rule.shift_id,
           required_people: rule.required_people,
           plan_category: rule.plan_category,
+          fulfillment_mode: rule.fulfillment_mode,
+          priority_level: rule.priority_level,
           qualification_id: rule.qualification_id ?? null,
           min_level: rule.qualification_id ? rule.min_level ?? 1 : null,
-          is_mandatory: rule.is_mandatory,
           days_of_week: rule.days_of_week,
           notes: rule.notes || null,
           allow_employee_ids: rule.allow_employee_ids || [],
@@ -480,6 +487,7 @@ const SpecialShiftWindowsPage: React.FC = () => {
           <Tag color="blue">{record.occurrence_count} occurrence</Tag>
           <Tag color="processing">S {record.scheduled_count}</Tag>
           <Tag color="success">A {record.applied_count}</Tag>
+          <Tag color="warning">P {record.partial_count || 0}</Tag>
         </Space>
       ),
     },
@@ -697,6 +705,33 @@ const SpecialShiftWindowsPage: React.FC = () => {
                           ]}
                         />
                       </Form.Item>
+                      <Form.Item
+                        {...field}
+                        name={[field.name, 'fulfillment_mode']}
+                        label="满足策略"
+                        rules={[{ required: true, message: '请选择满足策略' }]}
+                      >
+                        <Select
+                          options={[
+                            { label: 'HARD', value: 'HARD' },
+                            { label: 'SOFT', value: 'SOFT' },
+                          ]}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        {...field}
+                        name={[field.name, 'priority_level']}
+                        label="专项优先级"
+                        rules={[{ required: true, message: '请选择优先级' }]}
+                      >
+                        <Select
+                          options={[
+                            { label: 'CRITICAL', value: 'CRITICAL' },
+                            { label: 'HIGH', value: 'HIGH' },
+                            { label: 'NORMAL', value: 'NORMAL' },
+                          ]}
+                        />
+                      </Form.Item>
                       <Form.Item {...field} name={[field.name, 'days_of_week']} label="适用星期" rules={[{ required: true }]}>
                         <Checkbox.Group options={weekdayOptions} />
                       </Form.Item>
@@ -747,9 +782,6 @@ const SpecialShiftWindowsPage: React.FC = () => {
                         />
                       </Form.Item>
                     </div>
-                    <Form.Item {...field} name={[field.name, 'is_mandatory']} label="硬约束" valuePropName="checked">
-                      <Switch checkedChildren="必须满足" unCheckedChildren="可选" />
-                    </Form.Item>
                     <Form.Item {...field} name={[field.name, 'notes']} label="规则备注">
                       <Input placeholder="例如：仅限 USP A 组夜班 handover 覆盖" />
                     </Form.Item>
@@ -763,7 +795,8 @@ const SpecialShiftWindowsPage: React.FC = () => {
                     add({
                       required_people: 1,
                       plan_category: 'BASE',
-                      is_mandatory: true,
+                      fulfillment_mode: 'HARD',
+                      priority_level: 'HIGH',
                       days_of_week: [1, 2, 3, 4, 5, 6, 7],
                       allow_employee_ids: [],
                       deny_employee_ids: [],
@@ -792,7 +825,7 @@ const SpecialShiftWindowsPage: React.FC = () => {
               <Alert
                 type="warning"
                 message="当前预览存在阻断项，窗口不能激活"
-                description="需要保证每条 occurrence 的静态候选人数不低于 required_people。"
+                description="仅 HARD 规则会因静态候选人数不足而阻断激活；SOFT 规则会保留为求解期 partial 风险。"
                 showIcon
               />
             )}
@@ -834,6 +867,17 @@ const SpecialShiftWindowsPage: React.FC = () => {
                 {
                   title: '需求人数',
                   dataIndex: 'required_people',
+                },
+                {
+                  title: '满足',
+                  render: (_: unknown, record: SpecialShiftWindowPreview['rows'][number]) => (
+                    <Space>
+                      <Tag color={record.fulfillment_mode === 'HARD' ? 'error' : 'gold'}>
+                        {record.fulfillment_mode}
+                      </Tag>
+                      <Tag>{record.priority_level}</Tag>
+                    </Space>
+                  ),
                 },
                 {
                   title: '静态候选',
@@ -908,8 +952,23 @@ const SpecialShiftWindowsPage: React.FC = () => {
             { title: '日期', dataIndex: 'date', width: 120 },
             { title: '班次', dataIndex: 'shift_name', width: 160 },
             {
+              title: '策略',
+              width: 180,
+              render: (_: unknown, record: SpecialShiftOccurrence) => (
+                <Space>
+                  <Tag color={record.fulfillment_mode === 'HARD' ? 'error' : 'gold'}>{record.fulfillment_mode}</Tag>
+                  <Tag>{record.priority_level}</Tag>
+                </Space>
+              ),
+            },
+            {
               title: '覆盖',
               render: (_: unknown, record: SpecialShiftOccurrence) => `${record.filled_people} / ${record.required_people}`,
+              width: 100,
+            },
+            {
+              title: '欠配',
+              dataIndex: 'shortage_people',
               width: 100,
             },
             {

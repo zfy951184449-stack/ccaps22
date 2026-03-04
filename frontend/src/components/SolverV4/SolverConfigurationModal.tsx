@@ -18,7 +18,7 @@ export interface SolverConfig {
     enable_night_rest: boolean;
     enable_night_shift_interval: boolean;
     enable_balance_night_shifts: boolean;
-    enable_prefer_standard_shift: boolean; // NEW
+    enable_prefer_standard_shift: boolean;
 
     // Parameters
     max_consecutive_rest_days: number; // NEW
@@ -53,7 +53,7 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     enable_night_rest: true,
     enable_night_shift_interval: true,
     enable_balance_night_shifts: true,
-    enable_prefer_standard_shift: true,
+    enable_prefer_standard_shift: false,
 
     // Parameter Defaults
     max_consecutive_rest_days: 4,
@@ -158,7 +158,6 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_night_rest', title: '夜班后休息', description: '夜班后强制安排休息日' },
         { key: 'enable_night_shift_interval', title: '夜班间隔', description: '两次夜班之间的最小间隔天数' },
         { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
-        { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '当标准班次能覆盖任务时，禁止使用特殊班次' },
     ];
 
     return (

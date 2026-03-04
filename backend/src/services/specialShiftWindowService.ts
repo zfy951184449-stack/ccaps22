@@ -13,11 +13,15 @@ import SpecialShiftOccurrenceService, {
 export type SpecialShiftWindowStatus = 'DRAFT' | 'ACTIVE' | 'CANCELLED' | 'ARCHIVED';
 export type SpecialShiftPlanCategory = 'BASE' | 'OVERTIME';
 export type SpecialShiftScopeType = 'ALLOW' | 'DENY';
+export type SpecialShiftFulfillmentMode = 'HARD' | 'SOFT';
+export type SpecialShiftPriorityLevel = 'CRITICAL' | 'HIGH' | 'NORMAL';
 
 export interface SpecialShiftWindowRuleInput {
   shift_id: number;
   required_people: number;
   plan_category?: SpecialShiftPlanCategory;
+  fulfillment_mode?: SpecialShiftFulfillmentMode;
+  priority_level?: SpecialShiftPriorityLevel;
   qualification_id?: number | null;
   min_level?: number | null;
   is_mandatory?: boolean;
@@ -53,6 +57,8 @@ export interface SpecialShiftWindowPreviewRow {
   shift_id: number;
   shift_name: string;
   required_people: number;
+  fulfillment_mode: SpecialShiftFulfillmentMode;
+  priority_level: SpecialShiftPriorityLevel;
   eligible_employee_count: number;
   eligible_employee_ids: number[];
   blocking_issues: string[];
@@ -73,6 +79,8 @@ export interface SpecialShiftWindowRuleRecord {
   shift_code: string;
   required_people: number;
   plan_category: SpecialShiftPlanCategory;
+  fulfillment_mode: SpecialShiftFulfillmentMode;
+  priority_level: SpecialShiftPriorityLevel;
   qualification_id: number | null;
   qualification_name: string | null;
   min_level: number | null;
@@ -100,6 +108,7 @@ export interface SpecialShiftWindowRecord {
   occurrence_count: number;
   scheduled_count: number;
   applied_count: number;
+  partial_count: number;
   latest_scheduling_run_id: number | null;
 }
 
@@ -111,6 +120,7 @@ export interface SpecialShiftWindowDetail {
     required_headcount_total: number;
     scheduled_count: number;
     applied_count: number;
+    partial_count: number;
     cancelled_count: number;
     infeasible_count: number;
   };
@@ -126,6 +136,8 @@ export interface SpecialShiftSolverRequirement {
   shift_id: number;
   required_people: number;
   eligible_employee_ids: number[];
+  fulfillment_mode: SpecialShiftFulfillmentMode;
+  priority_level: SpecialShiftPriorityLevel;
   plan_category: SpecialShiftPlanCategory;
   lock_after_apply: boolean;
 }
@@ -164,6 +176,27 @@ const normalizeBoolean = (value: unknown, fallback = false): boolean => {
     return ['1', 'true', 'TRUE', 'yes', 'YES'].includes(value);
   }
   return fallback;
+};
+
+const normalizeFulfillmentMode = (
+  value: unknown,
+  fallback: SpecialShiftFulfillmentMode = 'HARD',
+): SpecialShiftFulfillmentMode => {
+  return String(value || fallback).toUpperCase() === 'SOFT' ? 'SOFT' : 'HARD';
+};
+
+const normalizePriorityLevel = (
+  value: unknown,
+  fallback: SpecialShiftPriorityLevel = 'HIGH',
+): SpecialShiftPriorityLevel => {
+  const normalized = String(value || fallback).toUpperCase();
+  if (normalized === 'CRITICAL') {
+    return 'CRITICAL';
+  }
+  if (normalized === 'NORMAL') {
+    return 'NORMAL';
+  }
+  return 'HIGH';
 };
 
 const parseJsonArray = (value: unknown): number[] => {
@@ -233,6 +266,10 @@ const normalizeRuleInput = (rule: SpecialShiftWindowRuleInput, index: number): S
     shift_id: shiftId,
     required_people: requiredPeople,
     plan_category: (rule.plan_category || 'BASE') as SpecialShiftPlanCategory,
+    fulfillment_mode: normalizeFulfillmentMode(
+      rule.fulfillment_mode ?? (rule.is_mandatory === false ? 'SOFT' : 'HARD'),
+    ),
+    priority_level: normalizePriorityLevel(rule.priority_level),
     qualification_id: qualificationId,
     min_level: minLevel,
     is_mandatory: normalizeBoolean(rule.is_mandatory, true),
@@ -260,6 +297,7 @@ const mapWindowRow = (row: RowDataPacket): SpecialShiftWindowRecord => ({
   occurrence_count: Number(row.occurrence_count || 0),
   scheduled_count: Number(row.scheduled_count || 0),
   applied_count: Number(row.applied_count || 0),
+  partial_count: Number(row.partial_count || 0),
   latest_scheduling_run_id: normalizeNumber(row.latest_scheduling_run_id),
 });
 
@@ -276,6 +314,7 @@ const ensureWindowExists = async (
         (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id) AS occurrence_count,
         (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id AND sso.status = 'SCHEDULED') AS scheduled_count,
         (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id AND sso.status = 'APPLIED') AS applied_count,
+        (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id AND sso.status = 'PARTIAL') AS partial_count,
         (SELECT MAX(sso.scheduling_run_id) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id) AS latest_scheduling_run_id
       FROM special_shift_windows ssw
       JOIN organization_units ou ON ou.id = ssw.org_unit_id
@@ -420,6 +459,8 @@ const insertRules = async (
             shift_id,
             required_people,
             plan_category,
+            fulfillment_mode,
+            priority_level,
             qualification_id,
             min_level,
             is_mandatory,
@@ -433,6 +474,8 @@ const insertRules = async (
         rule.shift_id,
         rule.required_people,
         rule.plan_category || 'BASE',
+        rule.fulfillment_mode || 'HARD',
+        rule.priority_level || 'HIGH',
         rule.qualification_id ?? null,
         rule.qualification_id ? rule.min_level ?? 1 : null,
         rule.is_mandatory !== false ? 1 : 0,
@@ -478,6 +521,8 @@ const getRuleRecords = async (
         sd.shift_code,
         sswr.required_people,
         sswr.plan_category,
+        sswr.fulfillment_mode,
+        sswr.priority_level,
         sswr.qualification_id,
         q.qualification_name,
         sswr.min_level,
@@ -530,6 +575,8 @@ const getRuleRecords = async (
       shift_code: String(row.shift_code || ''),
       required_people: Number(row.required_people),
       plan_category: String(row.plan_category || 'BASE') as SpecialShiftPlanCategory,
+      fulfillment_mode: normalizeFulfillmentMode(row.fulfillment_mode),
+      priority_level: normalizePriorityLevel(row.priority_level),
       qualification_id: normalizeNumber(row.qualification_id),
       qualification_name: row.qualification_name ? String(row.qualification_name) : null,
       min_level: normalizeNumber(row.min_level),
@@ -553,6 +600,7 @@ const getOccurrenceSummary = async (
         COALESCE(SUM(required_people), 0) AS required_headcount_total,
         COALESCE(SUM(CASE WHEN status = 'SCHEDULED' THEN 1 ELSE 0 END), 0) AS scheduled_count,
         COALESCE(SUM(CASE WHEN status = 'APPLIED' THEN 1 ELSE 0 END), 0) AS applied_count,
+        COALESCE(SUM(CASE WHEN status = 'PARTIAL' THEN 1 ELSE 0 END), 0) AS partial_count,
         COALESCE(SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END), 0) AS cancelled_count,
         COALESCE(SUM(CASE WHEN status = 'INFEASIBLE' THEN 1 ELSE 0 END), 0) AS infeasible_count
       FROM special_shift_occurrences
@@ -567,6 +615,7 @@ const getOccurrenceSummary = async (
     required_headcount_total: Number(row?.required_headcount_total || 0),
     scheduled_count: Number(row?.scheduled_count || 0),
     applied_count: Number(row?.applied_count || 0),
+    partial_count: Number(row?.partial_count || 0),
     cancelled_count: Number(row?.cancelled_count || 0),
     infeasible_count: Number(row?.infeasible_count || 0),
   };
@@ -586,7 +635,9 @@ const buildPreviewRows = async (
         sso.occurrence_date,
         sso.shift_id,
         sd.shift_name,
-        sso.required_people
+        sso.required_people,
+        sso.fulfillment_mode,
+        sso.priority_level
       FROM special_shift_occurrences sso
       JOIN shift_definitions sd ON sd.id = sso.shift_id
       WHERE sso.window_id = ?
@@ -605,6 +656,13 @@ const buildPreviewRows = async (
       denyEmployeeIds: rule?.deny_employee_ids || [],
     };
     const eligibleEmployeeIds = SpecialShiftEligibilityService.computeEligibleEmployeeIds(orgContext, eligibilityRule);
+    const blockingIssues =
+      rule?.fulfillment_mode === 'SOFT'
+        ? []
+        : SpecialShiftEligibilityService.buildBlockingIssues(
+            Number(row.required_people),
+            eligibleEmployeeIds,
+          );
     return {
       occurrence_id: Number(row.occurrence_id),
       rule_id: Number(row.rule_id),
@@ -612,12 +670,11 @@ const buildPreviewRows = async (
       shift_id: Number(row.shift_id),
       shift_name: String(row.shift_name || ''),
       required_people: Number(row.required_people),
+      fulfillment_mode: normalizeFulfillmentMode(row.fulfillment_mode),
+      priority_level: normalizePriorityLevel(row.priority_level),
       eligible_employee_count: eligibleEmployeeIds.length,
       eligible_employee_ids: eligibleEmployeeIds,
-      blocking_issues: SpecialShiftEligibilityService.buildBlockingIssues(
-        Number(row.required_people),
-        eligibleEmployeeIds,
-      ),
+      blocking_issues: blockingIssues,
     };
   });
 
@@ -625,6 +682,15 @@ const buildPreviewRows = async (
   if (rows.length === 0) {
     warnings.push('当前窗口没有展开出任何 occurrence');
   }
+  rows.forEach((row) => {
+    if (row.fulfillment_mode === 'SOFT' && row.eligible_employee_count < row.required_people) {
+      warnings.push(`${row.date} ${row.shift_name} 为 SOFT 规则，静态候选人数不足，求解时可能产生 partial`);
+    }
+  });
+  const nearCapacityWarnings = rows
+    .filter((row) => row.eligible_employee_count >= row.required_people && row.eligible_employee_count - row.required_people <= 1)
+    .map((row) => `${row.date} ${row.shift_name} 候选池仅比需求多 ${row.eligible_employee_count - row.required_people} 人`);
+  warnings.push(...nearCapacityWarnings);
 
   const canActivate = rows.length > 0 && rows.every((row) => row.blocking_issues.length === 0);
   return {
@@ -800,6 +866,7 @@ export class SpecialShiftWindowService {
           (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id) AS occurrence_count,
           (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id AND sso.status = 'SCHEDULED') AS scheduled_count,
           (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id AND sso.status = 'APPLIED') AS applied_count,
+          (SELECT COUNT(*) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id AND sso.status = 'PARTIAL') AS partial_count,
           (SELECT MAX(sso.scheduling_run_id) FROM special_shift_occurrences sso WHERE sso.window_id = ssw.id) AS latest_scheduling_run_id
         FROM special_shift_windows ssw
         JOIN organization_units ou ON ou.id = ssw.org_unit_id
@@ -864,7 +931,7 @@ export class SpecialShiftWindowService {
           SET status = 'PENDING',
               scheduling_run_id = NULL
           WHERE window_id = ?
-            AND status IN ('PENDING', 'INFEASIBLE', 'CANCELLED')
+            AND status IN ('PENDING', 'INFEASIBLE', 'CANCELLED', 'PARTIAL')
         `,
         [windowId],
       );
@@ -942,6 +1009,8 @@ export class SpecialShiftWindowService {
           sso.shift_id,
           sso.required_people,
           sso.plan_category,
+          sso.fulfillment_mode,
+          sso.priority_level,
           sso.qualification_id,
           sso.min_level
         FROM special_shift_occurrences sso
@@ -1007,6 +1076,8 @@ export class SpecialShiftWindowService {
         shift_id: Number(row.shift_id),
         required_people: Number(row.required_people),
         eligible_employee_ids: eligibleEmployeeIds,
+        fulfillment_mode: normalizeFulfillmentMode(row.fulfillment_mode),
+        priority_level: normalizePriorityLevel(row.priority_level),
         plan_category: String(row.plan_category || 'BASE') as SpecialShiftPlanCategory,
         lock_after_apply: normalizeBoolean(row.lock_after_apply, true),
       };
@@ -1028,7 +1099,7 @@ export class SpecialShiftWindowService {
         SET status = 'SCHEDULED',
             scheduling_run_id = ?
         WHERE id IN (${occurrenceIds.map(() => '?').join(',')})
-          AND status IN ('PENDING', 'SCHEDULED')
+          AND status IN ('PENDING', 'SCHEDULED', 'PARTIAL')
       `,
       [runId, ...occurrenceIds],
     );

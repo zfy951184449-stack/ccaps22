@@ -76,8 +76,26 @@ interface SpecialShiftRunRequirement {
     shift_id: number;
     required_people: number;
     eligible_employee_ids: number[];
+    fulfillment_mode: 'HARD' | 'SOFT';
+    priority_level: 'CRITICAL' | 'HIGH' | 'NORMAL';
+    candidates?: Array<{
+        employee_id: number;
+        impact_cost: number;
+    }>;
     plan_category: 'BASE' | 'OVERTIME';
     lock_after_apply?: boolean;
+}
+
+interface SpecialShiftSolverAssignment {
+    occurrence_id: number;
+    employee_id: number;
+    date: string;
+    shift_id: number;
+}
+
+interface SpecialShiftSolverShortage {
+    occurrence_id: number;
+    shortage_people: number;
 }
 
 interface ShiftDefinitionInfo {
@@ -124,6 +142,12 @@ const normalizeSpecialShiftRequirements = (value: unknown): SpecialShiftRunRequi
         .map((item: any) => {
             const planCategory: 'BASE' | 'OVERTIME' =
                 String(item?.plan_category || 'BASE') === 'OVERTIME' ? 'OVERTIME' : 'BASE';
+            const fulfillmentMode: 'HARD' | 'SOFT' =
+                String(item?.fulfillment_mode || 'HARD').toUpperCase() === 'SOFT' ? 'SOFT' : 'HARD';
+            const priorityLevel: 'CRITICAL' | 'HIGH' | 'NORMAL' =
+                String(item?.priority_level || 'HIGH').toUpperCase() === 'CRITICAL'
+                    ? 'CRITICAL'
+                    : (String(item?.priority_level || 'HIGH').toUpperCase() === 'NORMAL' ? 'NORMAL' : 'HIGH');
 
             return {
                 occurrence_id: Number(item?.occurrence_id),
@@ -134,6 +158,16 @@ const normalizeSpecialShiftRequirements = (value: unknown): SpecialShiftRunRequi
                 required_people: Number(item?.required_people),
                 eligible_employee_ids: Array.isArray(item?.eligible_employee_ids)
                     ? item.eligible_employee_ids.map((employeeId: unknown) => Number(employeeId)).filter((employeeId: number) => Number.isFinite(employeeId) && employeeId > 0)
+                    : [],
+                fulfillment_mode: fulfillmentMode,
+                priority_level: priorityLevel,
+                candidates: Array.isArray(item?.candidates)
+                    ? item.candidates
+                        .map((candidate: any) => ({
+                            employee_id: Number(candidate?.employee_id),
+                            impact_cost: Number(candidate?.impact_cost || 0),
+                        }))
+                        .filter((candidate: { employee_id: number; impact_cost: number }) => Number.isFinite(candidate.employee_id) && candidate.employee_id > 0)
                     : [],
                 plan_category: planCategory,
                 lock_after_apply: item?.lock_after_apply !== undefined ? Boolean(item.lock_after_apply) : true,
@@ -157,8 +191,54 @@ const buildSpecialShiftRunSummary = (requirements: SpecialShiftRunRequirement[])
     special_shift_occurrence_count: requirements.length,
     special_shift_required_headcount_total: requirements.reduce((sum, requirement) => sum + requirement.required_people, 0),
     special_shift_assigned_headcount_total: 0,
+    special_shift_shortage_total: 0,
+    special_shift_unmet_occurrence_count: 0,
+    special_shift_partial_occurrence_count: 0,
     special_shift_requirements: requirements,
+    special_shift_assignments: [],
+    special_shift_shortages: [],
 });
+
+const normalizeSpecialShiftAssignments = (value: unknown): SpecialShiftSolverAssignment[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item: any) => ({
+            occurrence_id: Number(item?.occurrence_id),
+            employee_id: Number(item?.employee_id),
+            date: String(item?.date || ''),
+            shift_id: Number(item?.shift_id),
+        }))
+        .filter((item) =>
+            Number.isFinite(item.occurrence_id) &&
+            item.occurrence_id > 0 &&
+            Number.isFinite(item.employee_id) &&
+            item.employee_id > 0 &&
+            item.date &&
+            Number.isFinite(item.shift_id) &&
+            item.shift_id > 0,
+        );
+};
+
+const normalizeSpecialShiftShortages = (value: unknown): SpecialShiftSolverShortage[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value
+        .map((item: any) => ({
+            occurrence_id: Number(item?.occurrence_id),
+            shortage_people: Number(item?.shortage_people || 0),
+        }))
+        .filter((item) =>
+            Number.isFinite(item.occurrence_id) &&
+            item.occurrence_id > 0 &&
+            Number.isFinite(item.shortage_people) &&
+            item.shortage_people > 0,
+        );
+};
 
 const parseRunSummary = (summary: any) => {
     if (!summary) {
@@ -230,13 +310,16 @@ const applySpecialShiftCoverage = async (
     connection: any,
     runId: number,
     requirements: SpecialShiftRunRequirement[],
-    shiftSchedule: ShiftScheduleItem[],
+    solverAssignments: SpecialShiftSolverAssignment[],
+    solverShortages: SpecialShiftSolverShortage[],
     shiftPlanIdByShiftKey: Map<string, number>,
 ) => {
     if (!requirements.length) {
         return {
             assignmentsInserted: 0,
             lockedShiftPlans: 0,
+            shortageTotal: 0,
+            partialOccurrences: 0,
         };
     }
 
@@ -247,40 +330,55 @@ const applySpecialShiftCoverage = async (
         occurrenceIds,
     );
 
-    const employeesByDateShift = new Map<string, number[]>();
-    shiftSchedule.forEach((plan) => {
-        const key = `${plan.date}:${plan.shift_id}`;
-        if (!employeesByDateShift.has(key)) {
-            employeesByDateShift.set(key, []);
+    const assignmentsByOccurrence = new Map<number, SpecialShiftSolverAssignment[]>();
+    solverAssignments.forEach((assignment) => {
+        if (!assignmentsByOccurrence.has(assignment.occurrence_id)) {
+            assignmentsByOccurrence.set(assignment.occurrence_id, []);
         }
-        employeesByDateShift.get(key)!.push(plan.employee_id);
+        assignmentsByOccurrence.get(assignment.occurrence_id)!.push(assignment);
+    });
+    const shortageByOccurrence = new Map<number, number>();
+    solverShortages.forEach((shortage) => {
+        shortageByOccurrence.set(shortage.occurrence_id, shortage.shortage_people);
     });
 
     let assignmentsInserted = 0;
     let lockedShiftPlans = 0;
+    let shortageTotal = 0;
+    let partialOccurrences = 0;
 
     for (const requirement of requirements) {
-        const dateShiftKey = `${requirement.date}:${requirement.shift_id}`;
-        const eligibleSet = new Set(requirement.eligible_employee_ids);
-        const selectedEmployeeIds = (employeesByDateShift.get(dateShiftKey) || [])
-            .filter((employeeId) => eligibleSet.has(employeeId))
-            .sort((a, b) => a - b);
+        const shortagePeople = shortageByOccurrence.get(requirement.occurrence_id) || 0;
+        shortageTotal += shortagePeople;
 
-        const selectedAssignments: Array<{ employeeId: number; shiftPlanId: number }> = [];
-        for (const employeeId of selectedEmployeeIds) {
-            const shiftPlanId = shiftPlanIdByShiftKey.get(buildShiftKey(employeeId, requirement.date, requirement.shift_id));
-            if (!shiftPlanId) {
-                continue;
-            }
-            selectedAssignments.push({ employeeId, shiftPlanId });
-            if (selectedAssignments.length >= requirement.required_people) {
-                break;
-            }
+        if (requirement.fulfillment_mode === 'HARD' && shortagePeople > 0) {
+            throw new Error(
+                `Special shift occurrence ${requirement.occurrence_id} 为 HARD 规则，不能存在 ${shortagePeople} 人欠配`,
+            );
         }
 
-        if (selectedAssignments.length < requirement.required_people) {
+        const eligibleSet = new Set(requirement.eligible_employee_ids);
+        const selectedAssignments = (assignmentsByOccurrence.get(requirement.occurrence_id) || [])
+            .filter((assignment) =>
+                eligibleSet.has(assignment.employee_id) &&
+                assignment.date === requirement.date &&
+                assignment.shift_id === requirement.shift_id,
+            )
+            .sort((a, b) => a.employee_id - b.employee_id)
+            .map((assignment) => {
+                const shiftPlanId = shiftPlanIdByShiftKey.get(
+                    buildShiftKey(assignment.employee_id, assignment.date, assignment.shift_id),
+                );
+                return shiftPlanId
+                    ? { employeeId: assignment.employee_id, shiftPlanId }
+                    : null;
+            })
+            .filter((assignment): assignment is { employeeId: number; shiftPlanId: number } => Boolean(assignment));
+
+        const expectedAssignedCount = requirement.required_people - shortagePeople;
+        if (selectedAssignments.length !== expectedAssignedCount) {
             throw new Error(
-                `Special shift occurrence ${requirement.occurrence_id} 未满足覆盖要求: 需要 ${requirement.required_people} 人, 实际 ${selectedAssignments.length} 人`,
+                `Special shift occurrence ${requirement.occurrence_id} 命中人数与 shortage 不一致: 期望 ${expectedAssignedCount}, 实际 ${selectedAssignments.length}`,
             );
         }
 
@@ -320,7 +418,7 @@ const applySpecialShiftCoverage = async (
         const shiftPlanIds = selectedAssignments.map((assignment) => assignment.shiftPlanId);
         const shiftPlanPlaceholders = shiftPlanIds.map(() => '?').join(',');
 
-        if (requirement.plan_category === 'OVERTIME') {
+        if (shiftPlanIds.length > 0 && requirement.plan_category === 'OVERTIME') {
             await connection.execute(
                 `UPDATE employee_shift_plans
                  SET plan_category = 'OVERTIME'
@@ -329,7 +427,7 @@ const applySpecialShiftCoverage = async (
             );
         }
 
-        if (requirement.lock_after_apply) {
+        if (shiftPlanIds.length > 0 && requirement.lock_after_apply) {
             await connection.execute(
                 `UPDATE employee_shift_plans
                  SET plan_state = 'LOCKED',
@@ -345,20 +443,26 @@ const applySpecialShiftCoverage = async (
             lockedShiftPlans += shiftPlanIds.length;
         }
 
+        const nextStatus = shortagePeople > 0 ? 'PARTIAL' : 'APPLIED';
+        if (nextStatus === 'PARTIAL') {
+            partialOccurrences += 1;
+        }
         await connection.execute(
             `
                 UPDATE special_shift_occurrences
-                SET status = 'APPLIED',
+                SET status = ?,
                     scheduling_run_id = ?
                 WHERE id = ?
             `,
-            [runId, requirement.occurrence_id],
+            [nextStatus, runId, requirement.occurrence_id],
         );
     }
 
     return {
         assignmentsInserted,
         lockedShiftPlans,
+        shortageTotal,
+        partialOccurrences,
     };
 };
 
@@ -1104,15 +1208,22 @@ async function saveResults(runId: number, result: any) {
         );
         const runSummary = rows.length > 0 ? parseRunSummary(rows[0].summary_json) : {};
         const storedResult = buildStoredResult(result);
+        const specialShiftAssignments = normalizeSpecialShiftAssignments(result?.special_shift_assignments);
+        const specialShiftShortages = normalizeSpecialShiftShortages(result?.special_shift_shortages);
         if (storedResult.summary) {
             storedResult.summary = {
                 ...storedResult.summary,
                 special_shift_requirement_count: Number(runSummary.special_shift_requirement_count || 0),
                 special_shift_occurrence_count: Number(runSummary.special_shift_occurrence_count || 0),
                 special_shift_required_headcount_total: Number(runSummary.special_shift_required_headcount_total || 0),
-                special_shift_assigned_headcount_total: Number(runSummary.special_shift_assigned_headcount_total || 0),
+                special_shift_assigned_headcount_total: specialShiftAssignments.length,
+                special_shift_shortage_total: specialShiftShortages.reduce((sum, item) => sum + item.shortage_people, 0),
+                special_shift_unmet_occurrence_count: specialShiftShortages.length,
+                special_shift_partial_occurrence_count: specialShiftShortages.length,
             };
         }
+        storedResult.special_shift_assignments = specialShiftAssignments;
+        storedResult.special_shift_shortages = specialShiftShortages;
         await pool.execute('UPDATE scheduling_runs SET result_summary = ? WHERE id = ?', [JSON.stringify(storedResult), runId]);
         if (isSuccessfulSolverResult(result)) {
             await markSpecialShiftOccurrencesScheduled(runId);
@@ -1284,6 +1395,8 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             : run.result_summary;
         const runSummary = parseRunSummary(run.summary_json);
         const specialShiftRequirements = normalizeSpecialShiftRequirements(runSummary.special_shift_requirements);
+        const specialShiftAssignments = normalizeSpecialShiftAssignments(rawResult.special_shift_assignments);
+        const specialShiftShortages = normalizeSpecialShiftShortages(rawResult.special_shift_shortages);
 
         // 兼容 Solver V4 统一 schedules 格式 & 旧版 assignments/shift_schedule 格式
         // Diagnostic: Log the keys present in the rawResult to debug format detection
@@ -1644,13 +1757,19 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             connection,
             runIdNum,
             specialShiftRequirements,
-            shiftSchedule,
+            specialShiftAssignments,
+            specialShiftShortages,
             shiftPlanIdByShiftKey,
         );
 
         const nextRunSummary = {
             ...runSummary,
             special_shift_assigned_headcount_total: specialShiftApplyResult.assignmentsInserted,
+            special_shift_shortage_total: specialShiftApplyResult.shortageTotal,
+            special_shift_partial_occurrence_count: specialShiftApplyResult.partialOccurrences,
+            special_shift_unmet_occurrence_count: specialShiftShortages.length,
+            special_shift_assignments: specialShiftAssignments,
+            special_shift_shortages: specialShiftShortages,
         };
         await connection.execute(
             'UPDATE scheduling_runs SET status = ?, summary_json = ? WHERE id = ?',
@@ -1680,6 +1799,8 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                 shift_link_backfill_missing: shiftLinkBackfill.missingAssignments,
                 special_shift_assignments_inserted: specialShiftApplyResult.assignmentsInserted,
                 special_shift_locked_plans: specialShiftApplyResult.lockedShiftPlans,
+                special_shift_shortage_total: specialShiftApplyResult.shortageTotal,
+                special_shift_partial_occurrences: specialShiftApplyResult.partialOccurrences,
             }
         });
 

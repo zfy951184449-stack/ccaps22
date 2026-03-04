@@ -15,6 +15,9 @@ export interface SpecialShiftOccurrenceListItem {
   shift_name: string;
   required_people: number;
   filled_people: number;
+  shortage_people: number;
+  fulfillment_mode: 'HARD' | 'SOFT';
+  priority_level: 'CRITICAL' | 'HIGH' | 'NORMAL';
   status: string;
   assignments: Array<{
     id: number;
@@ -96,6 +99,8 @@ export class SpecialShiftOccurrenceService {
           shift_id,
           required_people,
           plan_category,
+          fulfillment_mode,
+          priority_level,
           qualification_id,
           min_level,
           days_of_week
@@ -132,6 +137,8 @@ export class SpecialShiftOccurrenceService {
                 shift_id,
                 required_people,
                 plan_category,
+                fulfillment_mode,
+                priority_level,
                 qualification_id,
                 min_level,
                 status,
@@ -146,6 +153,8 @@ export class SpecialShiftOccurrenceService {
             Number(rule.shift_id),
             Number(rule.required_people),
             String(rule.plan_category || 'BASE'),
+            String(rule.fulfillment_mode || 'HARD'),
+            String(rule.priority_level || 'HIGH'),
             normalizeNumber(rule.qualification_id),
             normalizeNumber(rule.min_level),
           ],
@@ -186,6 +195,8 @@ export class SpecialShiftOccurrenceService {
           sso.shift_id,
           sd.shift_name,
           sso.required_people,
+          sso.fulfillment_mode,
+          sso.priority_level,
           sso.status,
           sso.scheduling_run_id,
           ssoa.id AS assignment_id,
@@ -220,6 +231,11 @@ export class SpecialShiftOccurrenceService {
           shift_name: String(row.shift_name || ''),
           required_people: Number(row.required_people),
           filled_people: 0,
+          shortage_people: Number(row.required_people || 0),
+          fulfillment_mode: String(row.fulfillment_mode || 'HARD') === 'SOFT' ? 'SOFT' : 'HARD',
+          priority_level: ['CRITICAL', 'NORMAL'].includes(String(row.priority_level || 'HIGH'))
+            ? (String(row.priority_level || 'HIGH') as 'CRITICAL' | 'NORMAL')
+            : 'HIGH',
           status: String(row.status),
           assignments: [],
           scheduling_run_id: normalizeNumber(row.scheduling_run_id),
@@ -239,6 +255,7 @@ export class SpecialShiftOccurrenceService {
           is_locked: Boolean(row.is_locked),
         });
         occurrence.filled_people += 1;
+        occurrence.shortage_people = Math.max(occurrence.required_people - occurrence.filled_people, 0);
       }
     });
 

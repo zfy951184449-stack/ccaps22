@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Typography, Row, Col, Tooltip } from 'antd';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Tooltip } from 'antd';
 import {
-    ProjectOutlined,
-    FullscreenOutlined,
-    ReloadOutlined,
+    ApartmentOutlined,
+    ClusterOutlined,
+    DeploymentUnitOutlined,
     LeftOutlined,
-    MobileOutlined
+    ProjectOutlined,
+    ReloadOutlined,
+    ScheduleOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 import { ProcessTemplate, StageOperation } from '../ProcessTemplateGantt/types';
@@ -14,6 +16,11 @@ interface ProcessTemplateResourceTimelineProps {
     template: ProcessTemplate;
     onBack: () => void;
 }
+
+const API_BASE_URL = 'http://localhost:3001/api';
+const SUITE_HEADER_HEIGHT = 40;
+const EQUIPMENT_HEADER_HEIGHT = 40;
+const STICKY_HEADER_OFFSET = SUITE_HEADER_HEIGHT + EQUIPMENT_HEADER_HEIGHT;
 
 // 模拟资源层级数据（符合 HIG 概念设计图）
 const MOCK_RESOURCE_HIERARCHY = [
@@ -51,32 +58,33 @@ const ProcessTemplateResourceTimeline: React.FC<ProcessTemplateResourceTimelineP
 }) => {
     const [loading, setLoading] = useState(true);
     const [operations, setOperations] = useState<StageOperation[]>([]);
-    const containerRef = useRef<HTMLDivElement>(null);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    const API_BASE_URL = 'http://localhost:3001/api';
+    const loadData = useCallback(async () => {
+        setLoading(true);
+        setErrorMessage(null);
+        try {
+            const stagesRes = await axios.get(`${API_BASE_URL}/process-templates/${template.id}/stages`);
+            const stages = stagesRes.data;
+
+            let allOps: StageOperation[] = [];
+            for (const stage of stages) {
+                const opsRes = await axios.get(`${API_BASE_URL}/process-templates/stages/${stage.id}/operations`);
+                allOps = [...allOps, ...opsRes.data];
+            }
+            setOperations(allOps);
+        } catch (err) {
+            console.error('Error loading operations', err);
+            setOperations([]);
+            setErrorMessage('工序数据加载失败，请重试。');
+        } finally {
+            setLoading(false);
+        }
+    }, [template.id]);
 
     useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                // 先获取所有 stages
-                const stagesRes = await axios.get(`${API_BASE_URL}/process-templates/${template.id}/stages`);
-                const stages = stagesRes.data;
-
-                let allOps: StageOperation[] = [];
-                for (const stage of stages) {
-                    const opsRes = await axios.get(`${API_BASE_URL}/process-templates/stages/${stage.id}/operations`);
-                    allOps = [...allOps, ...opsRes.data];
-                }
-                setOperations(allOps);
-            } catch (err) {
-                console.error('Error loading operations', err);
-            } finally {
-                setLoading(false);
-            }
-        };
         loadData();
-    }, [template.id]);
+    }, [loadData]);
 
     // 根据总天数生成 Y 轴时间刻度
     const timeScale = useMemo(() => {
@@ -96,37 +104,33 @@ const ProcessTemplateResourceTimeline: React.FC<ProcessTemplateResourceTimelineP
         return MOCK_RESOURCE_HIERARCHY.flatMap(suite => suite.equipments);
     }, []);
 
-    // 渲染头部工具栏 (Apple HIG Glassmorphism)
-    const renderHeader = () => (
-        <div className="sticky top-0 z-20 bg-white/70 backdrop-blur-xl border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm">
-            <div className="flex items-center space-x-4">
-                <button
-                    onClick={onBack}
-                    className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-600"
-                >
-                    <LeftOutlined />
-                </button>
-                <div>
-                    <h2 className="text-xl font-semibold text-gray-900 m-0 tracking-tight flex items-center gap-2">
-                        <ProjectOutlined className="text-blue-500" />
-                        Biopharma CMO Process Editor
-                    </h2>
-                    <div className="text-xs text-gray-500 mt-1">San Francisco Pro Display, Semibold</div>
-                </div>
-            </div>
-            <div className="flex items-center space-x-3">
-                <button className="px-4 py-1.5 rounded-full bg-gray-100/80 hover:bg-gray-200 border border-gray-200 text-gray-700 text-sm font-medium transition-all flex items-center gap-2 shadow-sm">
-                    <ReloadOutlined className="text-gray-400" /> Remix
-                </button>
-                <button className="w-8 h-8 rounded-full bg-gray-100/80 hover:bg-gray-200 border border-gray-200 text-gray-600 flex items-center justify-center transition-all shadow-sm">
-                    <MobileOutlined />
-                </button>
-                <button className="w-8 h-8 rounded-full bg-gray-100/80 hover:bg-gray-200 border border-gray-200 text-gray-600 flex items-center justify-center transition-all shadow-sm">
-                    <FullscreenOutlined />
-                </button>
-            </div>
-        </div>
+    const indexedOperations = useMemo(
+        () => operations.map((operation, index) => ({ operation, index })),
+        [operations]
     );
+
+    const summaryCards = useMemo(() => ([
+        {
+            label: '总周期',
+            value: `${template.total_days} 天`,
+            icon: <ScheduleOutlined className="text-sky-600" />
+        },
+        {
+            label: '工序数',
+            value: `${operations.length}`,
+            icon: <ProjectOutlined className="text-emerald-600" />
+        },
+        {
+            label: 'Suite',
+            value: `${MOCK_RESOURCE_HIERARCHY.length}`,
+            icon: <ClusterOutlined className="text-amber-600" />
+        },
+        {
+            label: '设备数',
+            value: `${flatEquipments.length}`,
+            icon: <DeploymentUnitOutlined className="text-violet-600" />
+        }
+    ]), [flatEquipments.length, operations.length, template.total_days]);
 
     // 绘制单个操作块
     const renderOperationBlock = (op: StageOperation, index: number) => {
@@ -134,12 +138,7 @@ const ProcessTemplateResourceTimeline: React.FC<ProcessTemplateResourceTimelineP
         const eqIndex = index % flatEquipments.length;
         const startHour = op.recommended_time || 0;
         const duration = op.standard_time || 2;
-        const day = op.operation_day || 1;
 
-        // 计算 Y 轴位置（每个小时高度为 32px，标题栏高度需要修正）
-        // 一天有 24 小时
-        // 还需要考量天数标题占用的空间或者直接平铺
-        // 为了简单起见，这里假设网格是一个大 Grid
         return (
             <Tooltip title={op.operation_name} key={op.id}>
                 <div
@@ -160,27 +159,117 @@ const ProcessTemplateResourceTimeline: React.FC<ProcessTemplateResourceTimelineP
     };
 
     return (
-        <div className="h-full flex flex-col pt-2" style={{ minHeight: 'calc(100vh - 120px)' }}>
-            <div className="flex-1 bg-white/60 backdrop-blur-2xl border border-gray-100 rounded-3xl overflow-hidden shadow-xl flex flex-col" style={{ minHeight: '800px' }}>
-                {renderHeader()}
+        <div className="h-full flex flex-col gap-4 pb-4" style={{ minHeight: 'calc(100vh - 120px)' }}>
+            <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 px-5 py-5 shadow-sm">
+                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="flex gap-3">
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-sky-300 hover:text-sky-700"
+                        >
+                            <LeftOutlined />
+                        </button>
 
+                        <div className="max-w-3xl">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold tracking-wide text-white">
+                                    {template.template_code}
+                                </span>
+                                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                                    {template.team_name || '未分配单元'}
+                                </span>
+                            </div>
+
+                            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
+                                {template.template_name}
+                            </h2>
+                            <p className="mt-2 text-sm leading-6 text-slate-600">
+                                {template.description || '暂无工艺描述。当前时间轴采用模拟资源层级，用于集中展示工艺工序在资源维度上的排布。'}
+                            </p>
+
+                            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={loadData}
+                                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-sky-300 hover:text-sky-700"
+                                >
+                                    <ReloadOutlined />
+                                    刷新工序
+                                </button>
+                                <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs text-slate-500">
+                                    <ApartmentOutlined className="text-slate-400" />
+                                    资源列按 Suite / 设备分层展示
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 xl:min-w-[440px]">
+                        {summaryCards.map(card => (
+                            <div
+                                key={card.label}
+                                className="rounded-2xl border border-white bg-white/85 px-4 py-3 shadow-sm"
+                            >
+                                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                                    <span>{card.label}</span>
+                                    {card.icon}
+                                </div>
+                                <div className="mt-2 text-2xl font-semibold text-slate-900">
+                                    {card.value}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {errorMessage && (
+                    <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <span>{errorMessage}</span>
+                            <button
+                                type="button"
+                                onClick={loadData}
+                                className="rounded-full border border-rose-200 bg-white px-3 py-1 text-xs font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                            >
+                                重试
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            <section className="flex min-h-[680px] flex-1 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
                 {loading ? (
-                    <div className="flex-1 flex items-center justify-center text-gray-400">Loading timeframe...</div>
+                    <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+                        正在加载工序时间轴...
+                    </div>
+                ) : operations.length === 0 ? (
+                    <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-slate-500">
+                        当前模版暂无可展示的工序数据。
+                    </div>
                 ) : (
-                    <div className="flex-1 overflow-auto bg-transparent relative flex" ref={containerRef}>
+                    <div className="flex flex-1 overflow-auto bg-gradient-to-br from-white via-slate-50 to-sky-50/40">
+                        {/* Y 轴时间 */}
+                        <div className="sticky left-0 z-20 w-20 shrink-0 border-r border-slate-200 bg-white shadow-[4px_0_12px_rgba(15,23,42,0.04)]">
+                            <div
+                                className="border-b border-slate-200 bg-slate-50"
+                                style={{ height: `${STICKY_HEADER_OFFSET}px` }}
+                            />
 
-                        {/* Y轴 时间 */}
-                        <div className="w-24 flex-shrink-0 bg-white/50 border-r border-gray-100 z-10 sticky left-0 shadow-[4px_0_12px_rgba(0,0,0,0.02)]">
-                            {/* 占位符对其 X轴 Header */}
-                            <div className="h-16 border-b border-gray-100"></div>
-
-                            {timeScale.map((d) => (
+                            {timeScale.map(d => (
                                 <div key={`day-${d.day}`}>
-                                    <div className="px-3 py-2 text-sm font-semibold text-gray-800 bg-gray-50/50 border-b border-gray-100 sticky top-16 z-20 backdrop-blur-md">
+                                    <div
+                                        className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700"
+                                        style={{ position: 'sticky', top: STICKY_HEADER_OFFSET, zIndex: 10 }}
+                                    >
                                         Day {d.day}
                                     </div>
-                                    {d.hours.map((hr, idx) => (
-                                        <div key={hr} className="h-8 border-b border-gray-100 px-3 text-[11px] text-gray-400 flex items-center justify-end">
+                                    {d.hours.map(hr => (
+                                        <div
+                                            key={hr}
+                                            className="flex h-8 items-center justify-end border-b border-slate-100 px-3 text-[11px] text-slate-400"
+                                        >
                                             {hr.split(':')[0]}
                                         </div>
                                     ))}
@@ -188,60 +277,68 @@ const ProcessTemplateResourceTimeline: React.FC<ProcessTemplateResourceTimelineP
                             ))}
                         </div>
 
-                        {/* X轴 资源与主体网格 */}
-                        <div className="flex-1 relative min-w-max">
-                            {/* 头部：车间 Suite */}
-                            <div className="h-8 flex bg-white/80 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-20">
-                                {MOCK_RESOURCE_HIERARCHY.map((suite, idx) => (
+                        {/* X 轴资源和网格 */}
+                        <div className="relative min-w-max flex-1">
+                            <div
+                                className="sticky top-0 z-20 flex border-b border-slate-200 bg-white"
+                                style={{ height: `${SUITE_HEADER_HEIGHT}px` }}
+                            >
+                                {MOCK_RESOURCE_HIERARCHY.map(suite => (
                                     <div
-                                        key={idx}
-                                        className="flex-1 flex items-center justify-center text-xs font-semibold text-gray-700 border-r border-gray-100"
-                                        style={{ minWidth: `${suite.equipments.length * 160}px` }}
+                                        key={suite.suiteName}
+                                        className="flex items-center justify-center border-r border-slate-200 px-3 text-xs font-semibold text-slate-700"
+                                        style={{ minWidth: `${suite.equipments.length * 160}px`, flex: 1 }}
                                     >
                                         {suite.suiteName}
                                     </div>
                                 ))}
                             </div>
-                            {/* 头部：设备 Equipment */}
-                            <div className="h-8 flex bg-white/90 backdrop-blur-xl border-b border-gray-100 sticky top-8 z-20 shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
-                                {flatEquipments.map((eq, idx) => (
+
+                            <div
+                                className="sticky z-20 flex border-b border-slate-200 bg-slate-50/95 shadow-[0_4px_12px_rgba(15,23,42,0.04)] backdrop-blur"
+                                style={{ top: `${SUITE_HEADER_HEIGHT}px`, height: `${EQUIPMENT_HEADER_HEIGHT}px` }}
+                            >
+                                {flatEquipments.map(eq => (
                                     <div
-                                        key={idx}
-                                        className="flex-1 w-40 flex items-center justify-center text-xs font-medium text-gray-600 border-r border-gray-100"
-                                        style={{ minWidth: '160px' }}
+                                        key={eq.id}
+                                        className="flex w-40 items-center justify-center border-r border-slate-200 px-3 text-xs font-medium text-slate-600"
+                                        style={{ minWidth: '160px', flex: 1 }}
                                     >
                                         {eq.name}
                                     </div>
                                 ))}
                             </div>
 
-                            {/* 网格主体列 */}
-                            <div className="flex relative">
+                            <div className="relative flex">
                                 {flatEquipments.map((eq, eqIdx) => (
-                                    <div key={`col-${eq.id}`} className="flex-1 border-r border-gray-100 relative" style={{ minWidth: '160px' }}>
-                                        {/* 渲染网格线 */}
-                                        {timeScale.map((d) => (
+                                    <div
+                                        key={`col-${eq.id}`}
+                                        className="relative flex-1 border-r border-slate-200"
+                                        style={{ minWidth: '160px' }}
+                                    >
+                                        {timeScale.map(d => (
                                             <div key={`col-${eq.id}-day-${d.day}`} className="relative">
-                                                {/* Day Title Space */}
-                                                <div className="h-[37px] bg-gray-50/30 border-b border-gray-100"></div>
-                                                {/* Hours Space */}
+                                                <div className="h-9 border-b border-slate-200 bg-slate-50/80" />
                                                 <div className="relative">
-                                                    {d.hours.map((hr, hIdx) => (
-                                                        <div key={hr} className="h-8 border-b border-gray-50/80"></div>
+                                                    {d.hours.map(hr => (
+                                                        <div key={hr} className="h-8 border-b border-slate-100" />
                                                     ))}
-                                                    {/* 在这列渲染属于这天的操作块 (根据前面提到的假逻辑) */}
-                                                    {operations.filter(op => op.operation_day === d.day && (operations.indexOf(op) % flatEquipments.length === eqIdx)).map(op => renderOperationBlock(op, operations.indexOf(op)))}
+                                                    {indexedOperations
+                                                        .filter(({ operation, index }) => (
+                                                            operation.operation_day === d.day &&
+                                                            index % flatEquipments.length === eqIdx
+                                                        ))
+                                                        .map(({ operation, index }) => renderOperationBlock(operation, index))}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ))}
                             </div>
-
                         </div>
                     </div>
                 )}
-            </div>
+            </section>
         </div>
     );
 };

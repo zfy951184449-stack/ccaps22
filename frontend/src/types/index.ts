@@ -215,6 +215,8 @@ export interface ShiftDefinition {
 
 export type SpecialShiftWindowStatus = 'DRAFT' | 'ACTIVE' | 'CANCELLED' | 'ARCHIVED';
 export type SpecialShiftPlanCategory = 'BASE' | 'OVERTIME';
+export type SpecialShiftFulfillmentMode = 'HARD' | 'SOFT';
+export type SpecialShiftPriorityLevel = 'CRITICAL' | 'HIGH' | 'NORMAL';
 
 export interface SpecialShiftWindowRule {
   id?: number;
@@ -223,6 +225,8 @@ export interface SpecialShiftWindowRule {
   shift_code?: string;
   required_people: number;
   plan_category: SpecialShiftPlanCategory;
+  fulfillment_mode?: SpecialShiftFulfillmentMode;
+  priority_level?: SpecialShiftPriorityLevel;
   qualification_id?: number | null;
   qualification_name?: string | null;
   min_level?: number | null;
@@ -250,6 +254,7 @@ export interface SpecialShiftWindow {
   occurrence_count: number;
   scheduled_count: number;
   applied_count: number;
+  partial_count?: number;
   latest_scheduling_run_id?: number | null;
 }
 
@@ -260,6 +265,8 @@ export interface SpecialShiftWindowPreviewRow {
   shift_id: number;
   shift_name: string;
   required_people: number;
+  fulfillment_mode: SpecialShiftFulfillmentMode;
+  priority_level: SpecialShiftPriorityLevel;
   eligible_employee_count: number;
   eligible_employee_ids: number[];
   blocking_issues: string[];
@@ -291,6 +298,9 @@ export interface SpecialShiftOccurrence {
   shift_name: string;
   required_people: number;
   filled_people: number;
+  shortage_people: number;
+  fulfillment_mode: SpecialShiftFulfillmentMode;
+  priority_level: SpecialShiftPriorityLevel;
   status: string;
   assignments: SpecialShiftOccurrenceAssignment[];
   scheduling_run_id?: number | null;
@@ -304,6 +314,7 @@ export interface SpecialShiftWindowDetail {
     required_headcount_total: number;
     scheduled_count: number;
     applied_count: number;
+    partial_count: number;
     cancelled_count: number;
     infeasible_count: number;
   };
