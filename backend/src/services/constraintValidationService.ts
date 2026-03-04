@@ -181,7 +181,6 @@ export const runConstraintValidation = async (templateId: number): Promise<Const
        oc.constraint_type,
        oc.time_lag,
        oc.constraint_level,
-       // oc.share_personnel, (Removed)
        oc.constraint_name
      FROM operation_constraints oc
      JOIN stage_operation_schedules sos ON oc.schedule_id = sos.id

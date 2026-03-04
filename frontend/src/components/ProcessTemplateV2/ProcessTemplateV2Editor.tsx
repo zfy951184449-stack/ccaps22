@@ -2,25 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Empty, Modal, Spin, Tabs, message } from 'antd';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import ProcessTemplateGantt from '../ProcessTemplateGantt';
-import { processTemplateV2Api } from '../../services/processTemplateV2Api';
+import { processTemplateV2Api } from '../../services';
 import TemplateEditorHeader from './TemplateEditorHeader';
+import TemplateResourceEditorTab from './TemplateResourceEditorTab';
 import TemplateResourceNodeManagementTab from './TemplateResourceNodeManagementTab';
-import TemplateResourcePlannerTab from './TemplateResourcePlannerTab';
 import { TeamSummary, TemplateSummary } from './types';
 
 interface ProcessTemplateV2EditorProps {
   templateId: number;
 }
 
-type EditorTabKey = 'process' | 'resource' | 'nodes';
+type EditorTabKey = 'resource' | 'nodes';
 
 const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templateId }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<EditorTabKey>('process');
+  const [activeTab, setActiveTab] = useState<EditorTabKey>('resource');
   const [template, setTemplate] = useState<TemplateSummary | null>(null);
   const [draft, setDraft] = useState<TemplateSummary | null>(null);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
@@ -196,30 +195,14 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
         destroyInactiveTabPane={false}
         items={[
           {
-            key: 'process',
-            label: '工艺时间轴',
-            children: (
-              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
-                  <div className="text-sm font-semibold text-slate-800">工艺结构与时间编辑</div>
-                  <p className="mt-1 text-sm text-slate-500">
-                    直接复用 V1 甘特编辑能力，继续支持阶段 CRUD、工序编辑、约束、共享组和资源规则。
-                  </p>
-                </div>
-                <div style={{ height: 'calc(100vh - 340px)', minHeight: 620 }}>
-                  <ProcessTemplateGantt template={draft} onBack={handleBack} />
-                </div>
-              </section>
-            ),
-          },
-          {
             key: 'resource',
-            label: '资源节点视图',
+            label: '资源主编辑视图',
             children: (
-              <TemplateResourcePlannerTab
+              <TemplateResourceEditorTab
                 templateId={templateId}
                 templateTeamId={draft.team_id}
                 active={activeTab === 'resource'}
+                onOpenNodes={() => setActiveTab('nodes')}
               />
             ),
           },

@@ -27,6 +27,7 @@ Do not treat restarts as verification. Run deterministic checks for the touched 
 
 Use the Codex rule split under `.agent/rules/` as the working set:
 - `codex-coding-rules.md`: repository-wide base rules
+- `codex-plan-collaboration-rules.md`: Plan mode 下遇到关键不确定性时优先提问、减少错误假设推进
 - `codex-backend-api-rules.md`: backend/API/database focused tasks
 - `codex-frontend-ui-rules.md`: frontend/UI/interaction focused tasks
 - `codex-solver-v4-rules.md`: solver V4 / assembler / apply-result focused tasks

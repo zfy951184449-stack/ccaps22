@@ -9,7 +9,7 @@ import {
 import { Button, Empty, Space, Tabs, message } from 'antd';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { processTemplateV2Api } from '../../services/processTemplateV2Api';
+import { processTemplateV2Api } from '../../services';
 import TemplateCreateDraftModal from './TemplateCreateDraftModal';
 import { TeamSummary, TemplateSummary } from './types';
 

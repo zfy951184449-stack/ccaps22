@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import { updateTemplateTotalDays } from './processTemplateController';
+import { upsertTemplateScheduleBinding } from '../services/resourceNodeService';
 import { loadTemplateRuleMetadataForStageOperations } from '../services/templateResourceRuleService';
 import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
 
@@ -459,5 +460,225 @@ export const getAvailableOperations = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching available operations:', error);
     res.status(500).json({ error: 'Failed to fetch available operations' });
+  }
+};
+
+const toHourValue = (value: number) => {
+  const remainder = value % 24;
+  return remainder < 0 ? remainder + 24 : remainder;
+};
+
+const buildRelativeScheduleFields = (
+  absoluteStartHour: number,
+  stageStartDay: number,
+  durationHours: number,
+) => {
+  const absoluteDay = Math.floor(absoluteStartHour / 24);
+  const operationDay = Math.max(0, absoluteDay - stageStartDay);
+  const recommendedDayOffset = absoluteDay - stageStartDay - operationDay;
+  const recommendedTime = toHourValue(absoluteStartHour);
+
+  const windowStartAbsolute = absoluteStartHour - 2;
+  const windowEndAbsolute = absoluteStartHour + Math.max(durationHours, 2);
+  const windowStartDay = Math.floor(windowStartAbsolute / 24);
+  const windowEndDay = Math.floor(windowEndAbsolute / 24);
+
+  return {
+    operation_day: operationDay,
+    recommended_time: recommendedTime,
+    recommended_day_offset: recommendedDayOffset,
+    window_start_time: toHourValue(windowStartAbsolute),
+    window_start_day_offset: windowStartDay - stageStartDay - operationDay,
+    window_end_time: toHourValue(windowEndAbsolute),
+    window_end_day_offset: windowEndDay - stageStartDay - operationDay,
+  };
+};
+
+export const createStageOperationFromCanvas = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const templateId = Number(req.params.id);
+    const {
+      stage_id,
+      operation_id,
+      resource_node_id,
+      operation_day,
+      recommended_time,
+      recommended_day_offset,
+      window_start_time,
+      window_start_day_offset,
+      window_end_time,
+      window_end_day_offset,
+      absolute_start_hour,
+    } = req.body ?? {};
+
+    if (!Number.isInteger(templateId) || templateId <= 0) {
+      return res.status(400).json({ error: 'Invalid template id' });
+    }
+
+    const stageId = Number(stage_id);
+    const operationId = Number(operation_id);
+
+    if (!Number.isInteger(stageId) || stageId <= 0 || !Number.isInteger(operationId) || operationId <= 0) {
+      return res.status(400).json({ error: 'stage_id and operation_id are required' });
+    }
+
+    await connection.beginTransaction();
+
+    const [stageRows] = await connection.execute<RowDataPacket[]>(
+      'SELECT id, template_id, start_day FROM process_stages WHERE id = ? LIMIT 1',
+      [stageId],
+    );
+
+    if (!stageRows.length || Number(stageRows[0].template_id) !== templateId) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Stage does not belong to current template' });
+    }
+
+    const [operationRows] = await connection.execute<RowDataPacket[]>(
+      'SELECT id, standard_time FROM operations WHERE id = ? LIMIT 1',
+      [operationId],
+    );
+
+    if (!operationRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Operation not found' });
+    }
+
+    const stageStartDay = Number(stageRows[0].start_day ?? 0);
+    const durationHours = Number(operationRows[0].standard_time ?? 2);
+    const derivedFields =
+      absolute_start_hour !== undefined && absolute_start_hour !== null
+        ? buildRelativeScheduleFields(Number(absolute_start_hour), stageStartDay, durationHours)
+        : {
+            operation_day: Number(operation_day ?? 0),
+            recommended_time: Number(recommended_time ?? 9),
+            recommended_day_offset: Number(recommended_day_offset ?? 0),
+            window_start_time: window_start_time !== undefined ? Number(window_start_time) : Number(recommended_time ?? 9) - 2,
+            window_start_day_offset: Number(window_start_day_offset ?? 0),
+            window_end_time:
+              window_end_time !== undefined ? Number(window_end_time) : Number(recommended_time ?? 9) + Math.max(durationHours, 2),
+            window_end_day_offset: Number(window_end_day_offset ?? 0),
+          };
+
+    const [maxOrderRows] = await connection.execute<RowDataPacket[]>(
+      'SELECT COALESCE(MAX(operation_order), 0) AS max_order FROM stage_operation_schedules WHERE stage_id = ?',
+      [stageId],
+    );
+    const finalOrder = Number(maxOrderRows[0]?.max_order ?? 0) + 1;
+
+    const [insertResult]: any = await connection.execute(
+      `INSERT INTO stage_operation_schedules
+       (stage_id, operation_id, operation_day, recommended_time, recommended_day_offset, window_start_time, window_start_day_offset, window_end_time, window_end_day_offset, operation_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        stageId,
+        operationId,
+        derivedFields.operation_day,
+        derivedFields.recommended_time,
+        derivedFields.recommended_day_offset,
+        derivedFields.window_start_time,
+        derivedFields.window_start_day_offset,
+        derivedFields.window_end_time,
+        derivedFields.window_end_day_offset,
+        finalOrder,
+      ],
+    );
+
+    const scheduleId = Number(insertResult.insertId);
+
+    if (resource_node_id !== undefined && resource_node_id !== null) {
+      await upsertTemplateScheduleBinding(scheduleId, Number(resource_node_id), connection);
+    }
+
+    await updateTemplateTotalDays(templateId, connection);
+    await connection.commit();
+
+    res.status(201).json({
+      id: scheduleId,
+      message: 'Stage operation created from canvas successfully',
+    });
+  } catch (error) {
+    await connection.rollback();
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error creating stage operation from canvas:', error);
+    res.status(500).json({ error: 'Failed to create stage operation from canvas' });
+  } finally {
+    connection.release();
+  }
+};
+
+export const moveStageOperationToStage = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const scheduleId = Number(req.params.scheduleId);
+    const targetStageId = Number(req.body?.target_stage_id);
+
+    if (!Number.isInteger(scheduleId) || scheduleId <= 0 || !Number.isInteger(targetStageId) || targetStageId <= 0) {
+      return res.status(400).json({ error: 'Invalid scheduleId or target_stage_id' });
+    }
+
+    await connection.beginTransaction();
+
+    const [scheduleRows] = await connection.execute<RowDataPacket[]>(
+      `SELECT sos.id, sos.stage_id, ps.template_id
+       FROM stage_operation_schedules sos
+       JOIN process_stages ps ON ps.id = sos.stage_id
+       WHERE sos.id = ?
+       LIMIT 1`,
+      [scheduleId],
+    );
+
+    if (!scheduleRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Schedule not found' });
+    }
+
+    const [targetStageRows] = await connection.execute<RowDataPacket[]>(
+      'SELECT id, template_id FROM process_stages WHERE id = ? LIMIT 1',
+      [targetStageId],
+    );
+
+    if (!targetStageRows.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Target stage not found' });
+    }
+
+    const templateId = Number(scheduleRows[0].template_id);
+    if (Number(targetStageRows[0].template_id) !== templateId) {
+      await connection.rollback();
+      return res.status(400).json({ error: 'Target stage does not belong to current template' });
+    }
+
+    const requestedOrder = req.body?.target_operation_order !== undefined ? Number(req.body.target_operation_order) : null;
+    let targetOrder = requestedOrder;
+
+    if (!Number.isFinite(targetOrder as number) || Number(targetOrder) <= 0) {
+      const [maxOrderRows] = await connection.execute<RowDataPacket[]>(
+        'SELECT COALESCE(MAX(operation_order), 0) AS max_order FROM stage_operation_schedules WHERE stage_id = ?',
+        [targetStageId],
+      );
+      targetOrder = Number(maxOrderRows[0]?.max_order ?? 0) + 1;
+    }
+
+    await connection.execute(
+      'UPDATE stage_operation_schedules SET stage_id = ?, operation_order = ? WHERE id = ?',
+      [targetStageId, Number(targetOrder), scheduleId],
+    );
+
+    await updateTemplateTotalDays(templateId, connection);
+    await connection.commit();
+
+    res.json({ message: 'Stage operation moved successfully' });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error moving stage operation:', error);
+    res.status(500).json({ error: 'Failed to move stage operation' });
+  } finally {
+    connection.release();
   }
 };

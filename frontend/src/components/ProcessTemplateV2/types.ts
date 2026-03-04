@@ -1,5 +1,6 @@
 import { Resource } from '../../types/platform';
 import { ResourceRequirementRule } from '../ProcessTemplateGantt/types';
+import { ConstraintConflict } from '../ProcessTemplateGantt/types';
 
 export interface TeamSummary {
   id: number;
@@ -112,6 +113,97 @@ export interface TemplateResourcePlannerResponse {
   warnings: string[];
 }
 
+export interface OperationLibraryItem {
+  id: number;
+  operation_code: string;
+  operation_name: string;
+  standard_time: number;
+  required_people: number;
+  description?: string | null;
+}
+
+export interface TemplateConstraintLink {
+  constraintId: number;
+  fromScheduleId: number;
+  fromOperationId: number;
+  fromOperationName: string;
+  fromOperationCode: string;
+  toScheduleId: number;
+  toOperationId: number;
+  toOperationName: string;
+  toOperationCode: string;
+  constraintType: number;
+  lagTime: number;
+  lagType?: string | null;
+  lagMin?: number | null;
+  lagMax?: number | null;
+  shareMode?: 'NONE' | 'SAME_TEAM' | 'DIFFERENT' | null;
+  constraintLevel?: number | null;
+  constraintName?: string | null;
+  description?: string | null;
+  fromStageName: string;
+  toStageName: string;
+  fromOperationDay: number;
+  fromRecommendedTime: number;
+  fromRecommendedDayOffset?: number | null;
+  toOperationDay: number;
+  toRecommendedTime: number;
+  toRecommendedDayOffset?: number | null;
+  fromStageStartDay: number;
+  toStageStartDay: number;
+}
+
+export interface TemplateShareGroupMember {
+  id: number;
+  scheduleId: number;
+  operationName: string;
+  requiredPeople: number;
+  stageName: string;
+}
+
+export interface TemplateShareGroupSummary {
+  id: number;
+  templateId: number;
+  groupCode: string;
+  groupName: string;
+  shareMode: 'SAME_TEAM' | 'DIFFERENT';
+  createdAt?: string;
+  memberCount: number;
+  memberIds: number[];
+  members: TemplateShareGroupMember[];
+}
+
+export interface TemplateEditorCapabilities {
+  resourceRulesEnabled: boolean;
+  constraintEditEnabled: boolean;
+  shareGroupEnabled: boolean;
+}
+
+export interface TemplateEditorValidationSummary {
+  summary: {
+    unplacedCount: number;
+    invalidBindingCount: number;
+    resourceRuleMismatchCount: number;
+    constraintConflictCount: number;
+  };
+  unplacedOperationIds: number[];
+  invalidBindings: Array<{
+    scheduleId: number;
+    status: TemplateBindingStatus;
+    reason: string | null;
+  }>;
+  resourceRuleMismatchIds: number[];
+  constraintConflicts: ConstraintConflict[];
+}
+
+export interface TemplateResourceEditorResponse extends TemplateResourcePlannerResponse {
+  constraints: TemplateConstraintLink[];
+  shareGroups: TemplateShareGroupSummary[];
+  validation: TemplateEditorValidationSummary;
+  capabilities: TemplateEditorCapabilities;
+  operationLibrary: OperationLibraryItem[];
+}
+
 export interface ResourceNodePayload {
   nodeCode?: string;
   nodeName: string;
@@ -166,4 +258,40 @@ export interface TemplateEditorState {
   template: TemplateSummary;
   teams: TeamSummary[];
   resources: Resource[];
+}
+
+export interface CreateStagePayload {
+  stageName: string;
+  stageOrder?: number;
+  startDay?: number;
+  description?: string;
+}
+
+export interface UpdateStagePayload {
+  stageName?: string;
+  stageOrder?: number;
+  startDay?: number;
+  description?: string | null;
+}
+
+export interface CreateStageOperationPayload {
+  operationId: number;
+  operationDay: number;
+  recommendedTime: number;
+  recommendedDayOffset?: number;
+  windowStartTime?: number;
+  windowStartDayOffset?: number;
+  windowEndTime?: number;
+  windowEndDayOffset?: number;
+}
+
+export interface UpdateStageOperationPayload {
+  operationDay?: number;
+  recommendedTime?: number;
+  recommendedDayOffset?: number;
+  windowStartTime?: number;
+  windowStartDayOffset?: number;
+  windowEndTime?: number;
+  windowEndDayOffset?: number;
+  operationOrder?: number;
 }

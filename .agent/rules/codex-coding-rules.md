@@ -11,6 +11,7 @@ description: Codex repository-wide coding rules for the APS monorepo. Focus on m
 
 这份文件是 **Codex 通用总规则**。遇到专项任务时，继续叠加对应规则：
 
+- Plan / Clarification：`codex-plan-collaboration-rules.md`
 - Backend / API：`codex-backend-api-rules.md`
 - Frontend / UI：`codex-frontend-ui-rules.md`
 - Solver / V4：`codex-solver-v4-rules.md`

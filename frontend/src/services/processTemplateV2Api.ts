@@ -1,12 +1,20 @@
 import axios from 'axios';
 import { Resource } from '../types/platform';
 import {
+  CreateStageOperationPayload,
+  CreateStagePayload,
+  OperationLibraryItem,
   ResourceNode,
   ResourceNodeMovePayload,
   ResourceNodePayload,
+  TemplateConstraintLink,
   TemplateResourceBindingResponse,
+  TemplateResourceEditorResponse,
   TemplateResourcePlannerResponse,
+  TemplateShareGroupSummary,
   TemplateSummary,
+  UpdateStageOperationPayload,
+  UpdateStagePayload,
 } from '../components/ProcessTemplateV2/types';
 
 const client = axios.create({
@@ -27,6 +35,17 @@ const mapTemplate = (data: any): TemplateSummary => ({
   total_days: Number(data.total_days ?? 0),
   created_at: data.created_at,
   updated_at: data.updated_at,
+});
+
+const mapStage = (data: any) => ({
+  id: Number(data.id),
+  template_id: Number(data.template_id),
+  stage_code: data.stage_code,
+  stage_name: data.stage_name,
+  stage_order: Number(data.stage_order),
+  start_day: Number(data.start_day),
+  description: data.description ?? null,
+  operation_count: data.operation_count !== undefined ? Number(data.operation_count) : undefined,
 });
 
 const mapResourceNode = (data: any): ResourceNode => ({
@@ -90,16 +109,7 @@ const mapPlannerOperation = (data: any) => ({
 
 const mapPlannerResponse = (data: any): TemplateResourcePlannerResponse => ({
   template: mapTemplate(data.template),
-  stages: (data.stages ?? []).map((item: any) => ({
-    id: Number(item.id),
-    template_id: Number(item.template_id),
-    stage_code: item.stage_code,
-    stage_name: item.stage_name,
-    stage_order: Number(item.stage_order),
-    start_day: Number(item.start_day),
-    description: item.description ?? null,
-    operation_count: item.operation_count !== undefined ? Number(item.operation_count) : undefined,
-  })),
+  stages: (data.stages ?? []).map(mapStage),
   operations: (data.operations ?? []).map(mapPlannerOperation),
   resourceTree: (data.resource_tree ?? []).map((item: any) => mapResourceNode(item)),
   metrics: {
@@ -110,6 +120,101 @@ const mapPlannerResponse = (data: any): TemplateResourcePlannerResponse => ({
     resourceNodeCount: Number(data.metrics?.resource_node_count ?? 0),
   },
   warnings: data.warnings ?? [],
+});
+
+const mapConstraint = (data: any): TemplateConstraintLink => ({
+  constraintId: Number(data.constraintId ?? data.constraint_id),
+  fromScheduleId: Number(data.fromScheduleId ?? data.from_schedule_id),
+  fromOperationId: Number(data.fromOperationId ?? data.from_operation_id),
+  fromOperationName: data.fromOperationName ?? data.from_operation_name,
+  fromOperationCode: data.fromOperationCode ?? data.from_operation_code,
+  toScheduleId: Number(data.toScheduleId ?? data.to_schedule_id),
+  toOperationId: Number(data.toOperationId ?? data.to_operation_id),
+  toOperationName: data.toOperationName ?? data.to_operation_name,
+  toOperationCode: data.toOperationCode ?? data.to_operation_code,
+  constraintType: Number(data.constraintType ?? data.constraint_type ?? 1),
+  lagTime: Number(data.lagTime ?? data.lag_time ?? 0),
+  lagType: data.lagType ?? data.lag_type ?? null,
+  lagMin: data.lagMin !== undefined || data.lag_min !== undefined ? Number(data.lagMin ?? data.lag_min ?? 0) : null,
+  lagMax: data.lagMax !== undefined || data.lag_max !== undefined ? Number(data.lagMax ?? data.lag_max) : null,
+  shareMode: data.shareMode ?? data.share_mode ?? 'NONE',
+  constraintLevel:
+    data.constraintLevel !== undefined || data.constraint_level !== undefined
+      ? Number(data.constraintLevel ?? data.constraint_level)
+      : null,
+  constraintName: data.constraintName ?? data.constraint_name ?? null,
+  description: data.description ?? null,
+  fromStageName: data.fromStageName ?? data.from_stage_name,
+  toStageName: data.toStageName ?? data.to_stage_name,
+  fromOperationDay: Number(data.fromOperationDay ?? data.from_operation_day ?? 0),
+  fromRecommendedTime: Number(data.fromRecommendedTime ?? data.from_recommended_time ?? 0),
+  fromRecommendedDayOffset:
+    data.fromRecommendedDayOffset !== undefined || data.from_recommended_day_offset !== undefined
+      ? Number(data.fromRecommendedDayOffset ?? data.from_recommended_day_offset ?? 0)
+      : null,
+  toOperationDay: Number(data.toOperationDay ?? data.to_operation_day ?? 0),
+  toRecommendedTime: Number(data.toRecommendedTime ?? data.to_recommended_time ?? 0),
+  toRecommendedDayOffset:
+    data.toRecommendedDayOffset !== undefined || data.to_recommended_day_offset !== undefined
+      ? Number(data.toRecommendedDayOffset ?? data.to_recommended_day_offset ?? 0)
+      : null,
+  fromStageStartDay: Number(data.fromStageStartDay ?? data.from_stage_start_day ?? 0),
+  toStageStartDay: Number(data.toStageStartDay ?? data.to_stage_start_day ?? 0),
+});
+
+const mapShareGroup = (data: any): TemplateShareGroupSummary => ({
+  id: Number(data.id),
+  templateId: Number(data.templateId ?? data.template_id),
+  groupCode: data.groupCode ?? data.group_code,
+  groupName: data.groupName ?? data.group_name,
+  shareMode: data.shareMode ?? data.share_mode,
+  createdAt: data.createdAt ?? data.created_at,
+  memberCount: Number(data.memberCount ?? data.member_count ?? 0),
+  memberIds: (data.memberIds ?? data.member_ids ?? []).map((item: unknown) => Number(item)),
+  members: (data.members ?? []).map((item: any) => ({
+    id: Number(item.id),
+    scheduleId: Number(item.scheduleId ?? item.schedule_id),
+    operationName: item.operationName ?? item.operation_name,
+    requiredPeople: Number(item.requiredPeople ?? item.required_people ?? 1),
+    stageName: item.stageName ?? item.stage_name,
+  })),
+});
+
+const mapOperationLibraryItem = (data: any): OperationLibraryItem => ({
+  id: Number(data.id),
+  operation_code: data.operation_code,
+  operation_name: data.operation_name,
+  standard_time: Number(data.standard_time ?? 0),
+  required_people: Number(data.required_people ?? 1),
+  description: data.description ?? null,
+});
+
+const mapResourceEditorResponse = (data: any): TemplateResourceEditorResponse => ({
+  ...mapPlannerResponse(data),
+  constraints: (data.constraints ?? []).map(mapConstraint),
+  shareGroups: (data.share_groups ?? []).map(mapShareGroup),
+  validation: {
+    summary: {
+      unplacedCount: Number(data.validation?.summary?.unplaced_count ?? 0),
+      invalidBindingCount: Number(data.validation?.summary?.invalid_binding_count ?? 0),
+      resourceRuleMismatchCount: Number(data.validation?.summary?.resource_rule_mismatch_count ?? 0),
+      constraintConflictCount: Number(data.validation?.summary?.constraint_conflict_count ?? 0),
+    },
+    unplacedOperationIds: (data.validation?.unplaced_operation_ids ?? []).map((item: unknown) => Number(item)),
+    invalidBindings: (data.validation?.invalid_bindings ?? []).map((item: any) => ({
+      scheduleId: Number(item.scheduleId ?? item.schedule_id),
+      status: item.status,
+      reason: item.reason ?? null,
+    })),
+    resourceRuleMismatchIds: (data.validation?.resource_rule_mismatch_ids ?? []).map((item: unknown) => Number(item)),
+    constraintConflicts: data.validation?.constraint_conflicts ?? [],
+  },
+  capabilities: {
+    resourceRulesEnabled: Boolean(data.capabilities?.resource_rules_enabled),
+    constraintEditEnabled: Boolean(data.capabilities?.constraint_edit_enabled),
+    shareGroupEnabled: Boolean(data.capabilities?.share_group_enabled),
+  },
+  operationLibrary: (data.operation_library ?? []).map(mapOperationLibraryItem),
 });
 
 const toResourceNodePayload = (payload: ResourceNodePayload) => ({
@@ -195,6 +300,109 @@ export const processTemplateV2Api = {
     const response = await client.get(`/process-templates/${templateId}/resource-planner`);
     return mapPlannerResponse(response.data);
   },
+  getResourceEditor: async (templateId: number) => {
+    const response = await client.get(`/process-templates/${templateId}/resource-editor`);
+    return mapResourceEditorResponse(response.data);
+  },
+  validateResourceEditor: async (templateId: number) => {
+    const response = await client.post(`/process-templates/${templateId}/editor-validate`);
+    return response.data;
+  },
+  createStage: async (templateId: number, payload: CreateStagePayload) => {
+    const response = await client.post(`/process-stages/template/${templateId}`, {
+      stage_name: payload.stageName,
+      stage_order: payload.stageOrder,
+      start_day: payload.startDay,
+      description: payload.description ?? null,
+    });
+    return mapStage(response.data);
+  },
+  updateStage: async (stageId: number, payload: UpdateStagePayload) => {
+    await client.put(`/process-stages/${stageId}`, {
+      stage_name: payload.stageName,
+      stage_order: payload.stageOrder,
+      start_day: payload.startDay,
+      description: payload.description ?? null,
+    });
+  },
+  deleteStage: async (stageId: number) => {
+    await client.delete(`/process-stages/${stageId}`);
+  },
+  listOperationLibrary: async () => {
+    const response = await client.get('/stage-operations/available');
+    return (response.data ?? []).map(mapOperationLibraryItem);
+  },
+  createOperationLibraryItem: async (payload: {
+    operationName: string;
+    standardTime: number;
+    requiredPeople: number;
+    description?: string;
+  }) => {
+    const response = await client.post('/operations', {
+      operation_name: payload.operationName,
+      standard_time: payload.standardTime,
+      required_people: payload.requiredPeople,
+      description: payload.description ?? null,
+    });
+    return mapOperationLibraryItem(response.data);
+  },
+  createStageOperation: async (stageId: number, payload: CreateStageOperationPayload) => {
+    const response = await client.post(`/stage-operations/stage/${stageId}`, {
+      operation_id: payload.operationId,
+      operation_day: payload.operationDay,
+      recommended_time: payload.recommendedTime,
+      recommended_day_offset: payload.recommendedDayOffset ?? 0,
+      window_start_time: payload.windowStartTime,
+      window_start_day_offset: payload.windowStartDayOffset ?? 0,
+      window_end_time: payload.windowEndTime,
+      window_end_day_offset: payload.windowEndDayOffset ?? 0,
+    });
+    return Number(response.data.id);
+  },
+  createStageOperationFromCanvas: async (
+    templateId: number,
+    payload: CreateStageOperationPayload & {
+      stageId: number;
+      resourceNodeId?: number | null;
+      absoluteStartHour?: number;
+    },
+  ) => {
+    const response = await client.post(`/process-templates/${templateId}/stage-operations/from-canvas`, {
+      stage_id: payload.stageId,
+      operation_id: payload.operationId,
+      resource_node_id: payload.resourceNodeId ?? null,
+      operation_day: payload.operationDay,
+      recommended_time: payload.recommendedTime,
+      recommended_day_offset: payload.recommendedDayOffset ?? 0,
+      window_start_time: payload.windowStartTime,
+      window_start_day_offset: payload.windowStartDayOffset ?? 0,
+      window_end_time: payload.windowEndTime,
+      window_end_day_offset: payload.windowEndDayOffset ?? 0,
+      absolute_start_hour: payload.absoluteStartHour,
+    });
+    return Number(response.data.id);
+  },
+  updateStageOperation: async (scheduleId: number, payload: UpdateStageOperationPayload) => {
+    await client.put(`/stage-operations/${scheduleId}`, {
+      operation_day: payload.operationDay,
+      recommended_time: payload.recommendedTime,
+      recommended_day_offset: payload.recommendedDayOffset,
+      window_start_time: payload.windowStartTime,
+      window_start_day_offset: payload.windowStartDayOffset,
+      window_end_time: payload.windowEndTime,
+      window_end_day_offset: payload.windowEndDayOffset,
+      operation_order: payload.operationOrder,
+    });
+  },
+  moveStageOperationToStage: async (scheduleId: number, targetStageId: number, targetOperationOrder?: number) => {
+    await client.post(`/stage-operations/${scheduleId}/move-stage`, {
+      target_stage_id: targetStageId,
+      target_operation_order: targetOperationOrder,
+    });
+  },
+  deleteStageOperation: async (scheduleId: number) => {
+    await client.delete(`/stage-operations/${scheduleId}`);
+  },
   listResourceNodes: async (params?: {
     departmentCode?: string;
     ownerOrgUnitId?: number;
@@ -249,6 +457,60 @@ export const processTemplateV2Api = {
       resource_node_id: resourceNodeId,
     });
     return response.data;
+  },
+  getOperationConstraints: async (scheduleId: number) => {
+    const response = await client.get(`/constraints/operation/${scheduleId}`);
+    return response.data;
+  },
+  createConstraint: async (payload: Record<string, unknown>) => {
+    const response = await client.post('/constraints', payload);
+    return response.data;
+  },
+  updateConstraint: async (constraintId: number, payload: Record<string, unknown>) => {
+    const response = await client.put(`/constraints/${constraintId}`, payload);
+    return response.data;
+  },
+  deleteConstraint: async (constraintId: number) => {
+    await client.delete(`/constraints/${constraintId}`);
+  },
+  listOperationShareGroups: async (scheduleId: number) => {
+    const response = await client.get(`/share-groups/operation/${scheduleId}`);
+    return (response.data ?? []).map(mapShareGroup);
+  },
+  createTemplateShareGroup: async (
+    templateId: number,
+    payload: { groupName: string; shareMode: 'SAME_TEAM' | 'DIFFERENT'; memberIds: number[] },
+  ) => {
+    const response = await client.post(`/share-groups/template/${templateId}`, {
+      group_name: payload.groupName,
+      share_mode: payload.shareMode,
+      member_ids: payload.memberIds,
+    });
+    return response.data;
+  },
+  updateTemplateShareGroup: async (
+    groupId: number,
+    payload: { groupName?: string; shareMode?: 'SAME_TEAM' | 'DIFFERENT'; memberIds?: number[] },
+  ) => {
+    const response = await client.put(`/share-groups/${groupId}`, {
+      group_name: payload.groupName,
+      share_mode: payload.shareMode,
+      member_ids: payload.memberIds,
+    });
+    return response.data;
+  },
+  assignOperationToShareGroup: async (scheduleId: number, groupId: number) => {
+    const response = await client.post('/share-groups/assign', {
+      schedule_id: scheduleId,
+      share_group_id: groupId,
+    });
+    return response.data;
+  },
+  removeOperationFromShareGroup: async (scheduleId: number, groupId: number) => {
+    await client.delete(`/share-groups/operation/${scheduleId}/group/${groupId}`);
+  },
+  deleteTemplateShareGroup: async (groupId: number) => {
+    await client.delete(`/share-groups/${groupId}`);
   },
   listResources: async (): Promise<Resource[]> => {
     const response = await client.get('/resources');

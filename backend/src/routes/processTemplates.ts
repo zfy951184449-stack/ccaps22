@@ -10,7 +10,12 @@ import {
   autoScheduleTemplate,
   getTemplatePersonnelCurve
 } from '../controllers/processTemplateController';
-import { getTemplateResourcePlanner } from '../controllers/templateResourcePlannerController';
+import {
+  getTemplateResourceEditor,
+  getTemplateResourcePlanner,
+  validateTemplateResourceEditor,
+} from '../controllers/templateResourcePlannerController';
+import { createStageOperationFromCanvas } from '../controllers/stageOperationController';
 
 const router = express.Router();
 
@@ -25,5 +30,8 @@ router.post('/:id/copy', copyTemplate);
 router.post('/:id/auto-schedule', autoScheduleTemplate);
 router.get('/:id/personnel-curve', getTemplatePersonnelCurve);
 router.get('/:id/resource-planner', getTemplateResourcePlanner);
+router.get('/:id/resource-editor', getTemplateResourceEditor);
+router.post('/:id/editor-validate', validateTemplateResourceEditor);
+router.post('/:id/stage-operations/from-canvas', createStageOperationFromCanvas);
 
 export default router;

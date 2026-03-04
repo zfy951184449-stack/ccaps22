@@ -23,7 +23,7 @@ import {
   NodeIndexOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
-import { processTemplateV2Api } from '../../services/processTemplateV2Api';
+import { processTemplateV2Api } from '../../services';
 import {
   PendingBindingItem,
   PlannerOperation,
@@ -260,7 +260,7 @@ const TemplateResourcePlannerTab: React.FC<TemplateResourcePlannerTabProps> = ({
       setErrorMessage(null);
       const response = await processTemplateV2Api.getPlanner(templateId);
       setPlanner(response);
-      setExpandedKeys(new Set(response.resourceTree.map((node) => node.id)));
+      setExpandedKeys(new Set(response.resourceTree.map((node: ResourceNode) => node.id)));
     } catch (error) {
       console.error('Failed to load template resource planner:', error);
       setPlanner(null);

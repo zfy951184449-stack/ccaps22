@@ -17,7 +17,7 @@ import axios from 'axios';
 import { DataNode } from 'antd/es/tree';
 import { ResourceFormModal } from '../Platform/PlatformEditors';
 import { Resource } from '../../types/platform';
-import { processTemplateV2Api } from '../../services/processTemplateV2Api';
+import { processTemplateV2Api } from '../../services';
 import { ResourceNode, ResourceNodeClass, TeamSummary } from './types';
 
 const NODE_CLASS_OPTIONS: Array<{ label: string; value: ResourceNodeClass }> = [
