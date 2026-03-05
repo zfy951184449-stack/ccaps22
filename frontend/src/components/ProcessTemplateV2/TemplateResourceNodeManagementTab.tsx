@@ -9,12 +9,16 @@ import {
   Select,
   Space,
   Spin,
+  Tag,
   Tree,
+  Typography,
   message,
 } from 'antd';
 import {
-  AppstoreOutlined,
   ApartmentOutlined,
+  AppstoreOutlined,
+  BuildOutlined,
+  ClusterOutlined,
   HomeOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -26,54 +30,86 @@ import { DataNode } from 'antd/es/tree';
 import { ResourceFormModal } from '../Platform/PlatformEditors';
 import { Resource } from '../../types/platform';
 import { processTemplateV2Api } from '../../services';
-import { PlannerOperation, ResourceNode, ResourceNodeClass, TeamSummary } from './types';
+import {
+  PlannerOperation,
+  ResourceNode,
+  ResourceNodeClass,
+  TeamSummary,
+} from './types';
 
-const NODE_CLASS_OPTIONS: Array<{ label: string; value: ResourceNodeClass }> = [
-  { label: 'Suite', value: 'SUITE' },
-  { label: '房间', value: 'ROOM' },
-  { label: '设备', value: 'EQUIPMENT' },
-  { label: '设备组件', value: 'COMPONENT' },
-  { label: '分组', value: 'GROUP' },
+const { Text } = Typography;
+
+type NodeBlueprint = {
+  nodeClass: ResourceNodeClass;
+  nodeSubtype?: string | null;
+  label: string;
+};
+
+const NODE_CLASS_OPTIONS: Array<{ label: string; value: ResourceNodeClass; icon: React.ReactNode }> = [
+  { label: '厂区', value: 'SITE', icon: <ClusterOutlined /> },
+  { label: '产线', value: 'LINE', icon: <ApartmentOutlined /> },
+  { label: '房间', value: 'ROOM', icon: <HomeOutlined /> },
+  { label: '系统', value: 'SYSTEM', icon: <BuildOutlined /> },
+  { label: '设备类', value: 'EQUIPMENT_CLASS', icon: <AppstoreOutlined /> },
+  { label: '设备型号', value: 'EQUIPMENT_MODEL', icon: <SettingOutlined /> },
+  { label: '设备实例', value: 'EQUIPMENT_UNIT', icon: <ToolOutlined /> },
+  { label: '组件/管线', value: 'COMPONENT', icon: <SettingOutlined /> },
+  { label: '工作站', value: 'UTILITY_STATION', icon: <ToolOutlined /> },
 ];
 
-const NODE_CLASS_CODE: Record<ResourceNodeClass, string> = {
-  SUITE: 'STE',
-  ROOM: 'ROM',
-  EQUIPMENT: 'EQP',
-  COMPONENT: 'CMP',
-  GROUP: 'GRP',
-};
-
 const NODE_CLASS_LABEL: Record<ResourceNodeClass, string> = {
-  SUITE: 'Suite',
+  SITE: '厂区',
+  LINE: '产线',
   ROOM: '房间',
-  EQUIPMENT: '设备',
-  COMPONENT: '组件',
-  GROUP: '分组',
+  SYSTEM: '系统',
+  EQUIPMENT_CLASS: '设备类',
+  EQUIPMENT_MODEL: '设备型号',
+  EQUIPMENT_UNIT: '设备实例',
+  COMPONENT: '组件/管线',
+  UTILITY_STATION: '工作站',
 };
 
-const NODE_CLASS_BADGE_CLASS: Record<ResourceNodeClass, string> = {
-  SUITE: 'border-indigo-200 bg-indigo-50 text-indigo-700',
-  ROOM: 'border-sky-200 bg-sky-50 text-sky-700',
-  EQUIPMENT: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-  COMPONENT: 'border-amber-200 bg-amber-50 text-amber-700',
-  GROUP: 'border-violet-200 bg-violet-50 text-violet-700',
+const NODE_CLASS_CODE: Record<ResourceNodeClass, string> = {
+  SITE: 'SIT',
+  LINE: 'LIN',
+  ROOM: 'ROM',
+  SYSTEM: 'SYS',
+  EQUIPMENT_CLASS: 'ECL',
+  EQUIPMENT_MODEL: 'EMD',
+  EQUIPMENT_UNIT: 'EUN',
+  COMPONENT: 'CMP',
+  UTILITY_STATION: 'UST',
 };
 
-const NODE_CLASS_ICON: Record<ResourceNodeClass, React.ReactNode> = {
-  SUITE: <ApartmentOutlined />,
-  ROOM: <HomeOutlined />,
-  EQUIPMENT: <ToolOutlined />,
-  COMPONENT: <SettingOutlined />,
-  GROUP: <AppstoreOutlined />,
+const NODE_SUBTYPE_OPTIONS: Record<ResourceNodeClass, Array<{ label: string; value: string }>> = {
+  SITE: [],
+  LINE: [],
+  ROOM: [
+    { label: '主工艺房间', value: 'MAIN_PROCESS' },
+    { label: '辅助间', value: 'AUXILIARY' },
+    { label: '通用房间', value: 'UTILITY_SHARED' },
+  ],
+  SYSTEM: [
+    { label: '一次性系统', value: 'SUS' },
+    { label: '不锈钢系统', value: 'SS' },
+  ],
+  EQUIPMENT_CLASS: [],
+  EQUIPMENT_MODEL: [],
+  EQUIPMENT_UNIT: [],
+  COMPONENT: [],
+  UTILITY_STATION: [
+    { label: 'CIP', value: 'CIP' },
+    { label: 'SIP', value: 'SIP' },
+  ],
 };
 
-const ROOM_SCENE_NODE_CLASSES: ResourceNodeClass[] = ['EQUIPMENT', 'COMPONENT', 'GROUP'];
+const BINDABLE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONENT', 'UTILITY_STATION']);
 
 interface NodeFormValues {
   nodeCode: string;
   nodeName: string;
   nodeClass: ResourceNodeClass;
+  nodeSubtype: string;
   parentId?: number | null;
   departmentCode: string;
   ownerOrgUnitId?: number | null;
@@ -101,74 +137,10 @@ const flattenNodes = (nodes: ResourceNode[]): ResourceNode[] => {
   return result;
 };
 
-const toTreeData = (nodes: ResourceNode[]): DataNode[] =>
-  nodes.map((node) => ({
-    key: node.id,
-    title: (
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="text-slate-500">{NODE_CLASS_ICON[node.nodeClass]}</span>
-        <span className="truncate text-slate-800">
-          {node.nodeName}
-          {node.boundResourceCode ? ` / ${node.boundResourceCode}` : ''}
-        </span>
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${NODE_CLASS_BADGE_CLASS[node.nodeClass]}`}
-        >
-          {NODE_CLASS_LABEL[node.nodeClass]}
-        </span>
-      </div>
-    ),
-    children: toTreeData(node.children),
-  }));
-
-const findNode = (nodes: ResourceNode[], nodeId: number | null): ResourceNode | null => {
-  if (!nodeId) {
-    return null;
-  }
-
-  for (const node of nodes) {
-    if (node.id === nodeId) {
-      return node;
-    }
-    const child = findNode(node.children, nodeId);
-    if (child) {
-      return child;
-    }
-  }
-
-  return null;
-};
-
-const buildNodeCodePreview = (
-  departmentCode: string,
-  nodeClass: ResourceNodeClass,
-  nodes: ResourceNode[],
-) => {
-  const prefix = `RN-${departmentCode}-${NODE_CLASS_CODE[nodeClass]}`;
-  const maxSuffix = nodes.reduce((max, node) => {
-    if (!node.nodeCode.startsWith(`${prefix}-`)) {
-      return max;
-    }
-    const match = node.nodeCode.match(/-(\d{4,})$/);
-    const suffix = Number(match?.[1] ?? 0);
-    return Math.max(max, suffix);
-  }, 0);
-
-  return `${prefix}-${String(maxSuffix + 1).padStart(4, '0')}`;
-};
-
 const buildNodeMap = (nodes: ResourceNode[]) => {
   const map = new Map<number, ResourceNode>();
   nodes.forEach((node) => {
     map.set(node.id, node);
-  });
-  return map;
-};
-
-const buildParentMap = (nodes: ResourceNode[]) => {
-  const map = new Map<number, number | null>();
-  nodes.forEach((node) => {
-    map.set(node.id, node.parentId ?? null);
   });
   return map;
 };
@@ -195,45 +167,123 @@ const buildNodePath = (nodeId: number, nodeMap: Map<number, ResourceNode>): Reso
   return path;
 };
 
-const isDescendantOf = (nodeId: number, ancestorId: number, parentMap: Map<number, number | null>) => {
-  let currentId = parentMap.get(nodeId) ?? null;
-  while (currentId) {
-    if (currentId === ancestorId) {
-      return true;
-    }
-    currentId = parentMap.get(currentId) ?? null;
-  }
-
-  return false;
-};
-
-const resolveParentRoomNode = (
-  node: ResourceNode | null,
-  nodeMap: Map<number, ResourceNode>,
-): ResourceNode | null => {
-  if (!node) {
+const findNode = (nodes: ResourceNode[], nodeId: number | null): ResourceNode | null => {
+  if (!nodeId) {
     return null;
   }
 
-  if (node.nodeClass === 'ROOM') {
-    return node;
-  }
-
-  let currentId = node.parentId ?? null;
-  while (currentId) {
-    const current = nodeMap.get(currentId);
-    if (!current) {
-      return null;
+  for (const node of nodes) {
+    if (node.id === nodeId) {
+      return node;
     }
-
-    if (current.nodeClass === 'ROOM') {
-      return current;
+    const child = findNode(node.children, nodeId);
+    if (child) {
+      return child;
     }
-
-    currentId = current.parentId ?? null;
   }
 
   return null;
+};
+
+const requiresSubtype = (nodeClass: ResourceNodeClass) => !['SITE', 'LINE', 'EQUIPMENT_UNIT'].includes(nodeClass);
+
+const allowedChildBlueprints = (parent: ResourceNode | null): NodeBlueprint[] => {
+  if (!parent) {
+    return [{ nodeClass: 'SITE', label: '厂区' }];
+  }
+
+  if (parent.nodeClass === 'SITE') {
+    return [
+      { nodeClass: 'LINE', label: '产线' },
+      { nodeClass: 'ROOM', nodeSubtype: 'UTILITY_SHARED', label: '通用房间' },
+    ];
+  }
+
+  if (parent.nodeClass === 'LINE') {
+    return [{ nodeClass: 'ROOM', nodeSubtype: 'MAIN_PROCESS', label: '主工艺房间' }];
+  }
+
+  if (parent.nodeClass === 'ROOM' && parent.nodeSubtype === 'MAIN_PROCESS') {
+    return [
+      { nodeClass: 'ROOM', nodeSubtype: 'AUXILIARY', label: '辅助间' },
+      { nodeClass: 'SYSTEM', label: '工艺系统' },
+    ];
+  }
+
+  if (parent.nodeClass === 'ROOM' && parent.nodeSubtype === 'UTILITY_SHARED') {
+    return [{ nodeClass: 'UTILITY_STATION', nodeSubtype: 'CIP', label: 'CIP站' }];
+  }
+
+  if (parent.nodeClass === 'SYSTEM') {
+    return [{ nodeClass: 'EQUIPMENT_CLASS', label: '设备类' }];
+  }
+
+  if (parent.nodeClass === 'EQUIPMENT_CLASS') {
+    return [{ nodeClass: 'EQUIPMENT_MODEL', label: '设备型号' }];
+  }
+
+  if (parent.nodeClass === 'EQUIPMENT_MODEL') {
+    return [{ nodeClass: 'EQUIPMENT_UNIT', label: '设备实例' }];
+  }
+
+  if (parent.nodeClass === 'EQUIPMENT_UNIT') {
+    return [{ nodeClass: 'COMPONENT', label: '组件/管线' }];
+  }
+
+  return [];
+};
+
+const getSubtypeOptions = (
+  nodeClass: ResourceNodeClass,
+  formMode: 'edit' | 'create-root' | 'create-child',
+  childBlueprints: NodeBlueprint[],
+) => {
+  if (formMode === 'create-child') {
+    const options = childBlueprints
+      .filter((item) => item.nodeClass === nodeClass)
+      .map((item) => item.nodeSubtype)
+      .filter((item): item is string => Boolean(item))
+      .map((item) => ({ label: item, value: item }));
+
+    if (options.length) {
+      return options;
+    }
+  }
+
+  return NODE_SUBTYPE_OPTIONS[nodeClass] ?? [];
+};
+
+const getClassIcon = (nodeClass: ResourceNodeClass) => {
+  const found = NODE_CLASS_OPTIONS.find((item) => item.value === nodeClass);
+  return found?.icon ?? <AppstoreOutlined />;
+};
+
+const toTreeData = (nodes: ResourceNode[]): DataNode[] =>
+  nodes.map((node) => ({
+    key: node.id,
+    title: (
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="text-slate-500">{getClassIcon(node.nodeClass)}</span>
+        <span className="truncate text-slate-800">{node.nodeName}</span>
+        <Tag className="!m-0" color="blue">{NODE_CLASS_LABEL[node.nodeClass]}</Tag>
+        {node.nodeSubtype ? <Tag className="!m-0">{node.nodeSubtype}</Tag> : null}
+      </div>
+    ),
+    children: toTreeData(node.children),
+  }));
+
+const buildNodeCodePreview = (departmentCode: string, nodeClass: ResourceNodeClass, nodes: ResourceNode[]) => {
+  const prefix = `RN-${departmentCode}-${NODE_CLASS_CODE[nodeClass]}`;
+  const maxSuffix = nodes.reduce((max, node) => {
+    if (!node.nodeCode.startsWith(`${prefix}-`)) {
+      return max;
+    }
+    const match = node.nodeCode.match(/-(\d{4,})$/);
+    const suffix = Number(match?.[1] ?? 0);
+    return Math.max(max, suffix);
+  }, 0);
+
+  return `${prefix}-${String(maxSuffix + 1).padStart(4, '0')}`;
 };
 
 const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagementTabProps> = ({
@@ -247,17 +297,18 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [impactOperations, setImpactOperations] = useState<PlannerOperation[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
-  const [activeRoomId, setActiveRoomId] = useState<number | null>(null);
-  const [draggingNodeId, setDraggingNodeId] = useState<number | null>(null);
-  const [warehouseKeyword, setWarehouseKeyword] = useState('');
   const [formMode, setFormMode] = useState<'edit' | 'create-root' | 'create-child'>('edit');
   const [resourceModalOpen, setResourceModalOpen] = useState(false);
   const [creatingResourceForNodeId, setCreatingResourceForNodeId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [cleanableLoading, setCleanableLoading] = useState(false);
+  const [cleanableTargetIds, setCleanableTargetIds] = useState<number[]>([]);
+  const [cleanableCandidates, setCleanableCandidates] = useState<ResourceNode[]>([]);
   const [draftValues, setDraftValues] = useState<NodeFormValues>({
     nodeCode: '',
     nodeName: '',
-    nodeClass: 'SUITE',
+    nodeClass: 'SITE',
+    nodeSubtype: '',
     parentId: null,
     departmentCode: 'USP',
     ownerOrgUnitId: null,
@@ -284,6 +335,10 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       if (nodeTree.length > 0) {
         setSelectedNodeId((current) => current ?? nodeTree[0].id);
       }
+      if (!nodeTree.length) {
+        setSelectedNodeId(null);
+        setFormMode('create-root');
+      }
     } catch (error) {
       console.error('Failed to load resource node management data:', error);
       setNodes([]);
@@ -305,85 +360,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
 
   const allNodes = useMemo(() => flattenNodes(nodes), [nodes]);
   const nodeMap = useMemo(() => buildNodeMap(allNodes), [allNodes]);
-  const parentMap = useMemo(() => buildParentMap(allNodes), [allNodes]);
   const selectedNode = useMemo(() => findNode(nodes, selectedNodeId), [nodes, selectedNodeId]);
-  const roomNodes = useMemo(() => allNodes.filter((node) => node.nodeClass === 'ROOM'), [allNodes]);
-
-  const activeRoom = useMemo(() => {
-    if (!activeRoomId) {
-      return null;
-    }
-
-    const matched = nodeMap.get(activeRoomId);
-    return matched?.nodeClass === 'ROOM' ? matched : null;
-  }, [activeRoomId, nodeMap]);
-
-  const roomPlacedNodes = useMemo(() => {
-    if (!activeRoom) {
-      return [];
-    }
-
-    return [...activeRoom.children]
-      .filter((node) => ROOM_SCENE_NODE_CLASSES.includes(node.nodeClass))
-      .sort((left, right) => left.sortOrder - right.sortOrder || left.id - right.id);
-  }, [activeRoom]);
-
-  const warehouseNodes = useMemo(() => {
-    if (!activeRoom) {
-      return [];
-    }
-
-    const query = warehouseKeyword.trim().toLowerCase();
-    return allNodes
-      .filter((node) => ROOM_SCENE_NODE_CLASSES.includes(node.nodeClass))
-      .filter((node) => node.id !== activeRoom.id)
-      .filter((node) => !isDescendantOf(node.id, activeRoom.id, parentMap))
-      .filter((node) => {
-        if (!query) {
-          return true;
-        }
-
-        const searchPayload = [
-          node.nodeCode,
-          node.nodeName,
-          node.boundResourceCode,
-          node.boundResourceName,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-
-        return searchPayload.includes(query);
-      })
-      .sort((left, right) => left.nodeName.localeCompare(right.nodeName, 'zh-CN'))
-      .slice(0, 40);
-  }, [activeRoom, allNodes, parentMap, warehouseKeyword]);
-
-  const roomSceneSlots = useMemo(() => {
-    const slotCount = Math.max(6, roomPlacedNodes.length + 2);
-    return Array.from({ length: slotCount }, (_, index) => roomPlacedNodes[index] ?? null);
-  }, [roomPlacedNodes]);
-
-  const roomSelectOptions = useMemo(
-    () =>
-      roomNodes.map((room) => ({
-        value: room.id,
-        label: buildNodePath(room.id, nodeMap)
-          .map((item) => item.nodeName)
-          .join(' / '),
-      })),
-    [roomNodes, nodeMap],
-  );
-
-  const nodeStats = useMemo(
-    () => ({
-      roomCount: roomNodes.length,
-      equipmentCount: allNodes.filter((node) => node.nodeClass === 'EQUIPMENT').length,
-      componentCount: allNodes.filter((node) => node.nodeClass === 'COMPONENT').length,
-      mappedResourceCount: allNodes.filter((node) => Boolean(node.boundResourceId)).length,
-    }),
-    [allNodes, roomNodes.length],
-  );
 
   const selectedNodePath = useMemo(() => {
     if (!selectedNode) {
@@ -395,84 +372,30 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       .join(' / ');
   }, [nodeMap, selectedNode]);
 
-  useEffect(() => {
-    if (!roomNodes.length) {
-      setActiveRoomId(null);
-      return;
-    }
+  const childBlueprints = useMemo(() => allowedChildBlueprints(selectedNode), [selectedNode]);
 
-    setActiveRoomId((current) => {
-      if (!current) {
-        return roomNodes[0].id;
-      }
-      return roomNodes.some((room) => room.id === current) ? current : roomNodes[0].id;
-    });
-  }, [roomNodes]);
-
-  useEffect(() => {
-    const roomNode = resolveParentRoomNode(selectedNode, nodeMap);
-    if (roomNode) {
-      setActiveRoomId(roomNode.id);
-    }
-  }, [selectedNode, nodeMap]);
-
-  useEffect(() => {
-    if (formMode === 'edit' && selectedNode) {
-      setDraftValues({
-        nodeCode: selectedNode.nodeCode,
-        nodeName: selectedNode.nodeName,
-        nodeClass: selectedNode.nodeClass,
-        parentId: selectedNode.parentId ?? null,
-        departmentCode: selectedNode.departmentCode,
-        ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
-        boundResourceId: selectedNode.boundResourceId ?? null,
-        sortOrder: selectedNode.sortOrder,
-        isActive: selectedNode.isActive,
-        metadataText: selectedNode.metadata ? JSON.stringify(selectedNode.metadata, null, 2) : '',
-      });
-      return;
-    }
-
+  const classOptions = useMemo(() => {
     if (formMode === 'create-root') {
-      setDraftValues({
-        nodeCode: '',
-        nodeName: '',
-        nodeClass: 'SUITE',
-        parentId: null,
-        departmentCode: 'USP',
-        ownerOrgUnitId: null,
-        boundResourceId: null,
-        sortOrder: undefined,
-        isActive: true,
-        metadataText: '',
-      });
-      return;
+      return NODE_CLASS_OPTIONS.filter((item) => item.value === 'SITE');
     }
 
-    if (formMode === 'create-child' && selectedNode) {
-      const defaultChildClass: ResourceNodeClass =
-        selectedNode.nodeClass === 'SUITE'
-          ? 'ROOM'
-          : selectedNode.nodeClass === 'ROOM'
-            ? 'EQUIPMENT'
-            : selectedNode.nodeClass === 'EQUIPMENT'
-              ? 'COMPONENT'
-              : 'GROUP';
-
-      setDraftValues({
-        nodeCode: '',
-        nodeName: '',
-        nodeClass: defaultChildClass,
-        parentId: selectedNode.id,
-        departmentCode: selectedNode.departmentCode,
-        ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
-        boundResourceId: null,
-        sortOrder: undefined,
-        isActive: true,
-        metadataText: '',
-      });
+    if (formMode === 'create-child') {
+      const allowed = new Set(childBlueprints.map((item) => item.nodeClass));
+      return NODE_CLASS_OPTIONS.filter((item) => allowed.has(item.value));
     }
-  }, [formMode, selectedNode]);
+
+    return NODE_CLASS_OPTIONS;
+  }, [childBlueprints, formMode]);
+
+  const subtypeOptions = useMemo(
+    () => getSubtypeOptions(draftValues.nodeClass, formMode, childBlueprints),
+    [childBlueprints, draftValues.nodeClass, formMode],
+  );
+
+  const generatedNodeCodePreview = useMemo(
+    () => buildNodeCodePreview(draftValues.departmentCode, draftValues.nodeClass, allNodes),
+    [allNodes, draftValues.departmentCode, draftValues.nodeClass],
+  );
 
   const availableResources = useMemo(() => {
     const boundIds = new Set(allNodes.map((node) => node.boundResourceId).filter(Boolean));
@@ -492,15 +415,121 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     [impactOperations, selectedNode],
   );
 
-  const generatedNodeCodePreview = useMemo(
-    () => buildNodeCodePreview(draftValues.departmentCode, draftValues.nodeClass, allNodes),
-    [allNodes, draftValues.departmentCode, draftValues.nodeClass],
+  const nodeStats = useMemo(
+    () => ({
+      totalCount: allNodes.length,
+      roomCount: allNodes.filter((node) => node.nodeClass === 'ROOM').length,
+      bindableCount: allNodes.filter((node) => BINDABLE_CLASSES.has(node.nodeClass)).length,
+      mappedResourceCount: allNodes.filter((node) => Boolean(node.boundResourceId)).length,
+    }),
+    [allNodes],
   );
+
+  useEffect(() => {
+    if (formMode === 'edit' && selectedNode) {
+      setDraftValues({
+        nodeCode: selectedNode.nodeCode,
+        nodeName: selectedNode.nodeName,
+        nodeClass: selectedNode.nodeClass,
+        nodeSubtype: selectedNode.nodeSubtype ?? '',
+        parentId: selectedNode.parentId ?? null,
+        departmentCode: selectedNode.departmentCode,
+        ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
+        boundResourceId: selectedNode.boundResourceId ?? null,
+        sortOrder: selectedNode.sortOrder,
+        isActive: selectedNode.isActive,
+        metadataText: selectedNode.metadata ? JSON.stringify(selectedNode.metadata, null, 2) : '',
+      });
+      return;
+    }
+
+    if (formMode === 'create-root') {
+      setDraftValues({
+        nodeCode: '',
+        nodeName: '',
+        nodeClass: 'SITE',
+        nodeSubtype: '',
+        parentId: null,
+        departmentCode: 'USP',
+        ownerOrgUnitId: null,
+        boundResourceId: null,
+        sortOrder: undefined,
+        isActive: true,
+        metadataText: '',
+      });
+      return;
+    }
+
+    if (formMode === 'create-child' && selectedNode) {
+      const firstBlueprint = childBlueprints[0];
+      setDraftValues({
+        nodeCode: '',
+        nodeName: '',
+        nodeClass: firstBlueprint?.nodeClass ?? selectedNode.nodeClass,
+        nodeSubtype: firstBlueprint?.nodeSubtype ?? '',
+        parentId: selectedNode.id,
+        departmentCode: selectedNode.departmentCode,
+        ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
+        boundResourceId: null,
+        sortOrder: undefined,
+        isActive: true,
+        metadataText: '',
+      });
+    }
+  }, [childBlueprints, formMode, selectedNode]);
+
+  useEffect(() => {
+    if (!requiresSubtype(draftValues.nodeClass)) {
+      if (draftValues.nodeSubtype) {
+        setDraftValues((current) => ({ ...current, nodeSubtype: '' }));
+      }
+      return;
+    }
+
+    if (subtypeOptions.length === 1 && draftValues.nodeSubtype !== subtypeOptions[0].value) {
+      setDraftValues((current) => ({ ...current, nodeSubtype: subtypeOptions[0].value }));
+      return;
+    }
+
+    if (subtypeOptions.length > 1 && !subtypeOptions.some((item) => item.value === draftValues.nodeSubtype)) {
+      setDraftValues((current) => ({ ...current, nodeSubtype: subtypeOptions[0].value }));
+    }
+  }, [draftValues.nodeClass, draftValues.nodeSubtype, subtypeOptions]);
+
+  const loadCleanableTargets = useCallback(async (node: ResourceNode | null) => {
+    if (!node || node.nodeClass !== 'UTILITY_STATION' || node.nodeSubtype !== 'CIP') {
+      setCleanableTargetIds([]);
+      setCleanableCandidates([]);
+      return;
+    }
+
+    try {
+      setCleanableLoading(true);
+      const response = await processTemplateV2Api.getResourceNodeCleanableTargets(node.id);
+      setCleanableTargetIds(response.targets.map((item) => item.targetNodeId));
+      setCleanableCandidates(response.candidateTargets);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '加载 CIP 可清洗对象失败');
+      setCleanableTargetIds([]);
+      setCleanableCandidates([]);
+    } finally {
+      setCleanableLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadCleanableTargets(selectedNode);
+  }, [loadCleanableTargets, selectedNode]);
 
   const handleSaveNode = async () => {
     try {
       if (!draftValues.nodeName.trim()) {
         message.error('请输入节点名称');
+        return;
+      }
+
+      if (requiresSubtype(draftValues.nodeClass) && !draftValues.nodeSubtype.trim()) {
+        message.error('当前节点类型要求填写 node_subtype');
         return;
       }
 
@@ -513,10 +542,12 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
           return;
         }
       }
+
       const payload = {
         nodeCode: formMode === 'edit' ? draftValues.nodeCode.trim() : undefined,
         nodeName: draftValues.nodeName.trim(),
         nodeClass: draftValues.nodeClass,
+        nodeSubtype: requiresSubtype(draftValues.nodeClass) ? draftValues.nodeSubtype.trim().toUpperCase() : null,
         parentId: draftValues.parentId ?? null,
         departmentCode: draftValues.departmentCode,
         ownerOrgUnitId: draftValues.ownerOrgUnitId ?? null,
@@ -588,105 +619,6 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     }
   };
 
-  const handleMoveNodeToRoom = async (nodeId: number, sortOrder?: number) => {
-    if (!activeRoom) {
-      message.warning('请先选择目标房间');
-      return;
-    }
-
-    if (nodeId === activeRoom.id) {
-      return;
-    }
-
-    if (isDescendantOf(activeRoom.id, nodeId, parentMap)) {
-      message.error('不能将父级节点摆放到其子节点房间中');
-      return;
-    }
-
-    try {
-      await processTemplateV2Api.moveResourceNode(nodeId, {
-        parentId: activeRoom.id,
-        sortOrder,
-      });
-      setSelectedNodeId(nodeId);
-      setFormMode('edit');
-      message.success('设备已摆放到房间');
-      await loadData();
-    } catch (error: any) {
-      console.error('Failed to move node into room:', error);
-      message.error(error?.response?.data?.error || '摆放设备失败');
-    } finally {
-      setDraggingNodeId(null);
-    }
-  };
-
-  const handleMoveNodeWithinRoom = async (nodeId: number, direction: 'forward' | 'backward') => {
-    if (!activeRoom) {
-      return;
-    }
-
-    const currentIndex = roomPlacedNodes.findIndex((node) => node.id === nodeId);
-    if (currentIndex < 0) {
-      return;
-    }
-
-    const targetIndex = direction === 'forward' ? currentIndex - 1 : currentIndex + 1;
-    if (targetIndex < 0 || targetIndex >= roomPlacedNodes.length) {
-      return;
-    }
-
-    const targetNode = roomPlacedNodes[targetIndex];
-    await handleMoveNodeToRoom(nodeId, targetNode.sortOrder);
-  };
-
-  const handleMoveNodeOutOfRoom = async (nodeId: number) => {
-    if (!activeRoom) {
-      return;
-    }
-
-    try {
-      await processTemplateV2Api.moveResourceNode(nodeId, {
-        parentId: activeRoom.parentId ?? null,
-      });
-      message.success('设备已移出当前房间');
-      await loadData();
-    } catch (error: any) {
-      console.error('Failed to move node out of room:', error);
-      message.error(error?.response?.data?.error || '移出房间失败');
-    }
-  };
-
-  const handleSceneDragStart = (event: React.DragEvent<HTMLDivElement>, nodeId: number) => {
-    setDraggingNodeId(nodeId);
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('application/resource-node-id', String(nodeId));
-    event.dataTransfer.setData('text/plain', String(nodeId));
-  };
-
-  const handleSceneDrop = async (
-    event: React.DragEvent<HTMLDivElement>,
-    options?: {
-      sortOrder?: number;
-    },
-  ) => {
-    event.preventDefault();
-    const rawValue =
-      event.dataTransfer.getData('application/resource-node-id') ||
-      event.dataTransfer.getData('text/plain') ||
-      (draggingNodeId ? String(draggingNodeId) : '');
-    const nodeId = Number(rawValue);
-    if (!Number.isInteger(nodeId) || nodeId <= 0) {
-      setDraggingNodeId(null);
-      return;
-    }
-
-    await handleMoveNodeToRoom(nodeId, options?.sortOrder);
-  };
-
-  const handleSceneDragEnd = () => {
-    setDraggingNodeId(null);
-  };
-
   const handleCreateResource = async (payload: any) => {
     try {
       const response = await axios.post('/api/resources', {
@@ -721,6 +653,54 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     }
   };
 
+  const handleSaveCleanableTargets = async () => {
+    if (!selectedNode || selectedNode.nodeClass !== 'UTILITY_STATION' || selectedNode.nodeSubtype !== 'CIP') {
+      return;
+    }
+
+    try {
+      setCleanableLoading(true);
+      await processTemplateV2Api.updateResourceNodeCleanableTargets(selectedNode.id, {
+        targetNodeIds: cleanableTargetIds,
+      });
+      message.success('CIP 可清洗对象已更新');
+      await loadData();
+      await loadCleanableTargets(selectedNode);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '更新 CIP 可清洗对象失败');
+    } finally {
+      setCleanableLoading(false);
+    }
+  };
+
+  const handleExportBackup = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      nodes,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `resource-nodes-backup-${Date.now()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  };
+
+  const handleClearForRebuild = async () => {
+    try {
+      await processTemplateV2Api.clearResourceNodeTreeForRebuild();
+      message.success('节点树、模板绑定和 CIP 关系已清空');
+      setSelectedNodeId(null);
+      setFormMode('create-root');
+      await loadData();
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '清空节点树失败');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[540px] items-center justify-center rounded-3xl border border-slate-200 bg-white">
@@ -740,22 +720,22 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
           <div className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold tracking-wide text-white inline-block">
             节点管理
           </div>
-          <h3 className="mt-3 text-2xl font-semibold text-slate-900">房间场景节点编辑</h3>
+          <h3 className="mt-3 text-2xl font-semibold text-slate-900">工艺模板 V2 语义节点建模</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            以“房间 + 设备摆放”的方式维护节点层级，设备可直接拖拽进房间并调整站位顺序。
+            采用“树 + 属性表单”维护 SITE/LINE/ROOM/SYSTEM/设备层级，并在 CIP 站配置可清洗对象的多对多引用关系。
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">房间</div>
+              <div className="text-xs text-slate-500">节点总数</div>
+              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.totalCount}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
+              <div className="text-xs text-slate-500">房间数</div>
               <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.roomCount}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">设备</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.equipmentCount}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">组件</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.componentCount}</div>
+              <div className="text-xs text-slate-500">可绑定节点</div>
+              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.bindableCount}</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
               <div className="text-xs text-slate-500">已挂载资源</div>
@@ -779,7 +759,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
           </Button>
           <Button
             icon={<PlusOutlined />}
-            disabled={!selectedNode}
+            disabled={!selectedNode || !allowedChildBlueprints(selectedNode).length}
             onClick={() => setFormMode('create-child')}
           >
             新增子节点
@@ -787,10 +767,15 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         </Space>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
+      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
         <div className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 text-sm font-semibold text-slate-700">资源节点树</div>
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-700">资源语义节点树</div>
+              <Text type="secondary" className="text-xs">
+                拖拽可移动层级
+              </Text>
+            </div>
             {nodes.length ? (
               <Tree
                 draggable
@@ -809,239 +794,6 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
               <Empty description="尚未创建资源节点" />
             )}
           </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 text-sm font-semibold text-slate-700">房间导航</div>
-            {roomNodes.length ? (
-              <div className="max-h-64 space-y-2 overflow-auto">
-                {roomNodes.map((room) => {
-                  const pathLabel = buildNodePath(room.id, nodeMap)
-                    .map((item) => item.nodeName)
-                    .join(' / ');
-                  const active = room.id === activeRoomId;
-                  return (
-                    <button
-                      key={room.id}
-                      type="button"
-                      className={`w-full rounded-2xl border px-3 py-2 text-left transition ${
-                        active
-                          ? 'border-sky-300 bg-sky-50 text-sky-700'
-                          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                      }`}
-                      onClick={() => {
-                        setActiveRoomId(room.id);
-                        setSelectedNodeId(room.id);
-                        setFormMode('edit');
-                      }}
-                    >
-                      <div className="text-sm font-medium">{room.nodeName}</div>
-                      <div className="mt-1 text-xs text-slate-500">{pathLabel}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <Empty description="暂无房间节点，请先创建 ROOM 节点" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-slate-700">房间场景编辑器</div>
-                <h4 className="mt-1 text-lg font-semibold text-slate-900">
-                  {activeRoom ? activeRoom.nodeName : '请选择房间'}
-                </h4>
-                <p className="mt-1 text-xs text-slate-500">
-                  将设备卡片拖到房间平面图中完成摆放，也可以点击“放入房间”按钮进行无拖拽操作。
-                </p>
-              </div>
-              <Space wrap>
-                <Select
-                  value={activeRoomId ?? undefined}
-                  options={roomSelectOptions}
-                  style={{ width: 260 }}
-                  placeholder="选择房间"
-                  onChange={(value) => {
-                    setActiveRoomId(value);
-                    setSelectedNodeId(value);
-                    setFormMode('edit');
-                  }}
-                />
-                <Button
-                  icon={<PlusOutlined />}
-                  disabled={!activeRoom}
-                  onClick={() => {
-                    if (!activeRoom) {
-                      return;
-                    }
-                    setSelectedNodeId(activeRoom.id);
-                    setFormMode('create-child');
-                  }}
-                >
-                  在房间新增设备
-                </Button>
-              </Space>
-            </div>
-
-            {!activeRoom ? (
-              <Empty description="请选择房间后开始拟物编辑" />
-            ) : (
-              <div className="space-y-4">
-                <div
-                  className="rounded-3xl border-2 border-dashed border-slate-300 bg-[radial-gradient(circle_at_20%_20%,rgba(203,213,225,0.2),rgba(255,255,255,0.95))] p-4"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => void handleSceneDrop(event)}
-                >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <div className="text-sm font-semibold text-slate-700">房间平面图</div>
-                    <div className="text-xs text-slate-500">
-                      已摆放 {roomPlacedNodes.length} 台设备
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-                    {roomSceneSlots.map((node, index) => (
-                      <div
-                        key={`scene-slot-${index}-${node?.id ?? 'empty'}`}
-                        className={`min-h-[148px] rounded-2xl border p-3 transition ${
-                          node
-                            ? 'border-slate-300 bg-white shadow-sm'
-                            : draggingNodeId
-                              ? 'border-sky-300 bg-sky-50/70'
-                              : 'border-slate-200 bg-slate-50/70'
-                        }`}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => void handleSceneDrop(event, { sortOrder: index + 1 })}
-                      >
-                        {node ? (
-                          <div
-                            draggable
-                            onDragStart={(event) => handleSceneDragStart(event, node.id)}
-                            onDragEnd={handleSceneDragEnd}
-                            className={`h-full cursor-grab rounded-xl border border-slate-200 bg-gradient-to-b from-white to-slate-100 p-3 shadow-[0_8px_16px_rgba(15,23,42,0.08)] active:cursor-grabbing ${
-                              selectedNodeId === node.id ? 'ring-2 ring-sky-300' : ''
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-medium text-slate-500">工位 {index + 1}</span>
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${NODE_CLASS_BADGE_CLASS[node.nodeClass]}`}
-                              >
-                                {NODE_CLASS_LABEL[node.nodeClass]}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-sm font-semibold text-slate-900">{node.nodeName}</div>
-                            <div className="mt-1 text-xs text-slate-500">
-                              {node.boundResourceCode
-                                ? `${node.boundResourceCode} / ${node.boundResourceName ?? '已挂载资源'}`
-                                : '未挂载真实资源'}
-                            </div>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <Button
-                                size="small"
-                                onClick={() => {
-                                  setSelectedNodeId(node.id);
-                                  setFormMode('edit');
-                                }}
-                              >
-                                编辑
-                              </Button>
-                              <Button
-                                size="small"
-                                disabled={index === 0}
-                                onClick={() => void handleMoveNodeWithinRoom(node.id, 'forward')}
-                              >
-                                前移
-                              </Button>
-                              <Button
-                                size="small"
-                                disabled={index >= roomPlacedNodes.length - 1}
-                                onClick={() => void handleMoveNodeWithinRoom(node.id, 'backward')}
-                              >
-                                后移
-                              </Button>
-                              <Button
-                                size="small"
-                                onClick={() => void handleMoveNodeOutOfRoom(node.id)}
-                              >
-                                移出
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex h-full min-h-[110px] items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white/60 text-xs text-slate-400">
-                            将设备拖到此位置
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm font-semibold text-slate-700">设备仓库</div>
-                    <Input
-                      allowClear
-                      placeholder="搜索设备编码/名称"
-                      value={warehouseKeyword}
-                      onChange={(event) => setWarehouseKeyword(event.target.value)}
-                      style={{ width: 220, maxWidth: '100%' }}
-                    />
-                  </div>
-
-                  {warehouseNodes.length ? (
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      {warehouseNodes.map((node) => (
-                        <div
-                          key={node.id}
-                          draggable
-                          onDragStart={(event) => handleSceneDragStart(event, node.id)}
-                          onDragEnd={handleSceneDragEnd}
-                          className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="truncate text-sm font-medium text-slate-900">{node.nodeName}</div>
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${NODE_CLASS_BADGE_CLASS[node.nodeClass]}`}
-                            >
-                              {NODE_CLASS_LABEL[node.nodeClass]}
-                            </span>
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500">{node.nodeCode}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {node.boundResourceCode
-                              ? `${node.boundResourceCode} / ${node.boundResourceName}`
-                              : '未挂载资源'}
-                          </div>
-                          <div className="mt-3 flex items-center justify-between">
-                            <Button size="small" onClick={() => void handleMoveNodeToRoom(node.id)}>
-                              放入房间
-                            </Button>
-                            <Button
-                              size="small"
-                              type="link"
-                              onClick={() => {
-                                setSelectedNodeId(node.id);
-                                setFormMode('edit');
-                              }}
-                            >
-                              打开属性
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <Empty description="仓库里暂无可摆放设备" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         <div className="space-y-4">
@@ -1051,9 +803,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                 <div className="text-sm font-semibold text-slate-700">
                   {formMode === 'edit' ? '节点属性编辑' : formMode === 'create-root' ? '新增根节点' : '新增子节点'}
                 </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {selectedNodePath || '当前未选择节点'}
-                </div>
+                <div className="mt-1 text-xs text-slate-500">{selectedNodePath || '当前未选择节点'}</div>
               </div>
               <Space>
                 <Button onClick={() => setFormMode('edit')} disabled={formMode === 'edit'}>
@@ -1072,15 +822,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">节点编码</label>
-                    <Input
-                      value={formMode === 'edit' ? draftValues.nodeCode : generatedNodeCodePreview}
-                      disabled
-                    />
-                    <div className="mt-1 text-xs text-slate-400">
-                      {formMode === 'edit'
-                        ? '节点编码由系统生成，保持唯一，不建议手动修改。'
-                        : '保存后由系统自动生成唯一编码；预览会根据当前部门域和节点分类变化。'}
-                    </div>
+                    <Input value={formMode === 'edit' ? draftValues.nodeCode : generatedNodeCodePreview} disabled />
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">节点名称</label>
@@ -1095,19 +837,39 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                     <label className="mb-1 block text-sm font-medium text-slate-700">节点分类</label>
                     <Select
                       value={draftValues.nodeClass}
-                      options={NODE_CLASS_OPTIONS}
-                      onChange={(value) => setDraftValues((current) => ({ ...current, nodeClass: value }))}
+                      options={classOptions.map((item) => ({ label: item.label, value: item.value }))}
+                      onChange={(value) =>
+                        setDraftValues((current) => ({
+                          ...current,
+                          nodeClass: value,
+                          nodeSubtype: '',
+                        }))
+                      }
                       style={{ width: '100%' }}
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">部门域</label>
-                    <Select
-                      value={draftValues.departmentCode}
-                      options={[{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }]}
-                      onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
-                      style={{ width: '100%' }}
-                    />
+                    <label className="mb-1 block text-sm font-medium text-slate-700">node_subtype</label>
+                    {requiresSubtype(draftValues.nodeClass) ? (
+                      subtypeOptions.length > 0 ? (
+                        <Select
+                          value={draftValues.nodeSubtype || undefined}
+                          options={subtypeOptions}
+                          onChange={(value) => setDraftValues((current) => ({ ...current, nodeSubtype: value }))}
+                          style={{ width: '100%' }}
+                        />
+                      ) : (
+                        <Input
+                          value={draftValues.nodeSubtype}
+                          placeholder="例如 REACTOR / AKTA / ABEC / PIPELINE"
+                          onChange={(event) =>
+                            setDraftValues((current) => ({ ...current, nodeSubtype: event.target.value }))
+                          }
+                        />
+                      )
+                    ) : (
+                      <Input value="(不需要)" disabled />
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">父节点</label>
@@ -1119,7 +881,22 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                       onChange={(value) => setDraftValues((current) => ({ ...current, parentId: value ?? null }))}
                       options={allNodes
                         .filter((node) => node.id !== selectedNode?.id)
-                        .map((node) => ({ value: node.id, label: node.nodeName }))}
+                        .map((node) => ({
+                          value: node.id,
+                          label: buildNodePath(node.id, nodeMap)
+                            .map((item) => item.nodeName)
+                            .join(' / '),
+                        }))}
+                      style={{ width: '100%' }}
+                      disabled={formMode === 'create-child'}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">部门域</label>
+                    <Select
+                      value={draftValues.departmentCode}
+                      options={[{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }]}
+                      onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
                       style={{ width: '100%' }}
                     />
                   </div>
@@ -1134,23 +911,6 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                         setDraftValues((current) => ({ ...current, ownerOrgUnitId: value ?? null }))
                       }
                       options={teams.map((team) => ({ value: Number(team.id), label: team.unit_name }))}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">挂载资源</label>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      value={draftValues.boundResourceId ?? undefined}
-                      onChange={(value) =>
-                        setDraftValues((current) => ({ ...current, boundResourceId: value ?? null }))
-                      }
-                      options={availableResources.map((resource) => ({
-                        value: resource.id,
-                        label: `${resource.resourceCode} / ${resource.resourceName}`,
-                      }))}
                       style={{ width: '100%' }}
                     />
                   </div>
@@ -1193,11 +953,12 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                     }
                   />
                 </div>
+
                 {selectedNode && formMode === 'edit' ? (
                   <div className="flex justify-end">
                     <Popconfirm
                       title="确定删除当前节点吗？"
-                      description="存在子节点或模板工序绑定时会被阻止。"
+                      description="存在子节点、模板绑定或 CIP 关系引用时会被阻止。"
                       okText="删除"
                       cancelText="取消"
                       onConfirm={() => void handleDeleteNode()}
@@ -1209,7 +970,9 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
               </div>
             )}
           </div>
+        </div>
 
+        <div className="space-y-4">
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center justify-between">
               <div className="text-sm font-semibold text-slate-700">资源挂载</div>
@@ -1219,6 +982,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                   setCreatingResourceForNodeId(selectedNode?.id ?? null);
                   setResourceModalOpen(true);
                 }}
+                disabled={!selectedNode || !BINDABLE_CLASSES.has(selectedNode.nodeClass)}
               >
                 新建资源并绑定
               </Button>
@@ -1226,9 +990,13 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             {selectedNode ? (
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <Alert
-                  type={selectedNode.children.length ? 'warning' : 'info'}
+                  type={BINDABLE_CLASSES.has(selectedNode.nodeClass) ? 'info' : 'warning'}
                   showIcon
-                  message={selectedNode.children.length ? '当前节点已有子节点，绑定资源会被后端校验阻止。' : '叶子节点可直接挂载真实资源。'}
+                  message={
+                    BINDABLE_CLASSES.has(selectedNode.nodeClass)
+                      ? '当前节点类型支持挂载资源（叶子节点）。'
+                      : '当前节点类型不支持直接挂载资源。'
+                  }
                 />
                 <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                   当前挂载：
@@ -1236,38 +1004,87 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                     ? ` ${selectedNode.boundResourceCode} / ${selectedNode.boundResourceName}`
                     : ' 未挂载资源'}
                 </div>
-                <div className="max-h-48 overflow-auto rounded-2xl border border-slate-200">
-                  {unassignedResources.length ? (
-                    unassignedResources.slice(0, 12).map((resource) => (
-                      <button
-                        key={resource.id}
-                        type="button"
-                        className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
-                        onClick={async () => {
-                          try {
-                            await processTemplateV2Api.updateResourceNode(selectedNode.id, {
-                              boundResourceId: resource.id,
-                            });
-                            message.success('资源已挂载到当前节点');
-                            await loadData();
-                          } catch (error: any) {
-                            message.error(error?.response?.data?.error || '挂载资源失败');
-                          }
-                        }}
-                      >
-                        <span>{resource.resourceCode} / {resource.resourceName}</span>
-                        <span className="text-xs text-slate-400">{resource.resourceType}</span>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-4 text-sm text-slate-400">当前没有未挂载资源</div>
-                  )}
-                </div>
+                {BINDABLE_CLASSES.has(selectedNode.nodeClass) ? (
+                  <>
+                    <Select
+                      allowClear
+                      showSearch
+                      optionFilterProp="label"
+                      value={draftValues.boundResourceId ?? undefined}
+                      onChange={(value) =>
+                        setDraftValues((current) => ({ ...current, boundResourceId: value ?? null }))
+                      }
+                      options={availableResources.map((resource) => ({
+                        value: resource.id,
+                        label: `${resource.resourceCode} / ${resource.resourceName}`,
+                      }))}
+                      style={{ width: '100%' }}
+                      placeholder="选择挂载资源"
+                    />
+                    <div className="max-h-40 overflow-auto rounded-2xl border border-slate-200">
+                      {unassignedResources.length ? (
+                        unassignedResources.slice(0, 10).map((resource) => (
+                          <button
+                            key={resource.id}
+                            type="button"
+                            className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                            onClick={async () => {
+                              try {
+                                await processTemplateV2Api.updateResourceNode(selectedNode.id, {
+                                  boundResourceId: resource.id,
+                                });
+                                message.success('资源已挂载到当前节点');
+                                await loadData();
+                              } catch (error: any) {
+                                message.error(error?.response?.data?.error || '挂载资源失败');
+                              }
+                            }}
+                          >
+                            <span>
+                              {resource.resourceCode} / {resource.resourceName}
+                            </span>
+                            <span className="text-xs text-slate-400">{resource.resourceType}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-4 text-sm text-slate-400">当前没有未挂载资源</div>
+                      )}
+                    </div>
+                  </>
+                ) : null}
               </Space>
             ) : (
               <Empty description="先选择节点后再挂载资源" />
             )}
           </div>
+
+          {selectedNode && selectedNode.nodeClass === 'UTILITY_STATION' && selectedNode.nodeSubtype === 'CIP' ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 text-sm font-semibold text-slate-700">CIP 可清洗对象</div>
+              <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                <Alert type="info" showIcon message="仅允许关联位于 SYSTEM(SS) 路径下的 EQUIPMENT_UNIT/COMPONENT。" />
+                <Select
+                  mode="multiple"
+                  showSearch
+                  optionFilterProp="label"
+                  loading={cleanableLoading}
+                  value={cleanableTargetIds}
+                  onChange={(value) => setCleanableTargetIds(value as number[])}
+                  options={cleanableCandidates.map((node) => ({
+                    value: node.id,
+                    label: `${buildNodePath(node.id, nodeMap)
+                      .map((item) => item.nodeName)
+                      .join(' / ')} (${node.nodeCode})`,
+                  }))}
+                  style={{ width: '100%' }}
+                  placeholder="选择可清洗对象"
+                />
+                <Button type="primary" loading={cleanableLoading} onClick={() => void handleSaveCleanableTargets()}>
+                  保存 CIP 关系
+                </Button>
+              </Space>
+            </div>
+          ) : null}
 
           <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-3 text-sm font-semibold text-slate-700">影响分析</div>
@@ -1296,6 +1113,27 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             ) : (
               <Empty description="先选择节点查看影响" />
             )}
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 text-sm font-semibold text-slate-700">人工重建工具</div>
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Alert
+                type="warning"
+                showIcon
+                message="建议先导出备份，再执行清空；清空会同时删除模板默认绑定与 CIP 关系。"
+              />
+              <Button onClick={handleExportBackup}>导出备份 (JSON)</Button>
+              <Popconfirm
+                title="确认清空节点树吗？"
+                description="会清空 resource_nodes、template 默认绑定和 CIP 关系，且不可恢复。"
+                okText="确认清空"
+                cancelText="取消"
+                onConfirm={() => void handleClearForRebuild()}
+              >
+                <Button danger>清空节点树（重建模式）</Button>
+              </Popconfirm>
+            </Space>
           </div>
         </div>
       </div>

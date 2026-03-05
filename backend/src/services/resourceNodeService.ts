@@ -10,7 +10,19 @@ import {
 
 const toBoolean = (value: unknown): boolean => value === true || value === 1 || value === '1';
 
-export type ResourceNodeClass = 'SUITE' | 'ROOM' | 'EQUIPMENT' | 'COMPONENT' | 'GROUP';
+export type ResourceNodeClass =
+  | 'SITE'
+  | 'LINE'
+  | 'ROOM'
+  | 'SYSTEM'
+  | 'EQUIPMENT_CLASS'
+  | 'EQUIPMENT_MODEL'
+  | 'EQUIPMENT_UNIT'
+  | 'COMPONENT'
+  | 'UTILITY_STATION';
+
+export type ResourceNodeRelationType = 'CIP_CLEANABLE';
+
 export type TemplateBindingStatus =
   | 'BOUND'
   | 'UNBOUND'
@@ -25,6 +37,7 @@ export interface ResourceNodeRecord {
   node_code: string;
   node_name: string;
   node_class: ResourceNodeClass;
+  node_subtype: string | null;
   parent_id: number | null;
   department_code: string;
   owner_org_unit_id: number | null;
@@ -46,6 +59,15 @@ export interface ResourceNodeTreeRecord extends ResourceNodeRecord {
   children: ResourceNodeTreeRecord[];
 }
 
+export interface ResourceNodeRelationRecord {
+  id: number;
+  source_node_id: number;
+  target_node_id: number;
+  relation_type: ResourceNodeRelationType;
+  metadata: Record<string, unknown> | null;
+  target: ResourceNodeRecord;
+}
+
 export interface TemplateScheduleBindingRecord {
   id: number;
   template_schedule_id: number;
@@ -62,12 +84,23 @@ type MySqlErrorWithCode = Error & {
 };
 
 const RESOURCE_NODE_CLASS_CODE: Record<ResourceNodeClass, string> = {
-  SUITE: 'STE',
+  SITE: 'SIT',
+  LINE: 'LIN',
   ROOM: 'ROM',
-  EQUIPMENT: 'EQP',
+  SYSTEM: 'SYS',
+  EQUIPMENT_CLASS: 'ECL',
+  EQUIPMENT_MODEL: 'EMD',
+  EQUIPMENT_UNIT: 'EUN',
   COMPONENT: 'CMP',
-  GROUP: 'GRP',
+  UTILITY_STATION: 'UST',
 };
+
+const ROOM_SUBTYPES = new Set(['MAIN_PROCESS', 'AUXILIARY', 'UTILITY_SHARED']);
+const SYSTEM_SUBTYPES = new Set(['SUS', 'SS']);
+const UTILITY_STATION_SUBTYPES = new Set(['CIP', 'SIP']);
+
+const BINDABLE_NODE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONENT', 'UTILITY_STATION']);
+const CLEANABLE_TARGET_NODE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONENT']);
 
 const normalizeMetadata = (value: unknown): Record<string, unknown> | null => {
   if (!value) {
@@ -89,11 +122,193 @@ const normalizeMetadata = (value: unknown): Record<string, unknown> | null => {
   return null;
 };
 
+const normalizeNodeSubtype = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_')
+    .replace(/[^\p{L}\p{N}_]/gu, '')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized.length > 64) {
+    throw new Error('node_subtype length must be <= 64');
+  }
+
+  return normalized;
+};
+
+const assertNodeSubtype = (nodeClass: ResourceNodeClass, rawSubtype: unknown): string | null => {
+  const subtype = normalizeNodeSubtype(rawSubtype);
+
+  if (nodeClass === 'SITE' || nodeClass === 'LINE' || nodeClass === 'EQUIPMENT_UNIT') {
+    if (subtype) {
+      throw new Error(`${nodeClass} does not allow node_subtype`);
+    }
+    return null;
+  }
+
+  if (nodeClass === 'ROOM') {
+    if (!subtype || !ROOM_SUBTYPES.has(subtype)) {
+      throw new Error('ROOM node_subtype must be MAIN_PROCESS, AUXILIARY or UTILITY_SHARED');
+    }
+    return subtype;
+  }
+
+  if (nodeClass === 'SYSTEM') {
+    if (!subtype || !SYSTEM_SUBTYPES.has(subtype)) {
+      throw new Error('SYSTEM node_subtype must be SUS or SS');
+    }
+    return subtype;
+  }
+
+  if (nodeClass === 'UTILITY_STATION') {
+    if (!subtype || !UTILITY_STATION_SUBTYPES.has(subtype)) {
+      throw new Error('UTILITY_STATION node_subtype must be CIP or SIP');
+    }
+    return subtype;
+  }
+
+  if (!subtype) {
+    throw new Error(`${nodeClass} requires node_subtype`);
+  }
+
+  return subtype;
+};
+
+const assertParentChildRule = (
+  parentNode: Pick<ResourceNodeRecord, 'node_class' | 'node_subtype'> | null,
+  childClass: ResourceNodeClass,
+  childSubtype: string | null,
+): void => {
+  if (!parentNode) {
+    if (childClass !== 'SITE') {
+      throw new Error('Root node must be SITE');
+    }
+    return;
+  }
+
+  const parentClass = parentNode.node_class;
+  const parentSubtype = parentNode.node_subtype;
+
+  if (parentClass === 'SITE') {
+    if (childClass === 'LINE') {
+      return;
+    }
+    if (childClass === 'ROOM' && childSubtype === 'UTILITY_SHARED') {
+      return;
+    }
+  }
+
+  if (parentClass === 'LINE') {
+    if (childClass === 'ROOM' && childSubtype === 'MAIN_PROCESS') {
+      return;
+    }
+  }
+
+  if (parentClass === 'ROOM') {
+    if (parentSubtype === 'MAIN_PROCESS') {
+      if (childClass === 'ROOM' && childSubtype === 'AUXILIARY') {
+        return;
+      }
+      if (childClass === 'SYSTEM') {
+        return;
+      }
+    }
+
+    if (parentSubtype === 'UTILITY_SHARED') {
+      if (childClass === 'UTILITY_STATION' && (childSubtype === 'CIP' || childSubtype === 'SIP')) {
+        return;
+      }
+    }
+  }
+
+  if (parentClass === 'SYSTEM') {
+    if (childClass === 'EQUIPMENT_CLASS') {
+      return;
+    }
+  }
+
+  if (parentClass === 'EQUIPMENT_CLASS') {
+    if (childClass === 'EQUIPMENT_MODEL') {
+      return;
+    }
+  }
+
+  if (parentClass === 'EQUIPMENT_MODEL') {
+    if (childClass === 'EQUIPMENT_UNIT') {
+      return;
+    }
+  }
+
+  if (parentClass === 'EQUIPMENT_UNIT') {
+    if (childClass === 'COMPONENT') {
+      return;
+    }
+  }
+
+  throw new Error(
+    `Invalid hierarchy: cannot place ${childClass}${childSubtype ? `(${childSubtype})` : ''} under ${parentClass}${
+      parentSubtype ? `(${parentSubtype})` : ''
+    }`,
+  );
+};
+
+const assertChildrenCompatibleWithNode = async (
+  nodeId: number,
+  nodeClass: ResourceNodeClass,
+  nodeSubtype: string | null,
+  executor: SqlExecutor = pool,
+): Promise<void> => {
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `SELECT id, node_name, node_class, node_subtype
+     FROM resource_nodes
+     WHERE parent_id = ?`,
+    [nodeId],
+  );
+
+  const parentNode = {
+    node_class: nodeClass,
+    node_subtype: nodeSubtype,
+  };
+
+  for (const row of rows) {
+    const childClass = String(row.node_class) as ResourceNodeClass;
+    const childSubtype = row.node_subtype ? String(row.node_subtype) : null;
+    const childName = String(row.node_name ?? row.id);
+
+    try {
+      assertParentChildRule(parentNode, childClass, childSubtype);
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Cannot update node: child "${childName}" becomes invalid (${error.message})`);
+      }
+      throw error;
+    }
+  }
+};
+
 const mapResourceNodeRow = (row: RowDataPacket): ResourceNodeRecord => ({
   id: Number(row.id),
   node_code: String(row.node_code),
   node_name: String(row.node_name),
   node_class: String(row.node_class) as ResourceNodeClass,
+  node_subtype: row.node_subtype ? String(row.node_subtype) : null,
   parent_id: row.parent_id !== null && row.parent_id !== undefined ? Number(row.parent_id) : null,
   department_code: String(row.department_code),
   owner_org_unit_id:
@@ -112,6 +327,25 @@ const mapResourceNodeRow = (row: RowDataPacket): ResourceNodeRecord => ({
   metadata: normalizeMetadata(row.metadata),
   child_count: Number(row.child_count ?? 0),
 });
+
+const buildNodeMap = (nodes: ResourceNodeRecord[]) => new Map<number, ResourceNodeRecord>(nodes.map((node) => [node.id, node]));
+
+const isNodeUnderSsSystem = (nodeId: number, nodeMap: Map<number, ResourceNodeRecord>): boolean => {
+  const visited = new Set<number>();
+  let cursor: ResourceNodeRecord | null = nodeMap.get(nodeId) ?? null;
+
+  while (cursor && !visited.has(cursor.id)) {
+    visited.add(cursor.id);
+
+    if (cursor.node_class === 'SYSTEM') {
+      return cursor.node_subtype === 'SS';
+    }
+
+    cursor = cursor.parent_id ? nodeMap.get(cursor.parent_id) ?? null : null;
+  }
+
+  return false;
+};
 
 export const listResourceNodes = async (
   filters: {
@@ -203,6 +437,14 @@ const assertNodeExists = async (nodeId: number, executor: SqlExecutor = pool): P
     throw new Error('Resource node not found');
   }
 
+  return node;
+};
+
+const assertCipStationNode = async (nodeId: number, executor: SqlExecutor = pool): Promise<ResourceNodeRecord> => {
+  const node = await assertNodeExists(nodeId, executor);
+  if (node.node_class !== 'UTILITY_STATION' || node.node_subtype !== 'CIP') {
+    throw new Error('Cleanable targets can only be configured on UTILITY_STATION(CIP) nodes');
+  }
   return node;
 };
 
@@ -307,6 +549,7 @@ export const createResourceNode = async (
     node_code?: string;
     node_name: string;
     node_class: ResourceNodeClass;
+    node_subtype?: string | null;
     parent_id?: number | null;
     department_code?: string;
     owner_org_unit_id?: number | null;
@@ -319,6 +562,13 @@ export const createResourceNode = async (
 ): Promise<number> => {
   const parentId = payload.parent_id ?? null;
   const parentNode = parentId ? await assertNodeExists(parentId, executor) : null;
+  const normalizedSubtype = assertNodeSubtype(payload.node_class, payload.node_subtype ?? null);
+
+  assertParentChildRule(parentNode, payload.node_class, normalizedSubtype);
+
+  if (payload.bound_resource_id && !BINDABLE_NODE_CLASSES.has(payload.node_class)) {
+    throw new Error(`Only ${Array.from(BINDABLE_NODE_CLASSES).join(', ')} can bind a resource`);
+  }
 
   const resolvedDepartmentCode =
     normalizeDepartmentCode(payload.department_code) ??
@@ -343,13 +593,14 @@ export const createResourceNode = async (
   const insertNode = async (nodeCode: string) => {
     const [result] = await executor.execute<ResultSetHeader>(
       `INSERT INTO resource_nodes (
-        node_code, node_name, node_class, parent_id, department_code,
+        node_code, node_name, node_class, node_subtype, parent_id, department_code,
         owner_org_unit_id, bound_resource_id, sort_order, is_active, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nodeCode,
         payload.node_name,
         payload.node_class,
+        normalizedSubtype,
         parentId,
         resolvedDepartmentCode,
         payload.owner_org_unit_id ?? null,
@@ -403,6 +654,7 @@ export const updateResourceNode = async (
     node_code: string;
     node_name: string;
     node_class: ResourceNodeClass;
+    node_subtype: string | null;
     parent_id: number | null;
     department_code: string;
     owner_org_unit_id: number | null;
@@ -414,13 +666,31 @@ export const updateResourceNode = async (
   executor: SqlExecutor = pool,
 ): Promise<void> => {
   const currentNode = await assertNodeExists(nodeId, executor);
+  const nextClass = payload.node_class ?? currentNode.node_class;
+  const nextSubtype =
+    payload.node_subtype !== undefined
+      ? assertNodeSubtype(nextClass, payload.node_subtype)
+      : payload.node_class !== undefined
+        ? assertNodeSubtype(nextClass, currentNode.node_subtype)
+        : currentNode.node_subtype;
+
   const nextParentId = payload.parent_id !== undefined ? payload.parent_id : currentNode.parent_id;
+  const nextParentNode = nextParentId ? await assertNodeExists(nextParentId, executor) : null;
+
+  await ensureNoCycle(nodeId, nextParentId ?? null, executor);
+  assertParentChildRule(nextParentNode, nextClass, nextSubtype);
+  if (payload.node_class !== undefined || payload.node_subtype !== undefined) {
+    await assertChildrenCompatibleWithNode(nodeId, nextClass, nextSubtype, executor);
+  }
+
   const nextOwnerOrgUnitId =
     payload.owner_org_unit_id !== undefined ? payload.owner_org_unit_id : currentNode.owner_org_unit_id;
   const nextBoundResourceId =
     payload.bound_resource_id !== undefined ? payload.bound_resource_id : currentNode.bound_resource_id;
 
-  await ensureNoCycle(nodeId, nextParentId ?? null, executor);
+  if (nextBoundResourceId && !BINDABLE_NODE_CLASSES.has(nextClass)) {
+    throw new Error(`Only ${Array.from(BINDABLE_NODE_CLASSES).join(', ')} can bind a resource`);
+  }
 
   if (nextBoundResourceId) {
     const childCount = await loadChildCount(nodeId, executor);
@@ -444,7 +714,10 @@ export const updateResourceNode = async (
     assign('node_name', payload.node_name);
   }
   if (payload.node_class !== undefined) {
-    assign('node_class', payload.node_class);
+    assign('node_class', nextClass);
+    assign('node_subtype', nextSubtype);
+  } else if (payload.node_subtype !== undefined) {
+    assign('node_subtype', nextSubtype);
   }
   if (payload.parent_id !== undefined) {
     assign('parent_id', payload.parent_id ?? null);
@@ -456,7 +729,6 @@ export const updateResourceNode = async (
     payload.owner_org_unit_id !== undefined ||
     payload.bound_resource_id !== undefined
   ) {
-    const nextParentNode = nextParentId ? await assertNodeExists(nextParentId, executor) : null;
     const resolvedDepartmentCode =
       normalizeDepartmentCode(nextParentNode?.department_code) ??
       (await loadResourceDepartmentCode(nextBoundResourceId, executor)) ??
@@ -501,7 +773,10 @@ export const moveResourceNode = async (
   executor: SqlExecutor = pool,
 ): Promise<void> => {
   const currentNode = await assertNodeExists(nodeId, executor);
+  const nextParentNode = nextParentId ? await assertNodeExists(nextParentId, executor) : null;
+
   await ensureNoCycle(nodeId, nextParentId, executor);
+  assertParentChildRule(nextParentNode, currentNode.node_class, currentNode.node_subtype);
 
   const [rows] = await executor.execute<RowDataPacket[]>(
     `SELECT COALESCE(MAX(sort_order), 0) AS max_sort
@@ -537,6 +812,17 @@ export const deleteResourceNode = async (nodeId: number, executor: SqlExecutor =
     throw new Error('Cannot delete resource node referenced by template operations');
   }
 
+  const [relationRows] = await executor.execute<RowDataPacket[]>(
+    `SELECT COUNT(*) AS relation_count
+     FROM resource_node_relations
+     WHERE source_node_id = ? OR target_node_id = ?`,
+    [nodeId, nodeId],
+  );
+
+  if (Number(relationRows[0]?.relation_count ?? 0) > 0) {
+    throw new Error('Cannot delete resource node referenced by CIP cleanable relations');
+  }
+
   const currentNode = await assertNodeExists(nodeId, executor);
   await executor.execute('DELETE FROM resource_nodes WHERE id = ?', [nodeId]);
   await normalizeResourceNodeOrder(currentNode.parent_id, executor);
@@ -561,6 +847,7 @@ export const listTemplateScheduleBindings = async (
         rn.node_code,
         rn.node_name,
         rn.node_class,
+        rn.node_subtype,
         rn.parent_id,
         rn.department_code,
         rn.owner_org_unit_id,
@@ -609,6 +896,14 @@ export const evaluateTemplateScheduleBinding = async (
 
   if (!node.is_active) {
     return { node, status: 'NODE_INACTIVE', reason: 'Resource node is inactive' };
+  }
+
+  if (!BINDABLE_NODE_CLASSES.has(node.node_class)) {
+    return {
+      node,
+      status: 'INVALID_NODE',
+      reason: `Default binding must target ${Array.from(BINDABLE_NODE_CLASSES).join(', ')}`,
+    };
   }
 
   if (node.child_count > 0) {
@@ -750,4 +1045,135 @@ export const copyTemplateScheduleBindings = async (
       [targetScheduleId, Number(row.resource_node_id)],
     );
   }
+};
+
+export const listCipCleanableTargets = async (
+  stationNodeId: number,
+  executor: SqlExecutor = pool,
+): Promise<ResourceNodeRelationRecord[]> => {
+  await assertCipStationNode(stationNodeId, executor);
+
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `SELECT
+        rel.id AS relation_id,
+        rel.source_node_id,
+        rel.target_node_id,
+        rel.relation_type,
+        rel.metadata AS relation_metadata,
+        rn.id,
+        rn.node_code,
+        rn.node_name,
+        rn.node_class,
+        rn.node_subtype,
+        rn.parent_id,
+        rn.department_code,
+        rn.owner_org_unit_id,
+        ou.unit_name AS owner_unit_name,
+        ou.unit_code AS owner_unit_code,
+        rn.bound_resource_id,
+        r.resource_code AS bound_resource_code,
+        r.resource_name AS bound_resource_name,
+        r.resource_type AS bound_resource_type,
+        r.status AS bound_resource_status,
+        r.is_schedulable AS bound_resource_is_schedulable,
+        rn.sort_order,
+        rn.is_active,
+        rn.metadata,
+        (SELECT COUNT(*) FROM resource_nodes child WHERE child.parent_id = rn.id) AS child_count
+     FROM resource_node_relations rel
+     JOIN resource_nodes rn ON rn.id = rel.target_node_id
+     LEFT JOIN organization_units ou ON ou.id = rn.owner_org_unit_id
+     LEFT JOIN resources r ON r.id = rn.bound_resource_id
+     WHERE rel.source_node_id = ? AND rel.relation_type = 'CIP_CLEANABLE'
+     ORDER BY rn.node_name`,
+    [stationNodeId],
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.relation_id),
+    source_node_id: Number(row.source_node_id),
+    target_node_id: Number(row.target_node_id),
+    relation_type: String(row.relation_type) as ResourceNodeRelationType,
+    metadata: normalizeMetadata(row.relation_metadata),
+    target: mapResourceNodeRow(row),
+  }));
+};
+
+export const listEligibleCipCleanableTargets = async (
+  stationNodeId: number,
+  executor: SqlExecutor = pool,
+): Promise<ResourceNodeRecord[]> => {
+  await assertCipStationNode(stationNodeId, executor);
+
+  const nodes = await listResourceNodes({ include_inactive: true }, executor);
+  const nodeMap = buildNodeMap(nodes);
+
+  return nodes
+    .filter((node) => node.id !== stationNodeId)
+    .filter((node) => node.is_active)
+    .filter((node) => CLEANABLE_TARGET_NODE_CLASSES.has(node.node_class))
+    .filter((node) => isNodeUnderSsSystem(node.id, nodeMap))
+    .sort((left, right) => left.node_name.localeCompare(right.node_name, 'zh-CN'));
+};
+
+export const replaceCipCleanableTargets = async (
+  stationNodeId: number,
+  targetNodeIds: number[],
+  executor: SqlExecutor = pool,
+): Promise<ResourceNodeRelationRecord[]> => {
+  await assertCipStationNode(stationNodeId, executor);
+
+  const nodes = await listResourceNodes({ include_inactive: true }, executor);
+  const nodeMap = buildNodeMap(nodes);
+
+  const dedupedTargetIds = Array.from(
+    new Set(
+      targetNodeIds
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    ),
+  );
+
+  for (const targetNodeId of dedupedTargetIds) {
+    const targetNode = nodeMap.get(targetNodeId);
+    if (!targetNode) {
+      throw new Error(`Cleanable target node ${targetNodeId} not found`);
+    }
+
+    if (!CLEANABLE_TARGET_NODE_CLASSES.has(targetNode.node_class)) {
+      throw new Error('CIP cleanable targets must be COMPONENT or EQUIPMENT_UNIT');
+    }
+
+    if (!isNodeUnderSsSystem(targetNode.id, nodeMap)) {
+      throw new Error('CIP cleanable targets must be under SYSTEM(SS)');
+    }
+
+    if (!targetNode.is_active) {
+      throw new Error('CIP cleanable targets must be active nodes');
+    }
+  }
+
+  await executor.execute(
+    `DELETE FROM resource_node_relations
+     WHERE source_node_id = ? AND relation_type = 'CIP_CLEANABLE'`,
+    [stationNodeId],
+  );
+
+  for (const targetNodeId of dedupedTargetIds) {
+    await executor.execute(
+      `INSERT INTO resource_node_relations
+       (source_node_id, target_node_id, relation_type, metadata)
+       VALUES (?, ?, 'CIP_CLEANABLE', NULL)`,
+      [stationNodeId, targetNodeId],
+    );
+  }
+
+  return listCipCleanableTargets(stationNodeId, executor);
+};
+
+export const clearResourceNodeTreeForRebuild = async (executor: SqlExecutor = pool): Promise<void> => {
+  await executor.execute('DELETE FROM template_stage_operation_resource_bindings');
+  await executor.execute('DELETE FROM resource_node_relations');
+  await executor.execute('UPDATE resource_nodes SET parent_id = NULL');
+  await executor.execute('DELETE FROM resource_nodes');
 };

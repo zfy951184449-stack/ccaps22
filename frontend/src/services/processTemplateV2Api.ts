@@ -5,7 +5,11 @@ import {
   CreateStagePayload,
   OperationLibraryItem,
   OperationTypeOption,
+  PlannerOperation,
+  ResourceNodeCleanableTargetsResponse,
   ResourceNode,
+  ResourceNodeRelation,
+  TemplateBindingStatus,
   ResourceNodeMovePayload,
   ResourceNodePayload,
   TemplateConstraintLink,
@@ -80,6 +84,7 @@ const mapResourceNode = (data: any): ResourceNode => ({
   nodeCode: data.nodeCode ?? data.node_code,
   nodeName: data.nodeName ?? data.node_name,
   nodeClass: data.nodeClass ?? data.node_class,
+  nodeSubtype: data.nodeSubtype ?? data.node_subtype ?? null,
   parentId: data.parentId ?? data.parent_id ?? null,
   departmentCode: data.departmentCode ?? data.department_code,
   ownerOrgUnitId: data.ownerOrgUnitId ?? data.owner_org_unit_id ?? null,
@@ -261,10 +266,67 @@ const mapResourceEditorResponse = (data: any): TemplateResourceEditorResponse =>
   operationLibrary: (data.operation_library ?? []).map(mapOperationLibraryItem),
 });
 
+const buildValidationFromPlannerOperations = (operations: PlannerOperation[]) => {
+  const unplacedOperationIds: number[] = [];
+  const resourceRuleMismatchIds: number[] = [];
+  const invalidBindings: Array<{
+    scheduleId: number;
+    status: TemplateBindingStatus;
+    reason: string | null;
+  }> = [];
+
+  operations.forEach((operation) => {
+    const scheduleId = Number(operation.id);
+    const status = (operation.bindingStatus ?? 'UNBOUND') as TemplateBindingStatus;
+    const reason = operation.bindingReason ?? null;
+
+    if (status === 'UNBOUND') {
+      unplacedOperationIds.push(scheduleId);
+    }
+    if (status !== 'BOUND') {
+      invalidBindings.push({ scheduleId, status, reason });
+    }
+    if (status === 'RESOURCE_RULE_MISMATCH') {
+      resourceRuleMismatchIds.push(scheduleId);
+    }
+  });
+
+  return {
+    summary: {
+      unplacedCount: unplacedOperationIds.length,
+      invalidBindingCount: invalidBindings.length,
+      resourceRuleMismatchCount: resourceRuleMismatchIds.length,
+      constraintConflictCount: 0,
+    },
+    unplacedOperationIds,
+    invalidBindings,
+    resourceRuleMismatchIds,
+    constraintConflicts: [],
+  };
+};
+
+const buildEditorFallbackFromPlanner = (planner: TemplateResourcePlannerResponse): TemplateResourceEditorResponse => ({
+  ...planner,
+  warnings: [
+    ...(planner.warnings ?? []),
+    'resource-editor 扩展接口不可用，已启用兼容模式（约束/共享组/规则编辑能力受限）。',
+  ],
+  constraints: [],
+  shareGroups: [],
+  validation: buildValidationFromPlannerOperations(planner.operations ?? []),
+  capabilities: {
+    resourceRulesEnabled: false,
+    constraintEditEnabled: false,
+    shareGroupEnabled: false,
+  },
+  operationLibrary: [],
+});
+
 const toResourceNodePayload = (payload: ResourceNodePayload) => ({
   node_code: payload.nodeCode,
   node_name: payload.nodeName,
   node_class: payload.nodeClass,
+  node_subtype: payload.nodeSubtype ?? null,
   parent_id: payload.parentId ?? null,
   department_code: payload.departmentCode,
   owner_org_unit_id: payload.ownerOrgUnitId ?? null,
@@ -272,6 +334,22 @@ const toResourceNodePayload = (payload: ResourceNodePayload) => ({
   sort_order: payload.sortOrder,
   is_active: payload.isActive,
   metadata: payload.metadata ?? null,
+});
+
+const mapResourceNodeRelation = (data: any): ResourceNodeRelation => ({
+  id: Number(data.id),
+  sourceNodeId: Number(data.sourceNodeId ?? data.source_node_id),
+  targetNodeId: Number(data.targetNodeId ?? data.target_node_id),
+  relationType: (data.relationType ?? data.relation_type ?? 'CIP_CLEANABLE') as 'CIP_CLEANABLE',
+  metadata: data.metadata ?? null,
+  target: mapResourceNode(data.target),
+});
+
+const mapResourceNodeCleanableTargetsResponse = (data: any): ResourceNodeCleanableTargetsResponse => ({
+  sourceNodeId: Number(data.sourceNodeId ?? data.source_node_id),
+  relationType: (data.relationType ?? data.relation_type ?? 'CIP_CLEANABLE') as 'CIP_CLEANABLE',
+  targets: (data.targets ?? []).map((item: any) => mapResourceNodeRelation(item)),
+  candidateTargets: (data.candidateTargets ?? data.candidate_targets ?? []).map((item: any) => mapResourceNode(item)),
 });
 
 const mapResource = (data: any): Resource => ({
@@ -345,8 +423,22 @@ export const processTemplateV2Api = {
     return mapPlannerResponse(response.data);
   },
   getResourceEditor: async (templateId: number) => {
-    const response = await client.get(`/process-templates/${templateId}/resource-editor`);
-    return mapResourceEditorResponse(response.data);
+    try {
+      const response = await client.get(`/process-templates/${templateId}/resource-editor`);
+      return mapResourceEditorResponse(response.data);
+    } catch (error: any) {
+      const status = Number(error?.response?.status ?? 0);
+      const shouldFallback =
+        !status || status === 404 || status === 500 || status === 502 || status === 503 || status === 504;
+
+      if (!shouldFallback) {
+        throw error;
+      }
+
+      const plannerResponse = await client.get(`/process-templates/${templateId}/resource-planner`);
+      const plannerPayload = mapPlannerResponse(plannerResponse.data);
+      return buildEditorFallbackFromPlanner(plannerPayload);
+    }
   },
   validateResourceEditor: async (templateId: number) => {
     const response = await client.post(`/process-templates/${templateId}/editor-validate`);
@@ -490,6 +582,24 @@ export const processTemplateV2Api = {
   },
   deleteResourceNode: async (nodeId: number) => {
     await client.delete(`/resource-nodes/${nodeId}`);
+  },
+  getResourceNodeCleanableTargets: async (nodeId: number): Promise<ResourceNodeCleanableTargetsResponse> => {
+    const response = await client.get(`/resource-nodes/${nodeId}/cleanable-targets`);
+    return mapResourceNodeCleanableTargetsResponse(response.data);
+  },
+  updateResourceNodeCleanableTargets: async (
+    nodeId: number,
+    payload: {
+      targetNodeIds: number[];
+    },
+  ): Promise<ResourceNodeCleanableTargetsResponse> => {
+    const response = await client.put(`/resource-nodes/${nodeId}/cleanable-targets`, {
+      target_node_ids: payload.targetNodeIds,
+    });
+    return mapResourceNodeCleanableTargetsResponse(response.data);
+  },
+  clearResourceNodeTreeForRebuild: async () => {
+    await client.post('/resource-nodes/rebuild/clear', { confirm: true });
   },
   getTemplateScheduleBinding: async (scheduleId: number): Promise<TemplateResourceBindingResponse> => {
     const response = await client.get(`/template-stage-operations/${scheduleId}/resource-binding`);

@@ -37,7 +37,25 @@ export interface TemplateStageSummary {
   operation_count?: number;
 }
 
-export type ResourceNodeClass = 'SUITE' | 'ROOM' | 'EQUIPMENT' | 'COMPONENT' | 'GROUP';
+export type ResourceNodeClass =
+  | 'SITE'
+  | 'LINE'
+  | 'ROOM'
+  | 'SYSTEM'
+  | 'EQUIPMENT_CLASS'
+  | 'EQUIPMENT_MODEL'
+  | 'EQUIPMENT_UNIT'
+  | 'COMPONENT'
+  | 'UTILITY_STATION';
+export type ResourceNodeSubtype =
+  | 'MAIN_PROCESS'
+  | 'AUXILIARY'
+  | 'UTILITY_SHARED'
+  | 'SUS'
+  | 'SS'
+  | 'CIP'
+  | 'SIP'
+  | string;
 export type TemplateBindingStatus =
   | 'BOUND'
   | 'UNBOUND'
@@ -52,6 +70,7 @@ export interface ResourceNode {
   nodeCode: string;
   nodeName: string;
   nodeClass: ResourceNodeClass;
+  nodeSubtype: ResourceNodeSubtype | null;
   parentId: number | null;
   departmentCode: string;
   ownerOrgUnitId: number | null;
@@ -347,6 +366,7 @@ export interface ResourceNodePayload {
   nodeCode?: string;
   nodeName: string;
   nodeClass: ResourceNodeClass;
+  nodeSubtype?: ResourceNodeSubtype | null;
   parentId?: number | null;
   departmentCode?: string;
   ownerOrgUnitId?: number | null;
@@ -359,6 +379,22 @@ export interface ResourceNodePayload {
 export interface ResourceNodeMovePayload {
   parentId: number | null;
   sortOrder?: number;
+}
+
+export interface ResourceNodeRelation {
+  id: number;
+  sourceNodeId: number;
+  targetNodeId: number;
+  relationType: 'CIP_CLEANABLE';
+  metadata: Record<string, unknown> | null;
+  target: ResourceNode;
+}
+
+export interface ResourceNodeCleanableTargetsResponse {
+  sourceNodeId: number;
+  relationType: 'CIP_CLEANABLE';
+  targets: ResourceNodeRelation[];
+  candidateTargets: ResourceNode[];
 }
 
 export interface TemplateResourceBindingResponse {

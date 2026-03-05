@@ -479,7 +479,17 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     } catch (error) {
       console.error('Failed to load template resource editor:', error);
       setEditor(null);
-      setErrorMessage('资源主编辑视图加载失败，请确认模板与资源节点接口正常。');
+      const apiMessage =
+        typeof (error as any)?.response?.data?.error === 'string'
+          ? (error as any).response.data.error
+          : typeof (error as Error)?.message === 'string'
+            ? (error as Error).message
+            : '';
+      setErrorMessage(
+        apiMessage
+          ? `资源主编辑视图加载失败：${apiMessage}`
+          : '资源主编辑视图加载失败，请确认模板与资源节点接口正常。',
+      );
     } finally {
       setLoading(false);
     }
@@ -1571,7 +1581,26 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   }
 
   if (errorMessage) {
-    return <Alert type="error" showIcon message={errorMessage} />;
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="资源主编辑视图加载失败"
+        description={errorMessage}
+        action={
+          <Space wrap>
+            <Button size="small" onClick={() => void loadEditor()}>
+              重试
+            </Button>
+            {onOpenNodes ? (
+              <Button size="small" type="link" onClick={onOpenNodes}>
+                打开节点管理
+              </Button>
+            ) : null}
+          </Space>
+        }
+      />
+    );
   }
 
   if (!editor) {

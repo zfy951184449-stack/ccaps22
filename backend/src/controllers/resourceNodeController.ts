@@ -2,10 +2,14 @@ import { Request, Response } from 'express';
 import pool from '../config/database';
 import {
   buildResourceNodeTree,
+  clearResourceNodeTreeForRebuild,
   createResourceNode,
   deleteResourceNode,
+  listCipCleanableTargets,
+  listEligibleCipCleanableTargets,
   listResourceNodes,
   moveResourceNode,
+  replaceCipCleanableTargets,
   updateResourceNode,
 } from '../services/resourceNodeService';
 
@@ -37,6 +41,7 @@ export const postResourceNode = async (req: Request, res: Response) => {
       node_code,
       node_name,
       node_class,
+      node_subtype,
       parent_id,
       department_code,
       owner_org_unit_id,
@@ -56,6 +61,7 @@ export const postResourceNode = async (req: Request, res: Response) => {
         node_code,
         node_name,
         node_class,
+        node_subtype: node_subtype ?? null,
         parent_id: parent_id ?? null,
         department_code,
         owner_org_unit_id: owner_org_unit_id ?? null,
@@ -156,6 +162,96 @@ export const removeResourceNode = async (req: Request, res: Response) => {
     }
     console.error('Error deleting resource node:', error);
     res.status(500).json({ error: 'Failed to delete resource node' });
+  } finally {
+    connection.release();
+  }
+};
+
+export const getResourceNodeCleanableTargets = async (req: Request, res: Response) => {
+  try {
+    const nodeId = Number(req.params.id);
+    if (!Number.isInteger(nodeId) || nodeId <= 0) {
+      return res.status(400).json({ error: 'Invalid node id' });
+    }
+
+    const [targets, candidateTargets] = await Promise.all([
+      listCipCleanableTargets(nodeId),
+      listEligibleCipCleanableTargets(nodeId),
+    ]);
+
+    res.json({
+      source_node_id: nodeId,
+      relation_type: 'CIP_CLEANABLE',
+      targets,
+      candidate_targets: candidateTargets,
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error loading cleanable targets:', error);
+    res.status(500).json({ error: 'Failed to load cleanable targets' });
+  }
+};
+
+export const putResourceNodeCleanableTargets = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const nodeId = Number(req.params.id);
+    if (!Number.isInteger(nodeId) || nodeId <= 0) {
+      return res.status(400).json({ error: 'Invalid node id' });
+    }
+
+    const targetNodeIds = Array.isArray(req.body?.target_node_ids)
+      ? req.body.target_node_ids.map((item: unknown) => Number(item))
+      : null;
+
+    if (!targetNodeIds) {
+      return res.status(400).json({ error: 'target_node_ids must be an array' });
+    }
+
+    await connection.beginTransaction();
+    const targets = await replaceCipCleanableTargets(nodeId, targetNodeIds, connection);
+    await connection.commit();
+
+    res.json({
+      source_node_id: nodeId,
+      relation_type: 'CIP_CLEANABLE',
+      targets,
+    });
+  } catch (error) {
+    await connection.rollback();
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error updating cleanable targets:', error);
+    res.status(500).json({ error: 'Failed to update cleanable targets' });
+  } finally {
+    connection.release();
+  }
+};
+
+export const clearResourceNodeTreeController = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    if (req.body?.confirm !== true) {
+      return res.status(400).json({ error: 'confirm=true is required for rebuild clear' });
+    }
+
+    await connection.beginTransaction();
+    await clearResourceNodeTreeForRebuild(connection);
+    await connection.commit();
+
+    res.json({ message: 'Resource node tree and bindings cleared' });
+  } catch (error) {
+    await connection.rollback();
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error clearing resource node tree:', error);
+    res.status(500).json({ error: 'Failed to clear resource node tree' });
   } finally {
     connection.release();
   }
