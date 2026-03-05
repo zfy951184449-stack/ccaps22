@@ -145,6 +145,27 @@ export interface OperationTypeOption {
 export type OperationCreateSourceMode = 'existing' | 'new';
 export type OperationCreateSourceFilter = 'recent' | 'stage' | 'department' | 'all';
 export type OperationCreateWindowMode = 'auto' | 'manual';
+export type OperationAdvancedTabKey = 'rules' | 'constraints' | 'share' | 'danger';
+
+export interface OperationCreatedResult {
+  scheduleId: number;
+  stageId: number;
+  openAdvanced?: boolean;
+  initialAdvancedTab?: OperationAdvancedTabKey;
+}
+
+export interface OperationCoreDraft {
+  stageId: number | null;
+  resourceNodeId: number | null;
+  operationDay: number;
+  recommendedTime: number;
+  recommendedDayOffset: number;
+  windowMode: OperationCreateWindowMode;
+  windowStartTime: number;
+  windowStartDayOffset: number;
+  windowEndTime: number;
+  windowEndDayOffset: number;
+}
 
 export interface OperationCreateContext {
   source: 'toolbar' | 'stage' | 'canvas' | 'unplaced' | 'copy';
@@ -327,7 +348,7 @@ export interface ResourceNodePayload {
   nodeName: string;
   nodeClass: ResourceNodeClass;
   parentId?: number | null;
-  departmentCode: string;
+  departmentCode?: string;
   ownerOrgUnitId?: number | null;
   boundResourceId?: number | null;
   sortOrder?: number;

@@ -46,8 +46,8 @@ export const postResourceNode = async (req: Request, res: Response) => {
       metadata,
     } = req.body;
 
-    if (!node_name || !node_class || !department_code) {
-      return res.status(400).json({ error: 'node_name, node_class and department_code are required' });
+    if (!node_name || !node_class) {
+      return res.status(400).json({ error: 'node_name and node_class are required' });
     }
 
     await connection.beginTransaction();

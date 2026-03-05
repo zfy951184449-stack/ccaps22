@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Drawer, Empty, Grid, Modal, Spin, Tag, message } from 'antd';
+import { Alert, Button, Drawer, Empty, Grid, Modal, Spin, Tabs, Tag, message } from 'antd';
 import axios from 'axios';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { processTemplateV2Api } from '../../services';
@@ -18,6 +18,8 @@ type EditorFocusRequest = {
   scheduleId?: number | null;
   token: number;
 } | null;
+
+type EditorWorkspaceTabKey = 'resource-editor' | 'node-management';
 
 const statusColorMap: Record<string, string> = {
   BOUND: 'green',
@@ -59,7 +61,7 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
   const [focusRequest, setFocusRequest] = useState<EditorFocusRequest>(null);
   const [activeFocus, setActiveFocus] = useState<EditorFocusFilter>('all');
   const [validateRequestToken, setValidateRequestToken] = useState<number | undefined>(undefined);
-  const [nodeDrawerOpen, setNodeDrawerOpen] = useState(false);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<EditorWorkspaceTabKey>('resource-editor');
   const [inspectorDrawerOpen, setInspectorDrawerOpen] = useState(false);
   const [selectedOperation, setSelectedOperation] = useState<PlannerOperation | null>(null);
   const [editorMetrics, setEditorMetrics] = useState({
@@ -143,6 +145,7 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
   }, [draft, template]);
 
   const triggerFocus = useCallback((focus: EditorFocusFilter, scheduleId?: number | null) => {
+    setActiveWorkspaceTab('resource-editor');
     setActiveFocus(focus);
     setFocusRequest({
       focus,
@@ -150,6 +153,17 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
       token: Date.now(),
     });
   }, []);
+
+  const handleOpenNodeManagement = useCallback(() => {
+    setActiveWorkspaceTab('node-management');
+    setInspectorDrawerOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeWorkspaceTab !== 'resource-editor') {
+      setInspectorDrawerOpen(false);
+    }
+  }, [activeWorkspaceTab]);
 
   const handleBack = useCallback(() => {
     if (!dirty) {
@@ -341,52 +355,65 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
         activeFocus={activeFocus}
         validating={false}
         onFocusChange={(focus) => triggerFocus(focus)}
-        onValidate={() => setValidateRequestToken(Date.now())}
-        onOpenNodes={() => setNodeDrawerOpen(true)}
+        onValidate={() => {
+          setActiveWorkspaceTab('resource-editor');
+          setValidateRequestToken(Date.now());
+        }}
+        onOpenNodes={handleOpenNodeManagement}
       />
 
-      {!showInlineInspector ? (
-        <div className="flex justify-end">
-          <Button onClick={() => setInspectorDrawerOpen(true)}>查看选中工序</Button>
-        </div>
-      ) : null}
+      <Tabs
+        activeKey={activeWorkspaceTab}
+        onChange={(key) => setActiveWorkspaceTab(key as EditorWorkspaceTabKey)}
+        items={[
+          {
+            key: 'resource-editor',
+            label: '资源主编辑',
+            children: (
+              <div className="space-y-4">
+                {!showInlineInspector ? (
+                  <div className="flex justify-end">
+                    <Button onClick={() => setInspectorDrawerOpen(true)}>查看选中工序</Button>
+                  </div>
+                ) : null}
 
-      <div className={showInlineInspector ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]' : 'space-y-4'}>
-        <TemplateResourceEditorTab
-          templateId={templateId}
-          templateTeamId={draft.team_id}
-          active
-          onOpenNodes={() => setNodeDrawerOpen(true)}
-          focusRequest={focusRequest}
-          validateRequestToken={validateRequestToken}
-          onFocusHandled={() => {
-            setFocusRequest(null);
-          }}
-          onEditorMetricsChange={setEditorMetrics}
-          onOperationSelectionChange={setSelectedOperation}
-        />
+                <div className={showInlineInspector ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]' : 'space-y-4'}>
+                  <TemplateResourceEditorTab
+                    templateId={templateId}
+                    templateTeamId={draft.team_id}
+                    active={activeWorkspaceTab === 'resource-editor'}
+                    onOpenNodes={handleOpenNodeManagement}
+                    focusRequest={focusRequest}
+                    validateRequestToken={validateRequestToken}
+                    onFocusHandled={() => {
+                      setFocusRequest(null);
+                    }}
+                    onEditorMetricsChange={setEditorMetrics}
+                    onOperationSelectionChange={setSelectedOperation}
+                  />
 
-        {showInlineInspector ? <aside>{renderInspector()}</aside> : null}
-      </div>
-
-      <Drawer
-        title="节点管理"
-        width={1040}
-        open={nodeDrawerOpen}
-        onClose={() => setNodeDrawerOpen(false)}
-        destroyOnClose
-      >
-        <TemplateResourceNodeManagementTab
-          templateId={templateId}
-          active={nodeDrawerOpen}
-          refreshKey={nodeDrawerOpen ? 1 : 0}
-        />
-      </Drawer>
+                  {showInlineInspector ? <aside>{renderInspector()}</aside> : null}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: 'node-management',
+            label: '节点管理',
+            children: (
+              <TemplateResourceNodeManagementTab
+                templateId={templateId}
+                active={activeWorkspaceTab === 'node-management'}
+              />
+            ),
+          },
+        ]}
+      />
 
       <Drawer
         title="选中工序 Inspector"
         width={420}
-        open={!showInlineInspector && inspectorDrawerOpen}
+        open={activeWorkspaceTab === 'resource-editor' && !showInlineInspector && inspectorDrawerOpen}
         onClose={() => setInspectorDrawerOpen(false)}
       >
         {renderInspector()}

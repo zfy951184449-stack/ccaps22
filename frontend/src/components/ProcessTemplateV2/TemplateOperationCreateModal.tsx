@@ -10,32 +10,27 @@ import {
   Select,
   Space,
   Tag,
-  Tooltip,
   message,
 } from 'antd';
 import {
   ClockCircleOutlined,
   CopyOutlined,
   EnterOutlined,
-  InfoCircleOutlined,
   NodeIndexOutlined,
-  PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { FixedSizeList, ListChildComponentProps } from 'react-window';
 import { processTemplateV2Api } from '../../services';
-import { Resource } from '../../types/platform';
 import { ResourceRequirementRule } from '../ProcessTemplateGantt/types';
+import OperationCoreForm, { validateOperationCoreDraft } from './OperationCoreForm';
 import {
-  OperationCreateConstraintDraft,
   OperationCreateContext,
   OperationCreateFormState,
+  OperationCreatedResult,
   OperationCreatePreview,
   OperationCreateValidationIssue,
-  OperationCreateWindowMode,
   OperationLibraryItem,
-  OperationSourceRecommendation,
   OperationTypeOption,
   PlannerOperation,
   ResourceNode,
@@ -57,7 +52,7 @@ type TemplateOperationCreateModalProps = {
   capabilities: TemplateEditorCapabilities;
   context: OperationCreateContext | null;
   onCancel: () => void;
-  onCreated: (scheduleId: number, stageId: number) => Promise<void> | void;
+  onCreated: (result: OperationCreatedResult) => Promise<void> | void;
 };
 
 type SavedCreateConfig = {
@@ -88,23 +83,6 @@ const RESOURCE_TYPE_OPTIONS: Array<ResourceRequirementRule['resource_type']> = [
   'VESSEL_CONTAINER',
   'TOOLING',
   'STERILIZATION_RESOURCE',
-];
-
-const CONSTRAINT_TYPE_OPTIONS = [
-  { value: 1 as const, label: 'FS' },
-  { value: 2 as const, label: 'SS' },
-  { value: 3 as const, label: 'FF' },
-  { value: 4 as const, label: 'SF' },
-];
-
-const LAG_TYPE_OPTIONS: Array<NonNullable<OperationCreateConstraintDraft['lagType']>> = [
-  'ASAP',
-  'FIXED',
-  'WINDOW',
-  'NEXT_DAY',
-  'NEXT_SHIFT',
-  'COOLING',
-  'BATCH_END',
 ];
 
 const normalizeText = (value: string) => value.trim().toLowerCase();
@@ -263,34 +241,6 @@ const createRequirementFromNode = (node: ResourceNode | null | undefined): Resou
       : [],
   source_scope: 'TEMPLATE_OVERRIDE',
 });
-
-const createConstraintDraft = (): OperationCreateConstraintDraft => ({
-  tempId: `constraint-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-  relationType: 'predecessor',
-  relatedScheduleId: null,
-  constraintType: 1,
-  lagTime: 0,
-  lagType: 'FIXED',
-  lagMin: 0,
-  lagMax: null,
-  constraintLevel: 1,
-  constraintName: '',
-  description: '',
-});
-
-const buildOperationUsageMap = (operations: PlannerOperation[]) => {
-  const stageMap = new Map<number, Map<number, number>>();
-  operations.forEach((operation) => {
-    const stageId = Number(operation.stage_id);
-    const operationId = Number(operation.operation_id);
-    if (!stageMap.has(stageId)) {
-      stageMap.set(stageId, new Map<number, number>());
-    }
-    const current = stageMap.get(stageId)!;
-    current.set(operationId, Number(current.get(operationId) ?? 0) + 1);
-  });
-  return stageMap;
-};
 
 const buildNodeMap = (nodes: ResourceNode[]) => new Map(nodes.map((node) => [Number(node.id), node]));
 
@@ -500,16 +450,13 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
   const allNodes = useMemo(() => flattenNodes(resourceNodes), [resourceNodes]);
   const leafNodes = useMemo(() => allNodes.filter((item) => (item.children ?? []).length === 0), [allNodes]);
   const nodeMap = useMemo(() => buildNodeMap(allNodes), [allNodes]);
-  const stageUsageMap = useMemo(() => buildOperationUsageMap(operations), [operations]);
   const [formState, setFormState] = useState<OperationCreateFormState | null>(null);
   const [initialStateSignature, setInitialStateSignature] = useState<string | null>(null);
   const [loadingReference, setLoadingReference] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingStep, setSavingStep] = useState('');
-  const [resources, setResources] = useState<Resource[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationTypeOption[]>([]);
   const [apiIssues, setApiIssues] = useState<OperationCreateValidationIssue[]>([]);
-  const [newConstraintDraft, setNewConstraintDraft] = useState<OperationCreateConstraintDraft>(createConstraintDraft());
   const [initializedKey, setInitializedKey] = useState<string | null>(null);
   const [activeOperationIndex, setActiveOperationIndex] = useState(0);
 
@@ -560,10 +507,9 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
     const loadReferenceData = async () => {
       try {
         setLoadingReference(true);
-        const [nextOperationCode, nextOperationTypes, nextResources] = await Promise.all([
+        const [nextOperationCode, nextOperationTypes] = await Promise.all([
           processTemplateV2Api.getNextOperationCode(),
           processTemplateV2Api.listOperationTypes(templateTeamId),
-          capabilities.resourceRulesEnabled ? processTemplateV2Api.listResources() : Promise.resolve([]),
         ]);
 
         if (cancelled) {
@@ -581,10 +527,8 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
         });
 
         setOperationTypes(nextOperationTypes);
-        setResources(nextResources);
         setFormState(nextState);
         setInitialStateSignature(sanitizeFormState(nextState));
-        setNewConstraintDraft(createConstraintDraft());
         setInitializedKey(openSeed);
       } catch (error: any) {
         console.error('Failed to prepare operation create modal:', error);
@@ -602,7 +546,6 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
       cancelled = true;
     };
   }, [
-    capabilities.resourceRulesEnabled,
     context,
     initializedKey,
     lastConfig,
@@ -637,16 +580,6 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
     () => (formState?.sourceDraft.operationId ? operationById.get(Number(formState.sourceDraft.operationId)) ?? null : null),
     [formState?.sourceDraft.operationId, operationById],
   );
-
-  const matchingHistoricalOperation = useMemo(() => {
-    if (!selectedExistingOperation) {
-      return null;
-    }
-    return (
-      operations.find((item) => Number(item.operation_id) === Number(selectedExistingOperation.id) && item.resource_requirements?.length) ??
-      null
-    );
-  }, [operations, selectedExistingOperation]);
 
   useEffect(() => {
     if (!selectedExistingOperation) {
@@ -739,30 +672,6 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
     );
   }, [allNodes, operations, selectedNode]);
 
-  const recommendedOperations = useMemo<OperationSourceRecommendation[]>(() => {
-    const seen = new Set<number>();
-    const recommendations: OperationSourceRecommendation[] = [];
-
-    const push = (operationId: number, reason: string, badge?: string) => {
-      if (!operationId || seen.has(operationId)) {
-        return;
-      }
-      seen.add(operationId);
-      recommendations.push({ operationId, reason, badge });
-    };
-
-    const stageUsage = Array.from(stageUsageMap.get(Number(selectedStage?.id))?.entries() ?? [])
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 4);
-    stageUsage.forEach(([operationId]) => push(operationId, '当前阶段常用', '阶段'));
-    recentOperationIdsState.slice(0, 4).forEach((operationId) => push(operationId, '最近使用', '最近'));
-    departmentOperationIds.forEach((operationId) => push(operationId, '同部门域常见', '部门域'));
-
-    return recommendations
-      .filter((item) => operationById.has(Number(item.operationId)))
-      .slice(0, 6);
-  }, [departmentOperationIds, operationById, recentOperationIdsState, selectedStage?.id, stageUsageMap]);
-
   const filteredOperationLibrary = useMemo(() => {
     const searchValue = normalizeText(deferredSearchValue);
     const currentFilter = formState?.sourceDraft.filter ?? 'all';
@@ -773,7 +682,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
       if (currentFilter === 'stage' && !stageOperationIds.has(Number(item.id))) {
         return false;
       }
-      if (currentFilter === 'department' && !departmentOperationIds.has(Number(item.id))) {
+      if (currentFilter === 'department' && selectedNode && !departmentOperationIds.has(Number(item.id))) {
         return false;
       }
       if (!searchValue) {
@@ -788,6 +697,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
     normalizedSearchIndex,
     operationLibrary,
     recentOperationIdsState,
+    selectedNode,
     stageOperationIds,
   ]);
 
@@ -822,7 +732,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
       return '当前阶段常用';
     }
     if (formState?.sourceDraft.filter === 'department') {
-      return '同部门域';
+      return '同部门工序';
     }
     return '全部';
   }, [formState?.sourceDraft.filter]);
@@ -910,51 +820,43 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
       }
     }
 
-    const stageStartDay = Number(selectedStage?.start_day ?? 0);
-    const absoluteWindowStart =
-      (stageStartDay + Number(formState.timingDraft.operationDay ?? 0) + Number(formState.timingDraft.windowStartDayOffset ?? 0)) * 24 +
-      Number(formState.timingDraft.windowStartTime ?? 0);
-    const absoluteWindowEnd =
-      (stageStartDay + Number(formState.timingDraft.operationDay ?? 0) + Number(formState.timingDraft.windowEndDayOffset ?? 0)) * 24 +
-      Number(formState.timingDraft.windowEndTime ?? 0);
-    if (absoluteWindowStart > absoluteWindowEnd) {
-      issues.push({ key: 'window-range', level: 'error', section: 'timing', message: '最早开始不能晚于最晚开始' });
-    }
-
-    if (!selectedNode) {
-      issues.push({ key: 'unplaced', level: 'warning', section: 'placement', message: '当前工序将以未落位状态创建' });
-    }
-
-    formState.constraintsDraft.items.forEach((item) => {
-      if (!item.relatedScheduleId) {
-        issues.push({
-          key: `constraint-${item.tempId}`,
-          level: 'error',
-          section: 'constraints',
-          message: '约束必须选择关联工序',
-        });
-      }
+    const coreValidation = validateOperationCoreDraft({
+      draft: {
+        stageId: formState.placementDraft.stageId,
+        resourceNodeId: formState.placementDraft.resourceNodeId,
+        operationDay: Number(formState.timingDraft.operationDay ?? 0),
+        recommendedTime: Number(formState.timingDraft.recommendedTime ?? 0),
+        recommendedDayOffset: Number(formState.timingDraft.recommendedDayOffset ?? 0),
+        windowMode: formState.timingDraft.windowMode,
+        windowStartTime: Number(formState.timingDraft.windowStartTime ?? 0),
+        windowStartDayOffset: Number(formState.timingDraft.windowStartDayOffset ?? 0),
+        windowEndTime: Number(formState.timingDraft.windowEndTime ?? 0),
+        windowEndDayOffset: Number(formState.timingDraft.windowEndDayOffset ?? 0),
+      },
+      stageStartDay: Number(selectedStage?.start_day ?? 0),
+      requireStage: true,
+      warnUnbound: true,
     });
 
-    if (selectedNode && formState.rulesDraft.requirements.length) {
-      const invalidRequirement = formState.rulesDraft.requirements.find((item) => {
-        const boundType = selectedNode.boundResourceType;
-        return boundType && RESOURCE_TYPE_OPTIONS.includes(boundType as ResourceRequirementRule['resource_type'])
-          ? item.resource_type !== boundType
-          : false;
+    coreValidation.errors.forEach((item, index) => {
+      issues.push({
+        key: `core-error-${index}`,
+        level: 'error',
+        section: 'timing',
+        message: item,
       });
-      if (invalidRequirement) {
-        issues.push({
-          key: 'rule-node-mismatch',
-          level: 'warning',
-          section: 'rules',
-          message: `当前节点绑定资源类型与规则 ${invalidRequirement.resource_type} 不一致`,
-        });
-      }
-    }
+    });
+    coreValidation.warnings.forEach((item, index) => {
+      issues.push({
+        key: `core-warning-${index}`,
+        level: 'warning',
+        section: 'placement',
+        message: item === '当前工序未绑定默认资源节点' ? '当前工序将以未落位状态创建' : item,
+      });
+    });
 
     return [...issues, ...apiIssues];
-  }, [apiIssues, formState, operationById, selectedNode, selectedStage]);
+  }, [apiIssues, formState, operationById, selectedStage]);
 
   const canSave = useMemo(
     () => validationIssues.every((item) => item.level !== 'error') && Boolean(formState),
@@ -964,15 +866,6 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
   const dirty = useMemo(
     () => sanitizeFormState(formState) !== initialStateSignature,
     [formState, initialStateSignature],
-  );
-
-  const existingOperationOptions = useMemo(
-    () =>
-      operations.map((item) => ({
-        value: item.id,
-        label: `${item.stage_name} / ${item.operation_name}`,
-      })),
-    [operations],
   );
 
   const recentNodes = useMemo(
@@ -1059,32 +952,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
         requirements: latest.resource_requirements?.length ? latest.resource_requirements : formState.rulesDraft.requirements,
       },
     });
-    message.success('已沿用同阶段上一个工序的时间与规则');
-  };
-
-  const updateRequirement = (index: number, patch: Partial<ResourceRequirementRule>) => {
-    setFormState((current) => {
-      if (!current) {
-        return current;
-      }
-      const nextRequirements = current.rulesDraft.requirements.map((item, itemIndex) => {
-        if (itemIndex !== index) {
-          return item;
-        }
-        const next = { ...item, ...patch };
-        if (patch.resource_type && patch.resource_type !== item.resource_type) {
-          next.candidate_resource_ids = [];
-          next.candidate_resources = [];
-        }
-        return next;
-      });
-      return {
-        ...current,
-        rulesDraft: {
-          requirements: nextRequirements,
-        },
-      };
-    });
+    message.success('已沿用同阶段上一个工序的时间与落位');
   };
 
   const closeWithConfirm = () => {
@@ -1140,7 +1008,10 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
     }
   };
 
-  const handleCreate = async (keepOpen: boolean) => {
+  const handleCreate = async (
+    keepOpen: boolean,
+    options?: { openAdvanced?: boolean; initialAdvancedTab?: OperationCreatedResult['initialAdvancedTab'] },
+  ) => {
     if (!formState || !selectedStage) {
       return;
     }
@@ -1197,55 +1068,13 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
         absoluteStartHour: formState.timingDraft.absoluteStartHour,
       });
 
-      if (capabilities.resourceRulesEnabled && formState.rulesDraft.requirements.length > 0) {
-        completedStep = '保存资源规则';
-        setSavingStep(completedStep);
-        await processTemplateV2Api.updateTemplateStageOperationResources(createdScheduleId, formState.rulesDraft.requirements);
-      }
-
-      for (const constraint of formState.constraintsDraft.items) {
-        completedStep = '保存约束';
-        setSavingStep(completedStep);
-        await processTemplateV2Api.createConstraint({
-          from_schedule_id:
-            constraint.relationType === 'predecessor' ? createdScheduleId : Number(constraint.relatedScheduleId),
-          to_schedule_id:
-            constraint.relationType === 'predecessor' ? Number(constraint.relatedScheduleId) : createdScheduleId,
-          constraint_type: constraint.constraintType,
-          constraint_level: constraint.constraintLevel ?? 1,
-          lag_time: Number(constraint.lagTime ?? 0),
-          lag_type: constraint.lagType ?? 'FIXED',
-          lag_min: Number(constraint.lagMin ?? 0),
-          lag_max: constraint.lagMax ?? null,
-          share_mode: 'NONE',
-          constraint_name: constraint.constraintName?.trim() || null,
-          description: constraint.description?.trim() || null,
-        });
-      }
-
-      if (capabilities.shareGroupEnabled && formState.shareGroupDraft.assignGroupId) {
-        completedStep = '加入共享组';
-        setSavingStep(completedStep);
-        await processTemplateV2Api.assignOperationToShareGroup(createdScheduleId, formState.shareGroupDraft.assignGroupId);
-      }
-
-      if (
-        capabilities.shareGroupEnabled &&
-        formState.shareGroupDraft.createNew &&
-        formState.shareGroupDraft.newGroupName.trim() &&
-        formState.shareGroupDraft.memberIds.length > 0
-      ) {
-        completedStep = '创建共享组';
-        setSavingStep(completedStep);
-        await processTemplateV2Api.createTemplateShareGroup(templateId, {
-          groupName: formState.shareGroupDraft.newGroupName.trim(),
-          shareMode: formState.shareGroupDraft.newGroupMode,
-          memberIds: [createdScheduleId, ...formState.shareGroupDraft.memberIds],
-        });
-      }
-
       persistLastConfig(formState, resolvedOperationId);
-      await onCreated(createdScheduleId, Number(formState.placementDraft.stageId));
+      await onCreated({
+        scheduleId: createdScheduleId,
+        stageId: Number(formState.placementDraft.stageId),
+        openAdvanced: Boolean(options?.openAdvanced),
+        initialAdvancedTab: options?.initialAdvancedTab,
+      });
       message.success('工序已创建');
 
       if (!keepOpen) {
@@ -1290,7 +1119,6 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
       };
       setFormState(nextState);
       setInitialStateSignature(sanitizeFormState(nextState));
-      setNewConstraintDraft(createConstraintDraft());
       message.success('已保留上下文，可继续创建下一道工序');
     } catch (error: any) {
       console.error('Failed to create operation:', error);
@@ -1316,7 +1144,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
   return (
     <Modal
       open={open}
-      width={1180}
+      width="min(1180px, calc(100vw - 24px))"
       centered
       maskClosable={false}
       onCancel={closeWithConfirm}
@@ -1334,34 +1162,27 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
               <Tag>{formState?.sourceDraft.mode === 'new' ? '来源模式：新建工序' : '来源模式：现有工序'}</Tag>
             </div>
           </div>
-          <Space>
-            <Tooltip title="恢复当前上下文默认值">
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => {
-                  if (!formState) {
-                    return;
-                  }
-                  const nextState = buildInitialFormState({
-                    stages,
-                    operations,
-                    operationLibrary,
-                    leafNodes,
-                    context,
-                    lastConfig,
-                    nextOperationCode: formState.sourceDraft.nextOperationCode,
-                  });
-                  setFormState(nextState);
-                  setInitialStateSignature(sanitizeFormState(nextState));
-                }}
-              >
-                恢复默认
-              </Button>
-            </Tooltip>
-            <Button icon={<CopyOutlined />} disabled={!lastConfig} onClick={applySavedConfig}>
-              复制上一个创建配置
-            </Button>
-          </Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              if (!formState) {
+                return;
+              }
+              const nextState = buildInitialFormState({
+                stages,
+                operations,
+                operationLibrary,
+                leafNodes,
+                context,
+                lastConfig,
+                nextOperationCode: formState.sourceDraft.nextOperationCode,
+              });
+              setFormState(nextState);
+              setInitialStateSignature(sanitizeFormState(nextState));
+            }}
+          >
+            恢复默认
+          </Button>
         </div>
       }
       footer={
@@ -1369,14 +1190,23 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
           <div className="text-sm text-slate-500">
             将创建到：{preview.stageName} / {preview.nodeName} / {preview.dayLabel}
             {savingStep ? <span className="ml-3 text-sky-600">处理中：{savingStep}</span> : null}
+            <span className="ml-3 text-slate-400">快捷键：Ctrl/Cmd + Enter 保存并继续创建</span>
           </div>
           <Space>
             <Button onClick={closeWithConfirm}>取消</Button>
             <Button loading={saving} disabled={!canSave} onClick={() => void handleCreate(true)}>
               保存并继续创建
             </Button>
-            <Button type="primary" loading={saving} disabled={!canSave} onClick={() => void handleCreate(false)}>
+            <Button loading={saving} disabled={!canSave} onClick={() => void handleCreate(false)}>
               创建工序
+            </Button>
+            <Button
+              type="primary"
+              loading={saving}
+              disabled={!canSave}
+              onClick={() => void handleCreate(false, { openAdvanced: true, initialAdvancedTab: 'rules' })}
+            >
+              创建并进入高级配置
             </Button>
           </Space>
         </div>
@@ -1417,7 +1247,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-sm font-semibold text-slate-900">工序来源</div>
-                    <div className="mt-1 text-xs text-slate-500">优先使用推荐卡片，减少搜索和重复输入。</div>
+                    <div className="mt-1 text-xs text-slate-500">支持从工序库选择现有工序，或新建工序主数据。</div>
                   </div>
                   <div className="w-full sm:w-auto sm:min-w-[260px]">
                     <Segmented
@@ -1509,7 +1339,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                           options={[
                             { label: '最近使用', value: 'recent' },
                             { label: '当前阶段常用', value: 'stage' },
-                            { label: '同部门域', value: 'department', disabled: !selectedNode },
+                            { label: '同部门工序', value: 'department' },
                             { label: '全部', value: 'all' },
                           ]}
                         />
@@ -1520,53 +1350,9 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                       <Alert
                         type="info"
                         showIcon
-                        message="同部门域筛选依赖默认资源节点，请先在“阶段与落位”里选择资源节点。"
+                        message="未选择资源节点，当前先展示全部工序；选择节点后会自动切换为同部门筛选。"
                       />
                     ) : null}
-
-                    <div>
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">推荐工序</div>
-                      {recommendedOperations.length ? (
-                        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                          {recommendedOperations.map((recommendation) => {
-                            const item = operationById.get(Number(recommendation.operationId));
-                            if (!item) {
-                              return null;
-                            }
-                            const selected = Number(formState.sourceDraft.operationId) === Number(item.id);
-                            return (
-                              <button
-                                key={item.id}
-                                type="button"
-                                aria-pressed={selected}
-                                onClick={() => selectExistingOperation(item.id)}
-                                className={`rounded-2xl border px-3 py-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 ${
-                                  selected
-                                    ? 'border-sky-500 bg-sky-50 shadow-[0_0_0_1px_rgba(14,165,233,0.25)]'
-                                    : 'border-slate-200 bg-slate-50 hover:border-sky-300'
-                                }`}
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="truncate text-sm font-semibold text-slate-900">{item.operation_name}</div>
-                                  <div className="flex items-center gap-1">
-                                    {recommendation.badge ? <Tag color="blue">{recommendation.badge}</Tag> : null}
-                                    {selected ? <Tag color="cyan">已选</Tag> : null}
-                                  </div>
-                                </div>
-                                <div className="mt-1 text-xs text-slate-500">{item.operation_code}</div>
-                                <div className="mt-2 flex flex-wrap gap-1">
-                                  <Tag>时长 {item.standard_time}h</Tag>
-                                  <Tag>人数 {item.required_people}</Tag>
-                                </div>
-                                <div className="mt-2 text-xs text-slate-500">{recommendation.reason}</div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前上下文下没有推荐工序" />
-                      )}
-                    </div>
 
                     <div>
                       <div className="mb-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
@@ -1609,7 +1395,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                             ) : null}
                           </div>
                         ) : (
-                          <div className="mt-2 text-xs text-slate-500">尚未选择工艺，请从推荐区或工序列表中选择。</div>
+                          <div className="mt-2 text-xs text-slate-500">尚未选择工艺，请从工序列表中选择。</div>
                         )}
                       </div>
 
@@ -1817,7 +1603,7 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
 
               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="mb-4">
-                  <div className="text-sm font-semibold text-slate-900">阶段与落位</div>
+                  <div className="text-sm font-semibold text-slate-900">阶段 / 资源 / 时间</div>
                   <div className="mt-1 text-xs text-slate-500">
                     {context?.source === 'canvas'
                       ? '从时间轴创建，节点和开始时间已自动带入。'
@@ -1825,62 +1611,88 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                         ? '从阶段列表创建，阶段已自动选中。'
                         : context?.source === 'unplaced'
                           ? '从未落位工序上下文创建。'
-                          : '当前可自由指定阶段与默认资源节点。'}
+                          : '当前可自由指定阶段、默认资源节点和时间窗。'}
                   </div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">所属阶段</label>
-                    <Select
-                      value={formState.placementDraft.stageId ?? undefined}
-                      onChange={(value) =>
-                        setFormState((current) =>
-                          current
-                            ? {
-                                ...current,
-                                placementDraft: {
-                                  ...current.placementDraft,
-                                  stageId: value ?? null,
-                                },
-                              }
-                            : current,
-                        )
-                      }
-                      options={stages.map((stage) => ({
-                        value: stage.id,
-                        label: `${stage.stage_name} / Day ${stage.start_day}`,
-                      }))}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">默认资源节点</label>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      value={formState.placementDraft.resourceNodeId ?? undefined}
-                      onChange={(value) =>
-                        setFormState((current) =>
-                          current
-                            ? {
-                                ...current,
-                                placementDraft: {
-                                  ...current.placementDraft,
-                                  resourceNodeId: value ?? null,
-                                },
-                              }
-                            : current,
-                        )
-                      }
-                      options={leafNodes.map((node) => ({
-                        value: node.id,
-                        label: `${node.nodeName} / ${node.boundResourceCode ?? '未挂资源'}`,
-                      }))}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
+
+                <OperationCoreForm
+                  value={{
+                    stageId: formState.placementDraft.stageId,
+                    resourceNodeId: formState.placementDraft.resourceNodeId,
+                    operationDay: formState.timingDraft.operationDay,
+                    recommendedTime: formState.timingDraft.recommendedTime,
+                    recommendedDayOffset: formState.timingDraft.recommendedDayOffset,
+                    windowMode: formState.timingDraft.windowMode,
+                    windowStartTime: formState.timingDraft.windowStartTime,
+                    windowStartDayOffset: formState.timingDraft.windowStartDayOffset,
+                    windowEndTime: formState.timingDraft.windowEndTime,
+                    windowEndDayOffset: formState.timingDraft.windowEndDayOffset,
+                  }}
+                  stages={stages}
+                  leafNodes={leafNodes}
+                  durationHours={formState.timingDraft.durationHours}
+                  timingExtra={
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">
+                        时长(h)
+                        {formState.sourceDraft.mode === 'existing' ? <Tag className="ml-2">来自工序主数据</Tag> : null}
+                      </label>
+                      <InputNumber
+                        min={1}
+                        value={formState.timingDraft.durationHours}
+                        disabled={formState.sourceDraft.mode === 'existing'}
+                        onChange={(next) =>
+                          setFormState((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  timingDraft: {
+                                    ...current.timingDraft,
+                                    durationHours: Number(next ?? 1),
+                                  },
+                                  sourceDraft:
+                                    current.sourceDraft.mode === 'new'
+                                      ? {
+                                          ...current.sourceDraft,
+                                          standardTime: Number(next ?? 1),
+                                        }
+                                      : current.sourceDraft,
+                                }
+                              : current,
+                          )
+                        }
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  }
+                  onChange={(patch) =>
+                    setFormState((current) =>
+                      current
+                        ? {
+                            ...current,
+                            placementDraft: {
+                              ...current.placementDraft,
+                              stageId: patch.stageId === undefined ? current.placementDraft.stageId : patch.stageId,
+                              resourceNodeId:
+                                patch.resourceNodeId === undefined ? current.placementDraft.resourceNodeId : patch.resourceNodeId,
+                            },
+                            timingDraft: {
+                              ...current.timingDraft,
+                              operationDay: patch.operationDay ?? current.timingDraft.operationDay,
+                              recommendedTime: patch.recommendedTime ?? current.timingDraft.recommendedTime,
+                              recommendedDayOffset: patch.recommendedDayOffset ?? current.timingDraft.recommendedDayOffset,
+                              windowMode: patch.windowMode ?? current.timingDraft.windowMode,
+                              windowStartTime: patch.windowStartTime ?? current.timingDraft.windowStartTime,
+                              windowStartDayOffset: patch.windowStartDayOffset ?? current.timingDraft.windowStartDayOffset,
+                              windowEndTime: patch.windowEndTime ?? current.timingDraft.windowEndTime,
+                              windowEndDayOffset: patch.windowEndDayOffset ?? current.timingDraft.windowEndDayOffset,
+                            },
+                          }
+                        : current,
+                    )
+                  }
+                />
+
                 <div className="mt-3 flex flex-wrap gap-2">
                   {recentNodes.map((node) => (
                     <Button
@@ -1925,827 +1737,10 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                     </Button>
                   ) : null}
                 </div>
+
                 {!leafNodes.length ? (
                   <Alert className="mt-3" type="warning" showIcon message="当前模板还没有资源节点，工序会以未落位状态创建。" />
                 ) : null}
-              </section>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">时间设置</div>
-                    <div className="mt-1 text-xs text-slate-500">默认使用业务时间模式，偏移字段仅在高级设置中展开。</div>
-                  </div>
-                  <Segmented
-                    value={formState.timingDraft.windowMode}
-                    onChange={(value) =>
-                      setFormState((current) =>
-                        current
-                          ? {
-                              ...current,
-                              timingDraft: {
-                                ...current.timingDraft,
-                                windowMode: value as OperationCreateWindowMode,
-                              },
-                            }
-                          : current,
-                      )
-                    }
-                    options={[
-                      { label: '自动时间窗', value: 'auto' },
-                      { label: '手动时间窗', value: 'manual' },
-                    ]}
-                  />
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">推荐开始 Day</label>
-                    <InputNumber
-                      min={0}
-                      value={formState.timingDraft.operationDay}
-                      onChange={(value) =>
-                        setFormState((current) =>
-                          current
-                            ? {
-                                ...current,
-                                timingDraft: {
-                                  ...current.timingDraft,
-                                  operationDay: Number(value ?? 0),
-                                },
-                              }
-                            : current,
-                        )
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">推荐开始时间</label>
-                    <InputNumber
-                      min={0}
-                      max={23.5}
-                      step={0.5}
-                      value={formState.timingDraft.recommendedTime}
-                      formatter={(value) => formatHourLabel(Number(value ?? 0))}
-                      parser={(value) => Number(value?.replace(':', '.') ?? 0)}
-                      onChange={(value) =>
-                        setFormState((current) =>
-                          current
-                            ? {
-                                ...current,
-                                timingDraft: {
-                                  ...current.timingDraft,
-                                  recommendedTime: Number(value ?? 0),
-                                },
-                              }
-                            : current,
-                        )
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">
-                      时长(h)
-                      {formState.sourceDraft.mode === 'existing' ? <Tag className="ml-2">来自工序主数据</Tag> : null}
-                    </label>
-                    <InputNumber
-                      min={1}
-                      value={formState.timingDraft.durationHours}
-                      disabled={formState.sourceDraft.mode === 'existing'}
-                      onChange={(value) =>
-                        setFormState((current) =>
-                          current
-                            ? {
-                                ...current,
-                                timingDraft: {
-                                  ...current.timingDraft,
-                                  durationHours: Number(value ?? 1),
-                                },
-                                sourceDraft:
-                                  current.sourceDraft.mode === 'new'
-                                    ? {
-                                        ...current.sourceDraft,
-                                        standardTime: Number(value ?? 1),
-                                      }
-                                    : current.sourceDraft,
-                              }
-                            : current,
-                        )
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
-
-                {formState.timingDraft.windowMode === 'manual' ? (
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200 p-4">
-                      <div className="mb-3 text-sm font-semibold text-slate-800">最早开始</div>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <InputNumber
-                          min={0}
-                          max={23.5}
-                          step={0.5}
-                          value={formState.timingDraft.windowStartTime}
-                          onChange={(value) =>
-                            setFormState((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    timingDraft: {
-                                      ...current.timingDraft,
-                                      windowStartTime: Number(value ?? 0),
-                                    },
-                                  }
-                                : current,
-                            )
-                          }
-                          style={{ width: '100%' }}
-                        />
-                        <InputNumber
-                          min={-7}
-                          max={7}
-                          value={formState.timingDraft.windowStartDayOffset}
-                          onChange={(value) =>
-                            setFormState((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    timingDraft: {
-                                      ...current.timingDraft,
-                                      windowStartDayOffset: Number(value ?? 0),
-                                    },
-                                  }
-                                : current,
-                            )
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-slate-200 p-4">
-                      <div className="mb-3 text-sm font-semibold text-slate-800">最晚开始</div>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <InputNumber
-                          min={0}
-                          max={23.5}
-                          step={0.5}
-                          value={formState.timingDraft.windowEndTime}
-                          onChange={(value) =>
-                            setFormState((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    timingDraft: {
-                                      ...current.timingDraft,
-                                      windowEndTime: Number(value ?? 0),
-                                    },
-                                  }
-                                : current,
-                            )
-                          }
-                          style={{ width: '100%' }}
-                        />
-                        <InputNumber
-                          min={-7}
-                          max={7}
-                          value={formState.timingDraft.windowEndDayOffset}
-                          onChange={(value) =>
-                            setFormState((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    timingDraft: {
-                                      ...current.timingDraft,
-                                      windowEndDayOffset: Number(value ?? 0),
-                                    },
-                                  }
-                                : current,
-                            )
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                    自动时间窗：最早开始 {formatHourLabel(formState.timingDraft.windowStartTime)} / 偏移 {formState.timingDraft.windowStartDayOffset}
-                    ，最晚开始 {formatHourLabel(formState.timingDraft.windowEndTime)} / 偏移 {formState.timingDraft.windowEndDayOffset}
-                  </div>
-                )}
-
-                <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-700">高级时间设置</summary>
-                  <div className="mt-3 grid gap-4 md:grid-cols-3">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">推荐偏移</label>
-                      <InputNumber
-                        min={-7}
-                        max={7}
-                        value={formState.timingDraft.recommendedDayOffset}
-                        onChange={(value) =>
-                          setFormState((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  timingDraft: {
-                                    ...current.timingDraft,
-                                    recommendedDayOffset: Number(value ?? 0),
-                                  },
-                                }
-                              : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">开始窗口偏移</label>
-                      <InputNumber
-                        min={-7}
-                        max={7}
-                        value={formState.timingDraft.windowStartDayOffset}
-                        onChange={(value) =>
-                          setFormState((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  timingDraft: {
-                                    ...current.timingDraft,
-                                    windowStartDayOffset: Number(value ?? 0),
-                                  },
-                                }
-                              : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">结束窗口偏移</label>
-                      <InputNumber
-                        min={-7}
-                        max={7}
-                        value={formState.timingDraft.windowEndDayOffset}
-                        onChange={(value) =>
-                          setFormState((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  timingDraft: {
-                                    ...current.timingDraft,
-                                    windowEndDayOffset: Number(value ?? 0),
-                                  },
-                                }
-                              : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                  </div>
-                </details>
-              </section>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">资源规则</div>
-                    <div className="mt-1 text-xs text-slate-500">支持直接在创建弹窗里完成轻量规则配置。</div>
-                  </div>
-                  {capabilities.resourceRulesEnabled ? (
-                    <Space>
-                      <Button
-                        size="small"
-                        onClick={() =>
-                          setFormState((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  rulesDraft: {
-                                    requirements: [...current.rulesDraft.requirements, createRequirementFromNode(selectedNode)],
-                                  },
-                                }
-                              : current,
-                          )
-                        }
-                      >
-                        添加需求
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={() =>
-                          setFormState((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  rulesDraft: {
-                                    requirements: [createRequirementFromNode(selectedNode)],
-                                  },
-                                }
-                              : current,
-                          )
-                        }
-                      >
-                        按当前节点自动生成
-                      </Button>
-                    </Space>
-                  ) : null}
-                </div>
-
-                {!capabilities.resourceRulesEnabled ? (
-                  <Alert type="info" showIcon message="模板资源规则功能当前未启用" />
-                ) : formState.rulesDraft.requirements.length ? (
-                  <div className="space-y-3">
-                    {matchingHistoricalOperation?.resource_requirements?.length ? (
-                      <Alert
-                        type="info"
-                        showIcon
-                        message={`已识别到同类工序历史规则 ${matchingHistoricalOperation.resource_requirements.length} 条，可直接沿用`}
-                        action={
-                          <Button
-                            size="small"
-                            onClick={() =>
-                              setFormState((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      rulesDraft: {
-                                        requirements: matchingHistoricalOperation.resource_requirements ?? [],
-                                      },
-                                    }
-                                  : current,
-                              )
-                            }
-                          >
-                            复制历史规则
-                          </Button>
-                        }
-                      />
-                    ) : null}
-                    {formState.rulesDraft.requirements.map((rule, index) => (
-                      <div key={`rule-${index}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                          <div className="text-sm font-semibold text-slate-800">需求 {index + 1}</div>
-                          <Space size={6}>
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                setFormState((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        rulesDraft: {
-                                          requirements: [...current.rulesDraft.requirements, { ...rule, id: null }],
-                                        },
-                                      }
-                                    : current,
-                                )
-                              }
-                            >
-                              复制上一条
-                            </Button>
-                            <Button
-                              size="small"
-                              onClick={() => updateRequirement(index, { candidate_resource_ids: [], candidate_resources: [] })}
-                            >
-                              清空候选资源
-                            </Button>
-                            <Button
-                              size="small"
-                              danger
-                              onClick={() =>
-                                setFormState((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        rulesDraft: {
-                                          requirements: current.rulesDraft.requirements.filter((_, itemIndex) => itemIndex !== index),
-                                        },
-                                      }
-                                    : current,
-                                )
-                              }
-                            >
-                              删除
-                            </Button>
-                          </Space>
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          <Select
-                            value={rule.resource_type}
-                            onChange={(value) => updateRequirement(index, { resource_type: value })}
-                            options={RESOURCE_TYPE_OPTIONS.map((item) => ({ value: item, label: item }))}
-                          />
-                          <InputNumber
-                            min={1}
-                            value={rule.required_count}
-                            onChange={(value) => updateRequirement(index, { required_count: Number(value ?? 1) })}
-                            style={{ width: '100%' }}
-                          />
-                          <Select
-                            mode="multiple"
-                            allowClear
-                            optionFilterProp="label"
-                            value={rule.candidate_resource_ids}
-                            onChange={(value) =>
-                              updateRequirement(index, {
-                                candidate_resource_ids: value,
-                                candidate_resources: resources
-                                  .filter((resource) => value.includes(Number(resource.id)))
-                                  .map((resource) => ({
-                                    id: Number(resource.id),
-                                    resource_code: resource.resourceCode,
-                                    resource_name: resource.resourceName,
-                                    resource_type: resource.resourceType,
-                                  })),
-                              })
-                            }
-                            options={resources
-                              .filter((resource) => resource.resourceType === rule.resource_type)
-                              .map((resource) => ({
-                                value: Number(resource.id),
-                                label: `${resource.resourceCode} / ${resource.resourceName}`,
-                              }))}
-                          />
-                          <div className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={rule.is_mandatory}
-                                onChange={(event) => updateRequirement(index, { is_mandatory: event.target.checked })}
-                              />
-                              必须
-                            </label>
-                            <label className="inline-flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                checked={rule.requires_exclusive_use}
-                                onChange={(event) =>
-                                  updateRequirement(index, { requires_exclusive_use: event.target.checked })
-                                }
-                              />
-                              独占
-                            </label>
-                          </div>
-                        </div>
-                        <div className="mt-3 grid gap-3 md:grid-cols-3">
-                          <InputNumber
-                            min={0}
-                            addonBefore="prep"
-                            value={rule.prep_minutes}
-                            onChange={(value) => updateRequirement(index, { prep_minutes: Number(value ?? 0) })}
-                            style={{ width: '100%' }}
-                          />
-                          <InputNumber
-                            min={0}
-                            addonBefore="changeover"
-                            value={rule.changeover_minutes}
-                            onChange={(value) => updateRequirement(index, { changeover_minutes: Number(value ?? 0) })}
-                            style={{ width: '100%' }}
-                          />
-                          <InputNumber
-                            min={0}
-                            addonBefore="cleanup"
-                            value={rule.cleanup_minutes}
-                            onChange={(value) => updateRequirement(index, { cleanup_minutes: Number(value ?? 0) })}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                    当前还没有资源规则，保存后工序会按默认绑定节点落位。
-                  </div>
-                )}
-              </section>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">约束与共享组</div>
-                    <div className="mt-1 text-xs text-slate-500">一次建全时可直接补充核心逻辑，不必创建后再跳回编辑。</div>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-3 flex items-center justify-between">
-                      <div className="text-sm font-semibold text-slate-800">轻量约束创建器</div>
-                      <Button
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={() => {
-                          if (!newConstraintDraft.relatedScheduleId) {
-                            message.warning('请先选择关联工序');
-                            return;
-                          }
-                          setFormState((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  constraintsDraft: {
-                                    items: [...current.constraintsDraft.items, newConstraintDraft],
-                                  },
-                                }
-                              : current,
-                          );
-                          setNewConstraintDraft(createConstraintDraft());
-                        }}
-                      >
-                        添加约束
-                      </Button>
-                    </div>
-                    {operations.length ? (
-                      <div className="space-y-3">
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <Select
-                            value={newConstraintDraft.relationType}
-                            onChange={(value) =>
-                              setNewConstraintDraft((current) => ({
-                                ...current,
-                                relationType: value,
-                              }))
-                            }
-                            options={[
-                              { value: 'predecessor', label: '当前工序作为前置' },
-                              { value: 'successor', label: '当前工序作为后续' },
-                            ]}
-                          />
-                          <Select
-                            showSearch
-                            optionFilterProp="label"
-                            value={newConstraintDraft.relatedScheduleId ?? undefined}
-                            onChange={(value) =>
-                              setNewConstraintDraft((current) => ({
-                                ...current,
-                                relatedScheduleId: value ?? null,
-                              }))
-                            }
-                            options={existingOperationOptions}
-                          />
-                        </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <Select
-                            value={newConstraintDraft.constraintType}
-                            onChange={(value) =>
-                              setNewConstraintDraft((current) => ({
-                                ...current,
-                                constraintType: value,
-                              }))
-                            }
-                            options={CONSTRAINT_TYPE_OPTIONS.map((item) => ({
-                              value: item.value,
-                              label: item.label,
-                            }))}
-                          />
-                          <InputNumber
-                            min={0}
-                            addonBefore="lag(h)"
-                            value={newConstraintDraft.lagTime}
-                            onChange={(value) =>
-                              setNewConstraintDraft((current) => ({
-                                ...current,
-                                lagTime: Number(value ?? 0),
-                              }))
-                            }
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <details className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                          <summary className="cursor-pointer text-sm text-slate-600">高级约束字段</summary>
-                          <div className="mt-3 grid gap-3">
-                            <Select
-                              value={newConstraintDraft.lagType}
-                              onChange={(value) =>
-                                setNewConstraintDraft((current) => ({
-                                  ...current,
-                                  lagType: value,
-                                }))
-                              }
-                              options={LAG_TYPE_OPTIONS.map((item) => ({ value: item, label: item }))}
-                            />
-                            <div className="grid gap-3 md:grid-cols-2">
-                              <InputNumber
-                                min={0}
-                                addonBefore="lag min"
-                                value={newConstraintDraft.lagMin}
-                                onChange={(value) =>
-                                  setNewConstraintDraft((current) => ({
-                                    ...current,
-                                    lagMin: Number(value ?? 0),
-                                  }))
-                                }
-                                style={{ width: '100%' }}
-                              />
-                              <InputNumber
-                                min={0}
-                                addonBefore="lag max"
-                                value={newConstraintDraft.lagMax ?? undefined}
-                                onChange={(value) =>
-                                  setNewConstraintDraft((current) => ({
-                                    ...current,
-                                    lagMax: value === null || value === undefined ? null : Number(value),
-                                  }))
-                                }
-                                style={{ width: '100%' }}
-                              />
-                            </div>
-                            <Input
-                              placeholder="约束名称"
-                              value={newConstraintDraft.constraintName}
-                              onChange={(event) =>
-                                setNewConstraintDraft((current) => ({
-                                  ...current,
-                                  constraintName: event.target.value,
-                                }))
-                              }
-                            />
-                            <Input.TextArea
-                              rows={2}
-                              placeholder="说明"
-                              value={newConstraintDraft.description}
-                              onChange={(event) =>
-                                setNewConstraintDraft((current) => ({
-                                  ...current,
-                                  description: event.target.value,
-                                }))
-                              }
-                            />
-                          </div>
-                        </details>
-
-                        {formState.constraintsDraft.items.length ? (
-                          <div className="space-y-2">
-                            {formState.constraintsDraft.items.map((item) => {
-                              const relatedOperation = operations.find((candidate) => Number(candidate.id) === Number(item.relatedScheduleId));
-                              return (
-                                <div
-                                  key={item.tempId}
-                                  className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3"
-                                >
-                                  <div>
-                                    <div className="text-sm font-medium text-slate-900">
-                                      {item.relationType === 'predecessor' ? '当前工序作为前置' : '当前工序作为后续'} /{' '}
-                                      {relatedOperation?.operation_name ?? '未选择'}
-                                    </div>
-                                    <div className="mt-1 text-xs text-slate-500">
-                                      {CONSTRAINT_TYPE_OPTIONS.find((option) => option.value === item.constraintType)?.label} / lag {item.lagTime}h
-                                    </div>
-                                  </div>
-                                  <Button
-                                    type="link"
-                                    danger
-                                    onClick={() =>
-                                      setFormState((current) =>
-                                        current
-                                          ? {
-                                              ...current,
-                                              constraintsDraft: {
-                                                items: current.constraintsDraft.items.filter((constraint) => constraint.tempId !== item.tempId),
-                                              },
-                                            }
-                                          : current,
-                                      )
-                                    }
-                                  >
-                                    删除
-                                  </Button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有待创建约束" />
-                        )}
-                      </div>
-                    ) : (
-                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="模板里还没有其他工序，暂时无法添加约束" />
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-3 text-sm font-semibold text-slate-800">共享组</div>
-                    {!capabilities.shareGroupEnabled ? (
-                      <Alert type="info" showIcon message="共享组功能当前未启用" />
-                    ) : (
-                      <div className="space-y-3">
-                        <Select
-                          allowClear
-                          showSearch
-                          optionFilterProp="label"
-                          value={formState.shareGroupDraft.assignGroupId ?? undefined}
-                          onChange={(value) =>
-                            setFormState((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    shareGroupDraft: {
-                                      ...current.shareGroupDraft,
-                                      assignGroupId: value ?? null,
-                                    },
-                                  }
-                                : current,
-                            )
-                          }
-                          options={shareGroups.map((group) => ({
-                            value: group.id,
-                            label: `${group.groupName} / ${group.shareMode} / 成员 ${group.memberCount}`,
-                          }))}
-                          placeholder="加入已有共享组"
-                        />
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-                          <input
-                            type="checkbox"
-                            checked={formState.shareGroupDraft.createNew}
-                            onChange={(event) =>
-                              setFormState((current) =>
-                                current
-                                  ? {
-                                      ...current,
-                                      shareGroupDraft: {
-                                        ...current.shareGroupDraft,
-                                        createNew: event.target.checked,
-                                      },
-                                    }
-                                  : current,
-                              )
-                            }
-                          />
-                          同时创建新共享组
-                        </label>
-                        {formState.shareGroupDraft.createNew ? (
-                          <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-3">
-                            <Input
-                              placeholder="共享组名称"
-                              value={formState.shareGroupDraft.newGroupName}
-                              onChange={(event) =>
-                                setFormState((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        shareGroupDraft: {
-                                          ...current.shareGroupDraft,
-                                          newGroupName: event.target.value,
-                                        },
-                                      }
-                                    : current,
-                                )
-                              }
-                            />
-                            <Select
-                              value={formState.shareGroupDraft.newGroupMode}
-                              onChange={(value) =>
-                                setFormState((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        shareGroupDraft: {
-                                          ...current.shareGroupDraft,
-                                          newGroupMode: value,
-                                        },
-                                      }
-                                    : current,
-                                )
-                              }
-                              options={[
-                                { value: 'SAME_TEAM', label: '同组执行' },
-                                { value: 'DIFFERENT', label: '不同人员' },
-                              ]}
-                            />
-                            <Select
-                              mode="multiple"
-                              allowClear
-                              showSearch
-                              optionFilterProp="label"
-                              value={formState.shareGroupDraft.memberIds}
-                              onChange={(value) =>
-                                setFormState((current) =>
-                                  current
-                                    ? {
-                                        ...current,
-                                        shareGroupDraft: {
-                                          ...current.shareGroupDraft,
-                                          memberIds: value,
-                                        },
-                                      }
-                                    : current,
-                                )
-                              }
-                              options={existingOperationOptions}
-                              placeholder="选择共享组已有成员"
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </div>
-                </div>
               </section>
             </>
           )}
@@ -2773,13 +1768,12 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 <Tag color={preview.isUnplaced ? 'orange' : 'green'}>{preview.isUnplaced ? '未落位' : '已绑定节点'}</Tag>
-                <Tag color={preview.hasRules ? 'blue' : 'default'}>{preview.hasRules ? '已配置规则' : '未配置规则'}</Tag>
               </div>
             </div>
           </div>
 
           <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-            <div className="text-sm font-semibold text-slate-900">智能推荐</div>
+            <div className="text-sm font-semibold text-slate-900">智能提示</div>
             <div className="mt-3 space-y-3">
               {selectedNode ? (
                 <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-600">
@@ -2798,22 +1792,6 @@ const TemplateOperationCreateModal: React.FC<TemplateOperationCreateModalProps> 
                   推荐开始时间
                 </div>
                 <div className="mt-2">{preview.dayLabel}</div>
-              </div>
-              <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-600">
-                <div className="flex items-center gap-2 font-medium text-slate-900">
-                  <InfoCircleOutlined />
-                  当前阶段常用工序
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {recommendedOperations.length ? (
-                    recommendedOperations.map((item) => {
-                      const operation = operationById.get(Number(item.operationId));
-                      return operation ? <Tag key={item.operationId}>{operation.operation_name}</Tag> : null;
-                    })
-                  ) : (
-                    <span className="text-slate-400">暂无推荐</span>
-                  )}
-                </div>
               </div>
             </div>
           </div>

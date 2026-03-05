@@ -2,6 +2,11 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import { SqlExecutor } from './operationResourceBindingService';
 import { getTemplateScheduleResourceRules } from './templateResourceRuleService';
+import {
+  DEFAULT_DEPARTMENT_CODE,
+  normalizeDepartmentCode,
+  resolveDepartmentCodeFromOrgUnit,
+} from './departmentCodeService';
 
 const toBoolean = (value: unknown): boolean => value === true || value === 1 || value === '1';
 
@@ -257,6 +262,29 @@ const loadChildCount = async (nodeId: number, executor: SqlExecutor = pool): Pro
   return Number(rows[0]?.child_count ?? 0);
 };
 
+const loadResourceDepartmentCode = async (
+  resourceId: number | null | undefined,
+  executor: SqlExecutor = pool,
+): Promise<string | null> => {
+  if (!resourceId) {
+    return null;
+  }
+
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `SELECT department_code
+     FROM resources
+     WHERE id = ?
+     LIMIT 1`,
+    [resourceId],
+  );
+
+  if (!rows.length) {
+    return null;
+  }
+
+  return normalizeDepartmentCode(rows[0].department_code) ?? null;
+};
+
 export const normalizeResourceNodeOrder = async (
   parentId: number | null,
   executor: SqlExecutor = pool,
@@ -280,7 +308,7 @@ export const createResourceNode = async (
     node_name: string;
     node_class: ResourceNodeClass;
     parent_id?: number | null;
-    department_code: string;
+    department_code?: string;
     owner_org_unit_id?: number | null;
     bound_resource_id?: number | null;
     sort_order?: number;
@@ -290,9 +318,14 @@ export const createResourceNode = async (
   executor: SqlExecutor = pool,
 ): Promise<number> => {
   const parentId = payload.parent_id ?? null;
-  if (parentId) {
-    await assertNodeExists(parentId, executor);
-  }
+  const parentNode = parentId ? await assertNodeExists(parentId, executor) : null;
+
+  const resolvedDepartmentCode =
+    normalizeDepartmentCode(payload.department_code) ??
+    normalizeDepartmentCode(parentNode?.department_code) ??
+    (await loadResourceDepartmentCode(payload.bound_resource_id, executor)) ??
+    (await resolveDepartmentCodeFromOrgUnit(payload.owner_org_unit_id ?? null, executor)) ??
+    DEFAULT_DEPARTMENT_CODE;
 
   const finalSortOrder =
     payload.sort_order ??
@@ -318,7 +351,7 @@ export const createResourceNode = async (
         payload.node_name,
         payload.node_class,
         parentId,
-        payload.department_code,
+        resolvedDepartmentCode,
         payload.owner_org_unit_id ?? null,
         payload.bound_resource_id ?? null,
         resolvedSortOrder,
@@ -337,7 +370,11 @@ export const createResourceNode = async (
     insertedNodeId = await insertNode(manualNodeCode);
   } else {
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const generatedNodeCode = await generateNextResourceNodeCode(payload.department_code, payload.node_class, executor);
+      const generatedNodeCode = await generateNextResourceNodeCode(
+        resolvedDepartmentCode,
+        payload.node_class,
+        executor,
+      );
 
       try {
         insertedNodeId = await insertNode(generatedNodeCode);
@@ -378,11 +415,13 @@ export const updateResourceNode = async (
 ): Promise<void> => {
   const currentNode = await assertNodeExists(nodeId, executor);
   const nextParentId = payload.parent_id !== undefined ? payload.parent_id : currentNode.parent_id;
+  const nextOwnerOrgUnitId =
+    payload.owner_org_unit_id !== undefined ? payload.owner_org_unit_id : currentNode.owner_org_unit_id;
+  const nextBoundResourceId =
+    payload.bound_resource_id !== undefined ? payload.bound_resource_id : currentNode.bound_resource_id;
 
   await ensureNoCycle(nodeId, nextParentId ?? null, executor);
 
-  const nextBoundResourceId =
-    payload.bound_resource_id !== undefined ? payload.bound_resource_id : currentNode.bound_resource_id;
   if (nextBoundResourceId) {
     const childCount = await loadChildCount(nodeId, executor);
     if (childCount > 0) {
@@ -411,7 +450,20 @@ export const updateResourceNode = async (
     assign('parent_id', payload.parent_id ?? null);
   }
   if (payload.department_code !== undefined) {
-    assign('department_code', payload.department_code);
+    assign('department_code', normalizeDepartmentCode(payload.department_code) ?? DEFAULT_DEPARTMENT_CODE);
+  } else if (
+    payload.parent_id !== undefined ||
+    payload.owner_org_unit_id !== undefined ||
+    payload.bound_resource_id !== undefined
+  ) {
+    const nextParentNode = nextParentId ? await assertNodeExists(nextParentId, executor) : null;
+    const resolvedDepartmentCode =
+      normalizeDepartmentCode(nextParentNode?.department_code) ??
+      (await loadResourceDepartmentCode(nextBoundResourceId, executor)) ??
+      (await resolveDepartmentCodeFromOrgUnit(nextOwnerOrgUnitId ?? null, executor)) ??
+      normalizeDepartmentCode(currentNode.department_code) ??
+      DEFAULT_DEPARTMENT_CODE;
+    assign('department_code', resolvedDepartmentCode);
   }
   if (payload.owner_org_unit_id !== undefined) {
     assign('owner_org_unit_id', payload.owner_org_unit_id ?? null);

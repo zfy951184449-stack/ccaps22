@@ -266,15 +266,17 @@ describe('TemplateOperationCreateModal', () => {
     await waitForCondition(() => !document.body.textContent?.includes('隐藏了已选工艺'));
   });
 
-  it('disables department filter when no resource node is selected', async () => {
+  it('allows department filter and falls back to all when no resource node is selected', async () => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(createSavedConfig([1])));
     await renderModal();
 
-    const departmentItem = Array.from(document.querySelectorAll('.ant-segmented-item')).find((node) =>
-      node.textContent?.includes('同部门域'),
-    ) as HTMLElement | undefined;
-    expect(departmentItem).toBeTruthy();
-    expect(departmentItem?.className).toContain('ant-segmented-item-disabled');
+    await clickSegmentedItem('同部门工序');
+
+    await waitForCondition(() =>
+      Boolean(document.body.textContent?.includes('未选择资源节点，当前先展示全部工序；选择节点后会自动切换为同部门筛选。')),
+    );
+    expect(document.querySelector('[data-testid="operation-list-item-1"]')).toBeTruthy();
+    expect(document.querySelector('[data-testid="operation-list-item-2"]')).toBeTruthy();
   });
 
   it('updates recent filter immediately after save and continue', async () => {

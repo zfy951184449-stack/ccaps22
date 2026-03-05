@@ -330,7 +330,7 @@ export interface ResourceInput {
   resourceCode: string;
   resourceName: string;
   resourceType: ResourceType;
-  departmentCode: DepartmentCode;
+  departmentCode?: DepartmentCode;
   ownerOrgUnitId: number | null;
   status: ResourceStatus;
   capacity: number;

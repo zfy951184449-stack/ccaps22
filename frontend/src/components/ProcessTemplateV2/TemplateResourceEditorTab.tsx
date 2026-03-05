@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
+  Drawer,
   Empty,
   Input,
   InputNumber,
@@ -15,6 +16,7 @@ import {
   Spin,
   Switch,
   Tag,
+  Tabs,
   Tooltip,
   message,
 } from 'antd';
@@ -36,8 +38,12 @@ import {
 import OperationConstraintsPanel from '../OperationConstraintsPanel';
 import { TemplateResourceRulesTabContent } from '../ProcessTemplateGantt/components/modals/TemplateResourceRulesTabContent';
 import { processTemplateV2Api } from '../../services';
+import OperationCoreForm, { validateOperationCoreDraft } from './OperationCoreForm';
 import {
+  OperationAdvancedTabKey,
   OperationCreateContext,
+  OperationCoreDraft,
+  OperationCreatedResult,
   PlannerOperation,
   ResourceNode,
   ResourceNodeFilterScope,
@@ -81,20 +87,12 @@ type StageDraft = {
   description: string;
 };
 
-type OperationDrawerMode = 'create' | 'edit';
-type OperationCreateMode = 'existing' | 'new';
-
 type OperationDraft = {
-  mode: OperationDrawerMode;
-  scheduleId?: number;
+  scheduleId: number;
   stageId: number | null;
   resourceNodeId: number | null;
-  operationId: number | null;
-  operationCreateMode: OperationCreateMode;
-  newOperationName: string;
-  newOperationStandardTime: number;
-  newOperationRequiredPeople: number;
-  newOperationDescription: string;
+  durationHours: number;
+  windowMode: OperationCoreDraft['windowMode'];
   operationDay: number;
   recommendedTime: number;
   recommendedDayOffset: number;
@@ -103,6 +101,10 @@ type OperationDraft = {
   windowEndTime: number;
   windowEndDayOffset: number;
   absoluteStartHour?: number;
+};
+
+type PendingOperationCreatedAction = OperationCreatedResult & {
+  token: number;
 };
 
 type LastMoveState = {
@@ -321,14 +323,11 @@ const sanitizeStageDraft = (draft: StageDraft | null) =>
 const sanitizeOperationDraft = (draft: OperationDraft | null) =>
   draft
     ? {
-        ...draft,
+        scheduleId: Number(draft.scheduleId),
         stageId: draft.stageId ?? null,
         resourceNodeId: draft.resourceNodeId ?? null,
-        operationId: draft.operationId ?? null,
-        newOperationName: draft.newOperationName.trim(),
-        newOperationDescription: draft.newOperationDescription.trim(),
-        newOperationStandardTime: Number(draft.newOperationStandardTime ?? 0),
-        newOperationRequiredPeople: Number(draft.newOperationRequiredPeople ?? 0),
+        durationHours: Number(draft.durationHours ?? 0),
+        windowMode: draft.windowMode,
         operationDay: Number(draft.operationDay ?? 0),
         recommendedTime: Number(draft.recommendedTime ?? 0),
         recommendedDayOffset: Number(draft.recommendedDayOffset ?? 0),
@@ -417,6 +416,9 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   const [createOperationModalOpen, setCreateOperationModalOpen] = useState(false);
   const [createOperationContext, setCreateOperationContext] = useState<OperationCreateContext | null>(null);
   const [operationDrawerOpen, setOperationDrawerOpen] = useState(false);
+  const [operationAdvancedDrawerOpen, setOperationAdvancedDrawerOpen] = useState(false);
+  const [operationAdvancedTab, setOperationAdvancedTab] = useState<OperationAdvancedTabKey>('rules');
+  const [pendingCreatedAction, setPendingCreatedAction] = useState<PendingOperationCreatedAction | null>(null);
   const [operationDraft, setOperationDraft] = useState<OperationDraft | null>(null);
   const [initialOperationDraft, setInitialOperationDraft] = useState<OperationDraft | null>(null);
   const [stageDrawerOpen, setStageDrawerOpen] = useState(false);
@@ -761,32 +763,80 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     [leafNodes, operationDraft?.resourceNodeId],
   );
 
-  const editDraftIssues = useMemo(() => {
-    const issues: string[] = [];
+  const editDraftIssueGroups = useMemo(() => {
+    const blocking: string[] = [];
+    const warnings: string[] = [];
     if (!operationDraft) {
-      return issues;
+      return { blocking, warnings };
     }
-    if (!operationDraft.stageId) {
-      issues.push('必须选择所属阶段');
+
+    const validation = validateOperationCoreDraft({
+      draft: {
+        stageId: operationDraft.stageId,
+        resourceNodeId: operationDraft.resourceNodeId,
+        operationDay: operationDraft.operationDay,
+        recommendedTime: operationDraft.recommendedTime,
+        recommendedDayOffset: operationDraft.recommendedDayOffset,
+        windowMode: operationDraft.windowMode,
+        windowStartTime: operationDraft.windowStartTime,
+        windowStartDayOffset: operationDraft.windowStartDayOffset,
+        windowEndTime: operationDraft.windowEndTime,
+        windowEndDayOffset: operationDraft.windowEndDayOffset,
+      },
+      stageStartDay: Number(editDraftStage?.start_day ?? 0),
+      requireStage: true,
+      warnUnbound: true,
+      bindingWarning:
+        selectedOperation?.bindingStatus && selectedOperation.bindingStatus !== 'BOUND'
+          ? `当前绑定状态：${selectedOperation.bindingStatus}${selectedOperation.bindingReason ? `，${selectedOperation.bindingReason}` : ''}`
+          : null,
+    });
+
+    blocking.push(...validation.errors);
+    warnings.push(...validation.warnings);
+    if (!editDraftNode && operationDraft.resourceNodeId) {
+      warnings.push('已选择资源节点，但当前节点不可用');
     }
-    if (!editDraftNode) {
-      issues.push('当前工序未绑定默认资源节点');
-    }
-    if (selectedOperation?.bindingStatus && selectedOperation.bindingStatus !== 'BOUND') {
-      issues.push(`当前绑定状态：${selectedOperation.bindingStatus}${selectedOperation.bindingReason ? `，${selectedOperation.bindingReason}` : ''}`);
+
+    return { blocking, warnings };
+  }, [editDraftNode, editDraftStage?.start_day, operationDraft, selectedOperation?.bindingReason, selectedOperation?.bindingStatus]);
+
+  useEffect(() => {
+    if (!operationDraft || operationDraft.windowMode !== 'auto') {
+      return;
     }
     const stageStartDay = Number(editDraftStage?.start_day ?? 0);
-    const absoluteWindowStart =
-      (stageStartDay + Number(operationDraft.operationDay ?? 0) + Number(operationDraft.windowStartDayOffset ?? 0)) * 24 +
-      Number(operationDraft.windowStartTime ?? 0);
-    const absoluteWindowEnd =
-      (stageStartDay + Number(operationDraft.operationDay ?? 0) + Number(operationDraft.windowEndDayOffset ?? 0)) * 24 +
-      Number(operationDraft.windowEndTime ?? 0);
-    if (absoluteWindowStart > absoluteWindowEnd) {
-      issues.push('时间窗开始不能晚于时间窗结束');
+    const absoluteStart =
+      (stageStartDay + Number(operationDraft.operationDay ?? 0) + Number(operationDraft.recommendedDayOffset ?? 0)) * 24 +
+      Number(operationDraft.recommendedTime ?? 0);
+    const absoluteWindowStart = absoluteStart - 2;
+    const absoluteWindowEnd = absoluteStart + Math.max(Number(operationDraft.durationHours ?? 2), 2);
+    const nextWindowStartTime = toHourValue(absoluteWindowStart);
+    const nextWindowStartOffset = Math.floor(absoluteWindowStart / 24) - stageStartDay - Number(operationDraft.operationDay ?? 0);
+    const nextWindowEndTime = toHourValue(absoluteWindowEnd);
+    const nextWindowEndOffset = Math.floor(absoluteWindowEnd / 24) - stageStartDay - Number(operationDraft.operationDay ?? 0);
+
+    if (
+      nextWindowStartTime === operationDraft.windowStartTime &&
+      nextWindowStartOffset === operationDraft.windowStartDayOffset &&
+      nextWindowEndTime === operationDraft.windowEndTime &&
+      nextWindowEndOffset === operationDraft.windowEndDayOffset
+    ) {
+      return;
     }
-    return issues;
-  }, [editDraftNode, editDraftStage?.start_day, operationDraft, selectedOperation?.bindingReason, selectedOperation?.bindingStatus]);
+
+    setOperationDraft((current) =>
+      current
+        ? {
+            ...current,
+            windowStartTime: nextWindowStartTime,
+            windowStartDayOffset: nextWindowStartOffset,
+            windowEndTime: nextWindowEndTime,
+            windowEndDayOffset: nextWindowEndOffset,
+          }
+        : current,
+    );
+  }, [editDraftStage?.start_day, operationDraft]);
 
   const visibleConstraintLinks = useMemo(() => {
     const allLinks = editor?.constraints ?? [];
@@ -893,18 +943,21 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   );
 
   const openEditOperationDrawer = useCallback(
-    (operation: PlannerOperation) => {
+    (
+      operation: PlannerOperation,
+      options?: { openAdvanced?: boolean; initialAdvancedTab?: OperationAdvancedTabKey },
+    ) => {
+      const hasWindow =
+        operation.window_start_time !== undefined &&
+        operation.window_start_time !== null &&
+        operation.window_end_time !== undefined &&
+        operation.window_end_time !== null;
       const nextDraft: OperationDraft = {
-        mode: 'edit',
         scheduleId: operation.id,
         stageId: operation.stage_id,
         resourceNodeId: operation.defaultResourceNodeId ?? null,
-        operationId: operation.operation_id,
-        operationCreateMode: 'existing',
-        newOperationName: '',
-        newOperationStandardTime: Number(operation.standard_time ?? 4),
-        newOperationRequiredPeople: Number(operation.required_people ?? 1),
-        newOperationDescription: operation.operation_description ?? '',
+        durationHours: Number(operation.standard_time ?? 4),
+        windowMode: hasWindow ? 'manual' : 'auto',
         operationDay: Number(operation.operation_day ?? 0),
         recommendedTime: Number(operation.recommended_time ?? 9),
         recommendedDayOffset: Number(operation.recommended_day_offset ?? 0),
@@ -923,6 +976,8 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       setAssignShareGroupId(null);
       setInitialOperationDraft(nextDraft);
       setOperationDraft(nextDraft);
+      setOperationAdvancedDrawerOpen(Boolean(options?.openAdvanced));
+      setOperationAdvancedTab(options?.initialAdvancedTab ?? 'rules');
       setOperationDrawerOpen(true);
     },
     [],
@@ -1028,96 +1083,79 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     if (!operationDraft) {
       return;
     }
-
-    if (!operationDraft.stageId) {
-      message.error('请选择所属阶段');
+    const stageStartDay = Number(editDraftStage?.start_day ?? 0);
+    const validation = validateOperationCoreDraft({
+      draft: {
+        stageId: operationDraft.stageId,
+        resourceNodeId: operationDraft.resourceNodeId,
+        operationDay: operationDraft.operationDay,
+        recommendedTime: operationDraft.recommendedTime,
+        recommendedDayOffset: operationDraft.recommendedDayOffset,
+        windowMode: operationDraft.windowMode,
+        windowStartTime: operationDraft.windowStartTime,
+        windowStartDayOffset: operationDraft.windowStartDayOffset,
+        windowEndTime: operationDraft.windowEndTime,
+        windowEndDayOffset: operationDraft.windowEndDayOffset,
+      },
+      stageStartDay,
+      requireStage: true,
+      warnUnbound: false,
+      bindingWarning: null,
+    });
+    if (validation.errors.length > 0) {
+      message.error(validation.errors[0]);
       return;
     }
 
     try {
       setOperationSaving(true);
 
-      let resolvedOperationId = operationDraft.operationId;
-      if (operationDraft.mode === 'create') {
-        if (operationDraft.operationCreateMode === 'new') {
-          if (!operationDraft.newOperationName.trim()) {
-            message.error('请输入工序名称');
-            return;
-          }
-          const createdOperation = await processTemplateV2Api.createOperationLibraryItem({
-            operationName: operationDraft.newOperationName.trim(),
-            standardTime: operationDraft.newOperationStandardTime,
-            requiredPeople: operationDraft.newOperationRequiredPeople,
-            description: operationDraft.newOperationDescription.trim() || undefined,
-          });
-          resolvedOperationId = createdOperation.id;
-        }
-
-        if (!resolvedOperationId) {
-          message.error('请选择工序');
-          return;
-        }
-
-        const isCanvasCreate = operationDraft.resourceNodeId || operationDraft.absoluteStartHour !== undefined;
-        let scheduleId: number;
-
-        if (isCanvasCreate) {
-          scheduleId = await processTemplateV2Api.createStageOperationFromCanvas(templateId, {
-            stageId: operationDraft.stageId,
-            operationId: resolvedOperationId,
-            resourceNodeId: operationDraft.resourceNodeId ?? null,
-            operationDay: operationDraft.operationDay,
-            recommendedTime: operationDraft.recommendedTime,
-            recommendedDayOffset: operationDraft.recommendedDayOffset,
-            windowStartTime: operationDraft.windowStartTime,
-            windowStartDayOffset: operationDraft.windowStartDayOffset,
-            windowEndTime: operationDraft.windowEndTime,
-            windowEndDayOffset: operationDraft.windowEndDayOffset,
-            absoluteStartHour: operationDraft.absoluteStartHour,
-          });
-        } else {
-          scheduleId = await processTemplateV2Api.createStageOperation(operationDraft.stageId, {
-            operationId: resolvedOperationId,
-            operationDay: operationDraft.operationDay,
-            recommendedTime: operationDraft.recommendedTime,
-            recommendedDayOffset: operationDraft.recommendedDayOffset,
-            windowStartTime: operationDraft.windowStartTime,
-            windowStartDayOffset: operationDraft.windowStartDayOffset,
-            windowEndTime: operationDraft.windowEndTime,
-            windowEndDayOffset: operationDraft.windowEndDayOffset,
-          });
-
-          if (operationDraft.resourceNodeId) {
-            await processTemplateV2Api.updateTemplateScheduleBinding(scheduleId, operationDraft.resourceNodeId);
-          }
-        }
-
-        message.success('工序已创建');
-        setSelectedOperationId(scheduleId);
-      } else {
-        if (!operationDraft.scheduleId) {
-          return;
-        }
-
-        if (selectedOperation && Number(selectedOperation.stage_id) !== Number(operationDraft.stageId)) {
-          await processTemplateV2Api.moveStageOperationToStage(operationDraft.scheduleId, Number(operationDraft.stageId));
-        }
-
-        await processTemplateV2Api.updateStageOperation(operationDraft.scheduleId, {
-          operationDay: operationDraft.operationDay,
-          recommendedTime: operationDraft.recommendedTime,
-          recommendedDayOffset: operationDraft.recommendedDayOffset,
-          windowStartTime: operationDraft.windowStartTime,
-          windowStartDayOffset: operationDraft.windowStartDayOffset,
-          windowEndTime: operationDraft.windowEndTime,
-          windowEndDayOffset: operationDraft.windowEndDayOffset,
-        });
-
-        await processTemplateV2Api.updateTemplateScheduleBinding(operationDraft.scheduleId, operationDraft.resourceNodeId ?? null);
-        message.success('工序已更新');
+      if (selectedOperation && Number(selectedOperation.stage_id) !== Number(operationDraft.stageId)) {
+        await processTemplateV2Api.moveStageOperationToStage(operationDraft.scheduleId, Number(operationDraft.stageId));
       }
 
+      const nextWindow =
+        operationDraft.windowMode === 'auto'
+          ? (() => {
+              const absoluteStart =
+                (stageStartDay +
+                  Number(operationDraft.operationDay ?? 0) +
+                  Number(operationDraft.recommendedDayOffset ?? 0)) *
+                  24 +
+                Number(operationDraft.recommendedTime ?? 0);
+              const absoluteWindowStart = absoluteStart - 2;
+              const absoluteWindowEnd = absoluteStart + Math.max(Number(operationDraft.durationHours ?? 2), 2);
+              return {
+                windowStartTime: toHourValue(absoluteWindowStart),
+                windowStartDayOffset:
+                  Math.floor(absoluteWindowStart / 24) - stageStartDay - Number(operationDraft.operationDay ?? 0),
+                windowEndTime: toHourValue(absoluteWindowEnd),
+                windowEndDayOffset:
+                  Math.floor(absoluteWindowEnd / 24) - stageStartDay - Number(operationDraft.operationDay ?? 0),
+              };
+            })()
+          : {
+              windowStartTime: operationDraft.windowStartTime,
+              windowStartDayOffset: operationDraft.windowStartDayOffset,
+              windowEndTime: operationDraft.windowEndTime,
+              windowEndDayOffset: operationDraft.windowEndDayOffset,
+            };
+
+      await processTemplateV2Api.updateStageOperation(operationDraft.scheduleId, {
+        operationDay: operationDraft.operationDay,
+        recommendedTime: operationDraft.recommendedTime,
+        recommendedDayOffset: operationDraft.recommendedDayOffset,
+        windowStartTime: nextWindow.windowStartTime,
+        windowStartDayOffset: nextWindow.windowStartDayOffset,
+        windowEndTime: nextWindow.windowEndTime,
+        windowEndDayOffset: nextWindow.windowEndDayOffset,
+      });
+
+      await processTemplateV2Api.updateTemplateScheduleBinding(operationDraft.scheduleId, operationDraft.resourceNodeId ?? null);
+      message.success('工序已更新');
+
       setOperationDrawerOpen(false);
+      setOperationAdvancedDrawerOpen(false);
       setInitialOperationDraft(null);
       await loadEditor();
     } catch (error: any) {
@@ -1135,6 +1173,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       if (selectedOperationId === scheduleId) {
         setSelectedOperationId(null);
         setOperationDrawerOpen(false);
+        setOperationAdvancedDrawerOpen(false);
       }
       await loadEditor();
     } catch (error: any) {
@@ -1348,7 +1387,16 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   };
 
   const focusOperation = useCallback(
-    (scheduleId: number, options?: { openDrawer?: boolean; showIssues?: boolean; showUnplaced?: boolean }) => {
+    (
+      scheduleId: number,
+      options?: {
+        openDrawer?: boolean;
+        showIssues?: boolean;
+        showUnplaced?: boolean;
+        openAdvanced?: boolean;
+        initialAdvancedTab?: OperationAdvancedTabKey;
+      },
+    ) => {
       const operation = operations.find((item) => Number(item.id) === Number(scheduleId));
       if (!operation) {
         return;
@@ -1362,7 +1410,10 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
         setShowUnplacedOnly(true);
       }
       if (options?.openDrawer) {
-        openEditOperationDrawer(operation);
+        openEditOperationDrawer(operation, {
+          openAdvanced: options.openAdvanced,
+          initialAdvancedTab: options.initialAdvancedTab,
+        });
       }
     },
     [openEditOperationDrawer, operations],
@@ -1451,6 +1502,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   const closeOperationDrawer = useCallback(() => {
     if (!operationDraftDirty) {
       setOperationDrawerOpen(false);
+      setOperationAdvancedDrawerOpen(false);
       return;
     }
 
@@ -1459,7 +1511,10 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       content: '关闭后会丢失当前工序编辑内容，是否继续？',
       okText: '放弃修改',
       cancelText: '继续编辑',
-      onOk: () => setOperationDrawerOpen(false),
+      onOk: () => {
+        setOperationDrawerOpen(false);
+        setOperationAdvancedDrawerOpen(false);
+      },
     });
   }, [operationDraftDirty]);
 
@@ -1469,13 +1524,32 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   }, []);
 
   const handleCreatedOperation = useCallback(
-    async (scheduleId: number, stageId: number) => {
-      setSelectedStageId(stageId);
-      setSelectedOperationId(scheduleId);
+    async (result: OperationCreatedResult) => {
+      setSelectedStageId(result.stageId);
+      setSelectedOperationId(result.scheduleId);
+      setPendingCreatedAction({
+        ...result,
+        token: Date.now(),
+      });
       await loadEditor();
     },
     [loadEditor],
   );
+
+  useEffect(() => {
+    if (!pendingCreatedAction) {
+      return;
+    }
+    const operation = operations.find((item) => Number(item.id) === Number(pendingCreatedAction.scheduleId));
+    if (!operation) {
+      return;
+    }
+    openEditOperationDrawer(operation, {
+      openAdvanced: pendingCreatedAction.openAdvanced,
+      initialAdvancedTab: pendingCreatedAction.initialAdvancedTab,
+    });
+    setPendingCreatedAction(null);
+  }, [openEditOperationDrawer, operations, pendingCreatedAction]);
 
   useEffect(() => {
     if (!selectedOperationId) {
@@ -1580,7 +1654,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                   <Button type="primary" icon={<PlusOutlined />} onClick={() => openStageDrawer()}>
                     创建第一个阶段
                   </Button>
-                  <Button onClick={onOpenNodes}>查看节点管理</Button>
+                  <Button onClick={onOpenNodes}>切换到节点管理</Button>
                 </Space>
               </div>
             ) : (
@@ -1938,7 +2012,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
           <div className="flex items-center justify-end gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <span className="text-sm text-slate-500">缩放</span>
             <Slider min={10} max={28} step={2} value={hourWidth} onChange={setHourWidth} style={{ width: 180 }} />
-            <Button onClick={onOpenNodes}>节点管理</Button>
+            <Button onClick={onOpenNodes}>切换到节点管理</Button>
           </div>
 
           {showUnplacedOnly ? (
@@ -2297,6 +2371,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                   {selectedOperation.required_people ? <Tag>所需人数 {selectedOperation.required_people}</Tag> : null}
                 </div>
               </div>
+              <Button onClick={() => setOperationAdvancedDrawerOpen(true)}>高级配置</Button>
             </div>
           ) : (
             '编辑工序'
@@ -2304,18 +2379,13 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
         }
         open={operationDrawerOpen}
         centered
-        width={1180}
+        width="min(1180px, calc(100vw - 24px))"
         onCancel={closeOperationDrawer}
         maskClosable={false}
         footer={[
           <Button key="cancel" onClick={closeOperationDrawer}>
             取消
           </Button>,
-          selectedOperation ? (
-            <Button key="copy" icon={<PlusOutlined />} onClick={() => void handleCopyOperation(selectedOperation)}>
-              复制
-            </Button>
-          ) : null,
           <Button key="save" type="primary" loading={operationSaving} onClick={() => void handleSaveOperation()}>
             保存工序
           </Button>,
@@ -2326,295 +2396,65 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
             <div className="space-y-4 overflow-y-auto pr-1">
               <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="mb-4">
-                  <div className="text-sm font-semibold text-slate-900">基础信息</div>
-                  <div className="mt-1 text-xs text-slate-500">工序主数据保持只读，当前仅调整所属阶段、时间与资源落位。</div>
+                  <div className="text-sm font-semibold text-slate-900">核心编辑</div>
+                  <div className="mt-1 text-xs text-slate-500">仅编辑所属阶段、资源落位和排程时间，高级逻辑在右侧抽屉维护。</div>
                 </div>
                 {selectedOperation ? (
-                  <div className="space-y-4">
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                      <div className="font-medium text-slate-900">
-                        {selectedOperation.operation_code} / {selectedOperation.operation_name}
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Tag>标准时长 {selectedOperation.standard_time ?? '-'}h</Tag>
-                        <Tag>所需人数 {selectedOperation.required_people ?? '-'}</Tag>
-                        {selectedOperation.resource_summary ? <Tag color="cyan">{selectedOperation.resource_summary}</Tag> : null}
-                      </div>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    <div className="font-medium text-slate-900">
+                      {selectedOperation.operation_code} / {selectedOperation.operation_name}
                     </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">所属阶段</label>
-                      <Select
-                        value={operationDraft.stageId ?? undefined}
-                        onChange={(value) => setOperationDraft((current) => (current ? { ...current, stageId: value } : current))}
-                        options={stages.map((stage) => ({ value: stage.id, label: `${stage.stage_name} / Day ${stage.start_day}` }))}
-                        style={{ width: '100%' }}
-                      />
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Tag>标准时长 {selectedOperation.standard_time ?? '-'}h</Tag>
+                      <Tag>所需人数 {selectedOperation.required_people ?? '-'}</Tag>
+                      {selectedOperation.resource_summary ? <Tag color="cyan">{selectedOperation.resource_summary}</Tag> : null}
                     </div>
                   </div>
                 ) : null}
-              </section>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">时间与落位</div>
-                    <div className="mt-1 text-xs text-slate-500">继续用业务时间模式编辑，偏移字段放到高级区。</div>
-                  </div>
-                  {selectedOperation?.bindingReason ? <Tag color="orange">需修复落位</Tag> : null}
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Day</label>
-                    <InputNumber
-                      min={0}
-                      value={operationDraft.operationDay}
-                      onChange={(value) =>
-                        setOperationDraft((current) => (current ? { ...current, operationDay: Number(value ?? 0) } : current))
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">推荐开始时间</label>
-                    <InputNumber
-                      min={0}
-                      max={23.9}
-                      step={0.5}
-                      value={operationDraft.recommendedTime}
-                      onChange={(value) =>
-                        setOperationDraft((current) =>
-                          current ? { ...current, recommendedTime: Number(value ?? 0) } : current,
-                        )
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">推荐偏移</label>
-                    <InputNumber
-                      min={-7}
-                      max={7}
-                      value={operationDraft.recommendedDayOffset}
-                      onChange={(value) =>
-                        setOperationDraft((current) =>
-                          current ? { ...current, recommendedDayOffset: Number(value ?? 0) } : current,
-                        )
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
 
                 <div className="mt-4">
-                  <label className="mb-1 block text-sm font-medium text-slate-700">默认资源节点</label>
-                  <Select
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    value={operationDraft.resourceNodeId ?? undefined}
-                    onChange={(value) =>
-                      setOperationDraft((current) => (current ? { ...current, resourceNodeId: value ?? null } : current))
+                  <OperationCoreForm
+                    value={{
+                      stageId: operationDraft.stageId,
+                      resourceNodeId: operationDraft.resourceNodeId,
+                      operationDay: operationDraft.operationDay,
+                      recommendedTime: operationDraft.recommendedTime,
+                      recommendedDayOffset: operationDraft.recommendedDayOffset,
+                      windowMode: operationDraft.windowMode,
+                      windowStartTime: operationDraft.windowStartTime,
+                      windowStartDayOffset: operationDraft.windowStartDayOffset,
+                      windowEndTime: operationDraft.windowEndTime,
+                      windowEndDayOffset: operationDraft.windowEndDayOffset,
+                    }}
+                    stages={stages}
+                    leafNodes={leafNodes}
+                    durationHours={operationDraft.durationHours}
+                    onChange={(patch) =>
+                      setOperationDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              stageId: patch.stageId === undefined ? current.stageId : patch.stageId,
+                              resourceNodeId:
+                                patch.resourceNodeId === undefined ? current.resourceNodeId : patch.resourceNodeId,
+                              operationDay: patch.operationDay ?? current.operationDay,
+                              recommendedTime: patch.recommendedTime ?? current.recommendedTime,
+                              recommendedDayOffset: patch.recommendedDayOffset ?? current.recommendedDayOffset,
+                              windowMode: patch.windowMode ?? current.windowMode,
+                              windowStartTime: patch.windowStartTime ?? current.windowStartTime,
+                              windowStartDayOffset: patch.windowStartDayOffset ?? current.windowStartDayOffset,
+                              windowEndTime: patch.windowEndTime ?? current.windowEndTime,
+                              windowEndDayOffset: patch.windowEndDayOffset ?? current.windowEndDayOffset,
+                            }
+                          : current,
+                      )
                     }
-                    options={leafNodes.map((node) => ({
-                      value: node.id,
-                      label: `${node.nodeName} / ${node.boundResourceCode ?? '未挂资源'}`,
-                    }))}
-                    style={{ width: '100%' }}
                   />
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <div className="mb-3 text-sm font-semibold text-slate-700">时间窗开始</div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <InputNumber
-                        min={0}
-                        max={23.9}
-                        step={0.5}
-                        value={operationDraft.windowStartTime}
-                        onChange={(value) =>
-                          setOperationDraft((current) =>
-                            current ? { ...current, windowStartTime: Number(value ?? 0) } : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                      <InputNumber
-                        min={-7}
-                        max={7}
-                        value={operationDraft.windowStartDayOffset}
-                        onChange={(value) =>
-                          setOperationDraft((current) =>
-                            current ? { ...current, windowStartDayOffset: Number(value ?? 0) } : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <div className="mb-3 text-sm font-semibold text-slate-700">时间窗结束</div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <InputNumber
-                        min={0}
-                        max={23.9}
-                        step={0.5}
-                        value={operationDraft.windowEndTime}
-                        onChange={(value) =>
-                          setOperationDraft((current) =>
-                            current ? { ...current, windowEndTime: Number(value ?? 0) } : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                      <InputNumber
-                        min={-7}
-                        max={7}
-                        value={operationDraft.windowEndDayOffset}
-                        onChange={(value) =>
-                          setOperationDraft((current) =>
-                            current ? { ...current, windowEndDayOffset: Number(value ?? 0) } : current,
-                          )
-                        }
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-700">当前排程摘要</summary>
-                  <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-600">
-                    <Tag>推荐开始 {formatHourLabel(operationDraft.recommendedTime)}</Tag>
-                    <Tag>开始窗 {formatHourLabel(operationDraft.windowStartTime)} / 偏移 {operationDraft.windowStartDayOffset}</Tag>
-                    <Tag>结束窗 {formatHourLabel(operationDraft.windowEndTime)} / 偏移 {operationDraft.windowEndDayOffset}</Tag>
-                    {editDraftNode ? <Tag color="green">节点 {editDraftNode.nodeName}</Tag> : <Tag color="orange">未绑定节点</Tag>}
-                  </div>
-                </details>
-
-                {selectedOperation?.bindingReason ? <Alert className="mt-4" type="warning" showIcon message={selectedOperation.bindingReason} /> : null}
-              </section>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 text-sm font-semibold text-slate-900">资源规则</div>
-                {selectedOperation ? (
-                  editor.capabilities.resourceRulesEnabled ? (
-                    <TemplateResourceRulesTabContent
-                      scheduleId={selectedOperation.id}
-                      visible={operationDrawerOpen}
-                      onRulesChanged={loadEditor}
-                    />
-                  ) : (
-                    <Alert type="info" showIcon message="模板资源规则功能当前未启用" />
-                  )
+                {selectedOperation?.bindingReason ? (
+                  <Alert className="mt-4" type="warning" showIcon message={selectedOperation.bindingReason} />
                 ) : null}
-              </section>
-
-              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 text-sm font-semibold text-slate-900">约束与共享组</div>
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-3 text-sm font-semibold text-slate-800">约束</div>
-                    {selectedOperation ? (
-                      <OperationConstraintsPanel
-                        scheduleId={selectedOperation.id}
-                        constraints={selectedOperationConstraints}
-                        availableOperations={availableConstraintOperations}
-                        onConstraintAdded={loadEditor}
-                        onConstraintUpdated={loadEditor}
-                        onConstraintDeleted={loadEditor}
-                      />
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div>
-                      <div className="mb-3 text-sm font-semibold text-slate-800">当前共享组</div>
-                      {currentOperationShareGroups.length ? (
-                        <div className="space-y-2">
-                          {currentOperationShareGroups.map((group) => (
-                            <div
-                              key={group.id}
-                              className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3"
-                            >
-                              <div>
-                                <div className="text-sm font-medium text-slate-900">{group.groupName}</div>
-                                <div className="mt-1 text-xs text-slate-500">
-                                  {group.shareMode} / 成员 {group.memberCount}
-                                </div>
-                              </div>
-                              <Button type="link" danger onClick={() => void handleRemoveShareGroup(group.id)}>
-                                移出
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前工序还没有加入共享组" />
-                      )}
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="mb-3 text-sm font-semibold text-slate-700">加入已有共享组</div>
-                      <Space.Compact style={{ width: '100%' }}>
-                        <Select
-                          allowClear
-                          showSearch
-                          optionFilterProp="label"
-                          value={assignShareGroupId ?? undefined}
-                          onChange={(value) => setAssignShareGroupId(value ?? null)}
-                          options={existingShareGroups.map((group) => ({
-                            value: group.id,
-                            label: `${group.groupName} / ${group.shareMode}`,
-                          }))}
-                          style={{ width: '100%' }}
-                        />
-                        <Button type="primary" onClick={() => void handleAssignShareGroup()}>
-                          加入
-                        </Button>
-                      </Space.Compact>
-                    </div>
-
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="mb-3 text-sm font-semibold text-slate-700">新建共享组</div>
-                      <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                        <Input
-                          placeholder="共享组名称"
-                          value={shareGroupName}
-                          onChange={(event) => setShareGroupName(event.target.value)}
-                        />
-                        <Select
-                          value={shareGroupMode}
-                          onChange={(value) => setShareGroupMode(value)}
-                          options={[
-                            { value: 'SAME_TEAM', label: '同组执行' },
-                            { value: 'DIFFERENT', label: '不同人员' },
-                          ]}
-                        />
-                        <Select
-                          mode="multiple"
-                          allowClear
-                          showSearch
-                          optionFilterProp="label"
-                          placeholder="选择至少一个额外工序"
-                          value={shareGroupMembers}
-                          onChange={(value) => setShareGroupMembers(value)}
-                          options={operations
-                            .filter((item) => Number(item.id) !== Number(selectedOperation?.id))
-                            .map((item) => ({
-                              value: item.id,
-                              label: `${item.stage_name} / ${item.operation_name}`,
-                            }))}
-                          style={{ width: '100%' }}
-                        />
-                        <Button type="primary" onClick={() => void handleCreateShareGroup()}>
-                          创建并加入
-                        </Button>
-                      </Space>
-                    </div>
-                  </div>
-                </div>
               </section>
             </div>
 
@@ -2654,34 +2494,176 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                     message={`绑定状态：${selectedOperation?.bindingStatus ?? 'UNKNOWN'}`}
                     description={selectedOperation?.bindingReason ?? '当前默认绑定有效'}
                   />
-                  <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-600">
-                    <div className="flex items-center justify-between">
-                      <span>共享组数量</span>
-                      <span className="font-medium text-slate-900">{currentOperationShareGroups.length}</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between">
-                      <span>前后约束数量</span>
-                      <span className="font-medium text-slate-900">
-                        {selectedOperationConstraints.predecessors.length + selectedOperationConstraints.successors.length}
-                      </span>
-                    </div>
-                  </div>
-                  {editDraftIssues.length ? (
-                    editDraftIssues.map((issue) => <Alert key={issue} type="warning" showIcon message={issue} />)
-                  ) : (
+                  {editDraftIssueGroups.blocking.length ? (
+                    editDraftIssueGroups.blocking.map((issue) => <Alert key={`block-${issue}`} type="error" showIcon message={issue} />)
+                  ) : null}
+                  {editDraftIssueGroups.warnings.length ? (
+                    editDraftIssueGroups.warnings.map((issue) => <Alert key={`warn-${issue}`} type="warning" showIcon message={issue} />)
+                  ) : null}
+                  {!editDraftIssueGroups.blocking.length && !editDraftIssueGroups.warnings.length ? (
                     <Alert type="success" showIcon message="当前编辑内容没有发现明显问题" />
-                  )}
+                  ) : null}
                 </div>
               </div>
 
               <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
                 <div className="text-sm font-semibold text-slate-900">快捷操作</div>
                 <div className="mt-3 space-y-2">
+                  <Button block onClick={() => setOperationAdvancedDrawerOpen(true)}>
+                    打开高级配置
+                  </Button>
                   {selectedOperation ? (
                     <Button block icon={<PlusOutlined />} onClick={() => void handleCopyOperation(selectedOperation)}>
                       复制当前工序
                     </Button>
                   ) : null}
+                  <Button block onClick={() => void handleValidate()}>
+                    重新校验模板
+                  </Button>
+                </div>
+              </div>
+            </aside>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Drawer
+        title="高级配置"
+        open={operationDrawerOpen && operationAdvancedDrawerOpen}
+        onClose={() => setOperationAdvancedDrawerOpen(false)}
+        width="min(920px, calc(100vw - 24px))"
+        destroyOnClose={false}
+      >
+        <Tabs
+          activeKey={operationAdvancedTab}
+          onChange={(key) => setOperationAdvancedTab(key as OperationAdvancedTabKey)}
+          items={[
+            {
+              key: 'rules',
+              label: '资源规则',
+              children: selectedOperation ? (
+                editor.capabilities.resourceRulesEnabled ? (
+                  <TemplateResourceRulesTabContent
+                    scheduleId={selectedOperation.id}
+                    visible={operationDrawerOpen && operationAdvancedDrawerOpen}
+                    onRulesChanged={loadEditor}
+                  />
+                ) : (
+                  <Alert type="info" showIcon message="模板资源规则功能当前未启用" />
+                )
+              ) : null,
+            },
+            {
+              key: 'constraints',
+              label: '约束',
+              children: selectedOperation ? (
+                <OperationConstraintsPanel
+                  scheduleId={selectedOperation.id}
+                  constraints={selectedOperationConstraints}
+                  availableOperations={availableConstraintOperations}
+                  onConstraintAdded={loadEditor}
+                  onConstraintUpdated={loadEditor}
+                  onConstraintDeleted={loadEditor}
+                />
+              ) : null,
+            },
+            {
+              key: 'share',
+              label: '共享组',
+              children: (
+                <div className="space-y-4">
+                  <div>
+                    <div className="mb-3 text-sm font-semibold text-slate-800">当前共享组</div>
+                    {currentOperationShareGroups.length ? (
+                      <div className="space-y-2">
+                        {currentOperationShareGroups.map((group) => (
+                          <div
+                            key={group.id}
+                            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3"
+                          >
+                            <div>
+                              <div className="text-sm font-medium text-slate-900">{group.groupName}</div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {group.shareMode} / 成员 {group.memberCount}
+                              </div>
+                            </div>
+                            <Button type="link" danger onClick={() => void handleRemoveShareGroup(group.id)}>
+                              移出
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前工序还没有加入共享组" />
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="mb-3 text-sm font-semibold text-slate-700">加入已有共享组</div>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        value={assignShareGroupId ?? undefined}
+                        onChange={(value) => setAssignShareGroupId(value ?? null)}
+                        options={existingShareGroups.map((group) => ({
+                          value: group.id,
+                          label: `${group.groupName} / ${group.shareMode}`,
+                        }))}
+                        style={{ width: '100%' }}
+                      />
+                      <Button type="primary" onClick={() => void handleAssignShareGroup()}>
+                        加入
+                      </Button>
+                    </Space.Compact>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="mb-3 text-sm font-semibold text-slate-700">新建共享组</div>
+                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                      <Input
+                        placeholder="共享组名称"
+                        value={shareGroupName}
+                        onChange={(event) => setShareGroupName(event.target.value)}
+                      />
+                      <Select
+                        value={shareGroupMode}
+                        onChange={(value) => setShareGroupMode(value)}
+                        options={[
+                          { value: 'SAME_TEAM', label: '同组执行' },
+                          { value: 'DIFFERENT', label: '不同人员' },
+                        ]}
+                      />
+                      <Select
+                        mode="multiple"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        placeholder="选择至少一个额外工序"
+                        value={shareGroupMembers}
+                        onChange={(value) => setShareGroupMembers(value)}
+                        options={operations
+                          .filter((item) => Number(item.id) !== Number(selectedOperation?.id))
+                          .map((item) => ({
+                            value: item.id,
+                            label: `${item.stage_name} / ${item.operation_name}`,
+                          }))}
+                        style={{ width: '100%' }}
+                      />
+                      <Button type="primary" onClick={() => void handleCreateShareGroup()}>
+                        创建并加入
+                      </Button>
+                    </Space>
+                  </div>
+                </div>
+              ),
+            },
+            {
+              key: 'danger',
+              label: '危险操作',
+              children: (
+                <div className="space-y-3">
                   <Button block onClick={() => void handleValidate()}>
                     重新校验模板
                   </Button>
@@ -2699,11 +2681,11 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                     </Popconfirm>
                   ) : null}
                 </div>
-              </div>
-            </aside>
-          </div>
-        ) : null}
-      </Modal>
+              ),
+            },
+          ]}
+        />
+      </Drawer>
     </section>
   );
 };

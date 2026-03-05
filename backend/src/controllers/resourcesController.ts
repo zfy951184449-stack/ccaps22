@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import pool from '../config/database';
 import { RowDataPacket } from 'mysql2';
 import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import {
+  DEFAULT_DEPARTMENT_CODE,
+  normalizeDepartmentCode,
+  resolveDepartmentCodeFromOrgUnit,
+} from '../services/departmentCodeService';
 
 const toBoolean = (value: unknown): boolean => value === true || value === 1 || value === '1';
 
@@ -73,9 +78,18 @@ export const createResource = async (req: Request, res: Response) => {
       metadata,
     } = req.body;
 
-    if (!resource_code || !resource_name || !resource_type || !department_code) {
-      return res.status(400).json({ error: 'resource_code, resource_name, resource_type and department_code are required' });
+    if (!resource_code || !resource_name || !resource_type) {
+      return res.status(400).json({ error: 'resource_code, resource_name and resource_type are required' });
     }
+
+    const ownerOrgUnitId =
+      owner_org_unit_id !== null && owner_org_unit_id !== undefined && Number.isFinite(Number(owner_org_unit_id))
+        ? Number(owner_org_unit_id)
+        : null;
+    const finalDepartmentCode =
+      normalizeDepartmentCode(department_code) ??
+      (await resolveDepartmentCodeFromOrgUnit(ownerOrgUnitId)) ??
+      DEFAULT_DEPARTMENT_CODE;
 
     const [result] = await pool.execute(
       `INSERT INTO resources (
@@ -86,8 +100,8 @@ export const createResource = async (req: Request, res: Response) => {
         resource_code,
         resource_name,
         resource_type,
-        department_code,
-        owner_org_unit_id || null,
+        finalDepartmentCode,
+        ownerOrgUnitId,
         status || 'ACTIVE',
         capacity || 1,
         location || null,
@@ -151,6 +165,22 @@ export const getResourceById = async (req: Request, res: Response) => {
 export const updateResource = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const ownerOrgUnitIdChanged = req.body.owner_org_unit_id !== undefined;
+    const ownerOrgUnitId =
+      ownerOrgUnitIdChanged && req.body.owner_org_unit_id !== null && req.body.owner_org_unit_id !== undefined
+        ? Number(req.body.owner_org_unit_id)
+        : null;
+    const inferredDepartmentCode =
+      req.body.department_code !== undefined
+        ? normalizeDepartmentCode(req.body.department_code)
+        : ownerOrgUnitIdChanged
+          ? await resolveDepartmentCodeFromOrgUnit(ownerOrgUnitId)
+          : null;
+    const nextDepartmentCode =
+      req.body.department_code !== undefined
+        ? inferredDepartmentCode ?? DEFAULT_DEPARTMENT_CODE
+        : inferredDepartmentCode;
+
     const allowedFields = [
       'resource_code',
       'resource_name',
@@ -170,12 +200,19 @@ export const updateResource = async (req: Request, res: Response) => {
     const params: unknown[] = [];
 
     allowedFields.forEach((field) => {
+      if (field === 'department_code' && nextDepartmentCode !== null && nextDepartmentCode !== undefined) {
+        updates.push('department_code = ?');
+        params.push(nextDepartmentCode);
+        return;
+      }
       if (req.body[field] !== undefined) {
         updates.push(`${field} = ?`);
         if (field === 'metadata') {
           params.push(req.body[field] ? JSON.stringify(req.body[field]) : null);
         } else if (field === 'is_shared' || field === 'is_schedulable') {
           params.push(req.body[field] ? 1 : 0);
+        } else if (field === 'owner_org_unit_id') {
+          params.push(req.body[field] !== null && req.body[field] !== undefined ? Number(req.body[field]) : null);
         } else {
           params.push(req.body[field]);
         }

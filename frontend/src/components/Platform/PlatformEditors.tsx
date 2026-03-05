@@ -44,7 +44,7 @@ interface ResourceFormValues {
   resourceCode: string;
   resourceName: string;
   resourceType: ResourceType;
-  departmentCode: Resource['departmentCode'];
+  departmentCode?: Resource['departmentCode'];
   ownerOrgUnitId: number | null;
   status: Resource['status'];
   capacity: number;
@@ -132,9 +132,6 @@ export const ResourceFormModal: React.FC<{
           </Form.Item>
           <Form.Item name="resourceType" label="资源类型" rules={[{ required: true }]}>
             <Select options={resourceTypeOptions} />
-          </Form.Item>
-          <Form.Item name="departmentCode" label="部门" rules={[{ required: true }]}>
-            <Select options={[{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }]} />
           </Form.Item>
           <Form.Item name="ownerOrgUnitId" label="归属单元">
             <Select allowClear options={orgUnitOptions} />
