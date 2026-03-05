@@ -1,5 +1,6 @@
 -- Process Template V2 governance scope upgrade
--- Adds node_scope and turns department/team into scope-driven optional fields.
+-- Adds node_scope and turns governance into scope-driven optional fields.
+-- Scope set: GLOBAL | DEPARTMENT.
 
 SET @node_scope_exists := (
   SELECT COUNT(*)
@@ -11,7 +12,7 @@ SET @node_scope_exists := (
 
 SET @add_node_scope_sql := IF(
   @node_scope_exists = 0,
-  "ALTER TABLE resource_nodes ADD COLUMN node_scope ENUM('GLOBAL','DEPARTMENT','TEAM') NOT NULL DEFAULT 'DEPARTMENT' AFTER parent_id",
+  "ALTER TABLE resource_nodes ADD COLUMN node_scope ENUM('GLOBAL','DEPARTMENT') NOT NULL DEFAULT 'DEPARTMENT' AFTER parent_id",
   'SELECT 1'
 );
 PREPARE stmt_add_node_scope FROM @add_node_scope_sql;
@@ -25,7 +26,7 @@ SET @backfill_scope_sql := IF(
   @node_scope_exists = 0,
   "UPDATE resource_nodes
    SET node_scope = CASE
-     WHEN owner_org_unit_id IS NOT NULL THEN 'TEAM'
+     WHEN owner_org_unit_id IS NOT NULL THEN 'DEPARTMENT'
      WHEN department_code IS NOT NULL THEN 'DEPARTMENT'
      ELSE 'GLOBAL'
    END",
@@ -33,7 +34,7 @@ SET @backfill_scope_sql := IF(
    SET node_scope = CASE
      WHEN node_scope IS NULL THEN
        CASE
-         WHEN owner_org_unit_id IS NOT NULL THEN 'TEAM'
+         WHEN owner_org_unit_id IS NOT NULL THEN 'DEPARTMENT'
          WHEN department_code IS NOT NULL THEN 'DEPARTMENT'
          ELSE 'GLOBAL'
        END
@@ -52,10 +53,6 @@ WHERE node_scope = 'GLOBAL';
 UPDATE resource_nodes
 SET owner_org_unit_id = NULL
 WHERE node_scope = 'DEPARTMENT';
-
-UPDATE resource_nodes
-SET department_code = NULL
-WHERE node_scope = 'TEAM';
 
 SET @scope_index_exists := (
   SELECT COUNT(*)

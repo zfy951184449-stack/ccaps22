@@ -5,11 +5,9 @@ import {
   CreateStagePayload,
   OperationLibraryItem,
   OperationTypeOption,
-  PlannerOperation,
   ResourceNodeCleanableTargetsResponse,
   ResourceNode,
   ResourceNodeRelation,
-  TemplateBindingStatus,
   ResourceNodeMovePayload,
   ResourceNodePayload,
   TemplateConstraintLink,
@@ -86,22 +84,11 @@ const mapResourceNode = (data: any): ResourceNode => ({
   nodeClass: data.nodeClass ?? data.node_class,
   nodeSubtype: data.nodeSubtype ?? data.node_subtype ?? null,
   parentId: data.parentId ?? data.parent_id ?? null,
-  nodeScope: (() => {
-    const explicitScope = data.nodeScope ?? data.node_scope ?? null;
-    if (explicitScope) {
-      return explicitScope;
-    }
-    const ownerOrgUnitId = data.ownerOrgUnitId ?? data.owner_org_unit_id ?? null;
-    if (ownerOrgUnitId !== null && ownerOrgUnitId !== undefined) {
-      return 'TEAM';
-    }
-    const departmentCode = data.departmentCode ?? data.department_code ?? null;
-    return departmentCode ? 'DEPARTMENT' : 'GLOBAL';
-  })(),
+  nodeScope: (data.nodeScope ?? data.node_scope ?? 'GLOBAL') as 'GLOBAL' | 'DEPARTMENT',
   departmentCode: data.departmentCode ?? data.department_code ?? null,
-  ownerOrgUnitId: data.ownerOrgUnitId ?? data.owner_org_unit_id ?? null,
-  ownerUnitName: data.ownerUnitName ?? data.owner_unit_name ?? null,
-  ownerUnitCode: data.ownerUnitCode ?? data.owner_unit_code ?? null,
+  equipmentSystemType: data.equipmentSystemType ?? data.equipment_system_type ?? null,
+  equipmentClass: data.equipmentClass ?? data.equipment_class ?? null,
+  equipmentModel: data.equipmentModel ?? data.equipment_model ?? null,
   boundResourceId: data.boundResourceId ?? data.bound_resource_id ?? null,
   boundResourceCode: data.boundResourceCode ?? data.bound_resource_code ?? null,
   boundResourceName: data.boundResourceName ?? data.bound_resource_name ?? null,
@@ -278,62 +265,6 @@ const mapResourceEditorResponse = (data: any): TemplateResourceEditorResponse =>
   operationLibrary: (data.operation_library ?? []).map(mapOperationLibraryItem),
 });
 
-const buildValidationFromPlannerOperations = (operations: PlannerOperation[]) => {
-  const unplacedOperationIds: number[] = [];
-  const resourceRuleMismatchIds: number[] = [];
-  const invalidBindings: Array<{
-    scheduleId: number;
-    status: TemplateBindingStatus;
-    reason: string | null;
-  }> = [];
-
-  operations.forEach((operation) => {
-    const scheduleId = Number(operation.id);
-    const status = (operation.bindingStatus ?? 'UNBOUND') as TemplateBindingStatus;
-    const reason = operation.bindingReason ?? null;
-
-    if (status === 'UNBOUND') {
-      unplacedOperationIds.push(scheduleId);
-    }
-    if (status !== 'BOUND') {
-      invalidBindings.push({ scheduleId, status, reason });
-    }
-    if (status === 'RESOURCE_RULE_MISMATCH') {
-      resourceRuleMismatchIds.push(scheduleId);
-    }
-  });
-
-  return {
-    summary: {
-      unplacedCount: unplacedOperationIds.length,
-      invalidBindingCount: invalidBindings.length,
-      resourceRuleMismatchCount: resourceRuleMismatchIds.length,
-      constraintConflictCount: 0,
-    },
-    unplacedOperationIds,
-    invalidBindings,
-    resourceRuleMismatchIds,
-    constraintConflicts: [],
-  };
-};
-
-const buildEditorFallbackFromPlanner = (planner: TemplateResourcePlannerResponse): TemplateResourceEditorResponse => ({
-  ...planner,
-  warnings: [
-    ...(planner.warnings ?? []),
-    'resource-editor 扩展接口不可用，已启用兼容模式（约束/共享组/规则编辑能力受限）。',
-  ],
-  constraints: [],
-  shareGroups: [],
-  validation: buildValidationFromPlannerOperations(planner.operations ?? []),
-  capabilities: {
-    resourceRulesEnabled: false,
-    constraintEditEnabled: false,
-    shareGroupEnabled: false,
-  },
-  operationLibrary: [],
-});
-
 const toResourceNodePayload = (payload: Partial<ResourceNodePayload>) => ({
   node_code: payload.nodeCode,
   node_name: payload.nodeName,
@@ -342,7 +273,9 @@ const toResourceNodePayload = (payload: Partial<ResourceNodePayload>) => ({
   parent_id: payload.parentId ?? null,
   node_scope: payload.nodeScope,
   department_code: payload.departmentCode,
-  owner_org_unit_id: payload.ownerOrgUnitId ?? null,
+  equipment_system_type: payload.equipmentSystemType ?? null,
+  equipment_class: payload.equipmentClass ?? null,
+  equipment_model: payload.equipmentModel ?? null,
   bound_resource_id: payload.boundResourceId ?? null,
   sort_order: payload.sortOrder,
   is_active: payload.isActive,
@@ -436,22 +369,8 @@ export const processTemplateV2Api = {
     return mapPlannerResponse(response.data);
   },
   getResourceEditor: async (templateId: number) => {
-    try {
-      const response = await client.get(`/process-templates/${templateId}/resource-editor`);
-      return mapResourceEditorResponse(response.data);
-    } catch (error: any) {
-      const status = Number(error?.response?.status ?? 0);
-      const shouldFallback =
-        !status || status === 404 || status === 500 || status === 502 || status === 503 || status === 504;
-
-      if (!shouldFallback) {
-        throw error;
-      }
-
-      const plannerResponse = await client.get(`/process-templates/${templateId}/resource-planner`);
-      const plannerPayload = mapPlannerResponse(plannerResponse.data);
-      return buildEditorFallbackFromPlanner(plannerPayload);
-    }
+    const response = await client.get(`/process-templates/${templateId}/resource-editor`);
+    return mapResourceEditorResponse(response.data);
   },
   validateResourceEditor: async (templateId: number) => {
     const response = await client.post(`/process-templates/${templateId}/editor-validate`);
@@ -566,14 +485,12 @@ export const processTemplateV2Api = {
   },
   listResourceNodes: async (params?: {
     departmentCode?: string;
-    ownerOrgUnitId?: number;
     includeInactive?: boolean;
     tree?: boolean;
   }) => {
     const response = await client.get('/resource-nodes', {
       params: {
         department_code: params?.departmentCode,
-        owner_org_unit_id: params?.ownerOrgUnitId,
         include_inactive: params?.includeInactive,
         tree: params?.tree,
       },

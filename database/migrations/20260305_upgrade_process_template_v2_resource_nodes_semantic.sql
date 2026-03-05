@@ -1,7 +1,7 @@
 -- Process Template V2 resource node semantic upgrade
 -- 1) Expand enum to include legacy + target values for safe transition.
 -- 2) Add node_subtype.
--- 3) Add node_scope and relax governance fields (department/team become scope-driven).
+-- 3) Add node_scope and relax governance fields (GLOBAL/DEPARTMENT).
 -- 3) Migrate legacy values into target semantic classes.
 -- 4) Narrow enum to target-only set.
 -- 5) Add CIP relation table and indexes.
@@ -16,7 +16,7 @@ ALTER TABLE resource_nodes
   ADD COLUMN node_subtype VARCHAR(64) DEFAULT NULL AFTER node_class;
 
 ALTER TABLE resource_nodes
-  ADD COLUMN node_scope ENUM('GLOBAL', 'DEPARTMENT', 'TEAM') NOT NULL DEFAULT 'DEPARTMENT' AFTER parent_id;
+  ADD COLUMN node_scope ENUM('GLOBAL', 'DEPARTMENT') NOT NULL DEFAULT 'DEPARTMENT' AFTER parent_id;
 
 -- Legacy to semantic mapping (manual rebuild mode still recommended after migration).
 UPDATE resource_nodes
@@ -42,7 +42,7 @@ WHERE node_class = 'COMPONENT';
 
 UPDATE resource_nodes
 SET node_scope = CASE
-  WHEN owner_org_unit_id IS NOT NULL THEN 'TEAM'
+  WHEN owner_org_unit_id IS NOT NULL THEN 'DEPARTMENT'
   WHEN department_code IS NOT NULL THEN 'DEPARTMENT'
   ELSE 'GLOBAL'
 END;
@@ -58,10 +58,6 @@ WHERE node_scope = 'GLOBAL';
 UPDATE resource_nodes
 SET owner_org_unit_id = NULL
 WHERE node_scope = 'DEPARTMENT';
-
-UPDATE resource_nodes
-SET department_code = NULL
-WHERE node_scope = 'TEAM';
 
 -- Target-only enum.
 ALTER TABLE resource_nodes

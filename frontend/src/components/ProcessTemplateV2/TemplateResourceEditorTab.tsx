@@ -611,10 +611,10 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       return new Set(nodeList.map((node) => node.id));
     }
 
-    if (scope === 'team' && templateTeamId) {
+    if (scope === 'department') {
       const result = new Set<number>();
       nodeList.forEach((node) => {
-        if (Number(node.ownerOrgUnitId) === Number(templateTeamId)) {
+        if (node.nodeScope === 'DEPARTMENT') {
           collectAncestorIds(node.id, parentMap).forEach((id) => result.add(id));
           collectDescendantIds(node).forEach((id) => result.add(id));
         }
@@ -627,7 +627,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       collectAncestorIds(nodeId, parentMap).forEach((id) => result.add(id));
     });
     return result;
-  }, [boundNodeIds, editor, nodeList, parentMap, scope, templateTeamId]);
+  }, [boundNodeIds, editor, nodeList, parentMap, scope]);
 
   const filteredTree = useMemo(
     () => pruneTree(editor?.resourceTree ?? [], scopedIds, searchValue),
@@ -1999,7 +1999,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                 onChange={(value) => setScope(value as ResourceNodeFilterScope)}
                 options={[
                   { label: '已引用节点', value: 'referenced' },
-                  { label: '模板团队节点', value: 'team' },
+                  { label: '部门域节点', value: 'department' },
                   { label: '全部节点', value: 'all' },
                 ]}
               />

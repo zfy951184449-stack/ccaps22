@@ -16,8 +16,6 @@ import {
 } from 'antd';
 import {
   ApartmentOutlined,
-  AppstoreOutlined,
-  BuildOutlined,
   ClusterOutlined,
   HomeOutlined,
   PlusOutlined,
@@ -31,6 +29,7 @@ import { ResourceFormModal } from '../Platform/PlatformEditors';
 import { Resource } from '../../types/platform';
 import { processTemplateV2Api } from '../../services';
 import {
+  EquipmentSystemType,
   PlannerOperation,
   ResourceNode,
   ResourceNodeClass,
@@ -50,9 +49,6 @@ const NODE_CLASS_OPTIONS: Array<{ label: string; value: ResourceNodeClass; icon:
   { label: '厂区', value: 'SITE', icon: <ClusterOutlined /> },
   { label: '产线', value: 'LINE', icon: <ApartmentOutlined /> },
   { label: '房间', value: 'ROOM', icon: <HomeOutlined /> },
-  { label: '系统', value: 'SYSTEM', icon: <BuildOutlined /> },
-  { label: '设备类', value: 'EQUIPMENT_CLASS', icon: <AppstoreOutlined /> },
-  { label: '设备型号', value: 'EQUIPMENT_MODEL', icon: <SettingOutlined /> },
   { label: '设备实例', value: 'EQUIPMENT_UNIT', icon: <ToolOutlined /> },
   { label: '组件/管线', value: 'COMPONENT', icon: <SettingOutlined /> },
   { label: '工作站', value: 'UTILITY_STATION', icon: <ToolOutlined /> },
@@ -62,9 +58,6 @@ const NODE_CLASS_LABEL: Record<ResourceNodeClass, string> = {
   SITE: '厂区',
   LINE: '产线',
   ROOM: '房间',
-  SYSTEM: '系统',
-  EQUIPMENT_CLASS: '设备类',
-  EQUIPMENT_MODEL: '设备型号',
   EQUIPMENT_UNIT: '设备实例',
   COMPONENT: '组件/管线',
   UTILITY_STATION: '工作站',
@@ -74,9 +67,6 @@ const NODE_CLASS_CODE: Record<ResourceNodeClass, string> = {
   SITE: 'SIT',
   LINE: 'LIN',
   ROOM: 'ROM',
-  SYSTEM: 'SYS',
-  EQUIPMENT_CLASS: 'ECL',
-  EQUIPMENT_MODEL: 'EMD',
   EQUIPMENT_UNIT: 'EUN',
   COMPONENT: 'CMP',
   UTILITY_STATION: 'UST',
@@ -90,12 +80,6 @@ const NODE_SUBTYPE_OPTIONS: Record<ResourceNodeClass, Array<{ label: string; val
     { label: '辅助间', value: 'AUXILIARY' },
     { label: '通用房间', value: 'UTILITY_SHARED' },
   ],
-  SYSTEM: [
-    { label: '一次性系统', value: 'SUS' },
-    { label: '不锈钢系统', value: 'SS' },
-  ],
-  EQUIPMENT_CLASS: [],
-  EQUIPMENT_MODEL: [],
   EQUIPMENT_UNIT: [],
   COMPONENT: [],
   UTILITY_STATION: [
@@ -108,7 +92,6 @@ const BINDABLE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONEN
 const NODE_SCOPE_OPTIONS: Array<{ label: string; value: ResourceNodeScope }> = [
   { label: '全局共享', value: 'GLOBAL' },
   { label: '部门域', value: 'DEPARTMENT' },
-  { label: '团队归属', value: 'TEAM' },
 ];
 const DEPARTMENT_OPTIONS = [{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }];
 
@@ -120,7 +103,9 @@ interface NodeFormValues {
   parentId?: number | null;
   nodeScope: ResourceNodeScope;
   departmentCode: string | null;
-  ownerOrgUnitId?: number | null;
+  equipmentSystemType: EquipmentSystemType | null;
+  equipmentClass: string;
+  equipmentModel: string;
   boundResourceId?: number | null;
   sortOrder?: number;
   isActive: boolean;
@@ -193,7 +178,9 @@ const findNode = (nodes: ResourceNode[], nodeId: number | null): ResourceNode | 
   return null;
 };
 
-const requiresSubtype = (nodeClass: ResourceNodeClass) => !['SITE', 'LINE', 'EQUIPMENT_UNIT'].includes(nodeClass);
+const requiresSubtype = (nodeClass: ResourceNodeClass) =>
+  nodeClass === 'ROOM' || nodeClass === 'UTILITY_STATION';
+const supportsOptionalSubtype = (nodeClass: ResourceNodeClass) => nodeClass === 'COMPONENT';
 
 const allowedChildBlueprints = (parent: ResourceNode | null): NodeBlueprint[] => {
   if (!parent) {
@@ -214,24 +201,15 @@ const allowedChildBlueprints = (parent: ResourceNode | null): NodeBlueprint[] =>
   if (parent.nodeClass === 'ROOM' && parent.nodeSubtype === 'MAIN_PROCESS') {
     return [
       { nodeClass: 'ROOM', nodeSubtype: 'AUXILIARY', label: '辅助间' },
-      { nodeClass: 'SYSTEM', label: '工艺系统' },
+      { nodeClass: 'EQUIPMENT_UNIT', label: '设备实例' },
     ];
   }
 
   if (parent.nodeClass === 'ROOM' && parent.nodeSubtype === 'UTILITY_SHARED') {
-    return [{ nodeClass: 'UTILITY_STATION', nodeSubtype: 'CIP', label: 'CIP站' }];
-  }
-
-  if (parent.nodeClass === 'SYSTEM') {
-    return [{ nodeClass: 'EQUIPMENT_CLASS', label: '设备类' }];
-  }
-
-  if (parent.nodeClass === 'EQUIPMENT_CLASS') {
-    return [{ nodeClass: 'EQUIPMENT_MODEL', label: '设备型号' }];
-  }
-
-  if (parent.nodeClass === 'EQUIPMENT_MODEL') {
-    return [{ nodeClass: 'EQUIPMENT_UNIT', label: '设备实例' }];
+    return [
+      { nodeClass: 'UTILITY_STATION', nodeSubtype: 'CIP', label: 'CIP站' },
+      { nodeClass: 'UTILITY_STATION', nodeSubtype: 'SIP', label: 'SIP站' },
+    ];
   }
 
   if (parent.nodeClass === 'EQUIPMENT_UNIT') {
@@ -263,7 +241,7 @@ const getSubtypeOptions = (
 
 const getClassIcon = (nodeClass: ResourceNodeClass) => {
   const found = NODE_CLASS_OPTIONS.find((item) => item.value === nodeClass);
-  return found?.icon ?? <AppstoreOutlined />;
+  return found?.icon ?? <SettingOutlined />;
 };
 
 const toTreeData = (nodes: ResourceNode[]): DataNode[] =>
@@ -283,17 +261,11 @@ const toTreeData = (nodes: ResourceNode[]): DataNode[] =>
 const buildNodeCodePreview = (
   nodeScope: ResourceNodeScope,
   departmentCode: string | null,
-  ownerOrgUnitId: number | null,
   nodeClass: ResourceNodeClass,
   nodes: ResourceNode[],
 ) => {
-  const scopeCode = nodeScope === 'GLOBAL' ? 'GLB' : nodeScope === 'DEPARTMENT' ? 'DPT' : 'TEM';
-  const domainToken =
-    nodeScope === 'DEPARTMENT'
-      ? departmentCode || 'USP'
-      : nodeScope === 'TEAM'
-        ? `TEAM${ownerOrgUnitId ?? 'X'}`
-        : 'GLOBAL';
+  const scopeCode = nodeScope === 'GLOBAL' ? 'GLB' : 'DPT';
+  const domainToken = nodeScope === 'DEPARTMENT' ? departmentCode || 'USP' : 'GLOBAL';
   const prefix = `RN-${scopeCode}-${domainToken}-${NODE_CLASS_CODE[nodeClass]}`;
   const maxSuffix = nodes.reduce((max, node) => {
     if (!node.nodeCode.startsWith(`${prefix}-`)) {
@@ -333,7 +305,9 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     parentId: null,
     nodeScope: 'GLOBAL',
     departmentCode: null,
-    ownerOrgUnitId: null,
+    equipmentSystemType: null,
+    equipmentClass: '',
+    equipmentModel: '',
     boundResourceId: null,
     sortOrder: undefined,
     isActive: true,
@@ -419,11 +393,10 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       buildNodeCodePreview(
         draftValues.nodeScope,
         draftValues.departmentCode,
-        draftValues.ownerOrgUnitId ?? null,
         draftValues.nodeClass,
         allNodes,
       ),
-    [allNodes, draftValues.departmentCode, draftValues.nodeClass, draftValues.nodeScope, draftValues.ownerOrgUnitId],
+    [allNodes, draftValues.departmentCode, draftValues.nodeClass, draftValues.nodeScope],
   );
 
   const availableResources = useMemo(() => {
@@ -464,7 +437,9 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         parentId: selectedNode.parentId ?? null,
         nodeScope: selectedNode.nodeScope,
         departmentCode: selectedNode.departmentCode,
-        ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
+        equipmentSystemType: selectedNode.equipmentSystemType ?? null,
+        equipmentClass: selectedNode.equipmentClass ?? '',
+        equipmentModel: selectedNode.equipmentModel ?? '',
         boundResourceId: selectedNode.boundResourceId ?? null,
         sortOrder: selectedNode.sortOrder,
         isActive: selectedNode.isActive,
@@ -482,7 +457,9 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         parentId: null,
         nodeScope: 'GLOBAL',
         departmentCode: null,
-        ownerOrgUnitId: null,
+        equipmentSystemType: null,
+        equipmentClass: '',
+        equipmentModel: '',
         boundResourceId: null,
         sortOrder: undefined,
         isActive: true,
@@ -501,7 +478,9 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         parentId: selectedNode.id,
         nodeScope: selectedNode.nodeScope,
         departmentCode: selectedNode.departmentCode,
-        ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
+        equipmentSystemType: null,
+        equipmentClass: '',
+        equipmentModel: '',
         boundResourceId: null,
         sortOrder: undefined,
         isActive: true,
@@ -511,7 +490,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
   }, [childBlueprints, formMode, selectedNode]);
 
   useEffect(() => {
-    if (!requiresSubtype(draftValues.nodeClass)) {
+    if (!requiresSubtype(draftValues.nodeClass) && !supportsOptionalSubtype(draftValues.nodeClass)) {
       if (draftValues.nodeSubtype) {
         setDraftValues((current) => ({ ...current, nodeSubtype: '' }));
       }
@@ -537,17 +516,24 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       }
 
       if (next.nodeScope === 'GLOBAL') {
-        if (next.departmentCode !== null || next.ownerOrgUnitId !== null) {
-          next = { ...next, departmentCode: null, ownerOrgUnitId: null };
+        if (next.departmentCode !== null) {
+          next = { ...next, departmentCode: null };
         }
       } else if (next.nodeScope === 'DEPARTMENT') {
         const normalizedDepartmentCode = next.departmentCode || 'USP';
-        if (next.departmentCode !== normalizedDepartmentCode || next.ownerOrgUnitId !== null) {
-          next = { ...next, departmentCode: normalizedDepartmentCode, ownerOrgUnitId: null };
+        if (next.departmentCode !== normalizedDepartmentCode) {
+          next = { ...next, departmentCode: normalizedDepartmentCode };
         }
-      } else if (next.nodeScope === 'TEAM') {
-        if (next.departmentCode !== null) {
-          next = { ...next, departmentCode: null };
+      }
+
+      if (next.nodeClass !== 'EQUIPMENT_UNIT') {
+        if (next.equipmentSystemType !== null || next.equipmentClass || next.equipmentModel) {
+          next = {
+            ...next,
+            equipmentSystemType: null,
+            equipmentClass: '',
+            equipmentModel: '',
+          };
         }
       }
 
@@ -588,7 +574,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       }
 
       if (requiresSubtype(draftValues.nodeClass) && !draftValues.nodeSubtype.trim()) {
-        message.error('当前节点类型要求填写 node_subtype');
+        message.error('当前节点类型要求填写节点子类型');
         return;
       }
 
@@ -597,8 +583,11 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         return;
       }
 
-      if (draftValues.nodeScope === 'TEAM' && !draftValues.ownerOrgUnitId) {
-        message.error('团队范围下必须选择归属团队');
+      if (
+        draftValues.nodeClass === 'EQUIPMENT_UNIT' &&
+        (!draftValues.equipmentSystemType || !draftValues.equipmentClass.trim() || !draftValues.equipmentModel.trim())
+      ) {
+        message.error('设备实例必须填写系统类型、设备类和设备型号');
         return;
       }
 
@@ -616,11 +605,16 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         nodeCode: formMode === 'edit' ? draftValues.nodeCode.trim() : undefined,
         nodeName: draftValues.nodeName.trim(),
         nodeClass: draftValues.nodeClass,
-        nodeSubtype: requiresSubtype(draftValues.nodeClass) ? draftValues.nodeSubtype.trim().toUpperCase() : null,
+        nodeSubtype:
+          requiresSubtype(draftValues.nodeClass) || supportsOptionalSubtype(draftValues.nodeClass)
+            ? draftValues.nodeSubtype.trim().toUpperCase() || null
+            : null,
         parentId: draftValues.parentId ?? null,
         nodeScope: draftValues.nodeScope,
         departmentCode: draftValues.nodeScope === 'DEPARTMENT' ? draftValues.departmentCode : null,
-        ownerOrgUnitId: draftValues.nodeScope === 'TEAM' ? draftValues.ownerOrgUnitId ?? null : null,
+        equipmentSystemType: draftValues.nodeClass === 'EQUIPMENT_UNIT' ? draftValues.equipmentSystemType : null,
+        equipmentClass: draftValues.nodeClass === 'EQUIPMENT_UNIT' ? draftValues.equipmentClass.trim() : null,
+        equipmentModel: draftValues.nodeClass === 'EQUIPMENT_UNIT' ? draftValues.equipmentModel.trim() : null,
         boundResourceId: draftValues.boundResourceId ?? null,
         sortOrder: draftValues.sortOrder,
         isActive: draftValues.isActive,
@@ -792,7 +786,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
           </div>
           <h3 className="mt-3 text-2xl font-semibold text-slate-900">工艺模板 V2 语义节点建模</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            采用“树 + 属性表单”维护 SITE/LINE/ROOM/SYSTEM/设备层级，并在 CIP 站配置可清洗对象的多对多引用关系。
+            采用“树 + 属性表单”维护 SITE/LINE/ROOM/EQUIPMENT_UNIT/COMPONENT/UTILITY_STATION，并在 CIP 站配置可清洗对象引用关系。
           </p>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
@@ -913,13 +907,16 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                           ...current,
                           nodeClass: value,
                           nodeSubtype: '',
+                          equipmentSystemType: null,
+                          equipmentClass: '',
+                          equipmentModel: '',
                         }))
                       }
                       style={{ width: '100%' }}
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">node_subtype</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">节点子类型</label>
                     {requiresSubtype(draftValues.nodeClass) ? (
                       subtypeOptions.length > 0 ? (
                         <Select
@@ -937,10 +934,60 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                           }
                         />
                       )
+                    ) : supportsOptionalSubtype(draftValues.nodeClass) ? (
+                      <Input
+                        value={draftValues.nodeSubtype}
+                        placeholder="可选，例如 PIPELINE"
+                        onChange={(event) =>
+                          setDraftValues((current) => ({ ...current, nodeSubtype: event.target.value }))
+                        }
+                      />
                     ) : (
                       <Input value="(不需要)" disabled />
                     )}
                   </div>
+                  {draftValues.nodeClass === 'EQUIPMENT_UNIT' ? (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">设备系统类型</label>
+                        <Select
+                          value={draftValues.equipmentSystemType ?? undefined}
+                          options={[
+                            { value: 'SUS', label: 'SUS' },
+                            { value: 'SS', label: 'SS' },
+                          ]}
+                          onChange={(value) =>
+                            setDraftValues((current) => ({
+                              ...current,
+                              equipmentSystemType: value as EquipmentSystemType,
+                            }))
+                          }
+                          style={{ width: '100%' }}
+                          placeholder="选择系统类型"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">设备类</label>
+                        <Input
+                          value={draftValues.equipmentClass}
+                          placeholder="例如 REACTOR / AKTA"
+                          onChange={(event) =>
+                            setDraftValues((current) => ({ ...current, equipmentClass: event.target.value }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">设备型号</label>
+                        <Input
+                          value={draftValues.equipmentModel}
+                          placeholder="例如 ABEC / AKTA1"
+                          onChange={(event) =>
+                            setDraftValues((current) => ({ ...current, equipmentModel: event.target.value }))
+                          }
+                        />
+                      </div>
+                    </>
+                  ) : null}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">父节点</label>
                     <Select
@@ -950,7 +997,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                       value={draftValues.parentId ?? undefined}
                       onChange={(value) => setDraftValues((current) => ({ ...current, parentId: value ?? null }))}
                       options={allNodes
-                        .filter((node) => node.id !== selectedNode?.id)
+                        .filter((node) => (formMode === 'create-child' ? true : node.id !== selectedNode?.id))
                         .map((node) => ({
                           value: node.id,
                           label: buildNodePath(node.id, nodeMap)
@@ -980,22 +1027,6 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                         value={draftValues.departmentCode ?? undefined}
                         options={DEPARTMENT_OPTIONS}
                         onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
-                        style={{ width: '100%' }}
-                      />
-                    </div>
-                  ) : null}
-                  {draftValues.nodeScope === 'TEAM' ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">归属团队</label>
-                      <Select
-                        allowClear
-                        showSearch
-                        optionFilterProp="label"
-                        value={draftValues.ownerOrgUnitId ?? undefined}
-                        onChange={(value) =>
-                          setDraftValues((current) => ({ ...current, ownerOrgUnitId: value ?? null }))
-                        }
-                        options={teams.map((team) => ({ value: Number(team.id), label: team.unit_name }))}
                         style={{ width: '100%' }}
                       />
                     </div>
@@ -1148,7 +1179,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="mb-3 text-sm font-semibold text-slate-700">CIP 可清洗对象</div>
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                <Alert type="info" showIcon message="仅允许关联位于 SYSTEM(SS) 路径下的 EQUIPMENT_UNIT/COMPONENT。" />
+                <Alert type="info" showIcon message="仅允许关联设备系统类型为 SS 的设备实例或组件。" />
                 <Select
                   mode="multiple"
                   showSearch
@@ -1156,12 +1187,26 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                   loading={cleanableLoading}
                   value={cleanableTargetIds}
                   onChange={(value) => setCleanableTargetIds(value as number[])}
-                  options={cleanableCandidates.map((node) => ({
-                    value: node.id,
-                    label: `${buildNodePath(node.id, nodeMap)
-                      .map((item) => item.nodeName)
-                      .join(' / ')} (${node.nodeCode})`,
-                  }))}
+                  options={cleanableCandidates.map((node) => {
+                    const parentNode = node.parentId ? nodeMap.get(node.parentId) : null;
+                    const systemType =
+                      node.equipmentSystemType ??
+                      (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentSystemType : null);
+                    const equipmentClass =
+                      node.equipmentClass ??
+                      (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentClass : null);
+                    const equipmentModel =
+                      node.equipmentModel ??
+                      (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentModel : null);
+                    const equipmentLabel = [systemType, equipmentClass, equipmentModel].filter(Boolean).join(' / ');
+
+                    return {
+                      value: node.id,
+                      label: `${buildNodePath(node.id, nodeMap)
+                        .map((item) => item.nodeName)
+                        .join(' / ')} (${node.nodeCode})${equipmentLabel ? ` [${equipmentLabel}]` : ''}`,
+                    };
+                  })}
                   style={{ width: '100%' }}
                   placeholder="选择可清洗对象"
                 />

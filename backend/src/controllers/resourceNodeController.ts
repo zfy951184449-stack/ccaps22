@@ -16,13 +16,11 @@ import {
 export const getResourceNodes = async (req: Request, res: Response) => {
   try {
     const departmentCode = typeof req.query.department_code === 'string' ? req.query.department_code : undefined;
-    const ownerOrgUnitId = req.query.owner_org_unit_id ? Number(req.query.owner_org_unit_id) : undefined;
     const includeInactive = req.query.include_inactive === 'true' || req.query.include_inactive === '1';
     const treeMode = req.query.tree !== 'false';
 
     const rows = await listResourceNodes({
       department_code: departmentCode,
-      owner_org_unit_id: ownerOrgUnitId,
       include_inactive: includeInactive,
     });
 
@@ -45,7 +43,9 @@ export const postResourceNode = async (req: Request, res: Response) => {
       parent_id,
       node_scope,
       department_code,
-      owner_org_unit_id,
+      equipment_system_type,
+      equipment_class,
+      equipment_model,
       bound_resource_id,
       sort_order,
       is_active,
@@ -66,7 +66,9 @@ export const postResourceNode = async (req: Request, res: Response) => {
         parent_id: parent_id ?? null,
         node_scope,
         department_code,
-        owner_org_unit_id: owner_org_unit_id ?? null,
+        equipment_system_type: equipment_system_type ?? null,
+        equipment_class: equipment_class ?? null,
+        equipment_model: equipment_model ?? null,
         bound_resource_id: bound_resource_id ?? null,
         sort_order,
         is_active,

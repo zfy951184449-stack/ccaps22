@@ -41,9 +41,6 @@ export type ResourceNodeClass =
   | 'SITE'
   | 'LINE'
   | 'ROOM'
-  | 'SYSTEM'
-  | 'EQUIPMENT_CLASS'
-  | 'EQUIPMENT_MODEL'
   | 'EQUIPMENT_UNIT'
   | 'COMPONENT'
   | 'UTILITY_STATION';
@@ -51,12 +48,11 @@ export type ResourceNodeSubtype =
   | 'MAIN_PROCESS'
   | 'AUXILIARY'
   | 'UTILITY_SHARED'
-  | 'SUS'
-  | 'SS'
   | 'CIP'
   | 'SIP'
   | string;
-export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT' | 'TEAM';
+export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT';
+export type EquipmentSystemType = 'SUS' | 'SS';
 export type TemplateBindingStatus =
   | 'BOUND'
   | 'UNBOUND'
@@ -75,9 +71,9 @@ export interface ResourceNode {
   parentId: number | null;
   nodeScope: ResourceNodeScope;
   departmentCode: string | null;
-  ownerOrgUnitId: number | null;
-  ownerUnitName: string | null;
-  ownerUnitCode: string | null;
+  equipmentSystemType: EquipmentSystemType | null;
+  equipmentClass: string | null;
+  equipmentModel: string | null;
   boundResourceId: number | null;
   boundResourceCode: string | null;
   boundResourceName: string | null;
@@ -372,7 +368,9 @@ export interface ResourceNodePayload {
   parentId?: number | null;
   nodeScope?: ResourceNodeScope;
   departmentCode?: string | null;
-  ownerOrgUnitId?: number | null;
+  equipmentSystemType?: EquipmentSystemType | null;
+  equipmentClass?: string | null;
+  equipmentModel?: string | null;
   boundResourceId?: number | null;
   sortOrder?: number;
   isActive?: boolean;
@@ -430,7 +428,7 @@ export interface PendingBindingItem {
   suggestedNodes: ResourceNode[];
 }
 
-export type ResourceNodeFilterScope = 'referenced' | 'team' | 'all';
+export type ResourceNodeFilterScope = 'referenced' | 'department' | 'all';
 
 export interface TemplateEditorState {
   template: TemplateSummary;
