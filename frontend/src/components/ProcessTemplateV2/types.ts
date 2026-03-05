@@ -56,6 +56,7 @@ export type ResourceNodeSubtype =
   | 'CIP'
   | 'SIP'
   | string;
+export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT' | 'TEAM';
 export type TemplateBindingStatus =
   | 'BOUND'
   | 'UNBOUND'
@@ -72,7 +73,8 @@ export interface ResourceNode {
   nodeClass: ResourceNodeClass;
   nodeSubtype: ResourceNodeSubtype | null;
   parentId: number | null;
-  departmentCode: string;
+  nodeScope: ResourceNodeScope;
+  departmentCode: string | null;
   ownerOrgUnitId: number | null;
   ownerUnitName: string | null;
   ownerUnitCode: string | null;
@@ -368,7 +370,8 @@ export interface ResourceNodePayload {
   nodeClass: ResourceNodeClass;
   nodeSubtype?: ResourceNodeSubtype | null;
   parentId?: number | null;
-  departmentCode?: string;
+  nodeScope?: ResourceNodeScope;
+  departmentCode?: string | null;
   ownerOrgUnitId?: number | null;
   boundResourceId?: number | null;
   sortOrder?: number;

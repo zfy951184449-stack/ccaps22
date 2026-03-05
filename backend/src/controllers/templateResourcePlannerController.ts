@@ -331,7 +331,10 @@ export const getTemplateResourcePlanner = async (req: Request, res: Response) =>
     res.json(payload);
   } catch (error) {
     console.error('Error fetching template resource planner:', error);
-    res.status(500).json({ error: 'Failed to fetch template resource planner' });
+    res.status(500).json({
+      error: 'Failed to fetch template resource planner',
+      detail: error instanceof Error ? error.message : null,
+    });
   }
 };
 
@@ -350,7 +353,10 @@ export const getTemplateResourceEditor = async (req: Request, res: Response) => 
     res.json(payload);
   } catch (error) {
     console.error('Error fetching template resource editor:', error);
-    res.status(500).json({ error: 'Failed to fetch template resource editor' });
+    res.status(500).json({
+      error: 'Failed to fetch template resource editor',
+      detail: error instanceof Error ? error.message : null,
+    });
   }
 };
 

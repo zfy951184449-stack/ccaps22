@@ -21,6 +21,8 @@ export type ResourceNodeClass =
   | 'COMPONENT'
   | 'UTILITY_STATION';
 
+export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT' | 'TEAM';
+
 export type ResourceNodeRelationType = 'CIP_CLEANABLE';
 
 export type TemplateBindingStatus =
@@ -39,7 +41,8 @@ export interface ResourceNodeRecord {
   node_class: ResourceNodeClass;
   node_subtype: string | null;
   parent_id: number | null;
-  department_code: string;
+  node_scope: ResourceNodeScope;
+  department_code: string | null;
   owner_org_unit_id: number | null;
   owner_unit_name: string | null;
   owner_unit_code: string | null;
@@ -83,6 +86,30 @@ type MySqlErrorWithCode = Error & {
   sqlMessage?: string;
 };
 
+const isMissingNodeSubtypeColumnError = (error: unknown): boolean => {
+  const mysqlError = error as MySqlErrorWithCode;
+  const message = `${mysqlError?.sqlMessage ?? mysqlError?.message ?? ''}`;
+  return mysqlError?.code === 'ER_BAD_FIELD_ERROR' && message.includes('node_subtype');
+};
+
+const hasResourceNodeRelationsTable = async (executor: SqlExecutor = pool): Promise<boolean> => {
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `SELECT COUNT(*) AS table_count
+     FROM information_schema.tables
+     WHERE table_schema = DATABASE() AND table_name = 'resource_node_relations'`,
+  );
+  return Number(rows[0]?.table_count ?? 0) > 0;
+};
+
+const assertResourceNodeRelationsTableReady = async (executor: SqlExecutor = pool): Promise<void> => {
+  const exists = await hasResourceNodeRelationsTable(executor);
+  if (!exists) {
+    throw new Error(
+      'resource_node_relations table not found. Please run migration: 20260305_upgrade_process_template_v2_resource_nodes_semantic.sql',
+    );
+  }
+};
+
 const RESOURCE_NODE_CLASS_CODE: Record<ResourceNodeClass, string> = {
   SITE: 'SIT',
   LINE: 'LIN',
@@ -93,6 +120,12 @@ const RESOURCE_NODE_CLASS_CODE: Record<ResourceNodeClass, string> = {
   EQUIPMENT_UNIT: 'EUN',
   COMPONENT: 'CMP',
   UTILITY_STATION: 'UST',
+};
+
+const RESOURCE_NODE_SCOPE_CODE: Record<ResourceNodeScope, string> = {
+  GLOBAL: 'GLB',
+  DEPARTMENT: 'DPT',
+  TEAM: 'TEM',
 };
 
 const ROOM_SUBTYPES = new Set(['MAIN_PROCESS', 'AUXILIARY', 'UTILITY_SHARED']);
@@ -189,6 +222,32 @@ const assertNodeSubtype = (nodeClass: ResourceNodeClass, rawSubtype: unknown): s
   }
 
   return subtype;
+};
+
+const normalizeNodeScope = (value: unknown): ResourceNodeScope | null => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toUpperCase();
+  if (normalized === 'GLOBAL' || normalized === 'DEPARTMENT' || normalized === 'TEAM') {
+    return normalized as ResourceNodeScope;
+  }
+
+  return null;
+};
+
+const normalizeOwnerOrgUnitId = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const normalized = Number(value);
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    throw new Error('owner_org_unit_id must be a positive integer');
+  }
+
+  return normalized;
 };
 
 const assertParentChildRule = (
@@ -310,7 +369,14 @@ const mapResourceNodeRow = (row: RowDataPacket): ResourceNodeRecord => ({
   node_class: String(row.node_class) as ResourceNodeClass,
   node_subtype: row.node_subtype ? String(row.node_subtype) : null,
   parent_id: row.parent_id !== null && row.parent_id !== undefined ? Number(row.parent_id) : null,
-  department_code: String(row.department_code),
+  node_scope:
+    normalizeNodeScope(row.node_scope) ??
+    (row.owner_org_unit_id !== null && row.owner_org_unit_id !== undefined
+      ? 'TEAM'
+      : normalizeDepartmentCode(row.department_code)
+        ? 'DEPARTMENT'
+        : 'GLOBAL'),
+  department_code: normalizeDepartmentCode(row.department_code) ?? null,
   owner_org_unit_id:
     row.owner_org_unit_id !== null && row.owner_org_unit_id !== undefined ? Number(row.owner_org_unit_id) : null,
   owner_unit_name: row.owner_unit_name ? String(row.owner_unit_name) : null,
@@ -449,12 +515,21 @@ const assertCipStationNode = async (nodeId: number, executor: SqlExecutor = pool
 };
 
 const generateNextResourceNodeCode = async (
-  departmentCode: string,
+  nodeScope: ResourceNodeScope,
+  departmentCode: string | null,
+  ownerOrgUnitId: number | null,
   nodeClass: ResourceNodeClass,
   executor: SqlExecutor = pool,
 ): Promise<string> => {
   const classCode = RESOURCE_NODE_CLASS_CODE[nodeClass];
-  const prefix = `RN-${departmentCode}-${classCode}`;
+  const scopeCode = RESOURCE_NODE_SCOPE_CODE[nodeScope];
+  const domainToken =
+    nodeScope === 'DEPARTMENT'
+      ? departmentCode ?? DEFAULT_DEPARTMENT_CODE
+      : nodeScope === 'TEAM'
+        ? `TEAM${ownerOrgUnitId ?? 'X'}`
+        : 'GLOBAL';
+  const prefix = `RN-${scopeCode}-${domainToken}-${classCode}`;
 
   const [rows] = await executor.execute<RowDataPacket[]>(
     `SELECT node_code
@@ -527,6 +602,62 @@ const loadResourceDepartmentCode = async (
   return normalizeDepartmentCode(rows[0].department_code) ?? null;
 };
 
+const resolveNodeGovernance = async (
+  input: {
+    nodeScope: ResourceNodeScope;
+    departmentCodeInput: unknown;
+    ownerOrgUnitIdInput: unknown;
+    parentNode: ResourceNodeRecord | null;
+    currentNode?: ResourceNodeRecord | null;
+    boundResourceId?: number | null;
+  },
+  executor: SqlExecutor = pool,
+): Promise<{
+  nodeScope: ResourceNodeScope;
+  departmentCode: string | null;
+  ownerOrgUnitId: number | null;
+}> => {
+  const normalizedOwnerOrgUnitId = normalizeOwnerOrgUnitId(input.ownerOrgUnitIdInput);
+
+  if (input.nodeScope === 'GLOBAL') {
+    return {
+      nodeScope: 'GLOBAL',
+      departmentCode: null,
+      ownerOrgUnitId: null,
+    };
+  }
+
+  if (input.nodeScope === 'DEPARTMENT') {
+    const resolvedDepartmentCode =
+      normalizeDepartmentCode(input.departmentCodeInput) ??
+      normalizeDepartmentCode(input.parentNode?.department_code) ??
+      (await loadResourceDepartmentCode(input.boundResourceId, executor)) ??
+      (await resolveDepartmentCodeFromOrgUnit(normalizedOwnerOrgUnitId, executor)) ??
+      normalizeDepartmentCode(input.currentNode?.department_code) ??
+      DEFAULT_DEPARTMENT_CODE;
+
+    return {
+      nodeScope: 'DEPARTMENT',
+      departmentCode: resolvedDepartmentCode,
+      ownerOrgUnitId: null,
+    };
+  }
+
+  const resolvedOwnerOrgUnitId =
+    normalizedOwnerOrgUnitId ??
+    normalizeOwnerOrgUnitId(input.parentNode?.owner_org_unit_id) ??
+    normalizeOwnerOrgUnitId(input.currentNode?.owner_org_unit_id);
+  if (!resolvedOwnerOrgUnitId) {
+    throw new Error('TEAM node_scope requires owner_org_unit_id');
+  }
+
+  return {
+    nodeScope: 'TEAM',
+    departmentCode: null,
+    ownerOrgUnitId: resolvedOwnerOrgUnitId,
+  };
+};
+
 export const normalizeResourceNodeOrder = async (
   parentId: number | null,
   executor: SqlExecutor = pool,
@@ -551,7 +682,8 @@ export const createResourceNode = async (
     node_class: ResourceNodeClass;
     node_subtype?: string | null;
     parent_id?: number | null;
-    department_code?: string;
+    node_scope?: ResourceNodeScope;
+    department_code?: string | null;
     owner_org_unit_id?: number | null;
     bound_resource_id?: number | null;
     sort_order?: number;
@@ -570,12 +702,30 @@ export const createResourceNode = async (
     throw new Error(`Only ${Array.from(BINDABLE_NODE_CLASSES).join(', ')} can bind a resource`);
   }
 
-  const resolvedDepartmentCode =
-    normalizeDepartmentCode(payload.department_code) ??
-    normalizeDepartmentCode(parentNode?.department_code) ??
-    (await loadResourceDepartmentCode(payload.bound_resource_id, executor)) ??
-    (await resolveDepartmentCodeFromOrgUnit(payload.owner_org_unit_id ?? null, executor)) ??
-    DEFAULT_DEPARTMENT_CODE;
+  const explicitNodeScope = normalizeNodeScope(payload.node_scope);
+  if (payload.node_scope !== undefined && !explicitNodeScope) {
+    throw new Error('node_scope must be GLOBAL, DEPARTMENT or TEAM');
+  }
+
+  const inferredNodeScope =
+    explicitNodeScope ??
+    parentNode?.node_scope ??
+    (normalizeOwnerOrgUnitId(payload.owner_org_unit_id) ? 'TEAM' : normalizeDepartmentCode(payload.department_code) ? 'DEPARTMENT' : 'GLOBAL');
+
+  if (payload.node_class === 'SITE' && inferredNodeScope !== 'GLOBAL') {
+    throw new Error('SITE nodes must use GLOBAL node_scope');
+  }
+
+  const governance = await resolveNodeGovernance(
+    {
+      nodeScope: inferredNodeScope,
+      departmentCodeInput: payload.department_code,
+      ownerOrgUnitIdInput: payload.owner_org_unit_id,
+      parentNode,
+      boundResourceId: payload.bound_resource_id ?? null,
+    },
+    executor,
+  );
 
   const finalSortOrder =
     payload.sort_order ??
@@ -593,17 +743,18 @@ export const createResourceNode = async (
   const insertNode = async (nodeCode: string) => {
     const [result] = await executor.execute<ResultSetHeader>(
       `INSERT INTO resource_nodes (
-        node_code, node_name, node_class, node_subtype, parent_id, department_code,
+        node_code, node_name, node_class, node_subtype, parent_id, node_scope, department_code,
         owner_org_unit_id, bound_resource_id, sort_order, is_active, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nodeCode,
         payload.node_name,
         payload.node_class,
         normalizedSubtype,
         parentId,
-        resolvedDepartmentCode,
-        payload.owner_org_unit_id ?? null,
+        governance.nodeScope,
+        governance.departmentCode,
+        governance.ownerOrgUnitId,
         payload.bound_resource_id ?? null,
         resolvedSortOrder,
         payload.is_active === false ? 0 : 1,
@@ -622,7 +773,9 @@ export const createResourceNode = async (
   } else {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const generatedNodeCode = await generateNextResourceNodeCode(
-        resolvedDepartmentCode,
+        governance.nodeScope,
+        governance.departmentCode,
+        governance.ownerOrgUnitId,
         payload.node_class,
         executor,
       );
@@ -656,7 +809,8 @@ export const updateResourceNode = async (
     node_class: ResourceNodeClass;
     node_subtype: string | null;
     parent_id: number | null;
-    department_code: string;
+    node_scope: ResourceNodeScope;
+    department_code: string | null;
     owner_org_unit_id: number | null;
     bound_resource_id: number | null;
     sort_order: number;
@@ -683,8 +837,15 @@ export const updateResourceNode = async (
     await assertChildrenCompatibleWithNode(nodeId, nextClass, nextSubtype, executor);
   }
 
-  const nextOwnerOrgUnitId =
-    payload.owner_org_unit_id !== undefined ? payload.owner_org_unit_id : currentNode.owner_org_unit_id;
+  const explicitNodeScope = payload.node_scope !== undefined ? normalizeNodeScope(payload.node_scope) : null;
+  if (payload.node_scope !== undefined && !explicitNodeScope) {
+    throw new Error('node_scope must be GLOBAL, DEPARTMENT or TEAM');
+  }
+  const nextNodeScope = explicitNodeScope ?? currentNode.node_scope;
+  if (nextClass === 'SITE' && nextNodeScope !== 'GLOBAL') {
+    throw new Error('SITE nodes must use GLOBAL node_scope');
+  }
+
   const nextBoundResourceId =
     payload.bound_resource_id !== undefined ? payload.bound_resource_id : currentNode.bound_resource_id;
 
@@ -698,6 +859,30 @@ export const updateResourceNode = async (
       throw new Error('Only leaf nodes can bind a resource');
     }
   }
+
+  const governanceNeedsRefresh =
+    payload.node_scope !== undefined ||
+    payload.department_code !== undefined ||
+    payload.owner_org_unit_id !== undefined ||
+    payload.parent_id !== undefined ||
+    payload.bound_resource_id !== undefined ||
+    payload.node_class !== undefined;
+
+  const governance = governanceNeedsRefresh
+    ? await resolveNodeGovernance(
+        {
+          nodeScope: nextNodeScope,
+          departmentCodeInput:
+            payload.department_code !== undefined ? payload.department_code : currentNode.department_code,
+          ownerOrgUnitIdInput:
+            payload.owner_org_unit_id !== undefined ? payload.owner_org_unit_id : currentNode.owner_org_unit_id,
+          parentNode: nextParentNode,
+          currentNode,
+          boundResourceId: nextBoundResourceId ?? null,
+        },
+        executor,
+      )
+    : null;
 
   const updates: string[] = [];
   const params: Array<string | number | null> = [];
@@ -722,23 +907,10 @@ export const updateResourceNode = async (
   if (payload.parent_id !== undefined) {
     assign('parent_id', payload.parent_id ?? null);
   }
-  if (payload.department_code !== undefined) {
-    assign('department_code', normalizeDepartmentCode(payload.department_code) ?? DEFAULT_DEPARTMENT_CODE);
-  } else if (
-    payload.parent_id !== undefined ||
-    payload.owner_org_unit_id !== undefined ||
-    payload.bound_resource_id !== undefined
-  ) {
-    const resolvedDepartmentCode =
-      normalizeDepartmentCode(nextParentNode?.department_code) ??
-      (await loadResourceDepartmentCode(nextBoundResourceId, executor)) ??
-      (await resolveDepartmentCodeFromOrgUnit(nextOwnerOrgUnitId ?? null, executor)) ??
-      normalizeDepartmentCode(currentNode.department_code) ??
-      DEFAULT_DEPARTMENT_CODE;
-    assign('department_code', resolvedDepartmentCode);
-  }
-  if (payload.owner_org_unit_id !== undefined) {
-    assign('owner_org_unit_id', payload.owner_org_unit_id ?? null);
+  if (governance) {
+    assign('node_scope', governance.nodeScope);
+    assign('department_code', governance.departmentCode);
+    assign('owner_org_unit_id', governance.ownerOrgUnitId);
   }
   if (payload.bound_resource_id !== undefined) {
     assign('bound_resource_id', payload.bound_resource_id ?? null);
@@ -812,15 +984,17 @@ export const deleteResourceNode = async (nodeId: number, executor: SqlExecutor =
     throw new Error('Cannot delete resource node referenced by template operations');
   }
 
-  const [relationRows] = await executor.execute<RowDataPacket[]>(
-    `SELECT COUNT(*) AS relation_count
-     FROM resource_node_relations
-     WHERE source_node_id = ? OR target_node_id = ?`,
-    [nodeId, nodeId],
-  );
+  if (await hasResourceNodeRelationsTable(executor)) {
+    const [relationRows] = await executor.execute<RowDataPacket[]>(
+      `SELECT COUNT(*) AS relation_count
+       FROM resource_node_relations
+       WHERE source_node_id = ? OR target_node_id = ?`,
+      [nodeId, nodeId],
+    );
 
-  if (Number(relationRows[0]?.relation_count ?? 0) > 0) {
-    throw new Error('Cannot delete resource node referenced by CIP cleanable relations');
+    if (Number(relationRows[0]?.relation_count ?? 0) > 0) {
+      throw new Error('Cannot delete resource node referenced by CIP cleanable relations');
+    }
   }
 
   const currentNode = await assertNodeExists(nodeId, executor);
@@ -838,8 +1012,7 @@ export const listTemplateScheduleBindings = async (
   }
 
   const placeholders = scheduleIds.map(() => '?').join(', ');
-  const [rows] = await executor.execute<RowDataPacket[]>(
-    `SELECT
+  const buildQuery = (includeNodeSubtype: boolean) => `SELECT
         b.id,
         b.template_schedule_id,
         b.resource_node_id,
@@ -847,7 +1020,7 @@ export const listTemplateScheduleBindings = async (
         rn.node_code,
         rn.node_name,
         rn.node_class,
-        rn.node_subtype,
+        ${includeNodeSubtype ? 'rn.node_subtype' : 'NULL AS node_subtype'},
         rn.parent_id,
         rn.department_code,
         rn.owner_org_unit_id,
@@ -867,9 +1040,19 @@ export const listTemplateScheduleBindings = async (
      LEFT JOIN resource_nodes rn ON rn.id = b.resource_node_id
      LEFT JOIN organization_units ou ON ou.id = rn.owner_org_unit_id
      LEFT JOIN resources r ON r.id = rn.bound_resource_id
-     WHERE b.template_schedule_id IN (${placeholders})`,
-    scheduleIds,
-  );
+     WHERE b.template_schedule_id IN (${placeholders})`;
+
+  let rows: RowDataPacket[];
+  try {
+    const [nextRows] = await executor.execute<RowDataPacket[]>(buildQuery(true), scheduleIds);
+    rows = nextRows;
+  } catch (error) {
+    if (!isMissingNodeSubtypeColumnError(error)) {
+      throw error;
+    }
+    const [nextRows] = await executor.execute<RowDataPacket[]>(buildQuery(false), scheduleIds);
+    rows = nextRows;
+  }
 
   rows.forEach((row) => {
     const node = row.resource_node_id ? mapResourceNodeRow(row) : null;
@@ -1051,6 +1234,7 @@ export const listCipCleanableTargets = async (
   stationNodeId: number,
   executor: SqlExecutor = pool,
 ): Promise<ResourceNodeRelationRecord[]> => {
+  await assertResourceNodeRelationsTableReady(executor);
   await assertCipStationNode(stationNodeId, executor);
 
   const [rows] = await executor.execute<RowDataPacket[]>(
@@ -1121,6 +1305,7 @@ export const replaceCipCleanableTargets = async (
   targetNodeIds: number[],
   executor: SqlExecutor = pool,
 ): Promise<ResourceNodeRelationRecord[]> => {
+  await assertResourceNodeRelationsTableReady(executor);
   await assertCipStationNode(stationNodeId, executor);
 
   const nodes = await listResourceNodes({ include_inactive: true }, executor);
@@ -1173,7 +1358,9 @@ export const replaceCipCleanableTargets = async (
 
 export const clearResourceNodeTreeForRebuild = async (executor: SqlExecutor = pool): Promise<void> => {
   await executor.execute('DELETE FROM template_stage_operation_resource_bindings');
-  await executor.execute('DELETE FROM resource_node_relations');
+  if (await hasResourceNodeRelationsTable(executor)) {
+    await executor.execute('DELETE FROM resource_node_relations');
+  }
   await executor.execute('UPDATE resource_nodes SET parent_id = NULL');
   await executor.execute('DELETE FROM resource_nodes');
 };

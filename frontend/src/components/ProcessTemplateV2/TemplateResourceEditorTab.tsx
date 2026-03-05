@@ -480,8 +480,10 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       console.error('Failed to load template resource editor:', error);
       setEditor(null);
       const apiMessage =
-        typeof (error as any)?.response?.data?.error === 'string'
-          ? (error as any).response.data.error
+        typeof (error as any)?.response?.data?.detail === 'string'
+          ? (error as any).response.data.detail
+          : typeof (error as any)?.response?.data?.error === 'string'
+            ? (error as any).response.data.error
           : typeof (error as Error)?.message === 'string'
             ? (error as Error).message
             : '';

@@ -86,7 +86,19 @@ const mapResourceNode = (data: any): ResourceNode => ({
   nodeClass: data.nodeClass ?? data.node_class,
   nodeSubtype: data.nodeSubtype ?? data.node_subtype ?? null,
   parentId: data.parentId ?? data.parent_id ?? null,
-  departmentCode: data.departmentCode ?? data.department_code,
+  nodeScope: (() => {
+    const explicitScope = data.nodeScope ?? data.node_scope ?? null;
+    if (explicitScope) {
+      return explicitScope;
+    }
+    const ownerOrgUnitId = data.ownerOrgUnitId ?? data.owner_org_unit_id ?? null;
+    if (ownerOrgUnitId !== null && ownerOrgUnitId !== undefined) {
+      return 'TEAM';
+    }
+    const departmentCode = data.departmentCode ?? data.department_code ?? null;
+    return departmentCode ? 'DEPARTMENT' : 'GLOBAL';
+  })(),
+  departmentCode: data.departmentCode ?? data.department_code ?? null,
   ownerOrgUnitId: data.ownerOrgUnitId ?? data.owner_org_unit_id ?? null,
   ownerUnitName: data.ownerUnitName ?? data.owner_unit_name ?? null,
   ownerUnitCode: data.ownerUnitCode ?? data.owner_unit_code ?? null,
@@ -322,12 +334,13 @@ const buildEditorFallbackFromPlanner = (planner: TemplateResourcePlannerResponse
   operationLibrary: [],
 });
 
-const toResourceNodePayload = (payload: ResourceNodePayload) => ({
+const toResourceNodePayload = (payload: Partial<ResourceNodePayload>) => ({
   node_code: payload.nodeCode,
   node_name: payload.nodeName,
   node_class: payload.nodeClass,
   node_subtype: payload.nodeSubtype ?? null,
   parent_id: payload.parentId ?? null,
+  node_scope: payload.nodeScope,
   department_code: payload.departmentCode,
   owner_org_unit_id: payload.ownerOrgUnitId ?? null,
   bound_resource_id: payload.boundResourceId ?? null,
@@ -572,7 +585,7 @@ export const processTemplateV2Api = {
     return Number(response.data.id);
   },
   updateResourceNode: async (nodeId: number, payload: Partial<ResourceNodePayload>) => {
-    await client.patch(`/resource-nodes/${nodeId}`, toResourceNodePayload(payload as ResourceNodePayload));
+    await client.patch(`/resource-nodes/${nodeId}`, toResourceNodePayload(payload));
   },
   moveResourceNode: async (nodeId: number, payload: ResourceNodeMovePayload) => {
     await client.post(`/resource-nodes/${nodeId}/move`, {

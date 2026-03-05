@@ -34,6 +34,7 @@ import {
   PlannerOperation,
   ResourceNode,
   ResourceNodeClass,
+  ResourceNodeScope,
   TeamSummary,
 } from './types';
 
@@ -104,6 +105,12 @@ const NODE_SUBTYPE_OPTIONS: Record<ResourceNodeClass, Array<{ label: string; val
 };
 
 const BINDABLE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONENT', 'UTILITY_STATION']);
+const NODE_SCOPE_OPTIONS: Array<{ label: string; value: ResourceNodeScope }> = [
+  { label: '全局共享', value: 'GLOBAL' },
+  { label: '部门域', value: 'DEPARTMENT' },
+  { label: '团队归属', value: 'TEAM' },
+];
+const DEPARTMENT_OPTIONS = [{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }];
 
 interface NodeFormValues {
   nodeCode: string;
@@ -111,7 +118,8 @@ interface NodeFormValues {
   nodeClass: ResourceNodeClass;
   nodeSubtype: string;
   parentId?: number | null;
-  departmentCode: string;
+  nodeScope: ResourceNodeScope;
+  departmentCode: string | null;
   ownerOrgUnitId?: number | null;
   boundResourceId?: number | null;
   sortOrder?: number;
@@ -272,8 +280,21 @@ const toTreeData = (nodes: ResourceNode[]): DataNode[] =>
     children: toTreeData(node.children),
   }));
 
-const buildNodeCodePreview = (departmentCode: string, nodeClass: ResourceNodeClass, nodes: ResourceNode[]) => {
-  const prefix = `RN-${departmentCode}-${NODE_CLASS_CODE[nodeClass]}`;
+const buildNodeCodePreview = (
+  nodeScope: ResourceNodeScope,
+  departmentCode: string | null,
+  ownerOrgUnitId: number | null,
+  nodeClass: ResourceNodeClass,
+  nodes: ResourceNode[],
+) => {
+  const scopeCode = nodeScope === 'GLOBAL' ? 'GLB' : nodeScope === 'DEPARTMENT' ? 'DPT' : 'TEM';
+  const domainToken =
+    nodeScope === 'DEPARTMENT'
+      ? departmentCode || 'USP'
+      : nodeScope === 'TEAM'
+        ? `TEAM${ownerOrgUnitId ?? 'X'}`
+        : 'GLOBAL';
+  const prefix = `RN-${scopeCode}-${domainToken}-${NODE_CLASS_CODE[nodeClass]}`;
   const maxSuffix = nodes.reduce((max, node) => {
     if (!node.nodeCode.startsWith(`${prefix}-`)) {
       return max;
@@ -310,7 +331,8 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     nodeClass: 'SITE',
     nodeSubtype: '',
     parentId: null,
-    departmentCode: 'USP',
+    nodeScope: 'GLOBAL',
+    departmentCode: null,
     ownerOrgUnitId: null,
     boundResourceId: null,
     sortOrder: undefined,
@@ -393,8 +415,15 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
   );
 
   const generatedNodeCodePreview = useMemo(
-    () => buildNodeCodePreview(draftValues.departmentCode, draftValues.nodeClass, allNodes),
-    [allNodes, draftValues.departmentCode, draftValues.nodeClass],
+    () =>
+      buildNodeCodePreview(
+        draftValues.nodeScope,
+        draftValues.departmentCode,
+        draftValues.ownerOrgUnitId ?? null,
+        draftValues.nodeClass,
+        allNodes,
+      ),
+    [allNodes, draftValues.departmentCode, draftValues.nodeClass, draftValues.nodeScope, draftValues.ownerOrgUnitId],
   );
 
   const availableResources = useMemo(() => {
@@ -433,6 +462,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         nodeClass: selectedNode.nodeClass,
         nodeSubtype: selectedNode.nodeSubtype ?? '',
         parentId: selectedNode.parentId ?? null,
+        nodeScope: selectedNode.nodeScope,
         departmentCode: selectedNode.departmentCode,
         ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
         boundResourceId: selectedNode.boundResourceId ?? null,
@@ -450,7 +480,8 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         nodeClass: 'SITE',
         nodeSubtype: '',
         parentId: null,
-        departmentCode: 'USP',
+        nodeScope: 'GLOBAL',
+        departmentCode: null,
         ownerOrgUnitId: null,
         boundResourceId: null,
         sortOrder: undefined,
@@ -468,6 +499,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         nodeClass: firstBlueprint?.nodeClass ?? selectedNode.nodeClass,
         nodeSubtype: firstBlueprint?.nodeSubtype ?? '',
         parentId: selectedNode.id,
+        nodeScope: selectedNode.nodeScope,
         departmentCode: selectedNode.departmentCode,
         ownerOrgUnitId: selectedNode.ownerOrgUnitId ?? null,
         boundResourceId: null,
@@ -495,6 +527,33 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       setDraftValues((current) => ({ ...current, nodeSubtype: subtypeOptions[0].value }));
     }
   }, [draftValues.nodeClass, draftValues.nodeSubtype, subtypeOptions]);
+
+  useEffect(() => {
+    setDraftValues((current) => {
+      let next = current;
+
+      if (next.nodeClass === 'SITE' && next.nodeScope !== 'GLOBAL') {
+        next = { ...next, nodeScope: 'GLOBAL' };
+      }
+
+      if (next.nodeScope === 'GLOBAL') {
+        if (next.departmentCode !== null || next.ownerOrgUnitId !== null) {
+          next = { ...next, departmentCode: null, ownerOrgUnitId: null };
+        }
+      } else if (next.nodeScope === 'DEPARTMENT') {
+        const normalizedDepartmentCode = next.departmentCode || 'USP';
+        if (next.departmentCode !== normalizedDepartmentCode || next.ownerOrgUnitId !== null) {
+          next = { ...next, departmentCode: normalizedDepartmentCode, ownerOrgUnitId: null };
+        }
+      } else if (next.nodeScope === 'TEAM') {
+        if (next.departmentCode !== null) {
+          next = { ...next, departmentCode: null };
+        }
+      }
+
+      return next;
+    });
+  }, [draftValues.nodeClass, draftValues.nodeScope]);
 
   const loadCleanableTargets = useCallback(async (node: ResourceNode | null) => {
     if (!node || node.nodeClass !== 'UTILITY_STATION' || node.nodeSubtype !== 'CIP') {
@@ -533,6 +592,16 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         return;
       }
 
+      if (draftValues.nodeScope === 'DEPARTMENT' && !draftValues.departmentCode) {
+        message.error('部门域范围下必须选择部门');
+        return;
+      }
+
+      if (draftValues.nodeScope === 'TEAM' && !draftValues.ownerOrgUnitId) {
+        message.error('团队范围下必须选择归属团队');
+        return;
+      }
+
       let metadata: Record<string, unknown> | null = null;
       if (draftValues.metadataText?.trim()) {
         try {
@@ -549,8 +618,9 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         nodeClass: draftValues.nodeClass,
         nodeSubtype: requiresSubtype(draftValues.nodeClass) ? draftValues.nodeSubtype.trim().toUpperCase() : null,
         parentId: draftValues.parentId ?? null,
-        departmentCode: draftValues.departmentCode,
-        ownerOrgUnitId: draftValues.ownerOrgUnitId ?? null,
+        nodeScope: draftValues.nodeScope,
+        departmentCode: draftValues.nodeScope === 'DEPARTMENT' ? draftValues.departmentCode : null,
+        ownerOrgUnitId: draftValues.nodeScope === 'TEAM' ? draftValues.ownerOrgUnitId ?? null : null,
         boundResourceId: draftValues.boundResourceId ?? null,
         sortOrder: draftValues.sortOrder,
         isActive: draftValues.isActive,
@@ -892,28 +962,44 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">部门域</label>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">归属范围</label>
                     <Select
-                      value={draftValues.departmentCode}
-                      options={[{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }]}
-                      onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">归属团队</label>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      value={draftValues.ownerOrgUnitId ?? undefined}
+                      value={draftValues.nodeScope}
+                      options={NODE_SCOPE_OPTIONS}
                       onChange={(value) =>
-                        setDraftValues((current) => ({ ...current, ownerOrgUnitId: value ?? null }))
+                        setDraftValues((current) => ({ ...current, nodeScope: value as ResourceNodeScope }))
                       }
-                      options={teams.map((team) => ({ value: Number(team.id), label: team.unit_name }))}
                       style={{ width: '100%' }}
+                      disabled={draftValues.nodeClass === 'SITE'}
                     />
                   </div>
+                  {draftValues.nodeScope === 'DEPARTMENT' ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">部门域</label>
+                      <Select
+                        value={draftValues.departmentCode ?? undefined}
+                        options={DEPARTMENT_OPTIONS}
+                        onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  ) : null}
+                  {draftValues.nodeScope === 'TEAM' ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">归属团队</label>
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        value={draftValues.ownerOrgUnitId ?? undefined}
+                        onChange={(value) =>
+                          setDraftValues((current) => ({ ...current, ownerOrgUnitId: value ?? null }))
+                        }
+                        options={teams.map((team) => ({ value: Number(team.id), label: team.unit_name }))}
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-slate-700">排序</label>
                     <InputNumber
