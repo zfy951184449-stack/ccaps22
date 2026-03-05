@@ -17,6 +17,11 @@ export interface TemplateSummary {
   team_name: string | null;
   description: string;
   total_days: number;
+  stage_count?: number;
+  unbound_count?: number;
+  constraint_conflict_count?: number;
+  invalid_binding_count?: number;
+  last_validated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -120,6 +125,119 @@ export interface OperationLibraryItem {
   standard_time: number;
   required_people: number;
   description?: string | null;
+  operation_type_id?: number | null;
+  operation_type_code?: string | null;
+  operation_type_name?: string | null;
+  operation_type_color?: string | null;
+  qualification_count?: number;
+}
+
+export interface OperationTypeOption {
+  id: number;
+  typeCode: string;
+  typeName: string;
+  color: string;
+  teamId?: number | null;
+  teamCode?: string | null;
+  teamName?: string | null;
+}
+
+export type OperationCreateSourceMode = 'existing' | 'new';
+export type OperationCreateSourceFilter = 'recent' | 'stage' | 'department' | 'all';
+export type OperationCreateWindowMode = 'auto' | 'manual';
+
+export interface OperationCreateContext {
+  source: 'toolbar' | 'stage' | 'canvas' | 'unplaced' | 'copy';
+  stageId?: number | null;
+  resourceNodeId?: number | null;
+  absoluteStartHour?: number;
+  operationDay?: number;
+  recommendedTime?: number;
+  recommendedDayOffset?: number;
+  windowStartTime?: number;
+  windowStartDayOffset?: number;
+  windowEndTime?: number;
+  windowEndDayOffset?: number;
+}
+
+export interface OperationCreateConstraintDraft {
+  tempId: string;
+  relationType: 'predecessor' | 'successor';
+  relatedScheduleId: number | null;
+  constraintType: 1 | 2 | 3 | 4;
+  lagTime: number;
+  lagType?: 'ASAP' | 'FIXED' | 'WINDOW' | 'NEXT_DAY' | 'NEXT_SHIFT' | 'COOLING' | 'BATCH_END';
+  lagMin?: number;
+  lagMax?: number | null;
+  constraintLevel?: number | null;
+  constraintName?: string;
+  description?: string;
+}
+
+export interface OperationCreateFormState {
+  sourceDraft: {
+    mode: OperationCreateSourceMode;
+    filter: OperationCreateSourceFilter;
+    searchValue: string;
+    operationId: number | null;
+    newOperationName: string;
+    nextOperationCode: string;
+    standardTime: number;
+    requiredPeople: number;
+    operationTypeId: number | null;
+    description: string;
+  };
+  placementDraft: {
+    stageId: number | null;
+    resourceNodeId: number | null;
+  };
+  timingDraft: {
+    operationDay: number;
+    recommendedTime: number;
+    recommendedDayOffset: number;
+    durationHours: number;
+    windowMode: OperationCreateWindowMode;
+    windowStartTime: number;
+    windowStartDayOffset: number;
+    windowEndTime: number;
+    windowEndDayOffset: number;
+    absoluteStartHour?: number;
+  };
+  rulesDraft: {
+    requirements: ResourceRequirementRule[];
+  };
+  constraintsDraft: {
+    items: OperationCreateConstraintDraft[];
+  };
+  shareGroupDraft: {
+    assignGroupId: number | null;
+    createNew: boolean;
+    newGroupName: string;
+    newGroupMode: 'SAME_TEAM' | 'DIFFERENT';
+    memberIds: number[];
+  };
+}
+
+export interface OperationCreatePreview {
+  stageName: string;
+  nodeName: string;
+  dayLabel: string;
+  durationHours: number;
+  isUnplaced: boolean;
+  hasRules: boolean;
+}
+
+export interface OperationCreateValidationIssue {
+  key: string;
+  level: 'error' | 'warning';
+  section: 'source' | 'placement' | 'timing' | 'rules' | 'constraints' | 'share';
+  message: string;
+}
+
+export interface OperationSourceRecommendation {
+  operationId: number;
+  reason: string;
+  badge?: string;
 }
 
 export interface TemplateConstraintLink {

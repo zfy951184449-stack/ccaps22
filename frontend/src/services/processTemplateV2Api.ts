@@ -4,6 +4,7 @@ import {
   CreateStageOperationPayload,
   CreateStagePayload,
   OperationLibraryItem,
+  OperationTypeOption,
   ResourceNode,
   ResourceNodeMovePayload,
   ResourceNodePayload,
@@ -16,6 +17,7 @@ import {
   UpdateStageOperationPayload,
   UpdateStagePayload,
 } from '../components/ProcessTemplateV2/types';
+import { ResourceRequirementRule } from '../components/ProcessTemplateGantt/types';
 
 const client = axios.create({
   baseURL: '/api',
@@ -33,6 +35,31 @@ const mapTemplate = (data: any): TemplateSummary => ({
   team_name: data.team_name ?? null,
   description: data.description ?? '',
   total_days: Number(data.total_days ?? 0),
+  stage_count:
+    data.stage_count !== undefined && data.stage_count !== null
+      ? Number(data.stage_count)
+      : data.stageCount !== undefined && data.stageCount !== null
+        ? Number(data.stageCount)
+        : undefined,
+  unbound_count:
+    data.unbound_count !== undefined && data.unbound_count !== null
+      ? Number(data.unbound_count)
+      : data.unboundCount !== undefined && data.unboundCount !== null
+        ? Number(data.unboundCount)
+        : undefined,
+  constraint_conflict_count:
+    data.constraint_conflict_count !== undefined && data.constraint_conflict_count !== null
+      ? Number(data.constraint_conflict_count)
+      : data.constraintConflictCount !== undefined && data.constraintConflictCount !== null
+        ? Number(data.constraintConflictCount)
+        : undefined,
+  invalid_binding_count:
+    data.invalid_binding_count !== undefined && data.invalid_binding_count !== null
+      ? Number(data.invalid_binding_count)
+      : data.invalidBindingCount !== undefined && data.invalidBindingCount !== null
+        ? Number(data.invalidBindingCount)
+        : undefined,
+  last_validated_at: data.last_validated_at ?? data.lastValidatedAt ?? null,
   created_at: data.created_at,
   updated_at: data.updated_at,
 });
@@ -187,6 +214,23 @@ const mapOperationLibraryItem = (data: any): OperationLibraryItem => ({
   standard_time: Number(data.standard_time ?? 0),
   required_people: Number(data.required_people ?? 1),
   description: data.description ?? null,
+  operation_type_id:
+    data.operation_type_id !== undefined && data.operation_type_id !== null ? Number(data.operation_type_id) : null,
+  operation_type_code: data.operation_type_code ?? null,
+  operation_type_name: data.operation_type_name ?? null,
+  operation_type_color: data.operation_type_color ?? null,
+  qualification_count:
+    data.qualification_count !== undefined && data.qualification_count !== null ? Number(data.qualification_count) : undefined,
+});
+
+const mapOperationType = (data: any): OperationTypeOption => ({
+  id: Number(data.id),
+  typeCode: data.type_code,
+  typeName: data.type_name,
+  color: data.color ?? '#1677ff',
+  teamId: data.team_id !== undefined && data.team_id !== null ? Number(data.team_id) : null,
+  teamCode: data.team_code ?? null,
+  teamName: data.team_name ?? null,
 });
 
 const mapResourceEditorResponse = (data: any): TemplateResourceEditorResponse => ({
@@ -329,19 +373,31 @@ export const processTemplateV2Api = {
     await client.delete(`/process-stages/${stageId}`);
   },
   listOperationLibrary: async () => {
-    const response = await client.get('/stage-operations/available');
+    const response = await client.get('/operations');
     return (response.data ?? []).map(mapOperationLibraryItem);
+  },
+  getNextOperationCode: async () => {
+    const response = await client.get('/operations/next-code');
+    return response.data?.nextCode ?? '';
+  },
+  listOperationTypes: async (teamId?: number | null) => {
+    const response = await client.get('/operation-types', {
+      params: teamId ? { team_id: teamId } : undefined,
+    });
+    return (response.data ?? []).map(mapOperationType);
   },
   createOperationLibraryItem: async (payload: {
     operationName: string;
     standardTime: number;
     requiredPeople: number;
+    operationTypeId?: number | null;
     description?: string;
   }) => {
     const response = await client.post('/operations', {
       operation_name: payload.operationName,
       standard_time: payload.standardTime,
       required_people: payload.requiredPeople,
+      operation_type_id: payload.operationTypeId ?? null,
       description: payload.description ?? null,
     });
     return mapOperationLibraryItem(response.data);
@@ -455,6 +511,21 @@ export const processTemplateV2Api = {
   updateTemplateScheduleBinding: async (scheduleId: number, resourceNodeId: number | null) => {
     const response = await client.put(`/template-stage-operations/${scheduleId}/resource-binding`, {
       resource_node_id: resourceNodeId,
+    });
+    return response.data;
+  },
+  updateTemplateStageOperationResources: async (scheduleId: number, requirements: ResourceRequirementRule[]) => {
+    const response = await client.put(`/template-stage-operations/${scheduleId}/resources`, {
+      requirements: requirements.map((rule) => ({
+        resource_type: rule.resource_type,
+        required_count: rule.required_count,
+        is_mandatory: rule.is_mandatory,
+        requires_exclusive_use: rule.requires_exclusive_use,
+        prep_minutes: rule.prep_minutes,
+        changeover_minutes: rule.changeover_minutes,
+        cleanup_minutes: rule.cleanup_minutes,
+        candidate_resource_ids: rule.candidate_resource_ids,
+      })),
     });
     return response.data;
   },

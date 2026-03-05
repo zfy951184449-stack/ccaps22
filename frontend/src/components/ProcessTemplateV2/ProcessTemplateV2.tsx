@@ -1,28 +1,33 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ApartmentOutlined,
-  ArrowRightOutlined,
-  CalendarOutlined,
-  CopyOutlined,
-  PlusOutlined,
-} from '@ant-design/icons';
-import { Button, Empty, Space, Tabs, message } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
+import { Button, Empty, Skeleton, Tabs, message } from 'antd';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { processTemplateV2Api } from '../../services';
 import TemplateCreateDraftModal from './TemplateCreateDraftModal';
+import TemplateCardV2 from './TemplateCardV2';
+import TemplateListToolbar, { TemplateDensity, TemplateSortBy, TemplateStatusFilter } from './TemplateListToolbar';
+import { TemplateRiskFocus } from './TemplateRiskBadges';
 import { TeamSummary, TemplateSummary } from './types';
 
-const formatTemplateDate = (value: string) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '未知';
-  }
+const RECENT_DAYS = 14;
 
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
+const normalizeText = (value: string) => value.trim().toLowerCase();
+
+const getRiskCount = (value?: number) => (value && value > 0 ? value : 0);
+
+const templateHasRisk = (template: TemplateSummary) =>
+  getRiskCount(template.unbound_count) > 0 ||
+  getRiskCount(template.constraint_conflict_count) > 0 ||
+  getRiskCount(template.invalid_binding_count) > 0;
+
+const isRecentTemplate = (template: TemplateSummary) => {
+  const timestamp = new Date(template.updated_at).getTime();
+  if (Number.isNaN(timestamp)) {
+    return false;
+  }
+  const diffDays = Math.abs(Date.now() - timestamp) / (24 * 60 * 60 * 1000);
+  return diffDays <= RECENT_DAYS;
 };
 
 const ProcessTemplateV2: React.FC = () => {
@@ -34,6 +39,11 @@ const ProcessTemplateV2: React.FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [activeTeamId, setActiveTeamId] = useState<string>('all');
+
+  const [searchValue, setSearchValue] = useState('');
+  const [statusFilter, setStatusFilter] = useState<TemplateStatusFilter>('all');
+  const [sortBy, setSortBy] = useState<TemplateSortBy>('updated');
+  const [density, setDensity] = useState<TemplateDensity>('card');
 
   const loadTeams = useCallback(async () => {
     try {
@@ -87,19 +97,63 @@ const ProcessTemplateV2: React.FC = () => {
     return teams.find((team) => String(team.id) === activeTeamId)?.unit_name || '当前单元';
   }, [activeTeamId, teams]);
 
+  const displayedTemplates = useMemo(() => {
+    const query = normalizeText(searchValue);
+
+    const next = templates
+      .filter((template) => {
+        if (!query) {
+          return true;
+        }
+
+        return [
+          template.template_code,
+          template.template_name,
+          template.description,
+          template.team_name,
+        ]
+          .filter(Boolean)
+          .some((value) => normalizeText(String(value)).includes(query));
+      })
+      .filter((template) => {
+        if (statusFilter === 'all') {
+          return true;
+        }
+
+        if (statusFilter === 'risk') {
+          return templateHasRisk(template);
+        }
+
+        return isRecentTemplate(template);
+      })
+      .sort((left, right) => {
+        if (sortBy === 'name') {
+          return left.template_name.localeCompare(right.template_name, 'zh-CN');
+        }
+
+        if (sortBy === 'cycle') {
+          return Number(right.total_days ?? 0) - Number(left.total_days ?? 0);
+        }
+
+        return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+      });
+
+    return next;
+  }, [searchValue, sortBy, statusFilter, templates]);
+
   const summaryCards = useMemo(() => {
-    const totalDays = templates.reduce((sum, item) => sum + item.total_days, 0);
-    const avgDays = templates.length > 0 ? (totalDays / templates.length).toFixed(1).replace('.0', '') : '0';
-    const maxDays = templates.reduce((max, item) => Math.max(max, item.total_days), 0);
-    const linkedTeams = templates.filter((item) => item.team_id !== null).length;
+    const totalDays = displayedTemplates.reduce((sum, item) => sum + item.total_days, 0);
+    const avgDays = displayedTemplates.length > 0 ? (totalDays / displayedTemplates.length).toFixed(1).replace('.0', '') : '0';
+    const maxDays = displayedTemplates.reduce((max, item) => Math.max(max, item.total_days), 0);
+    const linkedTeams = displayedTemplates.filter((item) => item.team_id !== null).length;
 
     return [
-      { label: '当前模板', value: `${templates.length}`, accent: 'text-slate-900' },
+      { label: '当前模板', value: `${displayedTemplates.length}`, accent: 'text-slate-900' },
       { label: '平均周期', value: `${avgDays} 天`, accent: 'text-sky-700' },
       { label: '最长周期', value: `${maxDays} 天`, accent: 'text-emerald-700' },
       { label: '已绑团队', value: `${linkedTeams}`, accent: 'text-amber-700' },
     ];
-  }, [templates]);
+  }, [displayedTemplates]);
 
   const handleCreateTemplate = async (payload: {
     templateName: string;
@@ -109,9 +163,12 @@ const ProcessTemplateV2: React.FC = () => {
     try {
       setCreating(true);
       const createdTemplate = await processTemplateV2Api.createTemplate(payload);
-      message.success('工艺模版已创建');
       setCreateOpen(false);
-      navigate(`/process-templates-v2/${createdTemplate.id}`);
+      navigate(`/process-templates-v2/${createdTemplate.id}`, {
+        state: {
+          flashMessage: '工艺模版已创建',
+        },
+      });
     } catch (error: any) {
       console.error('Failed to create template:', error);
       message.error(error?.response?.data?.error || '创建工艺模版失败');
@@ -125,13 +182,30 @@ const ProcessTemplateV2: React.FC = () => {
 
     try {
       const result = await processTemplateV2Api.copyTemplate(template.id);
-      message.success('模版复制成功，已进入新编辑器');
-      navigate(`/process-templates-v2/${result.newTemplateId}`);
+      navigate(`/process-templates-v2/${result.newTemplateId}`, {
+        state: {
+          flashMessage: '模版复制成功，已进入新编辑器',
+        },
+      });
     } catch (error: any) {
       console.error('Failed to copy template:', error);
       message.error(error?.response?.data?.error || '复制模版失败');
     }
   };
+
+  const handleContinueEdit = useCallback(
+    (template: TemplateSummary) => {
+      navigate(`/process-templates-v2/${template.id}`);
+    },
+    [navigate],
+  );
+
+  const handleFocusRisk = useCallback(
+    (template: TemplateSummary, focus: TemplateRiskFocus) => {
+      navigate(`/process-templates-v2/${template.id}?focus=${focus}`);
+    },
+    [navigate],
+  );
 
   return (
     <>
@@ -178,6 +252,18 @@ const ProcessTemplateV2: React.FC = () => {
           <Tabs activeKey={activeTeamId} onChange={setActiveTeamId} items={tabItems} tabBarStyle={{ marginBottom: 0 }} />
         </section>
 
+        <TemplateListToolbar
+          searchValue={searchValue}
+          onSearchValueChange={setSearchValue}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          sortBy={sortBy}
+          onSortByChange={setSortBy}
+          density={density}
+          onDensityChange={setDensity}
+          resultCount={displayedTemplates.length}
+        />
+
         {errorMessage ? (
           <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -190,80 +276,48 @@ const ProcessTemplateV2: React.FC = () => {
         ) : null}
 
         {loading ? (
-          <section className="flex min-h-[260px] items-center justify-center rounded-3xl border border-slate-200 bg-white text-sm text-slate-500 shadow-sm">
-            正在加载工艺模版...
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div key={`template-skeleton-${index}`} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <Skeleton active title={{ width: '60%' }} paragraph={{ rows: 4 }} />
+              </div>
+            ))}
           </section>
-        ) : templates.length === 0 ? (
+        ) : displayedTemplates.length === 0 ? (
           <section className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 px-6 py-16 shadow-sm">
             <Empty
-              description={`当前筛选“${activeTeamName}”下暂无工艺模版`}
+              description={
+                searchValue || statusFilter !== 'all'
+                  ? '当前筛选条件下没有匹配模版，建议调整搜索词或状态筛选。'
+                  : `当前筛选“${activeTeamName}”下暂无工艺模版`
+              }
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           </section>
-        ) : (
+        ) : density === 'card' ? (
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
-            {templates.map((template) => (
-              <article
+            {displayedTemplates.map((template) => (
+              <TemplateCardV2
                 key={template.id}
-                onClick={() => navigate(`/process-templates-v2/${template.id}`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    navigate(`/process-templates-v2/${template.id}`);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                className="group rounded-3xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-sky-700">
-                      {template.template_code}
-                    </div>
-                    <h3 className="mt-3 truncate text-lg font-semibold text-slate-900 transition-colors group-hover:text-sky-700">
-                      {template.template_name}
-                    </h3>
-                  </div>
-                  <div className="shrink-0 rounded-2xl bg-slate-900 px-3 py-2 text-right text-white">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-300">周期</div>
-                    <div className="text-sm font-semibold">{template.total_days} 天</div>
-                  </div>
-                </div>
-
-                <p className="mt-3 min-h-[44px] line-clamp-2 text-sm leading-6 text-slate-500">
-                  {template.description || '暂无工艺描述'}
-                </p>
-
-                <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                  <div className="rounded-2xl bg-slate-50 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <ApartmentOutlined className="text-slate-400" />
-                      <span>{template.team_name || '未分配单元'}</span>
-                    </div>
-                  </div>
-                  <div className="rounded-2xl bg-slate-50 px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <CalendarOutlined className="text-slate-400" />
-                      <span>更新于 {formatTemplateDate(template.updated_at)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-sm">
-                  <span className="font-medium text-slate-600">进入统一编辑器</span>
-                  <Space size="small">
-                    <Button
-                      icon={<CopyOutlined />}
-                      size="small"
-                      onClick={(event) => void handleCopyTemplate(template, event)}
-                    >
-                      复制
-                    </Button>
-                    <ArrowRightOutlined className="text-slate-400 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-sky-600" />
-                  </Space>
-                </div>
-              </article>
+                template={template}
+                density={density}
+                onContinue={handleContinueEdit}
+                onCopy={handleCopyTemplate}
+                onFocus={handleFocusRisk}
+              />
+            ))}
+          </section>
+        ) : (
+          <section className="space-y-3">
+            {displayedTemplates.map((template) => (
+              <TemplateCardV2
+                key={template.id}
+                template={template}
+                density={density}
+                onContinue={handleContinueEdit}
+                onCopy={handleCopyTemplate}
+                onFocus={handleFocusRisk}
+              />
             ))}
           </section>
         )}

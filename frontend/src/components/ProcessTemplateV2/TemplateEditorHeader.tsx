@@ -45,11 +45,11 @@ const TemplateEditorHeader: React.FC<TemplateEditorHeaderProps> = ({
 
   return (
     <>
-      <section className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 px-5 py-5 shadow-sm">
+      <section className="sticky top-2 z-30 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+              <Button size="large" icon={<ArrowLeftOutlined />} onClick={onBack}>
                 返回列表
               </Button>
               <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold tracking-wide text-white">
@@ -106,11 +106,12 @@ const TemplateEditorHeader: React.FC<TemplateEditorHeaderProps> = ({
           </div>
 
           <Space wrap>
-            <Button icon={<CopyOutlined />} onClick={() => void onCopy()}>
+            <Button size="large" icon={<CopyOutlined />} onClick={() => void onCopy()}>
               另存为
             </Button>
             <Button
               type="primary"
+              size="large"
               icon={<SaveOutlined />}
               onClick={() => void onSave()}
               loading={saving}
@@ -125,7 +126,7 @@ const TemplateEditorHeader: React.FC<TemplateEditorHeaderProps> = ({
               cancelText="取消"
               onConfirm={() => onDelete()}
             >
-              <Button danger icon={<DeleteOutlined />} loading={deleting}>
+              <Button size="large" danger icon={<DeleteOutlined />} loading={deleting}>
                 删除
               </Button>
             </Popconfirm>

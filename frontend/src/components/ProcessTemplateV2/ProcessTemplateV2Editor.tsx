@@ -1,29 +1,74 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Empty, Modal, Spin, Tabs, message } from 'antd';
+import { Alert, Button, Drawer, Empty, Grid, Modal, Spin, Tag, message } from 'antd';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { processTemplateV2Api } from '../../services';
+import TemplateEditorDiagnosticBar, { EditorFocusFilter } from './TemplateEditorDiagnosticBar';
 import TemplateEditorHeader from './TemplateEditorHeader';
 import TemplateResourceEditorTab from './TemplateResourceEditorTab';
 import TemplateResourceNodeManagementTab from './TemplateResourceNodeManagementTab';
-import { TeamSummary, TemplateSummary } from './types';
+import { PlannerOperation, TeamSummary, TemplateSummary } from './types';
 
 interface ProcessTemplateV2EditorProps {
   templateId: number;
 }
 
-type EditorTabKey = 'resource' | 'nodes';
+type EditorFocusRequest = {
+  focus: EditorFocusFilter;
+  scheduleId?: number | null;
+  token: number;
+} | null;
+
+const statusColorMap: Record<string, string> = {
+  BOUND: 'green',
+  UNBOUND: 'orange',
+  INVALID_NODE: 'red',
+  NODE_INACTIVE: 'red',
+  RESOURCE_UNBOUND: 'orange',
+  RESOURCE_INACTIVE: 'red',
+  RESOURCE_RULE_MISMATCH: 'gold',
+};
+
+const resolveFocusFilter = (value: string | null): EditorFocusFilter | null => {
+  if (!value) {
+    return null;
+  }
+
+  if (value === 'unbound' || value === 'conflict' || value === 'invalid' || value === 'all') {
+    return value;
+  }
+
+  return null;
+};
 
 const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templateId }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const screens = Grid.useBreakpoint();
+  const showInlineInspector = Boolean(screens.xl);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [activeTab, setActiveTab] = useState<EditorTabKey>('resource');
   const [template, setTemplate] = useState<TemplateSummary | null>(null);
   const [draft, setDraft] = useState<TemplateSummary | null>(null);
   const [teams, setTeams] = useState<TeamSummary[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [focusRequest, setFocusRequest] = useState<EditorFocusRequest>(null);
+  const [activeFocus, setActiveFocus] = useState<EditorFocusFilter>('all');
+  const [validateRequestToken, setValidateRequestToken] = useState<number | undefined>(undefined);
+  const [nodeDrawerOpen, setNodeDrawerOpen] = useState(false);
+  const [inspectorDrawerOpen, setInspectorDrawerOpen] = useState(false);
+  const [selectedOperation, setSelectedOperation] = useState<PlannerOperation | null>(null);
+  const [editorMetrics, setEditorMetrics] = useState({
+    nodeCount: 0,
+    operationCount: 0,
+    unplacedCount: 0,
+    invalidCount: 0,
+    conflictCount: 0,
+  });
 
   const loadEditorData = useCallback(async () => {
     try {
@@ -53,6 +98,38 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
     void loadEditorData();
   }, [loadEditorData]);
 
+  useEffect(() => {
+    const flashMessage = (location.state as { flashMessage?: string } | null)?.flashMessage;
+    if (!flashMessage) {
+      return;
+    }
+
+    message.success(flashMessage);
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+  }, [location.pathname, location.search, location.state, navigate]);
+
+  useEffect(() => {
+    const focusFromUrl = resolveFocusFilter(searchParams.get('focus'));
+    if (!focusFromUrl) {
+      return;
+    }
+
+    const scheduleRaw = searchParams.get('scheduleId');
+    const scheduleId = scheduleRaw ? Number(scheduleRaw) : null;
+
+    setActiveFocus(focusFromUrl);
+    setFocusRequest({
+      focus: focusFromUrl,
+      scheduleId: Number.isInteger(scheduleId) && scheduleId && scheduleId > 0 ? scheduleId : null,
+      token: Date.now(),
+    });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('focus');
+    next.delete('scheduleId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const dirty = useMemo(() => {
     if (!template || !draft) {
       return false;
@@ -64,6 +141,15 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
       Number(template.team_id ?? 0) !== Number(draft.team_id ?? 0)
     );
   }, [draft, template]);
+
+  const triggerFocus = useCallback((focus: EditorFocusFilter, scheduleId?: number | null) => {
+    setActiveFocus(focus);
+    setFocusRequest({
+      focus,
+      scheduleId: scheduleId ?? null,
+      token: Date.now(),
+    });
+  }, []);
 
   const handleBack = useCallback(() => {
     if (!dirty) {
@@ -121,8 +207,11 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
 
     try {
       const result = await processTemplateV2Api.copyTemplate(draft.id);
-      message.success('模版已复制，已进入新编辑器');
-      navigate(`/process-templates-v2/${result.newTemplateId}`);
+      navigate(`/process-templates-v2/${result.newTemplateId}`, {
+        state: {
+          flashMessage: '模版已复制，已进入新编辑器',
+        },
+      });
     } catch (error: any) {
       console.error('Failed to copy template from editor:', error);
       message.error(error?.response?.data?.error || '复制模版失败');
@@ -146,6 +235,60 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
       setDeleting(false);
     }
   }, [draft, navigate]);
+
+  const renderInspector = () => (
+    <div className="space-y-3">
+      <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="text-sm font-semibold text-slate-900">选中工序 Inspector</div>
+        {!selectedOperation ? (
+          <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
+            请在左侧或时间轴中选中工序
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3 text-sm">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="text-xs text-slate-500">工序编码</div>
+              <div className="mt-1 font-medium text-slate-900">{selectedOperation.operation_code}</div>
+              <div className="mt-2 text-xs text-slate-500">工序名称</div>
+              <div className="mt-1 font-medium text-slate-900">{selectedOperation.operation_name}</div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">阶段</span>
+                <Tag color="blue" style={{ marginInlineEnd: 0 }}>{selectedOperation.stage_name}</Tag>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-slate-500">绑定状态</span>
+                <Tag color={statusColorMap[selectedOperation.bindingStatus] || 'default'} style={{ marginInlineEnd: 0 }}>
+                  {selectedOperation.bindingStatus}
+                </Tag>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-xs text-slate-500">默认节点</span>
+                <span className="text-xs text-slate-700">{selectedOperation.defaultResourceNodeName || '未绑定'}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="small" onClick={() => triggerFocus('unbound', selectedOperation.id)}>
+                看未绑定
+              </Button>
+              <Button size="small" onClick={() => triggerFocus('conflict', selectedOperation.id)}>
+                看冲突
+              </Button>
+            </div>
+
+            {selectedOperation.bindingReason ? (
+              <div className="rounded-2xl border border-orange-200 bg-orange-50 px-3 py-3 text-xs text-orange-700">
+                {selectedOperation.bindingReason}
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -189,35 +332,65 @@ const ProcessTemplateV2Editor: React.FC<ProcessTemplateV2EditorProps> = ({ templ
         onChange={(patch) => setDraft((prev) => (prev ? { ...prev, ...patch } : prev))}
       />
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as EditorTabKey)}
-        destroyInactiveTabPane={false}
-        items={[
-          {
-            key: 'resource',
-            label: '资源主编辑视图',
-            children: (
-              <TemplateResourceEditorTab
-                templateId={templateId}
-                templateTeamId={draft.team_id}
-                active={activeTab === 'resource'}
-                onOpenNodes={() => setActiveTab('nodes')}
-              />
-            ),
-          },
-          {
-            key: 'nodes',
-            label: '节点管理',
-            children: (
-              <TemplateResourceNodeManagementTab
-                templateId={templateId}
-                active={activeTab === 'nodes'}
-              />
-            ),
-          },
-        ]}
+      <TemplateEditorDiagnosticBar
+        nodeCount={editorMetrics.nodeCount}
+        operationCount={editorMetrics.operationCount}
+        unplacedCount={editorMetrics.unplacedCount}
+        conflictCount={editorMetrics.conflictCount}
+        invalidCount={editorMetrics.invalidCount}
+        activeFocus={activeFocus}
+        validating={false}
+        onFocusChange={(focus) => triggerFocus(focus)}
+        onValidate={() => setValidateRequestToken(Date.now())}
+        onOpenNodes={() => setNodeDrawerOpen(true)}
       />
+
+      {!showInlineInspector ? (
+        <div className="flex justify-end">
+          <Button onClick={() => setInspectorDrawerOpen(true)}>查看选中工序</Button>
+        </div>
+      ) : null}
+
+      <div className={showInlineInspector ? 'grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]' : 'space-y-4'}>
+        <TemplateResourceEditorTab
+          templateId={templateId}
+          templateTeamId={draft.team_id}
+          active
+          onOpenNodes={() => setNodeDrawerOpen(true)}
+          focusRequest={focusRequest}
+          validateRequestToken={validateRequestToken}
+          onFocusHandled={() => {
+            setFocusRequest(null);
+          }}
+          onEditorMetricsChange={setEditorMetrics}
+          onOperationSelectionChange={setSelectedOperation}
+        />
+
+        {showInlineInspector ? <aside>{renderInspector()}</aside> : null}
+      </div>
+
+      <Drawer
+        title="节点管理"
+        width={1040}
+        open={nodeDrawerOpen}
+        onClose={() => setNodeDrawerOpen(false)}
+        destroyOnClose
+      >
+        <TemplateResourceNodeManagementTab
+          templateId={templateId}
+          active={nodeDrawerOpen}
+          refreshKey={nodeDrawerOpen ? 1 : 0}
+        />
+      </Drawer>
+
+      <Drawer
+        title="选中工序 Inspector"
+        width={420}
+        open={!showInlineInspector && inspectorDrawerOpen}
+        onClose={() => setInspectorDrawerOpen(false)}
+      >
+        {renderInspector()}
+      </Drawer>
     </div>
   );
 };

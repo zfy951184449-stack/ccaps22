@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
-  Collapse,
   Empty,
   Input,
   InputNumber,
@@ -38,7 +37,7 @@ import OperationConstraintsPanel from '../OperationConstraintsPanel';
 import { TemplateResourceRulesTabContent } from '../ProcessTemplateGantt/components/modals/TemplateResourceRulesTabContent';
 import { processTemplateV2Api } from '../../services';
 import {
-  OperationLibraryItem,
+  OperationCreateContext,
   PlannerOperation,
   ResourceNode,
   ResourceNodeFilterScope,
@@ -47,6 +46,7 @@ import {
   TemplateShareGroupSummary,
   TemplateStageSummary,
 } from './types';
+import TemplateOperationCreateModal from './TemplateOperationCreateModal';
 
 const LEFT_PANEL_WIDTH = 360;
 const RESOURCE_TREE_WIDTH = 320;
@@ -137,6 +137,21 @@ interface TemplateResourceEditorTabProps {
   active?: boolean;
   refreshKey?: number;
   onOpenNodes?: () => void;
+  focusRequest?: {
+    focus: 'all' | 'unbound' | 'conflict' | 'invalid';
+    scheduleId?: number | null;
+    token: number;
+  } | null;
+  validateRequestToken?: number;
+  onFocusHandled?: () => void;
+  onEditorMetricsChange?: (metrics: {
+    nodeCount: number;
+    operationCount: number;
+    unplacedCount: number;
+    invalidCount: number;
+    conflictCount: number;
+  }) => void;
+  onOperationSelectionChange?: (operation: PlannerOperation | null) => void;
 }
 
 const normalizeText = (value: string) => value.trim().toLowerCase();
@@ -239,6 +254,14 @@ const toHourValue = (value: number) => {
   return remainder < 0 ? remainder + 24 : remainder;
 };
 
+const formatHourLabel = (value: number) => {
+  const totalMinutes = Math.round(Number(value ?? 0) * 60);
+  const normalized = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+};
+
 const getAbsoluteStartHour = (operation: PlannerOperation) =>
   (Number(operation.stage_start_day ?? 0) +
     Number(operation.operation_day ?? 0) +
@@ -281,33 +304,6 @@ const createDefaultStageDraft = (stages: TemplateStageSummary[]): StageDraft => 
     stageOrder: maxOrder + 1,
     startDay: maxStartDay + 1,
     description: '',
-  };
-};
-
-const createDefaultOperationDraft = (
-  stages: TemplateStageSummary[],
-  operationLibrary: OperationLibraryItem[],
-  defaults?: Partial<OperationDraft>,
-): OperationDraft => {
-  const firstOperation = operationLibrary[0] ?? null;
-  return {
-    mode: 'create',
-    stageId: defaults?.stageId ?? stages[0]?.id ?? null,
-    resourceNodeId: defaults?.resourceNodeId ?? null,
-    operationId: defaults?.operationId ?? firstOperation?.id ?? null,
-    operationCreateMode: defaults?.operationCreateMode ?? 'existing',
-    newOperationName: defaults?.newOperationName ?? '',
-    newOperationStandardTime: defaults?.newOperationStandardTime ?? 4,
-    newOperationRequiredPeople: defaults?.newOperationRequiredPeople ?? 1,
-    newOperationDescription: defaults?.newOperationDescription ?? '',
-    operationDay: defaults?.operationDay ?? 0,
-    recommendedTime: defaults?.recommendedTime ?? 9,
-    recommendedDayOffset: defaults?.recommendedDayOffset ?? 0,
-    windowStartTime: defaults?.windowStartTime ?? 7,
-    windowStartDayOffset: defaults?.windowStartDayOffset ?? 0,
-    windowEndTime: defaults?.windowEndTime ?? 13,
-    windowEndDayOffset: defaults?.windowEndDayOffset ?? 0,
-    absoluteStartHour: defaults?.absoluteStartHour,
   };
 };
 
@@ -398,7 +394,13 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   active = true,
   refreshKey = 0,
   onOpenNodes,
+  focusRequest = null,
+  validateRequestToken,
+  onFocusHandled,
+  onEditorMetricsChange,
+  onOperationSelectionChange,
 }) => {
+  const lastValidateTokenRef = useRef<number | undefined>(undefined);
   const storageKey = useMemo(() => buildEditorStorageKey(templateId), [templateId]);
   const [loading, setLoading] = useState(false);
   const [editor, setEditor] = useState<TemplateResourceEditorResponse | null>(null);
@@ -412,6 +414,8 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
   const [expandedKeys, setExpandedKeys] = useState<Set<number>>(new Set());
   const [selectedStageId, setSelectedStageId] = useState<number | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
+  const [createOperationModalOpen, setCreateOperationModalOpen] = useState(false);
+  const [createOperationContext, setCreateOperationContext] = useState<OperationCreateContext | null>(null);
   const [operationDrawerOpen, setOperationDrawerOpen] = useState(false);
   const [operationDraft, setOperationDraft] = useState<OperationDraft | null>(null);
   const [initialOperationDraft, setInitialOperationDraft] = useState<OperationDraft | null>(null);
@@ -543,6 +547,24 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     () => operations.find((item) => Number(item.id) === Number(selectedOperationId)) ?? null,
     [operations, selectedOperationId],
   );
+
+  useEffect(() => {
+    onOperationSelectionChange?.(selectedOperation);
+  }, [onOperationSelectionChange, selectedOperation]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    onEditorMetricsChange?.({
+      nodeCount: Number(editor.metrics.resourceNodeCount ?? 0),
+      operationCount: Number(editor.metrics.totalOperations ?? 0),
+      unplacedCount: Number(editor.validation.summary.unplacedCount ?? 0),
+      invalidCount: Number(editor.validation.summary.invalidBindingCount ?? 0),
+      conflictCount: Number(editor.validation.summary.constraintConflictCount ?? 0),
+    });
+  }, [editor, onEditorMetricsChange]);
 
   const stageDraftDirty = useMemo(
     () => JSON.stringify(sanitizeStageDraft(stageDraft)) !== JSON.stringify(sanitizeStageDraft(initialStageDraft)),
@@ -729,6 +751,43 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     [operations],
   );
 
+  const editDraftStage = useMemo(
+    () => stages.find((item) => Number(item.id) === Number(operationDraft?.stageId)) ?? null,
+    [operationDraft?.stageId, stages],
+  );
+
+  const editDraftNode = useMemo(
+    () => (operationDraft?.resourceNodeId ? leafNodes.find((item) => Number(item.id) === Number(operationDraft.resourceNodeId)) ?? null : null),
+    [leafNodes, operationDraft?.resourceNodeId],
+  );
+
+  const editDraftIssues = useMemo(() => {
+    const issues: string[] = [];
+    if (!operationDraft) {
+      return issues;
+    }
+    if (!operationDraft.stageId) {
+      issues.push('必须选择所属阶段');
+    }
+    if (!editDraftNode) {
+      issues.push('当前工序未绑定默认资源节点');
+    }
+    if (selectedOperation?.bindingStatus && selectedOperation.bindingStatus !== 'BOUND') {
+      issues.push(`当前绑定状态：${selectedOperation.bindingStatus}${selectedOperation.bindingReason ? `，${selectedOperation.bindingReason}` : ''}`);
+    }
+    const stageStartDay = Number(editDraftStage?.start_day ?? 0);
+    const absoluteWindowStart =
+      (stageStartDay + Number(operationDraft.operationDay ?? 0) + Number(operationDraft.windowStartDayOffset ?? 0)) * 24 +
+      Number(operationDraft.windowStartTime ?? 0);
+    const absoluteWindowEnd =
+      (stageStartDay + Number(operationDraft.operationDay ?? 0) + Number(operationDraft.windowEndDayOffset ?? 0)) * 24 +
+      Number(operationDraft.windowEndTime ?? 0);
+    if (absoluteWindowStart > absoluteWindowEnd) {
+      issues.push('时间窗开始不能晚于时间窗结束');
+    }
+    return issues;
+  }, [editDraftNode, editDraftStage?.start_day, operationDraft, selectedOperation?.bindingReason, selectedOperation?.bindingStatus]);
+
   const visibleConstraintLinks = useMemo(() => {
     const allLinks = editor?.constraints ?? [];
     if (showAllConstraints) {
@@ -812,19 +871,25 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     [stages],
   );
 
-  const openCreateOperationDrawer = useCallback(
+  const openCreateOperationModal = useCallback(
     (defaults?: Partial<OperationDraft>) => {
-      const nextDraft = createDefaultOperationDraft(stages, editor?.operationLibrary ?? [], defaults);
-      setShareGroupName('');
-      setShareGroupMembers([]);
-      setShareGroupMode('SAME_TEAM');
-      setAssignShareGroupId(null);
-      setInitialOperationDraft(nextDraft);
-      setOperationDraft(nextDraft);
+      setCreateOperationContext({
+        source: defaults?.absoluteStartHour !== undefined ? 'canvas' : defaults?.stageId ? 'stage' : 'toolbar',
+        stageId: defaults?.stageId ?? null,
+        resourceNodeId: defaults?.resourceNodeId ?? null,
+        absoluteStartHour: defaults?.absoluteStartHour,
+        operationDay: defaults?.operationDay,
+        recommendedTime: defaults?.recommendedTime,
+        recommendedDayOffset: defaults?.recommendedDayOffset,
+        windowStartTime: defaults?.windowStartTime,
+        windowStartDayOffset: defaults?.windowStartDayOffset,
+        windowEndTime: defaults?.windowEndTime,
+        windowEndDayOffset: defaults?.windowEndDayOffset,
+      });
       setSelectedOperationId(null);
-      setOperationDrawerOpen(true);
+      setCreateOperationModalOpen(true);
     },
-    [editor?.operationLibrary, stages],
+    [],
   );
 
   const openEditOperationDrawer = useCallback(
@@ -1104,7 +1169,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     }
   };
 
-  const handleValidate = async () => {
+  const handleValidate = useCallback(async () => {
     try {
       setValidating(true);
       await processTemplateV2Api.validateResourceEditor(templateId);
@@ -1116,7 +1181,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     } finally {
       setValidating(false);
     }
-  };
+  }, [loadEditor, templateId]);
 
   const handleAssignNode = async (operation: PlannerOperation, nodeId: number | null) => {
     try {
@@ -1303,6 +1368,71 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
     [openEditOperationDrawer, operations],
   );
 
+  const resetViewportFilters = useCallback(() => {
+    setShowUnplacedOnly(false);
+    setShowIssuesOnly(false);
+    setShowAllConstraints(false);
+    setSearchValue('');
+  }, []);
+
+  useEffect(() => {
+    if (!focusRequest || !editor) {
+      return;
+    }
+
+    if (focusRequest.focus === 'all') {
+      resetViewportFilters();
+      onFocusHandled?.();
+      return;
+    }
+
+    if (focusRequest.focus === 'unbound') {
+      setShowUnplacedOnly(true);
+      setShowIssuesOnly(false);
+      const targetScheduleId = focusRequest.scheduleId ?? editor.validation.unplacedOperationIds[0];
+      if (targetScheduleId) {
+        focusOperation(targetScheduleId, { showUnplaced: true });
+      }
+      onFocusHandled?.();
+      return;
+    }
+
+    if (focusRequest.focus === 'invalid') {
+      setShowUnplacedOnly(false);
+      setShowIssuesOnly(true);
+      const targetScheduleId = focusRequest.scheduleId ?? editor.validation.invalidBindings[0]?.scheduleId;
+      if (targetScheduleId) {
+        focusOperation(targetScheduleId, { showIssues: true });
+      }
+      onFocusHandled?.();
+      return;
+    }
+
+    if (focusRequest.focus === 'conflict') {
+      setShowUnplacedOnly(false);
+      setShowIssuesOnly(true);
+      const targetScheduleId =
+        focusRequest.scheduleId ?? editor.validation.constraintConflicts[0]?.operationScheduleIds?.[0];
+      if (targetScheduleId) {
+        focusOperation(targetScheduleId, { showIssues: true });
+      }
+      onFocusHandled?.();
+    }
+  }, [editor, focusOperation, focusRequest, onFocusHandled, resetViewportFilters]);
+
+  useEffect(() => {
+    if (validateRequestToken === undefined || validateRequestToken === null) {
+      return;
+    }
+
+    if (lastValidateTokenRef.current === validateRequestToken) {
+      return;
+    }
+
+    lastValidateTokenRef.current = validateRequestToken;
+    void handleValidate();
+  }, [handleValidate, validateRequestToken]);
+
   const closeStageDrawer = useCallback(() => {
     if (!stageDraftDirty) {
       setStageDrawerOpen(false);
@@ -1332,6 +1462,31 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
       onOk: () => setOperationDrawerOpen(false),
     });
   }, [operationDraftDirty]);
+
+  const closeCreateOperationModal = useCallback(() => {
+    setCreateOperationModalOpen(false);
+    setCreateOperationContext(null);
+  }, []);
+
+  const handleCreatedOperation = useCallback(
+    async (scheduleId: number, stageId: number) => {
+      setSelectedStageId(stageId);
+      setSelectedOperationId(scheduleId);
+      await loadEditor();
+    },
+    [loadEditor],
+  );
+
+  useEffect(() => {
+    if (!selectedOperationId) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.getElementById(`resource-editor-operation-${selectedOperationId}`);
+      element?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedOperationId, editor]);
 
   if (loading) {
     return (
@@ -1405,7 +1560,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                 <Button size="small" icon={<PlusOutlined />} onClick={() => openStageDrawer()}>
                   新增阶段
                 </Button>
-                <Button size="small" onClick={() => openCreateOperationDrawer({ stageId: selectedStageId ?? undefined })}>
+                <Button size="small" onClick={() => openCreateOperationModal({ stageId: selectedStageId ?? undefined })}>
                   新增工序
                 </Button>
               </Space>
@@ -1521,7 +1676,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                               type="text"
                               size="small"
                               icon={<PlusOutlined />}
-                              onClick={() => openCreateOperationDrawer({ stageId: stage.id })}
+                              onClick={() => openCreateOperationModal({ stageId: stage.id })}
                             />
                           </Tooltip>
                         </Space>
@@ -1770,6 +1925,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
               <Button icon={<CheckCircleOutlined />} loading={validating} onClick={() => void handleValidate()}>
                 自动排程校验
               </Button>
+              <Button onClick={resetViewportFilters}>恢复全部</Button>
               <Button icon={<UndoOutlined />} disabled={!lastMove} onClick={() => void handleUndoLastMove()}>
                 撤销上次移动
               </Button>
@@ -1955,7 +2111,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                               absoluteStartHour,
                               4,
                             );
-                            openCreateOperationDrawer({
+                            openCreateOperationModal({
                               stageId,
                               resourceNodeId: row.node.id,
                               absoluteStartHour,
@@ -1978,6 +2134,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                                 title={`${bar.title}${bar.subtitle ? ` / ${bar.subtitle}` : ''} / ${bar.operation.bindingStatus}`}
                               >
                                 <button
+                                  id={`resource-editor-operation-${bar.operation.id}`}
                                   type="button"
                                   draggable
                                   onDragStart={(event) => {
@@ -2106,11 +2263,48 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
         ) : null}
       </Modal>
 
+      <TemplateOperationCreateModal
+        open={createOperationModalOpen}
+        templateId={templateId}
+        templateName={editor.template.template_name}
+        templateTeamId={templateTeamId}
+        stages={stages}
+        operations={operations}
+        resourceNodes={nodeList}
+        operationLibrary={editor.operationLibrary ?? []}
+        shareGroups={editor.shareGroups ?? []}
+        capabilities={editor.capabilities}
+        context={createOperationContext}
+        onCancel={closeCreateOperationModal}
+        onCreated={handleCreatedOperation}
+      />
+
       <Modal
-        title={operationDraft?.mode === 'edit' && selectedOperation ? `编辑工序 - ${selectedOperation.operation_name}` : '新增工序'}
+        title={
+          selectedOperation ? (
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">编辑工序</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {selectedOperation.operation_code} / {selectedOperation.operation_name}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <Tag color="blue">{selectedOperation.stage_name}</Tag>
+                  <Tag color={selectedOperation.bindingStatus === 'BOUND' ? 'green' : 'orange'}>
+                    {selectedOperation.bindingStatus}
+                  </Tag>
+                  {selectedOperation.standard_time ? <Tag>标准时长 {selectedOperation.standard_time}h</Tag> : null}
+                  {selectedOperation.required_people ? <Tag>所需人数 {selectedOperation.required_people}</Tag> : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            '编辑工序'
+          )
+        }
         open={operationDrawerOpen}
         centered
-        width={920}
+        width={1180}
         onCancel={closeOperationDrawer}
         maskClosable={false}
         footer={[
@@ -2128,266 +2322,183 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
         ]}
       >
         {operationDraft ? (
-          <div style={{ maxHeight: '76vh', overflowY: 'auto', paddingRight: 4 }}>
-            <>
-            <Collapse
-              defaultActiveKey={['basic', 'timing']}
-              items={[
-              {
-                key: 'basic',
-                label: '基础信息',
-                children: (
-                  <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,2.1fr)_320px]" style={{ maxHeight: '76vh' }}>
+            <div className="space-y-4 overflow-y-auto pr-1">
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4">
+                  <div className="text-sm font-semibold text-slate-900">基础信息</div>
+                  <div className="mt-1 text-xs text-slate-500">工序主数据保持只读，当前仅调整所属阶段、时间与资源落位。</div>
+                </div>
+                {selectedOperation ? (
+                  <div className="space-y-4">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                      <div className="font-medium text-slate-900">
+                        {selectedOperation.operation_code} / {selectedOperation.operation_name}
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Tag>标准时长 {selectedOperation.standard_time ?? '-'}h</Tag>
+                        <Tag>所需人数 {selectedOperation.required_people ?? '-'}</Tag>
+                        {selectedOperation.resource_summary ? <Tag color="cyan">{selectedOperation.resource_summary}</Tag> : null}
+                      </div>
+                    </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-slate-700">所属阶段</label>
                       <Select
                         value={operationDraft.stageId ?? undefined}
                         onChange={(value) => setOperationDraft((current) => (current ? { ...current, stageId: value } : current))}
-                        options={stages.map((stage) => ({ value: stage.id, label: stage.stage_name }))}
+                        options={stages.map((stage) => ({ value: stage.id, label: `${stage.stage_name} / Day ${stage.start_day}` }))}
                         style={{ width: '100%' }}
                       />
                     </div>
+                  </div>
+                ) : null}
+              </section>
 
-                    {operationDraft.mode === 'create' ? (
-                      <>
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-slate-700">工序来源</label>
-                          <Segmented
-                            value={operationDraft.operationCreateMode}
-                            onChange={(value) =>
-                              setOperationDraft((current) =>
-                                current ? { ...current, operationCreateMode: value as OperationCreateMode } : current,
-                              )
-                            }
-                            options={[
-                              { label: '使用现有工序', value: 'existing' },
-                              { label: '新建工序', value: 'new' },
-                            ]}
-                          />
-                        </div>
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">时间与落位</div>
+                    <div className="mt-1 text-xs text-slate-500">继续用业务时间模式编辑，偏移字段放到高级区。</div>
+                  </div>
+                  {selectedOperation?.bindingReason ? <Tag color="orange">需修复落位</Tag> : null}
+                </div>
 
-                        {operationDraft.operationCreateMode === 'existing' ? (
-                          <div>
-                            <label className="mb-1 block text-sm font-medium text-slate-700">选择工序</label>
-                            <Select
-                              showSearch
-                              optionFilterProp="label"
-                              value={operationDraft.operationId ?? undefined}
-                              onChange={(value) =>
-                                setOperationDraft((current) => (current ? { ...current, operationId: value } : current))
-                              }
-                              options={(editor.operationLibrary ?? []).map((item) => ({
-                                value: item.id,
-                                label: `${item.operation_code} / ${item.operation_name}`,
-                              }))}
-                              style={{ width: '100%' }}
-                            />
-                          </div>
-                        ) : (
-                          <>
-                            <div>
-                              <label className="mb-1 block text-sm font-medium text-slate-700">工序名称</label>
-                              <Input
-                                value={operationDraft.newOperationName}
-                                onChange={(event) =>
-                                  setOperationDraft((current) =>
-                                    current ? { ...current, newOperationName: event.target.value } : current,
-                                  )
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">标准时长(h)</label>
-                                <InputNumber
-                                  min={1}
-                                  value={operationDraft.newOperationStandardTime}
-                                  onChange={(value) =>
-                                    setOperationDraft((current) =>
-                                      current ? { ...current, newOperationStandardTime: Number(value ?? 1) } : current,
-                                    )
-                                  }
-                                  style={{ width: '100%' }}
-                                />
-                              </div>
-                              <div>
-                                <label className="mb-1 block text-sm font-medium text-slate-700">所需人数</label>
-                                <InputNumber
-                                  min={1}
-                                  value={operationDraft.newOperationRequiredPeople}
-                                  onChange={(value) =>
-                                    setOperationDraft((current) =>
-                                      current ? { ...current, newOperationRequiredPeople: Number(value ?? 1) } : current,
-                                    )
-                                  }
-                                  style={{ width: '100%' }}
-                                />
-                              </div>
-                            </div>
-                            <div>
-                              <label className="mb-1 block text-sm font-medium text-slate-700">描述</label>
-                              <Input.TextArea
-                                rows={3}
-                                value={operationDraft.newOperationDescription}
-                                onChange={(event) =>
-                                  setOperationDraft((current) =>
-                                    current ? { ...current, newOperationDescription: event.target.value } : current,
-                                  )
-                                }
-                              />
-                            </div>
-                          </>
-                        )}
-                      </>
-                    ) : selectedOperation ? (
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                        <div className="font-medium text-slate-900">
-                          {selectedOperation.operation_code} / {selectedOperation.operation_name}
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Tag>标准时长 {selectedOperation.standard_time ?? '-'}h</Tag>
-                          <Tag>所需人数 {selectedOperation.required_people ?? '-'}</Tag>
-                          <Tag color={selectedOperation.bindingStatus === 'BOUND' ? 'green' : 'orange'}>
-                            {selectedOperation.bindingStatus}
-                          </Tag>
-                        </div>
-                      </div>
-                    ) : null}
-                  </Space>
-                ),
-              },
-              {
-                key: 'timing',
-                label: '时间与落位',
-                children: (
-                  <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">Day</label>
-                        <InputNumber
-                          min={0}
-                          value={operationDraft.operationDay}
-                          onChange={(value) =>
-                            setOperationDraft((current) => (current ? { ...current, operationDay: Number(value ?? 0) } : current))
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">推荐时间</label>
-                        <InputNumber
-                          min={0}
-                          max={23.9}
-                          step={0.5}
-                          value={operationDraft.recommendedTime}
-                          onChange={(value) =>
-                            setOperationDraft((current) =>
-                              current ? { ...current, recommendedTime: Number(value ?? 0) } : current,
-                            )
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">推荐偏移</label>
-                        <InputNumber
-                          min={-7}
-                          max={7}
-                          value={operationDraft.recommendedDayOffset}
-                          onChange={(value) =>
-                            setOperationDraft((current) =>
-                              current ? { ...current, recommendedDayOffset: Number(value ?? 0) } : current,
-                            )
-                          }
-                          style={{ width: '100%' }}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="mb-3 text-sm font-semibold text-slate-700">时间窗开始</div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <InputNumber
-                            min={0}
-                            max={23.9}
-                            step={0.5}
-                            value={operationDraft.windowStartTime}
-                            onChange={(value) =>
-                              setOperationDraft((current) =>
-                                current ? { ...current, windowStartTime: Number(value ?? 0) } : current,
-                              )
-                            }
-                            style={{ width: '100%' }}
-                          />
-                          <InputNumber
-                            min={-7}
-                            max={7}
-                            value={operationDraft.windowStartDayOffset}
-                            onChange={(value) =>
-                              setOperationDraft((current) =>
-                                current ? { ...current, windowStartDayOffset: Number(value ?? 0) } : current,
-                              )
-                            }
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </div>
-                      <div className="rounded-2xl border border-slate-200 p-4">
-                        <div className="mb-3 text-sm font-semibold text-slate-700">时间窗结束</div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <InputNumber
-                            min={0}
-                            max={23.9}
-                            step={0.5}
-                            value={operationDraft.windowEndTime}
-                            onChange={(value) =>
-                              setOperationDraft((current) =>
-                                current ? { ...current, windowEndTime: Number(value ?? 0) } : current,
-                              )
-                            }
-                            style={{ width: '100%' }}
-                          />
-                          <InputNumber
-                            min={-7}
-                            max={7}
-                            value={operationDraft.windowEndDayOffset}
-                            onChange={(value) =>
-                              setOperationDraft((current) =>
-                                current ? { ...current, windowEndDayOffset: Number(value ?? 0) } : current,
-                              )
-                            }
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">默认资源节点</label>
-                      <Select
-                        allowClear
-                        showSearch
-                        optionFilterProp="label"
-                        value={operationDraft.resourceNodeId ?? undefined}
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">Day</label>
+                    <InputNumber
+                      min={0}
+                      value={operationDraft.operationDay}
+                      onChange={(value) =>
+                        setOperationDraft((current) => (current ? { ...current, operationDay: Number(value ?? 0) } : current))
+                      }
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">推荐开始时间</label>
+                    <InputNumber
+                      min={0}
+                      max={23.9}
+                      step={0.5}
+                      value={operationDraft.recommendedTime}
+                      onChange={(value) =>
+                        setOperationDraft((current) =>
+                          current ? { ...current, recommendedTime: Number(value ?? 0) } : current,
+                        )
+                      }
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">推荐偏移</label>
+                    <InputNumber
+                      min={-7}
+                      max={7}
+                      value={operationDraft.recommendedDayOffset}
+                      onChange={(value) =>
+                        setOperationDraft((current) =>
+                          current ? { ...current, recommendedDayOffset: Number(value ?? 0) } : current,
+                        )
+                      }
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="mb-1 block text-sm font-medium text-slate-700">默认资源节点</label>
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    value={operationDraft.resourceNodeId ?? undefined}
+                    onChange={(value) =>
+                      setOperationDraft((current) => (current ? { ...current, resourceNodeId: value ?? null } : current))
+                    }
+                    options={leafNodes.map((node) => ({
+                      value: node.id,
+                      label: `${node.nodeName} / ${node.boundResourceCode ?? '未挂资源'}`,
+                    }))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="mb-3 text-sm font-semibold text-slate-700">时间窗开始</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <InputNumber
+                        min={0}
+                        max={23.9}
+                        step={0.5}
+                        value={operationDraft.windowStartTime}
                         onChange={(value) =>
-                          setOperationDraft((current) => (current ? { ...current, resourceNodeId: value ?? null } : current))
+                          setOperationDraft((current) =>
+                            current ? { ...current, windowStartTime: Number(value ?? 0) } : current,
+                          )
                         }
-                        options={leafNodes.map((node) => ({
-                          value: node.id,
-                          label: `${node.nodeName} / ${node.boundResourceCode ?? '未挂资源'}`,
-                        }))}
+                        style={{ width: '100%' }}
+                      />
+                      <InputNumber
+                        min={-7}
+                        max={7}
+                        value={operationDraft.windowStartDayOffset}
+                        onChange={(value) =>
+                          setOperationDraft((current) =>
+                            current ? { ...current, windowStartDayOffset: Number(value ?? 0) } : current,
+                          )
+                        }
                         style={{ width: '100%' }}
                       />
                     </div>
-                    {selectedOperation?.bindingReason ? (
-                      <Alert type="warning" showIcon message={selectedOperation.bindingReason} />
-                    ) : null}
-                  </Space>
-                ),
-              },
-              {
-                key: 'rules',
-                label: '资源规则',
-                children: selectedOperation ? (
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="mb-3 text-sm font-semibold text-slate-700">时间窗结束</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <InputNumber
+                        min={0}
+                        max={23.9}
+                        step={0.5}
+                        value={operationDraft.windowEndTime}
+                        onChange={(value) =>
+                          setOperationDraft((current) =>
+                            current ? { ...current, windowEndTime: Number(value ?? 0) } : current,
+                          )
+                        }
+                        style={{ width: '100%' }}
+                      />
+                      <InputNumber
+                        min={-7}
+                        max={7}
+                        value={operationDraft.windowEndDayOffset}
+                        onChange={(value) =>
+                          setOperationDraft((current) =>
+                            current ? { ...current, windowEndDayOffset: Number(value ?? 0) } : current,
+                          )
+                        }
+                        style={{ width: '100%' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-700">当前排程摘要</summary>
+                  <div className="mt-3 flex flex-wrap gap-2 text-sm text-slate-600">
+                    <Tag>推荐开始 {formatHourLabel(operationDraft.recommendedTime)}</Tag>
+                    <Tag>开始窗 {formatHourLabel(operationDraft.windowStartTime)} / 偏移 {operationDraft.windowStartDayOffset}</Tag>
+                    <Tag>结束窗 {formatHourLabel(operationDraft.windowEndTime)} / 偏移 {operationDraft.windowEndDayOffset}</Tag>
+                    {editDraftNode ? <Tag color="green">节点 {editDraftNode.nodeName}</Tag> : <Tag color="orange">未绑定节点</Tag>}
+                  </div>
+                </details>
+
+                {selectedOperation?.bindingReason ? <Alert className="mt-4" type="warning" showIcon message={selectedOperation.bindingReason} /> : null}
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 text-sm font-semibold text-slate-900">资源规则</div>
+                {selectedOperation ? (
                   editor.capabilities.resourceRulesEnabled ? (
                     <TemplateResourceRulesTabContent
                       scheduleId={selectedOperation.id}
@@ -2397,39 +2508,35 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                   ) : (
                     <Alert type="info" showIcon message="模板资源规则功能当前未启用" />
                   )
-                ) : (
-                  <Alert type="info" showIcon message="保存工序后才可编辑资源规则" />
-                ),
-              },
-              {
-                key: 'constraints',
-                label: '约束',
-                children: selectedOperation ? (
-                  <OperationConstraintsPanel
-                    scheduleId={selectedOperation.id}
-                    constraints={selectedOperationConstraints}
-                    availableOperations={availableConstraintOperations}
-                    onConstraintAdded={loadEditor}
-                    onConstraintUpdated={loadEditor}
-                    onConstraintDeleted={loadEditor}
-                  />
-                ) : (
-                  <Alert type="info" showIcon message="保存工序后才可编辑约束" />
-                ),
-              },
-              {
-                key: 'share',
-                label: '共享组',
-                children: selectedOperation ? (
-                  <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                    <div className="rounded-2xl border border-slate-200 p-4">
-                      <div className="mb-3 text-sm font-semibold text-slate-700">当前共享组</div>
+                ) : null}
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 text-sm font-semibold text-slate-900">约束与共享组</div>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mb-3 text-sm font-semibold text-slate-800">约束</div>
+                    {selectedOperation ? (
+                      <OperationConstraintsPanel
+                        scheduleId={selectedOperation.id}
+                        constraints={selectedOperationConstraints}
+                        availableOperations={availableConstraintOperations}
+                        onConstraintAdded={loadEditor}
+                        onConstraintUpdated={loadEditor}
+                        onConstraintDeleted={loadEditor}
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div>
+                      <div className="mb-3 text-sm font-semibold text-slate-800">当前共享组</div>
                       {currentOperationShareGroups.length ? (
                         <div className="space-y-2">
                           {currentOperationShareGroups.map((group) => (
                             <div
                               key={group.id}
-                              className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3"
+                              className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-3"
                             >
                               <div>
                                 <div className="text-sm font-medium text-slate-900">{group.groupName}</div>
@@ -2448,7 +2555,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                       )}
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 text-sm font-semibold text-slate-700">加入已有共享组</div>
                       <Space.Compact style={{ width: '100%' }}>
                         <Select
@@ -2469,7 +2576,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                       </Space.Compact>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 p-4">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 text-sm font-semibold text-slate-700">新建共享组</div>
                       <Space direction="vertical" size={12} style={{ width: '100%' }}>
                         <Input
@@ -2494,7 +2601,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                           value={shareGroupMembers}
                           onChange={(value) => setShareGroupMembers(value)}
                           options={operations
-                            .filter((item) => Number(item.id) !== Number(selectedOperation.id))
+                            .filter((item) => Number(item.id) !== Number(selectedOperation?.id))
                             .map((item) => ({
                               value: item.id,
                               label: `${item.stage_name} / ${item.operation_name}`,
@@ -2506,29 +2613,94 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
                         </Button>
                       </Space>
                     </div>
-                  </Space>
-                ) : (
-                  <Alert type="info" showIcon message="保存工序后才可编辑共享组" />
-                ),
-              },
-              ]}
-            />
-            {selectedOperation ? (
-              <div className="mt-4">
-                <Popconfirm
-                  title="删除当前工序？"
-                  description="删除后将移除该阶段操作安排。"
-                  okText="删除"
-                  cancelText="取消"
-                  onConfirm={() => void handleDeleteOperation(selectedOperation.id)}
-                >
-                  <Button danger icon={<DeleteOutlined />}>
-                    删除工序
-                  </Button>
-                </Popconfirm>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <aside className="space-y-4 overflow-y-auto pl-1">
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                <div className="text-sm font-semibold text-slate-900">编辑预览</div>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <div className="flex items-center justify-between rounded-2xl bg-white px-3 py-3">
+                    <span>阶段</span>
+                    <span className="font-medium text-slate-900">{editDraftStage?.stage_name ?? '未选择'}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-white px-3 py-3">
+                    <span>资源节点</span>
+                    <span className="font-medium text-slate-900">{editDraftNode?.nodeName ?? '未绑定'}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-white px-3 py-3">
+                    <span>推荐开始</span>
+                    <span className="font-medium text-slate-900">
+                      Day {operationDraft.operationDay} / {formatHourLabel(operationDraft.recommendedTime)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-white px-3 py-3">
+                    <span>时间窗</span>
+                    <span className="font-medium text-slate-900">
+                      {formatHourLabel(operationDraft.windowStartTime)} - {formatHourLabel(operationDraft.windowEndTime)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            ) : null}
-            </>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                <div className="text-sm font-semibold text-slate-900">状态与诊断</div>
+                <div className="mt-3 space-y-2">
+                  <Alert
+                    type={selectedOperation?.bindingStatus === 'BOUND' ? 'success' : 'warning'}
+                    showIcon
+                    message={`绑定状态：${selectedOperation?.bindingStatus ?? 'UNKNOWN'}`}
+                    description={selectedOperation?.bindingReason ?? '当前默认绑定有效'}
+                  />
+                  <div className="rounded-2xl bg-white px-3 py-3 text-sm text-slate-600">
+                    <div className="flex items-center justify-between">
+                      <span>共享组数量</span>
+                      <span className="font-medium text-slate-900">{currentOperationShareGroups.length}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between">
+                      <span>前后约束数量</span>
+                      <span className="font-medium text-slate-900">
+                        {selectedOperationConstraints.predecessors.length + selectedOperationConstraints.successors.length}
+                      </span>
+                    </div>
+                  </div>
+                  {editDraftIssues.length ? (
+                    editDraftIssues.map((issue) => <Alert key={issue} type="warning" showIcon message={issue} />)
+                  ) : (
+                    <Alert type="success" showIcon message="当前编辑内容没有发现明显问题" />
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+                <div className="text-sm font-semibold text-slate-900">快捷操作</div>
+                <div className="mt-3 space-y-2">
+                  {selectedOperation ? (
+                    <Button block icon={<PlusOutlined />} onClick={() => void handleCopyOperation(selectedOperation)}>
+                      复制当前工序
+                    </Button>
+                  ) : null}
+                  <Button block onClick={() => void handleValidate()}>
+                    重新校验模板
+                  </Button>
+                  {selectedOperation ? (
+                    <Popconfirm
+                      title="删除当前工序？"
+                      description="删除后将移除该阶段操作安排。"
+                      okText="删除"
+                      cancelText="取消"
+                      onConfirm={() => void handleDeleteOperation(selectedOperation.id)}
+                    >
+                      <Button block danger icon={<DeleteOutlined />}>
+                        删除工序
+                      </Button>
+                    </Popconfirm>
+                  ) : null}
+                </div>
+              </div>
+            </aside>
           </div>
         ) : null}
       </Modal>
