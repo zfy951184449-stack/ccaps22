@@ -1619,7 +1619,7 @@ const TemplateResourceEditorTab: React.FC<TemplateResourceEditorTabProps> = ({
         <div className="max-w-4xl">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold tracking-wide text-white">
-              资源主编辑视图
+              资源工作台
             </span>
             <Tag color="blue">V2 主编辑器</Tag>
           </div>

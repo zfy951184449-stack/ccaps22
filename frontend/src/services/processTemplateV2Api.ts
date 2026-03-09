@@ -3,6 +3,7 @@ import { Resource } from '../types/platform';
 import {
   CreateStageOperationPayload,
   CreateStagePayload,
+  NodeCanvasLayoutHint,
   OperationLibraryItem,
   OperationTypeOption,
   ResourceNodeCleanableTargetsResponse,
@@ -77,30 +78,91 @@ const mapStage = (data: any) => ({
   operation_count: data.operation_count !== undefined ? Number(data.operation_count) : undefined,
 });
 
-const mapResourceNode = (data: any): ResourceNode => ({
-  id: Number(data.id),
-  nodeCode: data.nodeCode ?? data.node_code,
-  nodeName: data.nodeName ?? data.node_name,
-  nodeClass: data.nodeClass ?? data.node_class,
-  nodeSubtype: data.nodeSubtype ?? data.node_subtype ?? null,
-  parentId: data.parentId ?? data.parent_id ?? null,
-  nodeScope: (data.nodeScope ?? data.node_scope ?? 'GLOBAL') as 'GLOBAL' | 'DEPARTMENT',
-  departmentCode: data.departmentCode ?? data.department_code ?? null,
-  equipmentSystemType: data.equipmentSystemType ?? data.equipment_system_type ?? null,
-  equipmentClass: data.equipmentClass ?? data.equipment_class ?? null,
-  equipmentModel: data.equipmentModel ?? data.equipment_model ?? null,
-  boundResourceId: data.boundResourceId ?? data.bound_resource_id ?? null,
-  boundResourceCode: data.boundResourceCode ?? data.bound_resource_code ?? null,
-  boundResourceName: data.boundResourceName ?? data.bound_resource_name ?? null,
-  boundResourceType: data.boundResourceType ?? data.bound_resource_type ?? null,
-  boundResourceStatus: data.boundResourceStatus ?? data.bound_resource_status ?? null,
-  boundResourceIsSchedulable: Boolean(data.boundResourceIsSchedulable ?? data.bound_resource_is_schedulable),
-  sortOrder: Number(data.sortOrder ?? data.sort_order ?? 0),
-  isActive: Boolean(data.isActive ?? data.is_active),
-  metadata: data.metadata ?? null,
-  childCount: Number(data.childCount ?? data.child_count ?? 0),
-  children: (data.children ?? []).map((item: any) => mapResourceNode(item)),
-});
+const normalizeMetadataObject = (value: unknown): Record<string, unknown> | null => {
+  if (!value) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === 'object') {
+    return value as Record<string, unknown>;
+  }
+  return null;
+};
+
+const parseNodeLayoutHint = (metadata: Record<string, unknown> | null): NodeCanvasLayoutHint | null => {
+  const raw = metadata?.ui_layout_v1;
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const candidate = raw as Record<string, unknown>;
+  const x = Number(candidate.x);
+  const y = Number(candidate.y);
+  const w = Number(candidate.w);
+  const h = Number(candidate.h);
+  const zone = String(candidate.zone ?? '');
+  const manual = candidate.manual === true;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) {
+    return null;
+  }
+  if (!['process_floor', 'aux_lane', 'utility_lane', 'pipeline_lane'].includes(zone)) {
+    return null;
+  }
+
+  const roomAnchorId =
+    candidate.roomAnchorId !== undefined && candidate.roomAnchorId !== null ? Number(candidate.roomAnchorId) : undefined;
+  const pinnedToNodeId =
+    candidate.pinnedToNodeId !== undefined && candidate.pinnedToNodeId !== null
+      ? Number(candidate.pinnedToNodeId)
+      : undefined;
+
+  return {
+    x,
+    y,
+    w,
+    h,
+    zone: zone as NodeCanvasLayoutHint['zone'],
+    roomAnchorId: Number.isFinite(roomAnchorId as number) ? roomAnchorId : undefined,
+    pinnedToNodeId: Number.isFinite(pinnedToNodeId as number) ? pinnedToNodeId : undefined,
+    manual,
+  };
+};
+
+const mapResourceNode = (data: any): ResourceNode => {
+  const metadata = normalizeMetadataObject(data.metadata ?? null);
+
+  return {
+    id: Number(data.id),
+    nodeCode: data.nodeCode ?? data.node_code,
+    nodeName: data.nodeName ?? data.node_name,
+    nodeClass: data.nodeClass ?? data.node_class,
+    nodeSubtype: data.nodeSubtype ?? data.node_subtype ?? null,
+    parentId: data.parentId ?? data.parent_id ?? null,
+    nodeScope: (data.nodeScope ?? data.node_scope ?? 'GLOBAL') as 'GLOBAL' | 'DEPARTMENT',
+    departmentCode: data.departmentCode ?? data.department_code ?? null,
+    equipmentSystemType: data.equipmentSystemType ?? data.equipment_system_type ?? null,
+    equipmentClass: data.equipmentClass ?? data.equipment_class ?? null,
+    equipmentModel: data.equipmentModel ?? data.equipment_model ?? null,
+    boundResourceId: data.boundResourceId ?? data.bound_resource_id ?? null,
+    boundResourceCode: data.boundResourceCode ?? data.bound_resource_code ?? null,
+    boundResourceName: data.boundResourceName ?? data.bound_resource_name ?? null,
+    boundResourceType: data.boundResourceType ?? data.bound_resource_type ?? null,
+    boundResourceStatus: data.boundResourceStatus ?? data.bound_resource_status ?? null,
+    boundResourceIsSchedulable: Boolean(data.boundResourceIsSchedulable ?? data.bound_resource_is_schedulable),
+    sortOrder: Number(data.sortOrder ?? data.sort_order ?? 0),
+    isActive: Boolean(data.isActive ?? data.is_active),
+    metadata,
+    layoutHint: parseNodeLayoutHint(metadata),
+    childCount: Number(data.childCount ?? data.child_count ?? 0),
+    children: (data.children ?? []).map((item: any) => mapResourceNode(item)),
+  };
+};
 
 const mapPlannerOperation = (data: any) => ({
   ...data,
@@ -281,6 +343,26 @@ const toResourceNodePayload = (payload: Partial<ResourceNodePayload>) => ({
   is_active: payload.isActive,
   metadata: payload.metadata ?? null,
 });
+
+const mergeLayoutHintIntoMetadata = (
+  metadata: Record<string, unknown> | null | undefined,
+  layoutHint: NodeCanvasLayoutHint,
+): Record<string, unknown> => {
+  const base = normalizeMetadataObject(metadata) ?? {};
+  return {
+    ...base,
+    ui_layout_v1: {
+      x: layoutHint.x,
+      y: layoutHint.y,
+      w: layoutHint.w,
+      h: layoutHint.h,
+      zone: layoutHint.zone,
+      manual: layoutHint.manual,
+      ...(layoutHint.roomAnchorId ? { roomAnchorId: layoutHint.roomAnchorId } : {}),
+      ...(layoutHint.pinnedToNodeId ? { pinnedToNodeId: layoutHint.pinnedToNodeId } : {}),
+    },
+  };
+};
 
 const mapResourceNodeRelation = (data: any): ResourceNodeRelation => ({
   id: Number(data.id),
@@ -503,6 +585,18 @@ export const processTemplateV2Api = {
   },
   updateResourceNode: async (nodeId: number, payload: Partial<ResourceNodePayload>) => {
     await client.patch(`/resource-nodes/${nodeId}`, toResourceNodePayload(payload));
+  },
+  updateResourceNodeLayoutHint: async (
+    nodeId: number,
+    layoutHint: NodeCanvasLayoutHint,
+    currentMetadata?: Record<string, unknown> | null,
+  ) => {
+    await client.patch(
+      `/resource-nodes/${nodeId}`,
+      toResourceNodePayload({
+        metadata: mergeLayoutHintIntoMetadata(currentMetadata, layoutHint),
+      }),
+    );
   },
   moveResourceNode: async (nodeId: number, payload: ResourceNodeMovePayload) => {
     await client.post(`/resource-nodes/${nodeId}/move`, {

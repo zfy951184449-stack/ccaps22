@@ -53,6 +53,19 @@ export type ResourceNodeSubtype =
   | string;
 export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT';
 export type EquipmentSystemType = 'SUS' | 'SS';
+export type NodeCanvasLayoutZone = 'process_floor' | 'aux_lane' | 'utility_lane' | 'pipeline_lane';
+
+export interface NodeCanvasLayoutHint {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  zone: NodeCanvasLayoutZone;
+  roomAnchorId?: number;
+  pinnedToNodeId?: number;
+  manual: boolean;
+}
+
 export type TemplateBindingStatus =
   | 'BOUND'
   | 'UNBOUND'
@@ -83,6 +96,7 @@ export interface ResourceNode {
   sortOrder: number;
   isActive: boolean;
   metadata: Record<string, unknown> | null;
+  layoutHint?: NodeCanvasLayoutHint | null;
   childCount: number;
   children: ResourceNode[];
 }

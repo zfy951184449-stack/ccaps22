@@ -10,15 +10,12 @@ import {
   Space,
   Spin,
   Tag,
-  Tree,
-  Typography,
   message,
 } from 'antd';
 import {
   ApartmentOutlined,
   ClusterOutlined,
   HomeOutlined,
-  PlusOutlined,
   ReloadOutlined,
   SettingOutlined,
   ToolOutlined,
@@ -30,14 +27,16 @@ import { Resource } from '../../types/platform';
 import { processTemplateV2Api } from '../../services';
 import {
   EquipmentSystemType,
+  NodeCanvasLayoutHint,
   PlannerOperation,
   ResourceNode,
   ResourceNodeClass,
   ResourceNodeScope,
   TeamSummary,
 } from './types';
-
-const { Text } = Typography;
+import NodeWorkbenchNavigator from './node-workbench/NodeWorkbenchNavigator';
+import NodeWorkbenchCanvas from './node-workbench/NodeWorkbenchCanvas';
+import NodeInspectorDrawer from './node-workbench/NodeInspectorDrawer';
 
 type NodeBlueprint = {
   nodeClass: ResourceNodeClass;
@@ -258,6 +257,117 @@ const toTreeData = (nodes: ResourceNode[]): DataNode[] =>
     children: toTreeData(node.children),
   }));
 
+const filterNodesByQuery = (nodes: ResourceNode[], query: string): ResourceNode[] => {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) {
+    return nodes;
+  }
+
+  return nodes
+    .map((node) => {
+      const nextChildren = filterNodesByQuery(node.children, query);
+      const matched = [node.nodeName, node.nodeCode, node.boundResourceCode ?? '', node.boundResourceName ?? '']
+        .join(' ')
+        .toLowerCase()
+        .includes(normalized);
+
+      if (!matched && !nextChildren.length) {
+        return null;
+      }
+
+      return {
+        ...node,
+        children: nextChildren,
+      };
+    })
+    .filter((item): item is ResourceNode => Boolean(item));
+};
+
+const buildAutoLayoutDraft = (allNodes: ResourceNode[]): Record<number, NodeCanvasLayoutHint> => {
+  const draft: Record<number, NodeCanvasLayoutHint> = {};
+  const childrenByParent = new Map<number, ResourceNode[]>();
+  allNodes.forEach((node) => {
+    if (!node.parentId) {
+      return;
+    }
+    const current = childrenByParent.get(node.parentId) ?? [];
+    current.push(node);
+    childrenByParent.set(node.parentId, current);
+  });
+  childrenByParent.forEach((items) => items.sort((left, right) => left.sortOrder - right.sortOrder));
+
+  const rooms = allNodes.filter((node) => node.nodeClass === 'ROOM');
+  rooms.forEach((room) => {
+    const children = childrenByParent.get(room.id) ?? [];
+    if (room.nodeSubtype === 'UTILITY_SHARED') {
+      const stations = children.filter((node) => node.nodeClass === 'UTILITY_STATION');
+      stations.forEach((station, index) => {
+        const col = index % 3;
+        const row = Math.floor(index / 3);
+        draft[station.id] = {
+          x: 0.05 + col * 0.31,
+          y: 0.08 + row * 0.42,
+          w: 0.28,
+          h: 0.34,
+          zone: 'utility_lane',
+          roomAnchorId: room.id,
+          manual: false,
+        };
+      });
+      return;
+    }
+
+    const auxiliaryRooms = children.filter(
+      (node) => node.nodeClass === 'ROOM' && node.nodeSubtype === 'AUXILIARY',
+    );
+    auxiliaryRooms.forEach((aux, index) => {
+      const col = index % 4;
+      draft[aux.id] = {
+        x: 0.04 + col * 0.235,
+        y: 0.12,
+        w: 0.22,
+        h: 0.72,
+        zone: 'aux_lane',
+        roomAnchorId: room.id,
+        manual: false,
+      };
+    });
+
+    const equipments = children.filter((node) => node.nodeClass === 'EQUIPMENT_UNIT');
+    equipments.forEach((equipment, index) => {
+      const col = index % 3;
+      const row = Math.floor(index / 3);
+      draft[equipment.id] = {
+        x: 0.05 + col * 0.31,
+        y: 0.08 + row * 0.42,
+        w: 0.28,
+        h: 0.34,
+        zone: 'process_floor',
+        roomAnchorId: room.id,
+        manual: false,
+      };
+
+      const components = (childrenByParent.get(equipment.id) ?? []).filter((node) => node.nodeClass === 'COMPONENT');
+      components.forEach((component, componentIndex) => {
+        const globalIndex = index * 4 + componentIndex;
+        const pipelineCol = globalIndex % 4;
+        draft[component.id] = {
+          x: 0.04 + pipelineCol * 0.235,
+          y: 0.2,
+          w: 0.21,
+          h: 0.55,
+          zone: 'pipeline_lane',
+          roomAnchorId: room.id,
+          pinnedToNodeId: equipment.id,
+          manual: false,
+        };
+      });
+    });
+  });
+
+  return draft;
+};
+
 const buildNodeCodePreview = (
   nodeScope: ResourceNodeScope,
   departmentCode: string | null,
@@ -291,6 +401,10 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
   const [impactOperations, setImpactOperations] = useState<PlannerOperation[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [formMode, setFormMode] = useState<'edit' | 'create-root' | 'create-child'>('edit');
+  const [workbenchSearch, setWorkbenchSearch] = useState('');
+  const [layoutDraft, setLayoutDraft] = useState<Record<number, NodeCanvasLayoutHint>>({});
+  const [layoutDirtyNodeIds, setLayoutDirtyNodeIds] = useState<number[]>([]);
+  const [layoutSaving, setLayoutSaving] = useState(false);
   const [resourceModalOpen, setResourceModalOpen] = useState(false);
   const [creatingResourceForNodeId, setCreatingResourceForNodeId] = useState<number | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -328,6 +442,8 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       setResources(resourceList);
       setImpactOperations(plannerResponse.operations);
       setTeams(teamsResponse);
+      setLayoutDraft({});
+      setLayoutDirtyNodeIds([]);
       if (nodeTree.length > 0) {
         setSelectedNodeId((current) => current ?? nodeTree[0].id);
       }
@@ -341,6 +457,8 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       setResources([]);
       setImpactOperations([]);
       setTeams([]);
+      setLayoutDraft({});
+      setLayoutDirtyNodeIds([]);
       setErrorMessage('资源节点管理加载失败，请先确认资源节点表和资源中心模型已就绪。');
     } finally {
       setLoading(false);
@@ -425,6 +543,24 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       mappedResourceCount: allNodes.filter((node) => Boolean(node.boundResourceId)).length,
     }),
     [allNodes],
+  );
+
+  const filteredNavigatorNodes = useMemo(() => filterNodesByQuery(nodes, workbenchSearch), [nodes, workbenchSearch]);
+  const navigatorTreeData = useMemo(() => toTreeData(filteredNavigatorNodes), [filteredNavigatorNodes]);
+
+  const selectedCipNode = useMemo(() => {
+    if (!selectedNode || selectedNode.nodeClass !== 'UTILITY_STATION' || selectedNode.nodeSubtype !== 'CIP') {
+      return null;
+    }
+    return selectedNode;
+  }, [selectedNode]);
+
+  const cleanableTargetNodes = useMemo(
+    () =>
+      cleanableTargetIds
+        .map((nodeId) => nodeMap.get(nodeId))
+        .filter((node): node is ResourceNode => Boolean(node)),
+    [cleanableTargetIds, nodeMap],
   );
 
   useEffect(() => {
@@ -601,6 +737,17 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         }
       }
 
+      if (formMode === 'edit' && selectedNode) {
+        const layoutHint = layoutDraft[selectedNode.id];
+        if (layoutHint) {
+          metadata = {
+            ...(selectedNode.metadata ?? {}),
+            ...(metadata ?? {}),
+            ui_layout_v1: layoutHint,
+          };
+        }
+      }
+
       const payload = {
         nodeCode: formMode === 'edit' ? draftValues.nodeCode.trim() : undefined,
         nodeName: draftValues.nodeName.trim(),
@@ -765,6 +912,54 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     }
   };
 
+  const handleLayoutChange = useCallback((nodeId: number, hint: NodeCanvasLayoutHint) => {
+    setLayoutDraft((current) => ({
+      ...current,
+      [nodeId]: hint,
+    }));
+    setLayoutDirtyNodeIds((current) => (current.includes(nodeId) ? current : [...current, nodeId]));
+  }, []);
+
+  const handleAutoLayout = useCallback(() => {
+    const nextDraft = buildAutoLayoutDraft(allNodes);
+    const dirtyIds = Object.keys(nextDraft).map((item) => Number(item));
+    setLayoutDraft(nextDraft);
+    setLayoutDirtyNodeIds(dirtyIds);
+    if (dirtyIds.length) {
+      message.success(`已生成 ${dirtyIds.length} 个节点的自动布局草稿`);
+    } else {
+      message.info('当前没有可自动编排的节点');
+    }
+  }, [allNodes]);
+
+  const handleSaveLayout = useCallback(async () => {
+    const targetIds = layoutDirtyNodeIds.filter((nodeId) => Boolean(layoutDraft[nodeId]));
+    if (!targetIds.length) {
+      message.info('当前没有需要保存的布局变更');
+      return;
+    }
+
+    try {
+      setLayoutSaving(true);
+      for (const nodeId of targetIds) {
+        const hint = layoutDraft[nodeId];
+        const node = nodeMap.get(nodeId);
+        if (!hint || !node) {
+          continue;
+        }
+        // Persist only ui_layout_v1 and keep other metadata keys unchanged.
+        await processTemplateV2Api.updateResourceNodeLayoutHint(nodeId, hint, node.metadata ?? null);
+      }
+      message.success(`布局已保存（${targetIds.length} 个节点）`);
+      setLayoutDirtyNodeIds([]);
+      await loadData();
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '保存布局失败');
+    } finally {
+      setLayoutSaving(false);
+    }
+  }, [layoutDirtyNodeIds, layoutDraft, loadData, nodeMap]);
+
   if (loading) {
     return (
       <div className="flex min-h-[540px] items-center justify-center rounded-3xl border border-slate-200 bg-white">
@@ -782,491 +977,455 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-sky-50 px-5 py-5 shadow-sm">
         <div>
           <div className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold tracking-wide text-white inline-block">
-            节点管理
+            资源工作台
           </div>
-          <h3 className="mt-3 text-2xl font-semibold text-slate-900">工艺模板 V2 语义节点建模</h3>
+          <h3 className="mt-3 text-2xl font-semibold text-slate-900">工艺模板 V2 资源节点拟物建模</h3>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            采用“树 + 属性表单”维护 SITE/LINE/ROOM/EQUIPMENT_UNIT/COMPONENT/UTILITY_STATION，并在 CIP 站配置可清洗对象引用关系。
+            左侧层级导航定位节点，中央拟物画布完成布局与关系，右侧属性抽屉负责精细字段编辑与资源绑定。
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">节点总数</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.totalCount}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">房间数</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.roomCount}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">可绑定节点</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.bindableCount}</div>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-white/80 px-3 py-2">
-              <div className="text-xs text-slate-500">已挂载资源</div>
-              <div className="mt-1 text-lg font-semibold text-slate-900">{nodeStats.mappedResourceCount}</div>
-            </div>
-          </div>
         </div>
         <Space wrap>
           <Button icon={<ReloadOutlined />} onClick={() => void loadData()}>
             刷新
           </Button>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setFormMode('create-root');
-              setSelectedNodeId(null);
-            }}
-          >
-            新增根节点
+          <Button icon={<ReloadOutlined />} onClick={handleAutoLayout}>
+            自动编排
           </Button>
-          <Button
-            icon={<PlusOutlined />}
-            disabled={!selectedNode || !allowedChildBlueprints(selectedNode).length}
-            onClick={() => setFormMode('create-child')}
-          >
-            新增子节点
+          <Button type="primary" loading={layoutSaving} onClick={() => void handleSaveLayout()}>
+            保存布局{layoutDirtyNodeIds.length ? ` (${layoutDirtyNodeIds.length})` : ''}
           </Button>
         </Space>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)_360px]">
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-700">资源语义节点树</div>
-              <Text type="secondary" className="text-xs">
-                拖拽可移动层级
-              </Text>
-            </div>
-            {nodes.length ? (
-              <Tree
-                draggable
-                blockNode
-                treeData={toTreeData(nodes)}
-                selectedKeys={selectedNodeId ? [selectedNodeId] : []}
-                onSelect={(keys) => {
-                  const nextId = keys.length ? Number(keys[0]) : null;
-                  setSelectedNodeId(nextId);
-                  setFormMode('edit');
-                }}
-                onDrop={(info) => void handleTreeDrop(info)}
-                defaultExpandAll
-              />
-            ) : (
-              <Empty description="尚未创建资源节点" />
-            )}
-          </div>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
+        <NodeWorkbenchNavigator
+          treeData={navigatorTreeData}
+          selectedNodeId={selectedNodeId}
+          canCreateChild={Boolean(selectedNode && allowedChildBlueprints(selectedNode).length)}
+          searchValue={workbenchSearch}
+          stats={nodeStats}
+          onSearchChange={setWorkbenchSearch}
+          onRefresh={() => void loadData()}
+          onCreateRoot={() => {
+            setFormMode('create-root');
+            setSelectedNodeId(null);
+          }}
+          onCreateChild={() => setFormMode('create-child')}
+          onLocateSelected={() => {
+            if (!selectedNode) {
+              return;
+            }
+            setWorkbenchSearch('');
+            message.success(`已定位到 ${selectedNode.nodeName}`);
+          }}
+          onSelect={(nodeId) => {
+            setSelectedNodeId(nodeId);
+            setFormMode('edit');
+          }}
+          onDrop={(info) => void handleTreeDrop(info)}
+        />
 
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-slate-700">
-                  {formMode === 'edit' ? '节点属性编辑' : formMode === 'create-root' ? '新增根节点' : '新增子节点'}
+        <NodeWorkbenchCanvas
+          allNodes={allNodes}
+          selectedNodeId={selectedNodeId}
+          searchValue={workbenchSearch}
+          layoutDraft={layoutDraft}
+          selectedCipNode={selectedCipNode}
+          cleanableTargets={cleanableTargetNodes}
+          onSelectNode={(nodeId) => {
+            setSelectedNodeId(nodeId);
+            setFormMode('edit');
+          }}
+          onLayoutChange={handleLayoutChange}
+          onAutoLayout={handleAutoLayout}
+        />
+
+        <NodeInspectorDrawer
+          mode={formMode}
+          selectedNodePath={selectedNodePath}
+          hasEditableNode={Boolean(selectedNode)}
+          onBackToEdit={() => setFormMode('edit')}
+          onSaveNode={() => void handleSaveNode()}
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">节点编码</label>
+                  <Input value={formMode === 'edit' ? draftValues.nodeCode : generatedNodeCodePreview} disabled />
                 </div>
-                <div className="mt-1 text-xs text-slate-500">{selectedNodePath || '当前未选择节点'}</div>
-              </div>
-              <Space>
-                <Button onClick={() => setFormMode('edit')} disabled={formMode === 'edit'}>
-                  回到编辑
-                </Button>
-                <Button type="primary" onClick={() => void handleSaveNode()}>
-                  保存节点
-                </Button>
-              </Space>
-            </div>
-
-            {!selectedNode && formMode === 'edit' ? (
-              <Empty description="选择一个节点后即可编辑" />
-            ) : (
-              <div className="space-y-4">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">节点编码</label>
-                    <Input value={formMode === 'edit' ? draftValues.nodeCode : generatedNodeCodePreview} disabled />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">节点名称</label>
-                    <Input
-                      value={draftValues.nodeName}
-                      onChange={(event) =>
-                        setDraftValues((current) => ({ ...current, nodeName: event.target.value }))
-                      }
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">节点分类</label>
-                    <Select
-                      value={draftValues.nodeClass}
-                      options={classOptions.map((item) => ({ label: item.label, value: item.value }))}
-                      onChange={(value) =>
-                        setDraftValues((current) => ({
-                          ...current,
-                          nodeClass: value,
-                          nodeSubtype: '',
-                          equipmentSystemType: null,
-                          equipmentClass: '',
-                          equipmentModel: '',
-                        }))
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">节点子类型</label>
-                    {requiresSubtype(draftValues.nodeClass) ? (
-                      subtypeOptions.length > 0 ? (
-                        <Select
-                          value={draftValues.nodeSubtype || undefined}
-                          options={subtypeOptions}
-                          onChange={(value) => setDraftValues((current) => ({ ...current, nodeSubtype: value }))}
-                          style={{ width: '100%' }}
-                        />
-                      ) : (
-                        <Input
-                          value={draftValues.nodeSubtype}
-                          placeholder="例如 REACTOR / AKTA / ABEC / PIPELINE"
-                          onChange={(event) =>
-                            setDraftValues((current) => ({ ...current, nodeSubtype: event.target.value }))
-                          }
-                        />
-                      )
-                    ) : supportsOptionalSubtype(draftValues.nodeClass) ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">节点名称</label>
+                  <Input
+                    value={draftValues.nodeName}
+                    onChange={(event) =>
+                      setDraftValues((current) => ({ ...current, nodeName: event.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">节点分类</label>
+                  <Select
+                    value={draftValues.nodeClass}
+                    options={classOptions.map((item) => ({ label: item.label, value: item.value }))}
+                    onChange={(value) =>
+                      setDraftValues((current) => ({
+                        ...current,
+                        nodeClass: value,
+                        nodeSubtype: '',
+                        equipmentSystemType: null,
+                        equipmentClass: '',
+                        equipmentModel: '',
+                      }))
+                    }
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">节点子类型</label>
+                  {requiresSubtype(draftValues.nodeClass) ? (
+                    subtypeOptions.length > 0 ? (
+                      <Select
+                        value={draftValues.nodeSubtype || undefined}
+                        options={subtypeOptions}
+                        onChange={(value) => setDraftValues((current) => ({ ...current, nodeSubtype: value }))}
+                        style={{ width: '100%' }}
+                      />
+                    ) : (
                       <Input
                         value={draftValues.nodeSubtype}
-                        placeholder="可选，例如 PIPELINE"
+                        placeholder="例如 REACTOR / AKTA / ABEC / PIPELINE"
                         onChange={(event) =>
                           setDraftValues((current) => ({ ...current, nodeSubtype: event.target.value }))
                         }
                       />
-                    ) : (
-                      <Input value="(不需要)" disabled />
-                    )}
-                  </div>
-                  {draftValues.nodeClass === 'EQUIPMENT_UNIT' ? (
-                    <>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">设备系统类型</label>
-                        <Select
-                          value={draftValues.equipmentSystemType ?? undefined}
-                          options={[
-                            { value: 'SUS', label: 'SUS' },
-                            { value: 'SS', label: 'SS' },
-                          ]}
-                          onChange={(value) =>
-                            setDraftValues((current) => ({
-                              ...current,
-                              equipmentSystemType: value as EquipmentSystemType,
-                            }))
-                          }
-                          style={{ width: '100%' }}
-                          placeholder="选择系统类型"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">设备类</label>
-                        <Input
-                          value={draftValues.equipmentClass}
-                          placeholder="例如 REACTOR / AKTA"
-                          onChange={(event) =>
-                            setDraftValues((current) => ({ ...current, equipmentClass: event.target.value }))
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-slate-700">设备型号</label>
-                        <Input
-                          value={draftValues.equipmentModel}
-                          placeholder="例如 ABEC / AKTA1"
-                          onChange={(event) =>
-                            setDraftValues((current) => ({ ...current, equipmentModel: event.target.value }))
-                          }
-                        />
-                      </div>
-                    </>
-                  ) : null}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">父节点</label>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      value={draftValues.parentId ?? undefined}
-                      onChange={(value) => setDraftValues((current) => ({ ...current, parentId: value ?? null }))}
-                      options={allNodes
-                        .filter((node) => (formMode === 'create-child' ? true : node.id !== selectedNode?.id))
-                        .map((node) => ({
-                          value: node.id,
-                          label: buildNodePath(node.id, nodeMap)
-                            .map((item) => item.nodeName)
-                            .join(' / '),
-                        }))}
-                      style={{ width: '100%' }}
-                      disabled={formMode === 'create-child'}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">归属范围</label>
-                    <Select
-                      value={draftValues.nodeScope}
-                      options={NODE_SCOPE_OPTIONS}
-                      onChange={(value) =>
-                        setDraftValues((current) => ({ ...current, nodeScope: value as ResourceNodeScope }))
+                    )
+                  ) : supportsOptionalSubtype(draftValues.nodeClass) ? (
+                    <Input
+                      value={draftValues.nodeSubtype}
+                      placeholder="可选，例如 PIPELINE"
+                      onChange={(event) =>
+                        setDraftValues((current) => ({ ...current, nodeSubtype: event.target.value }))
                       }
-                      style={{ width: '100%' }}
-                      disabled={draftValues.nodeClass === 'SITE'}
                     />
-                  </div>
-                  {draftValues.nodeScope === 'DEPARTMENT' ? (
+                  ) : (
+                    <Input value="(不需要)" disabled />
+                  )}
+                </div>
+                {draftValues.nodeClass === 'EQUIPMENT_UNIT' ? (
+                  <>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">部门域</label>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">设备系统类型</label>
                       <Select
-                        value={draftValues.departmentCode ?? undefined}
-                        options={DEPARTMENT_OPTIONS}
-                        onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
+                        value={draftValues.equipmentSystemType ?? undefined}
+                        options={[
+                          { value: 'SUS', label: 'SUS' },
+                          { value: 'SS', label: 'SS' },
+                        ]}
+                        onChange={(value) =>
+                          setDraftValues((current) => ({
+                            ...current,
+                            equipmentSystemType: value as EquipmentSystemType,
+                          }))
+                        }
                         style={{ width: '100%' }}
+                        placeholder="选择系统类型"
                       />
                     </div>
-                  ) : null}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">排序</label>
-                    <InputNumber
-                      min={1}
-                      value={draftValues.sortOrder}
-                      onChange={(value) =>
-                        setDraftValues((current) => ({
-                          ...current,
-                          sortOrder: typeof value === 'number' ? value : undefined,
-                        }))
-                      }
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">启用状态</label>
-                  <Select
-                    value={draftValues.isActive}
-                    options={[
-                      { value: true, label: '启用' },
-                      { value: false, label: '停用' },
-                    ]}
-                    onChange={(value) => setDraftValues((current) => ({ ...current, isActive: value }))}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">扩展信息 JSON</label>
-                  <Input.TextArea
-                    rows={6}
-                    value={draftValues.metadataText}
-                    onChange={(event) =>
-                      setDraftValues((current) => ({ ...current, metadataText: event.target.value }))
-                    }
-                  />
-                </div>
-
-                {selectedNode && formMode === 'edit' ? (
-                  <div className="flex justify-end">
-                    <Popconfirm
-                      title="确定删除当前节点吗？"
-                      description="存在子节点、模板绑定或 CIP 关系引用时会被阻止。"
-                      okText="删除"
-                      cancelText="取消"
-                      onConfirm={() => void handleDeleteNode()}
-                    >
-                      <Button danger>删除节点</Button>
-                    </Popconfirm>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="text-sm font-semibold text-slate-700">资源挂载</div>
-              <Button
-                type="link"
-                onClick={() => {
-                  setCreatingResourceForNodeId(selectedNode?.id ?? null);
-                  setResourceModalOpen(true);
-                }}
-                disabled={!selectedNode || !BINDABLE_CLASSES.has(selectedNode.nodeClass)}
-              >
-                新建资源并绑定
-              </Button>
-            </div>
-            {selectedNode ? (
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                <Alert
-                  type={BINDABLE_CLASSES.has(selectedNode.nodeClass) ? 'info' : 'warning'}
-                  showIcon
-                  message={
-                    BINDABLE_CLASSES.has(selectedNode.nodeClass)
-                      ? '当前节点类型支持挂载资源（叶子节点）。'
-                      : '当前节点类型不支持直接挂载资源。'
-                  }
-                />
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  当前挂载：
-                  {selectedNode.boundResourceCode
-                    ? ` ${selectedNode.boundResourceCode} / ${selectedNode.boundResourceName}`
-                    : ' 未挂载资源'}
-                </div>
-                {BINDABLE_CLASSES.has(selectedNode.nodeClass) ? (
-                  <>
-                    <Select
-                      allowClear
-                      showSearch
-                      optionFilterProp="label"
-                      value={draftValues.boundResourceId ?? undefined}
-                      onChange={(value) =>
-                        setDraftValues((current) => ({ ...current, boundResourceId: value ?? null }))
-                      }
-                      options={availableResources.map((resource) => ({
-                        value: resource.id,
-                        label: `${resource.resourceCode} / ${resource.resourceName}`,
-                      }))}
-                      style={{ width: '100%' }}
-                      placeholder="选择挂载资源"
-                    />
-                    <div className="max-h-40 overflow-auto rounded-2xl border border-slate-200">
-                      {unassignedResources.length ? (
-                        unassignedResources.slice(0, 10).map((resource) => (
-                          <button
-                            key={resource.id}
-                            type="button"
-                            className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
-                            onClick={async () => {
-                              try {
-                                await processTemplateV2Api.updateResourceNode(selectedNode.id, {
-                                  boundResourceId: resource.id,
-                                });
-                                message.success('资源已挂载到当前节点');
-                                await loadData();
-                              } catch (error: any) {
-                                message.error(error?.response?.data?.error || '挂载资源失败');
-                              }
-                            }}
-                          >
-                            <span>
-                              {resource.resourceCode} / {resource.resourceName}
-                            </span>
-                            <span className="text-xs text-slate-400">{resource.resourceType}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-3 py-4 text-sm text-slate-400">当前没有未挂载资源</div>
-                      )}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">设备类</label>
+                      <Input
+                        value={draftValues.equipmentClass}
+                        placeholder="例如 REACTOR / AKTA"
+                        onChange={(event) =>
+                          setDraftValues((current) => ({ ...current, equipmentClass: event.target.value }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">设备型号</label>
+                      <Input
+                        value={draftValues.equipmentModel}
+                        placeholder="例如 ABEC / AKTA1"
+                        onChange={(event) =>
+                          setDraftValues((current) => ({ ...current, equipmentModel: event.target.value }))
+                        }
+                      />
                     </div>
                   </>
                 ) : null}
-              </Space>
-            ) : (
-              <Empty description="先选择节点后再挂载资源" />
-            )}
-          </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">父节点</label>
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    value={draftValues.parentId ?? undefined}
+                    onChange={(value) => setDraftValues((current) => ({ ...current, parentId: value ?? null }))}
+                    options={allNodes
+                      .filter((node) => (formMode === 'create-child' ? true : node.id !== selectedNode?.id))
+                      .map((node) => ({
+                        value: node.id,
+                        label: buildNodePath(node.id, nodeMap)
+                          .map((item) => item.nodeName)
+                          .join(' / '),
+                      }))}
+                    style={{ width: '100%' }}
+                    disabled={formMode === 'create-child'}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">归属范围</label>
+                  <Select
+                    value={draftValues.nodeScope}
+                    options={NODE_SCOPE_OPTIONS}
+                    onChange={(value) =>
+                      setDraftValues((current) => ({ ...current, nodeScope: value as ResourceNodeScope }))
+                    }
+                    style={{ width: '100%' }}
+                    disabled={draftValues.nodeClass === 'SITE'}
+                  />
+                </div>
+                {draftValues.nodeScope === 'DEPARTMENT' ? (
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-slate-700">部门域</label>
+                    <Select
+                      value={draftValues.departmentCode ?? undefined}
+                      options={DEPARTMENT_OPTIONS}
+                      onChange={(value) => setDraftValues((current) => ({ ...current, departmentCode: value }))}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                ) : null}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">排序</label>
+                  <InputNumber
+                    min={1}
+                    value={draftValues.sortOrder}
+                    onChange={(value) =>
+                      setDraftValues((current) => ({
+                        ...current,
+                        sortOrder: typeof value === 'number' ? value : undefined,
+                      }))
+                    }
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
 
-          {selectedNode && selectedNode.nodeClass === 'UTILITY_STATION' && selectedNode.nodeSubtype === 'CIP' ? (
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="mb-3 text-sm font-semibold text-slate-700">CIP 可清洗对象</div>
-              <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                <Alert type="info" showIcon message="仅允许关联设备系统类型为 SS 的设备实例或组件。" />
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-medium text-slate-700">启用状态</label>
                 <Select
-                  mode="multiple"
-                  showSearch
-                  optionFilterProp="label"
-                  loading={cleanableLoading}
-                  value={cleanableTargetIds}
-                  onChange={(value) => setCleanableTargetIds(value as number[])}
-                  options={cleanableCandidates.map((node) => {
-                    const parentNode = node.parentId ? nodeMap.get(node.parentId) : null;
-                    const systemType =
-                      node.equipmentSystemType ??
-                      (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentSystemType : null);
-                    const equipmentClass =
-                      node.equipmentClass ??
-                      (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentClass : null);
-                    const equipmentModel =
-                      node.equipmentModel ??
-                      (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentModel : null);
-                    const equipmentLabel = [systemType, equipmentClass, equipmentModel].filter(Boolean).join(' / ');
-
-                    return {
-                      value: node.id,
-                      label: `${buildNodePath(node.id, nodeMap)
-                        .map((item) => item.nodeName)
-                        .join(' / ')} (${node.nodeCode})${equipmentLabel ? ` [${equipmentLabel}]` : ''}`,
-                    };
-                  })}
+                  value={draftValues.isActive}
+                  options={[
+                    { value: true, label: '启用' },
+                    { value: false, label: '停用' },
+                  ]}
+                  onChange={(value) => setDraftValues((current) => ({ ...current, isActive: value }))}
                   style={{ width: '100%' }}
-                  placeholder="选择可清洗对象"
                 />
-                <Button type="primary" loading={cleanableLoading} onClick={() => void handleSaveCleanableTargets()}>
-                  保存 CIP 关系
-                </Button>
-              </Space>
-            </div>
-          ) : null}
+              </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 text-sm font-semibold text-slate-700">影响分析</div>
-            {selectedNode ? (
+              <div className="mt-4">
+                <label className="mb-1 block text-sm font-medium text-slate-700">扩展信息 JSON</label>
+                <Input.TextArea
+                  rows={6}
+                  value={draftValues.metadataText}
+                  onChange={(event) =>
+                    setDraftValues((current) => ({ ...current, metadataText: event.target.value }))
+                  }
+                />
+              </div>
+
+              {selectedNode && formMode === 'edit' ? (
+                <div className="mt-4 flex justify-end">
+                  <Popconfirm
+                    title="确定删除当前节点吗？"
+                    description="存在子节点、模板绑定或 CIP 关系引用时会被阻止。"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => void handleDeleteNode()}
+                  >
+                    <Button danger>删除节点</Button>
+                  </Popconfirm>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="text-sm font-semibold text-slate-700">资源绑定</div>
+                <Button
+                  type="link"
+                  onClick={() => {
+                    setCreatingResourceForNodeId(selectedNode?.id ?? null);
+                    setResourceModalOpen(true);
+                  }}
+                  disabled={!selectedNode || !BINDABLE_CLASSES.has(selectedNode.nodeClass)}
+                >
+                  新建资源并绑定
+                </Button>
+              </div>
+              {selectedNode ? (
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <Alert
+                    type={BINDABLE_CLASSES.has(selectedNode.nodeClass) ? 'info' : 'warning'}
+                    showIcon
+                    message={
+                      BINDABLE_CLASSES.has(selectedNode.nodeClass)
+                        ? '当前节点类型支持挂载资源（叶子节点）。'
+                        : '当前节点类型不支持直接挂载资源。'
+                    }
+                  />
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                    当前挂载：
+                    {selectedNode.boundResourceCode
+                      ? ` ${selectedNode.boundResourceCode} / ${selectedNode.boundResourceName}`
+                      : ' 未挂载资源'}
+                  </div>
+                  {BINDABLE_CLASSES.has(selectedNode.nodeClass) ? (
+                    <>
+                      <Select
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        value={draftValues.boundResourceId ?? undefined}
+                        onChange={(value) =>
+                          setDraftValues((current) => ({ ...current, boundResourceId: value ?? null }))
+                        }
+                        options={availableResources.map((resource) => ({
+                          value: resource.id,
+                          label: `${resource.resourceCode} / ${resource.resourceName}`,
+                        }))}
+                        style={{ width: '100%' }}
+                        placeholder="选择挂载资源"
+                      />
+                      <div className="max-h-40 overflow-auto rounded-2xl border border-slate-200">
+                        {unassignedResources.length ? (
+                          unassignedResources.slice(0, 10).map((resource) => (
+                            <button
+                              key={resource.id}
+                              type="button"
+                              className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50"
+                              onClick={async () => {
+                                try {
+                                  await processTemplateV2Api.updateResourceNode(selectedNode.id, {
+                                    boundResourceId: resource.id,
+                                  });
+                                  message.success('资源已挂载到当前节点');
+                                  await loadData();
+                                } catch (error: any) {
+                                  message.error(error?.response?.data?.error || '挂载资源失败');
+                                }
+                              }}
+                            >
+                              <span>
+                                {resource.resourceCode} / {resource.resourceName}
+                              </span>
+                              <span className="text-xs text-slate-400">{resource.resourceType}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-4 text-sm text-slate-400">当前没有未挂载资源</div>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
+                </Space>
+              ) : (
+                <Empty description="先选择节点后再挂载资源" />
+              )}
+            </div>
+
+            {selectedNode && selectedNode.nodeClass === 'UTILITY_STATION' && selectedNode.nodeSubtype === 'CIP' ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="mb-3 text-sm font-semibold text-slate-700">CIP 可清洗对象</div>
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <Alert type="info" showIcon message="仅允许关联设备系统类型为 SS 的设备实例或组件。" />
+                  <Select
+                    mode="multiple"
+                    showSearch
+                    optionFilterProp="label"
+                    loading={cleanableLoading}
+                    value={cleanableTargetIds}
+                    onChange={(value) => setCleanableTargetIds(value as number[])}
+                    options={cleanableCandidates.map((node) => {
+                      const parentNode = node.parentId ? nodeMap.get(node.parentId) : null;
+                      const systemType =
+                        node.equipmentSystemType ??
+                        (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentSystemType : null);
+                      const equipmentClass =
+                        node.equipmentClass ??
+                        (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentClass : null);
+                      const equipmentModel =
+                        node.equipmentModel ??
+                        (parentNode?.nodeClass === 'EQUIPMENT_UNIT' ? parentNode.equipmentModel : null);
+                      const equipmentLabel = [systemType, equipmentClass, equipmentModel].filter(Boolean).join(' / ');
+
+                      return {
+                        value: node.id,
+                        label: `${buildNodePath(node.id, nodeMap)
+                          .map((item) => item.nodeName)
+                          .join(' / ')} (${node.nodeCode})${equipmentLabel ? ` [${equipmentLabel}]` : ''}`,
+                      };
+                    })}
+                    style={{ width: '100%' }}
+                    placeholder="选择可清洗对象"
+                  />
+                  <Button type="primary" loading={cleanableLoading} onClick={() => void handleSaveCleanableTargets()}>
+                    保存 CIP 关系
+                  </Button>
+                </Space>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="mb-3 text-sm font-semibold text-slate-700">影响分析</div>
+              {selectedNode ? (
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <Alert type="info" showIcon message={`当前节点被 ${impactedOperations.length} 个模板工序默认引用`} />
+                  <div className="max-h-64 overflow-auto rounded-2xl border border-slate-200">
+                    {impactedOperations.length ? (
+                      impactedOperations.map((operation) => (
+                        <div key={operation.id} className="border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
+                          <div className="font-medium text-slate-800">{operation.operation_name}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {operation.stage_name} / {operation.bindingStatus}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-4 text-sm text-slate-400">当前节点暂未被模板工序引用</div>
+                    )}
+                  </div>
+                </Space>
+              ) : (
+                <Empty description="先选择节点查看影响" />
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="mb-3 text-sm font-semibold text-slate-700">人工重建工具</div>
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 <Alert
-                  type="info"
+                  type="warning"
                   showIcon
-                  message={`当前节点被 ${impactedOperations.length} 个模板工序默认引用`}
+                  message="建议先导出备份，再执行清空；清空会同时删除模板默认绑定与 CIP 关系。"
                 />
-                <div className="max-h-64 overflow-auto rounded-2xl border border-slate-200">
-                  {impactedOperations.length ? (
-                    impactedOperations.map((operation) => (
-                      <div key={operation.id} className="border-b border-slate-100 px-3 py-2 text-sm last:border-b-0">
-                        <div className="font-medium text-slate-800">{operation.operation_name}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {operation.stage_name} / {operation.bindingStatus}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-3 py-4 text-sm text-slate-400">当前节点暂未被模板工序引用</div>
-                  )}
-                </div>
+                <Button onClick={handleExportBackup}>导出备份 (JSON)</Button>
+                <Popconfirm
+                  title="确认清空节点树吗？"
+                  description="会清空 resource_nodes、template 默认绑定和 CIP 关系，且不可恢复。"
+                  okText="确认清空"
+                  cancelText="取消"
+                  onConfirm={() => void handleClearForRebuild()}
+                >
+                  <Button danger>清空节点树（重建模式）</Button>
+                </Popconfirm>
               </Space>
-            ) : (
-              <Empty description="先选择节点查看影响" />
-            )}
+            </div>
           </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-3 text-sm font-semibold text-slate-700">人工重建工具</div>
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
-              <Alert
-                type="warning"
-                showIcon
-                message="建议先导出备份，再执行清空；清空会同时删除模板默认绑定与 CIP 关系。"
-              />
-              <Button onClick={handleExportBackup}>导出备份 (JSON)</Button>
-              <Popconfirm
-                title="确认清空节点树吗？"
-                description="会清空 resource_nodes、template 默认绑定和 CIP 关系，且不可恢复。"
-                okText="确认清空"
-                cancelText="取消"
-                onConfirm={() => void handleClearForRebuild()}
-              >
-                <Button danger>清空节点树（重建模式）</Button>
-              </Popconfirm>
-            </Space>
-          </div>
-        </div>
+        </NodeInspectorDrawer>
       </div>
 
       <ResourceFormModal
