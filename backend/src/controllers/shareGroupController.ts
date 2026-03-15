@@ -285,6 +285,8 @@ export const getShareGroupsForGantt = async (req: Request, res: Response) => {
 export const getShareGroupsForBatchGantt = async (req: Request, res: Response) => {
     try {
         const batchIdsParam = req.query.batch_ids as string;
+        const startDate = req.query.start_date as string | undefined;
+        const endDate = req.query.end_date as string | undefined;
         if (!batchIdsParam) {
             return res.json([]);
         }
@@ -295,19 +297,33 @@ export const getShareGroupsForBatchGantt = async (req: Request, res: Response) =
         }
 
         const placeholders = batchIds.map(() => '?').join(',');
+        const hasWindowFilter = Boolean(startDate && endDate);
+        const params: Array<string | number> = [...batchIds];
+
+        if (hasWindowFilter) {
+            params.push(String(endDate), String(startDate));
+        }
 
         const [groups] = await pool.execute<RowDataPacket[]>(`
             SELECT 
                 bsg.id,
                 bsg.group_name,
                 bsg.share_mode,
-                GROUP_CONCAT(bsgm.batch_operation_plan_id) as member_operation_ids
+                GROUP_CONCAT(DISTINCT bsgm.batch_operation_plan_id ORDER BY bsgm.batch_operation_plan_id) as member_operation_ids
             FROM batch_share_groups bsg
             JOIN batch_share_group_members bsgm ON bsg.id = bsgm.group_id
+            ${hasWindowFilter ? `
+            JOIN batch_share_group_members bsgm_visible ON bsg.id = bsgm_visible.group_id
+            JOIN batch_operation_plans bop_visible ON bsgm_visible.batch_operation_plan_id = bop_visible.id
+            ` : ''}
             WHERE bsg.batch_plan_id IN (${placeholders})
+            ${hasWindowFilter ? `
+              AND bop_visible.planned_start_datetime <= ?
+              AND bop_visible.planned_end_datetime >= ?
+            ` : ''}
             GROUP BY bsg.id
-            HAVING COUNT(bsgm.id) >= 2
-        `, batchIds);
+            HAVING COUNT(DISTINCT bsgm.id) >= 2
+        `, params);
 
         // 转换为前端需要的格式
         const result = groups.map((g: any) => ({
@@ -693,4 +709,3 @@ export const createBatchShareGroup = async (req: Request, res: Response) => {
         connection.release();
     }
 };
-

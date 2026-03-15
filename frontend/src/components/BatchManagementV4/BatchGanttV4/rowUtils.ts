@@ -147,9 +147,13 @@ export const calculateRowLayout = (
             batch.stages.forEach(stage => {
                 // Stage 行 - 使用批次作用域复合键
                 const stageKey = `batch-${batch.id}-stage-${stage.id}`;
-                const stageLayout = buildStageLaneLayout(stage, stageKey);
+                const isStageExpanded = expandedStages.has(stageKey);
+                const needsLaneLayout = layoutMode === 'dense' && isStageExpanded;
+                const stageLayout = needsLaneLayout ? buildStageLaneLayout(stage, stageKey) : undefined;
 
-                stageLayouts.set(stageKey, stageLayout);
+                if (stageLayout) {
+                    stageLayouts.set(stageKey, stageLayout);
+                }
                 rowMap.set(stageKey, rowIndex);
                 rows.push({
                     kind: 'stage',
@@ -162,11 +166,11 @@ export const calculateRowLayout = (
                 });
                 rowIndex++;
 
-                if (!expandedStages.has(stageKey)) {
+                if (!isStageExpanded) {
                     return;
                 }
 
-                if (layoutMode === 'dense') {
+                if (layoutMode === 'dense' && stageLayout) {
                     for (let laneIndex = 0; laneIndex < stageLayout.laneCount; laneIndex += 1) {
                         const laneKey = `${stageKey}-lane-${laneIndex}`;
                         laneRowMap.set(laneKey, rowIndex);

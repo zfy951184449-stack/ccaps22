@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs from 'dayjs';
 import { Tooltip } from 'antd';
 import { TeamOutlined } from '@ant-design/icons';
@@ -44,10 +44,13 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
     const { startDate, endDate, viewMode, zoomLevel, enterSingleDayMode, expandedBatches, layoutMode, showShareGroupLines } = useGantt();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isGrabbing, setIsGrabbing] = useState(false);
+    const [isScrolling, setIsScrolling] = useState(false);
 
     const isDragging = useRef(false);
     const startX = useRef(0);
     const scrollLeftStart = useRef(0);
+    const scrollIdleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isScrollingRef = useRef(false);
 
     const dayWidth = zoomLevel;
     const hourWidth = dayWidth / 24;
@@ -81,7 +84,32 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
 
     const dailyPeaks = usePeakPersonnelV4(batches, shareGroups, startDate, endDate);
 
+    const markScrolling = useCallback(() => {
+        if (!isScrollingRef.current) {
+            isScrollingRef.current = true;
+            setIsScrolling(true);
+        }
+
+        if (scrollIdleTimeoutRef.current) {
+            clearTimeout(scrollIdleTimeoutRef.current);
+        }
+
+        scrollIdleTimeoutRef.current = setTimeout(() => {
+            isScrollingRef.current = false;
+            setIsScrolling(false);
+        }, 140);
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            if (scrollIdleTimeoutRef.current) {
+                clearTimeout(scrollIdleTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+        markScrolling();
         onVerticalScroll?.(event.currentTarget.scrollTop);
         onScrollInteraction?.();
         onHorizontalScroll?.(event.currentTarget.scrollLeft);
@@ -102,6 +130,7 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
             return;
         }
         event.preventDefault();
+        markScrolling();
         const nextX = event.pageX;
         const walk = nextX - startX.current;
         scrollContainerRef.current.scrollLeft = scrollLeftStart.current - walk;
@@ -111,6 +140,8 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
         isDragging.current = false;
         setIsGrabbing(false);
     };
+
+    const shouldRenderConnections = !isScrolling && !isGrabbing;
 
     const renderGanttBarLabel = (text: string, width: number) => {
         if (width < 30) {
@@ -587,7 +618,7 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
                 {renderHeader()}
                 <div className="gantt-w-full gantt-relative" style={{ height: totalBodyHeight, overflow: 'hidden' }}>
                     {renderGridBackground()}
-                    {showShareGroupLines && shareGroups.length > 0 && (
+                    {shouldRenderConnections && showShareGroupLines && shareGroups.length > 0 && (
                         <ShareGroupConnections
                             shareGroups={shareGroups}
                             operationPositions={operationPositions}
@@ -596,7 +627,7 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
                             visibleBottom={visibleBottom + rowHeight * 4}
                         />
                     )}
-                    {dependencies.length > 0 && (
+                    {shouldRenderConnections && dependencies.length > 0 && (
                         <ConstraintConnections
                             dependencies={dependencies}
                             operationPositions={operationPositions}

@@ -342,11 +342,21 @@ export const getGanttDependencies = async (req: Request, res: Response) => {
     try {
         const batchIds = parseCsvNumberList(req.query.batch_ids);
         const statuses = parseStatusFilter(req.query.status);
+        const { start_date, end_date } = req.query;
         const whereClauses = [
             `successor_batch.plan_status IN (${statuses.map(() => '?').join(',')})`,
             `predecessor_batch.plan_status IN (${statuses.map(() => '?').join(',')})`
         ];
         const params: Array<string | number> = [...statuses, ...statuses];
+
+        if (start_date && end_date) {
+            whereClauses.push(`(
+                (successor_bop.planned_start_datetime <= ? AND successor_bop.planned_end_datetime >= ?)
+                OR
+                (predecessor_bop.planned_start_datetime <= ? AND predecessor_bop.planned_end_datetime >= ?)
+            )`);
+            params.push(String(end_date), String(start_date), String(end_date), String(start_date));
+        }
 
         if (batchIds.length > 0) {
             whereClauses.push(`(successor_batch.id IN (${batchIds.map(() => '?').join(',')}) OR predecessor_batch.id IN (${batchIds.map(() => '?').join(',')}))`);

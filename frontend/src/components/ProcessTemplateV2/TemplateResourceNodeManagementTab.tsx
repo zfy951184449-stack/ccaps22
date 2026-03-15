@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
-  Drawer,
   Empty,
   Input,
   InputNumber,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -1455,13 +1455,14 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         onAutoLayout={handleAutoLayout}
       />
 
-      <Drawer
+      <Modal
         title="Palette"
-        placement="left"
         width={420}
         open={paletteDrawerOpen}
-        onClose={() => setPaletteDrawerOpen(false)}
+        onCancel={() => setPaletteDrawerOpen(false)}
+        footer={null}
         destroyOnClose={false}
+        styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
       >
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -1526,14 +1527,15 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             onDrop={(info) => void handleTreeDrop(info)}
           />
         </div>
-      </Drawer>
+      </Modal>
 
-      <Drawer
+      <Modal
         title="Filters"
-        placement="right"
         width={360}
         open={filterDrawerOpen}
-        onClose={() => setFilterDrawerOpen(false)}
+        onCancel={() => setFilterDrawerOpen(false)}
+        footer={null}
+        styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
       >
         <div className="space-y-5">
           <div>
@@ -1582,18 +1584,19 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             Reset filters
           </Button>
         </div>
-      </Drawer>
+      </Modal>
 
-      <Drawer
+      <Modal
         title={formMode === 'edit' ? 'Inspector' : formMode === 'create-root' ? 'Create root node' : 'Create child node'}
-        placement="right"
-        width={520}
+        width={760}
         open={inspectorDrawerOpen || formMode !== 'edit'}
-        onClose={() => {
+        onCancel={() => {
           setInspectorDrawerOpen(false);
           setFormMode('edit');
         }}
+        footer={null}
         destroyOnClose={false}
+        styles={{ body: { maxHeight: '78vh', overflowY: 'auto' } }}
       >
         <NodeInspectorDrawer
           mode={formMode}
@@ -1981,15 +1984,16 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             </div>
           </div>
         </NodeInspectorDrawer>
-      </Drawer>
+      </Modal>
 
-      <Drawer
+      <Modal
         title="Add room"
-        placement="left"
         width={420}
         open={createRoomOpen}
-        onClose={() => setCreateRoomOpen(false)}
+        onCancel={() => setCreateRoomOpen(false)}
+        footer={null}
         destroyOnClose={false}
+        styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
       >
         <div className="space-y-5">
           <div>
@@ -2093,15 +2097,16 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             </Button>
           </div>
         </div>
-      </Drawer>
+      </Modal>
 
-      <Drawer
+      <Modal
         title="Add equipment"
-        placement="left"
         width={420}
         open={createEquipmentOpen}
-        onClose={() => setCreateEquipmentOpen(false)}
+        onCancel={() => setCreateEquipmentOpen(false)}
+        footer={null}
         destroyOnClose={false}
+        styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
       >
         <div className="space-y-5">
           <div>
@@ -2185,7 +2190,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             </Button>
           </div>
         </div>
-      </Drawer>
+      </Modal>
 
       <ResourceFormModal
         open={resourceModalOpen}

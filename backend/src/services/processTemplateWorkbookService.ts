@@ -1,4 +1,5 @@
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import type { PoolConnection } from 'mysql2/promise';
 import pool from '../config/database';
 import { updateTemplateTotalDays } from '../controllers/processTemplateController';
 import { upsertTemplateScheduleBinding } from './resourceNodeService';
@@ -220,8 +221,6 @@ const groupBy = <T>(
   });
   return map;
 };
-
-const createPlaceholders = (length: number) => length > 0 ? length.toString().split('').map(() => '?').join(', ') : '';
 
 const createInClause = (items: Array<string | number>) => items.map(() => '?').join(', ');
 
@@ -614,6 +613,7 @@ const loadResourceRequirements = async (
     );
 
     const requirementOrderMap = new Map<string, number>();
+    const scheduleOrderCounter = new Map<number, number>();
     const grouped = new Map<string, WorkbookResourceRequirementRow>();
 
     rows.forEach((row) => {
@@ -621,10 +621,13 @@ const loadResourceRequirements = async (
       const requirementId = Number(row.requirement_id);
       const orderKey = `${scheduleId}::${requirementId}`;
       const currentOrder = requirementOrderMap.get(orderKey);
-      const scheduleOrderCount = Array.from(requirementOrderMap.keys()).filter((key) => key.startsWith(`${scheduleId}::`)).length;
-      const requirementOrder = currentOrder ?? scheduleOrderCount + 1;
+      const nextScheduleOrder = (scheduleOrderCounter.get(scheduleId) ?? 0) + 1;
+      const requirementOrder = currentOrder ?? nextScheduleOrder;
 
       requirementOrderMap.set(orderKey, requirementOrder);
+      if (!currentOrder) {
+        scheduleOrderCounter.set(scheduleId, nextScheduleOrder);
+      }
 
       const groupKey = `${scheduleId}::${requirementId}`;
       const existing = grouped.get(groupKey);
@@ -834,52 +837,62 @@ export const exportProcessTemplateWorkbook = async (
         });
       });
 
-      const [shareGroupRows] = await pool.execute<RowDataPacket[]>(
-        `SELECT
-            pt.template_code,
-            psg.id,
-            psg.group_code,
-            psg.group_name,
-            psg.share_mode
-         FROM personnel_share_groups psg
-         JOIN process_templates pt ON pt.id = psg.template_id
-         WHERE psg.template_id IN (${constraintWhere})
-         ORDER BY pt.template_code, psg.group_code`,
-        templateIdList,
-      );
-
-      const shareGroupIdList = shareGroupRows.map((row) => Number(row.id));
-      shareGroupRows.forEach((row) => {
-        shareGroups.push({
-          template_code: String(row.template_code),
-          group_code: String(row.group_code),
-          group_name: row.group_name ? String(row.group_name) : null,
-          share_mode: row.share_mode ? String(row.share_mode) : 'SAME_TEAM',
-        });
-      });
-
-      if (shareGroupIdList.length) {
-        const memberWhere = createInClause(shareGroupIdList);
-        const [shareMemberRows] = await pool.execute<RowDataPacket[]>(
+      try {
+        const [shareGroupRows] = await pool.execute<RowDataPacket[]>(
           `SELECT
               pt.template_code,
+              psg.id,
               psg.group_code,
-              psgm.schedule_id
-           FROM personnel_share_group_members psgm
-           JOIN personnel_share_groups psg ON psg.id = psgm.group_id
+              psg.group_name,
+              psg.share_mode
+           FROM personnel_share_groups psg
            JOIN process_templates pt ON pt.id = psg.template_id
-           WHERE psgm.group_id IN (${memberWhere})
-           ORDER BY pt.template_code, psg.group_code, psgm.schedule_id`,
-          shareGroupIdList,
+           WHERE psg.template_id IN (${constraintWhere})
+           ORDER BY pt.template_code, psg.group_code`,
+          templateIdList,
         );
 
-        shareMemberRows.forEach((row) => {
-          shareGroupMembers.push({
+        const shareGroupIdList = shareGroupRows.map((row) => Number(row.id));
+        shareGroupRows.forEach((row) => {
+          shareGroups.push({
             template_code: String(row.template_code),
             group_code: String(row.group_code),
-            schedule_key: buildScheduleKey(Number(row.schedule_id)),
+            group_name: row.group_name ? String(row.group_name) : null,
+            share_mode: row.share_mode ? String(row.share_mode) : 'SAME_TEAM',
           });
         });
+
+        if (shareGroupIdList.length) {
+          const memberWhere = createInClause(shareGroupIdList);
+          const [shareMemberRows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                pt.template_code,
+                psg.group_code,
+                psgm.schedule_id
+             FROM personnel_share_group_members psgm
+             JOIN personnel_share_groups psg ON psg.id = psgm.group_id
+             JOIN process_templates pt ON pt.id = psg.template_id
+             WHERE psgm.group_id IN (${memberWhere})
+             ORDER BY pt.template_code, psg.group_code, psgm.schedule_id`,
+            shareGroupIdList,
+          );
+
+          shareMemberRows.forEach((row) => {
+            shareGroupMembers.push({
+              template_code: String(row.template_code),
+              group_code: String(row.group_code),
+              schedule_key: buildScheduleKey(Number(row.schedule_id)),
+            });
+          });
+        }
+      } catch (error) {
+        if (isMissingTableError(error)) {
+          warnings.push(
+            `Skipped share groups export because table ${extractMissingTableName(error) ?? 'personnel_share_groups'} is missing.`,
+          );
+        } else {
+          throw error;
+        }
       }
 
       resourceBindings = remapTemplateCode(
@@ -922,7 +935,7 @@ export const exportProcessTemplateWorkbook = async (
 };
 
 const resolveTemplateId = async (
-  connection: typeof pool,
+  connection: PoolConnection,
   template: WorkbookTemplateRow,
   mode: WorkbookImportMode,
   existingMap: Map<string, ExistingTemplateRow>,
@@ -971,7 +984,13 @@ const resolveTemplateId = async (
      WHERE id = ?`,
     [template.template_name, template.description, teamId, existing.id],
   );
-  await connection.execute('DELETE FROM personnel_share_groups WHERE template_id = ?', [existing.id]);
+  try {
+    await connection.execute('DELETE FROM personnel_share_groups WHERE template_id = ?', [existing.id]);
+  } catch (error) {
+    if (!isMissingTableError(error)) {
+      throw error;
+    }
+  }
   await connection.execute('DELETE FROM process_stages WHERE template_id = ?', [existing.id]);
 
   return {
@@ -983,6 +1002,16 @@ const resolveTemplateId = async (
 export const importProcessTemplateWorkbook = async (
   payload: ProcessTemplateWorkbookImportPayload,
 ): Promise<ProcessTemplateWorkbookImportResult> => {
+  if (
+    payload.format_version &&
+    payload.format_version !== 'process-template-workbook-v1'
+  ) {
+    throw new ProcessTemplateWorkbookError(
+      `Unsupported workbook format_version: ${payload.format_version}`,
+      400,
+    );
+  }
+
   const mode: WorkbookImportMode = payload.mode === 'replace' ? 'replace' : 'create';
   const templates = normalizeTemplates(payload.templates);
   const stages = normalizeStages(payload.stages);
@@ -1246,7 +1275,9 @@ export const importProcessTemplateWorkbook = async (
             prep_minutes: row.prep_minutes,
             changeover_minutes: row.changeover_minutes,
             cleanup_minutes: row.cleanup_minutes,
-            candidate_resource_ids: row.candidate_resource_codes.map((code) => resourceCodeMap.get(code)).filter(Boolean),
+            candidate_resource_ids: row.candidate_resource_codes
+              .map((code) => resourceCodeMap.get(code))
+              .filter((value): value is number => Number.isInteger(value)),
           }));
 
         if (!normalizedRequirements.length) {

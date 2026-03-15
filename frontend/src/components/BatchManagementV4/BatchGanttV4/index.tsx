@@ -43,6 +43,8 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
     const [shareGroups, setShareGroups] = useState<GanttShareGroup[]>([]);
     const [offScreenOps, setOffScreenOps] = useState<OffScreenOperation[]>([]);
     const [loading, setLoading] = useState(false);
+    const [hasAutoFit, setHasAutoFit] = useState(false);
+    const [reloadVersion, setReloadVersion] = useState(0);
 
     // Editing Operation State
     const [editingOperation, setEditingOperation] = useState<GanttOperation | null>(null);
@@ -50,6 +52,17 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
     // 快捷创建共享组模式状态
     const [isShareGroupMode, setIsShareGroupMode] = useState(false);
     const [selectedOperationIds, setSelectedOperationIds] = useState<number[]>([]);
+
+    const clearGanttData = useCallback(() => {
+        setBatches([]);
+        setDependencies([]);
+        setShareGroups([]);
+        setOffScreenOps([]);
+    }, []);
+
+    const requestReload = useCallback(() => {
+        setReloadVersion(prev => prev + 1);
+    }, []);
 
     const handleEditOperation = useCallback((operation: GanttOperation) => {
         setEditingOperation(operation);
@@ -59,30 +72,28 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         setEditingOperation(null);
     }, []);
 
-    const handleSaveOperation = async (id: number, values: any) => {
+    const handleSaveOperation = useCallback(async (id: number, values: any) => {
         try {
             await axios.put(`/api/v5/gantt/operations/${id}`, values);
             message.success('操作更新成功');
-            // Refresh data
-            fetchData();
+            requestReload();
         } catch (error) {
             console.error('Failed to update operation:', error);
             message.error('更新失败，请重试');
         }
-    };
+    }, [requestReload]);
 
-    const handleDeleteOperation = async (id: number) => {
+    const handleDeleteOperation = useCallback(async (id: number) => {
         try {
             await axios.delete(`/api/v5/gantt/operations/${id}`);
             message.success('操作删除成功');
             setEditingOperation(null);
-            // Refresh data
-            fetchData();
+            requestReload();
         } catch (error) {
             console.error('Failed to delete operation:', error);
             message.error('删除失败，请重试');
         }
-    };
+    }, [requestReload]);
 
     // 快捷创建共享组处理函数
     const handleEnterShareGroupMode = useCallback(() => {
@@ -113,11 +124,11 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
     // Minimap Visibility State
     const [minimapVisible, setMinimapVisible] = useState(false);
     const minimapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const skipNextFetchRef = useRef(false);
     const currentScrollLeftRef = useRef(0);
     const currentVisibleDayIndexRef = useRef(0);
     const [minimapDate, setMinimapDate] = useState(startDate);
     const filterBatchIdsKey = useMemo(() => (filteredBatchIds ? filteredBatchIds.join(',') : ''), [filteredBatchIds]);
+    const filteredBatchIdSet = useMemo(() => new Set(filteredBatchIds ?? []), [filteredBatchIds]);
     const hasExplicitBatchFilter = filteredBatchIds !== undefined;
     const rowHeight = 32;
     const rowLayout = useMemo(
@@ -201,131 +212,192 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         }
     };
 
-    const [hasAutoFit, setHasAutoFit] = useState(false);
+    const fetchHierarchy = useCallback(async (rangeStart: dayjs.Dayjs, rangeEnd: dayjs.Dayjs) => {
+        const hierarchyParams: Record<string, string> = {
+            start_date: rangeStart.format('YYYY-MM-DD HH:mm:ss'),
+            end_date: rangeEnd.format('YYYY-MM-DD HH:mm:ss'),
+            status: 'DRAFT,ACTIVATED,PLANNED'
+        };
 
-    const fetchData = useCallback(async () => {
-        if (hasExplicitBatchFilter && filteredBatchIds.length === 0) {
-            setBatches([]);
-            setDependencies([]);
-            setShareGroups([]);
-            setOffScreenOps([]);
+        if (filterBatchIdsKey) {
+            hierarchyParams.batch_ids = filterBatchIdsKey;
+        }
+
+        const res = await axios.get('/api/v5/gantt/hierarchy', {
+            params: hierarchyParams
+        });
+
+        const { batches: fetchedBatches, offScreenOperations: fetchedOffScreen } = res.data;
+
+        return {
+            batches: (fetchedBatches || res.data) as GanttBatch[],
+            offScreenOperations: (fetchedOffScreen || []) as OffScreenOperation[],
+        };
+    }, [filterBatchIdsKey]);
+
+    useEffect(() => {
+        if (hasAutoFit) {
+            return;
+        }
+
+        if (hasExplicitBatchFilter && filteredBatchIdSet.size === 0) {
+            clearGanttData();
             setLoading(false);
             return;
         }
 
-        setLoading(true);
-        try {
-            // On initial auto-fit, we look back further (e.g., 6 months) to find the true "First Project"
-            // efficiently, then snap the view to it.
-            const fetchStart = !hasAutoFit ? dayjs().subtract(6, 'month') : startDate;
-            // Ensure we cover enough future for initial load too
-            const fetchEnd = !hasAutoFit ? dayjs().add(6, 'month') : endDate;
-            const hierarchyParams: Record<string, string> = {
-                start_date: fetchStart.format('YYYY-MM-DD HH:mm:ss'),
-                end_date: fetchEnd.format('YYYY-MM-DD HH:mm:ss'),
-                status: 'DRAFT,ACTIVATED,PLANNED'
-            };
+        let cancelled = false;
 
-            if (filterBatchIdsKey) {
-                hierarchyParams.batch_ids = filterBatchIdsKey;
-            }
+        const autoFit = async () => {
+            setLoading(true);
+            try {
+                const probeStart = dayjs().subtract(6, 'month');
+                const probeEnd = dayjs().add(6, 'month');
+                const { batches: fetchedData } = await fetchHierarchy(probeStart, probeEnd);
 
-            const res = await axios.get('/api/v5/gantt/hierarchy', {
-                params: hierarchyParams
-            });
+                if (cancelled) {
+                    return;
+                }
 
-            // V2: API now returns { batches, offScreenOperations }
-            const { batches: fetchedBatches, offScreenOperations: fetchedOffScreen } = res.data;
-            const fetchedData: GanttBatch[] = fetchedBatches || res.data; // Fallback for old format
+                if (fetchedData.length === 0) {
+                    clearGanttData();
+                    setHasAutoFit(true);
+                    return;
+                }
 
-            // Auto-Fit Logic: Snap startDate to the earliest batch AND endDate to the latest batch
-            if (!hasAutoFit && fetchedData.length > 0) {
-                // Find global min start and max end date in the fetched set
                 let minDate = dayjs(fetchedData[0].startDate);
                 let maxDate = dayjs(fetchedData[0].endDate);
 
-                fetchedData.forEach(b => {
-                    const bStart = dayjs(b.startDate);
-                    if (bStart.isBefore(minDate)) minDate = bStart;
+                fetchedData.forEach(batch => {
+                    const batchStart = dayjs(batch.startDate);
+                    const batchEnd = dayjs(batch.endDate);
 
-                    const bEnd = dayjs(b.endDate);
-                    if (bEnd.isAfter(maxDate)) maxDate = bEnd;
+                    if (batchStart.isBefore(minDate)) {
+                        minDate = batchStart;
+                    }
+
+                    if (batchEnd.isAfter(maxDate)) {
+                        maxDate = batchEnd;
+                    }
                 });
 
-                // Snap view. This will likely trigger a re-fetch via useEffect dependency.
-                skipNextFetchRef.current = true;
                 setHasAutoFit(true);
                 setStartDate(minDate.startOf('day'));
-                // Option B: Adaptive End Date + 1 week buffer
                 setEndDate(maxDate.add(1, 'week').endOf('week'));
-
-                // Apply filter from parent component if provided
-                const displayBatches = hasExplicitBatchFilter
-                    ? fetchedData.filter(b => filteredBatchIds.includes(b.id))
-                    : fetchedData;
-
-                // We update local batches to show something immediately, though re-fetch will overwrite
-                setBatches(displayBatches);
-                setOffScreenOps(fetchedOffScreen || []);
-            } else {
-                // Apply filter from parent component if provided
-                const displayBatches = hasExplicitBatchFilter
-                    ? fetchedData.filter(b => filteredBatchIds.includes(b.id))
-                    : fetchedData;
-
-                setBatches(displayBatches);
-                setOffScreenOps(fetchedOffScreen || []);
-            }
-
-            // P1 Fix: Force expand all in Single Day Mode to ensure visibility
-            if (viewMode === 'day') {
-                expandAll(fetchedData);
-            }
-
-            // 获取共享组数据
-            if (fetchedData.length > 0) {
-                const batchIds = fetchedData.map(b => b.id);
-                const batchIdsParam = batchIds.join(',');
-                try {
-                    const [sgRes, depRes] = await Promise.all([
-                        axios.get('/api/share-groups/batches/gantt', {
-                            params: { batch_ids: batchIdsParam }
-                        }),
-                        axios.get('/api/v5/gantt/dependencies', {
-                            params: {
-                                start_date: fetchStart.format('YYYY-MM-DD'),
-                                end_date: fetchEnd.format('YYYY-MM-DD'),
-                                batch_ids: batchIdsParam
-                            }
-                        })
-                    ]);
-                    setShareGroups(sgRes.data);
-                    setDependencies(depRes.data);
-                } catch (sgError) {
-                    console.error('Failed to fetch auxiliary data (share groups or dependencies)', sgError);
-                    // Non-critical, just empty them
-                    setShareGroups([]);
-                    // Keep dependencies empty if failed
-                    setDependencies([]);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('Failed to auto-fit gantt data', error);
                 }
-            } else {
-                setShareGroups([]);
-                setDependencies([]);
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
-        } catch (error) {
-            console.error('Failed to fetch gantt data', error);
-        } finally {
-            setLoading(false);
-        }
-    }, [endDate, expandAll, filterBatchIdsKey, filteredBatchIds, hasAutoFit, hasExplicitBatchFilter, setEndDate, setStartDate, startDate, viewMode]);
+        };
+
+        autoFit();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [clearGanttData, fetchHierarchy, filteredBatchIdSet, hasAutoFit, hasExplicitBatchFilter, setEndDate, setStartDate]);
 
     useEffect(() => {
-        if (skipNextFetchRef.current) {
-            skipNextFetchRef.current = false;
+        if (!hasAutoFit) {
             return;
         }
-        fetchData();
-    }, [fetchData]);
+
+        if (hasExplicitBatchFilter && filteredBatchIdSet.size === 0) {
+            clearGanttData();
+            setLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadData = async () => {
+            setLoading(true);
+            try {
+                const { batches: fetchedData, offScreenOperations: fetchedOffScreen } = await fetchHierarchy(startDate, endDate);
+
+                if (cancelled) {
+                    return;
+                }
+
+                const displayBatches = hasExplicitBatchFilter
+                    ? fetchedData.filter(batch => filteredBatchIdSet.has(batch.id))
+                    : fetchedData;
+
+                setBatches(displayBatches);
+                setOffScreenOps(fetchedOffScreen);
+
+                if (viewMode === 'day') {
+                    expandAll(displayBatches);
+                }
+
+                if (displayBatches.length === 0) {
+                    setShareGroups([]);
+                    setDependencies([]);
+                    return;
+                }
+
+                const batchIdsParam = displayBatches.map(batch => batch.id).join(',');
+                const rangeParams = {
+                    start_date: startDate.format('YYYY-MM-DD HH:mm:ss'),
+                    end_date: endDate.format('YYYY-MM-DD HH:mm:ss')
+                };
+
+                const [sgRes, depRes] = await Promise.all([
+                    axios.get('/api/share-groups/batches/gantt', {
+                        params: {
+                            batch_ids: batchIdsParam,
+                            ...rangeParams
+                        }
+                    }),
+                    axios.get('/api/v5/gantt/dependencies', {
+                        params: {
+                            batch_ids: batchIdsParam,
+                            ...rangeParams
+                        }
+                    })
+                ]);
+
+                if (cancelled) {
+                    return;
+                }
+
+                setShareGroups(sgRes.data);
+                setDependencies(depRes.data);
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('Failed to fetch gantt data', error);
+                    setShareGroups([]);
+                    setDependencies([]);
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadData();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        clearGanttData,
+        endDate,
+        expandAll,
+        fetchHierarchy,
+        filteredBatchIdSet,
+        hasAutoFit,
+        hasExplicitBatchFilter,
+        reloadVersion,
+        startDate,
+        viewMode
+    ]);
 
     const handleConfirmShareGroup = useCallback(async () => {
         if (selectedOperationIds.length < 2) {
@@ -344,12 +416,12 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
 
             message.success(`${groupName} 创建成功`);
             handleCancelShareGroup();
-            await fetchData();
+            requestReload();
         } catch (error) {
             console.error('创建共享组失败:', error);
             message.error('创建共享组失败');
         }
-    }, [selectedOperationIds, shareGroups.length, handleCancelShareGroup, fetchData]);
+    }, [handleCancelShareGroup, requestReload, selectedOperationIds, shareGroups.length]);
 
     return (
         <div
@@ -541,7 +613,7 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                             </svg>
                         )}
                     </button>
-                    <button className="gantt-btn-mode" title="Refresh" onClick={fetchData}>
+                    <button className="gantt-btn-mode" title="Refresh" onClick={requestReload}>
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                         </svg>
