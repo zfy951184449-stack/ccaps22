@@ -11,10 +11,6 @@ import {
   getTemplatePersonnelCurve
 } from '../controllers/processTemplateController';
 import {
-  exportTemplateWorkbook,
-  importTemplateWorkbook,
-} from '../controllers/processTemplateWorkbookController';
-import {
   getTemplateResourceEditor,
   getTemplateResourcePlanner,
   validateTemplateResourceEditor,
@@ -25,8 +21,6 @@ const router = express.Router();
 
 // 模版路由
 router.get('/', getAllTemplates);
-router.get('/workbook/export', exportTemplateWorkbook);
-router.post('/workbook/import', importTemplateWorkbook);
 router.get('/:id', getTemplateById);
 router.post('/', createTemplate);
 router.put('/:id', updateTemplate);
