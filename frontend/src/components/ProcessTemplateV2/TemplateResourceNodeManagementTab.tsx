@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
+  Drawer,
   Empty,
   Input,
   InputNumber,
@@ -9,6 +10,7 @@ import {
   Select,
   Space,
   Spin,
+  Switch,
   Tag,
   message,
 } from 'antd';
@@ -35,8 +37,11 @@ import {
   TeamSummary,
 } from './types';
 import NodeWorkbenchNavigator from './node-workbench/NodeWorkbenchNavigator';
-import NodeWorkbenchCanvas from './node-workbench/NodeWorkbenchCanvas';
 import NodeInspectorDrawer from './node-workbench/NodeInspectorDrawer';
+import FactoryLayoutCanvas, {
+  RoomCreatePreview,
+  WorkbenchGroupMode,
+} from './node-workbench/FactoryLayoutCanvas';
 
 type NodeBlueprint = {
   nodeClass: ResourceNodeClass;
@@ -94,6 +99,32 @@ const NODE_SCOPE_OPTIONS: Array<{ label: string; value: ResourceNodeScope }> = [
 ];
 const DEPARTMENT_OPTIONS = [{ value: 'USP' }, { value: 'DSP' }, { value: 'SPI' }, { value: 'MAINT' }];
 
+const ROOM_TEMPLATE_OPTIONS: Array<{
+  value: RoomTemplateKey;
+  label: string;
+  nodeSubtype: string;
+  departmentCode: string | null;
+}> = [
+  { value: 'USP_PROCESS', label: 'USP room', nodeSubtype: 'MAIN_PROCESS', departmentCode: 'USP' },
+  { value: 'DSP_PROCESS', label: 'DSP room', nodeSubtype: 'MAIN_PROCESS', departmentCode: 'DSP' },
+  { value: 'SUPPORT', label: 'Support', nodeSubtype: 'AUXILIARY', departmentCode: null },
+  { value: 'UTILITY', label: 'Utility', nodeSubtype: 'UTILITY_SHARED', departmentCode: null },
+];
+
+const EQUIPMENT_TEMPLATE_OPTIONS: Array<{
+  value: EquipmentTemplateKey;
+  label: string;
+  systemType: EquipmentSystemType;
+  equipmentClass: string;
+  equipmentModel: string;
+}> = [
+  { value: 'BIOREACTOR', label: 'Bioreactor', systemType: 'SS', equipmentClass: 'REACTOR', equipmentModel: 'BIOREACTOR' },
+  { value: 'SEED_TRAIN', label: 'Seed train', systemType: 'SS', equipmentClass: 'SEED', equipmentModel: 'SEED_TRAIN' },
+  { value: 'CHROM_SKID', label: 'Chrom skid', systemType: 'SS', equipmentClass: 'CHROM', equipmentModel: 'CHROM_SKID' },
+  { value: 'UFDF_SKID', label: 'UFDF skid', systemType: 'SS', equipmentClass: 'UFDF', equipmentModel: 'UFDF_SKID' },
+  { value: 'BUFFER_TANK', label: 'Buffer tank', systemType: 'SS', equipmentClass: 'TANK', equipmentModel: 'BUFFER_TANK' },
+];
+
 interface NodeFormValues {
   nodeCode: string;
   nodeName: string;
@@ -109,6 +140,22 @@ interface NodeFormValues {
   sortOrder?: number;
   isActive: boolean;
   metadataText?: string;
+}
+
+type RoomTemplateKey = 'USP_PROCESS' | 'DSP_PROCESS' | 'SUPPORT' | 'UTILITY';
+type EquipmentTemplateKey = 'BIOREACTOR' | 'SEED_TRAIN' | 'CHROM_SKID' | 'UFDF_SKID' | 'BUFFER_TANK';
+
+interface RoomCreateDraft {
+  template: RoomTemplateKey;
+  nodeName: string;
+  parentId: number | null;
+  ownerGroupLabel: string;
+}
+
+interface EquipmentCreateDraft {
+  template: EquipmentTemplateKey;
+  roomId: number | null;
+  nodeName: string;
 }
 
 interface TemplateResourceNodeManagementTabProps {
@@ -411,6 +458,16 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
   const [cleanableLoading, setCleanableLoading] = useState(false);
   const [cleanableTargetIds, setCleanableTargetIds] = useState<number[]>([]);
   const [cleanableCandidates, setCleanableCandidates] = useState<ResourceNode[]>([]);
+  const [paletteDrawerOpen, setPaletteDrawerOpen] = useState(false);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [inspectorDrawerOpen, setInspectorDrawerOpen] = useState(false);
+  const [groupBy, setGroupBy] = useState<WorkbenchGroupMode>('department');
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [activeDepartmentCodes, setActiveDepartmentCodes] = useState<string[]>([]);
+  const [showInactiveRooms, setShowInactiveRooms] = useState(true);
+  const [qualifiedOnly, setQualifiedOnly] = useState(false);
+  const [createRoomOpen, setCreateRoomOpen] = useState(false);
+  const [createEquipmentOpen, setCreateEquipmentOpen] = useState(false);
   const [draftValues, setDraftValues] = useState<NodeFormValues>({
     nodeCode: '',
     nodeName: '',
@@ -426,6 +483,17 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     sortOrder: undefined,
     isActive: true,
     metadataText: '',
+  });
+  const [roomCreateDraft, setRoomCreateDraft] = useState<RoomCreateDraft>({
+    template: 'USP_PROCESS',
+    nodeName: 'USP Buffer Prep',
+    parentId: null,
+    ownerGroupLabel: 'USP Department / Upstream Team',
+  });
+  const [equipmentCreateDraft, setEquipmentCreateDraft] = useState<EquipmentCreateDraft>({
+    template: 'BIOREACTOR',
+    roomId: null,
+    nodeName: 'BR-101',
   });
 
   const loadData = useCallback(async () => {
@@ -485,6 +553,161 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       .map((item) => item.nodeName)
       .join(' / ');
   }, [nodeMap, selectedNode]);
+
+  const getMetadataString = useCallback((node: ResourceNode | null, keys: string[]) => {
+    if (!node?.metadata) {
+      return null;
+    }
+    for (const key of keys) {
+      const value = node.metadata[key];
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+    return null;
+  }, []);
+
+  const selectedRoomAnchor = useMemo(() => {
+    if (!selectedNode) {
+      return null;
+    }
+
+    if (selectedNode.nodeClass === 'ROOM') {
+      return selectedNode;
+    }
+
+    let cursor: ResourceNode | undefined = selectedNode;
+    const visited = new Set<number>();
+    while (cursor?.parentId && !visited.has(cursor.id)) {
+      visited.add(cursor.id);
+      const parent = nodeMap.get(cursor.parentId);
+      if (!parent) {
+        return null;
+      }
+      if (parent.nodeClass === 'ROOM') {
+        return parent;
+      }
+      cursor = parent;
+    }
+    return null;
+  }, [nodeMap, selectedNode]);
+
+  const lineParentOptions = useMemo(
+    () =>
+      allNodes
+        .filter((node) => node.nodeClass === 'LINE')
+        .map((node) => ({
+          value: node.id,
+          label: buildNodePath(node.id, nodeMap)
+            .map((item) => item.nodeName)
+            .join(' / '),
+          departmentCode: node.departmentCode,
+          ownerGroupLabel: getMetadataString(node, ['teamLabel', 'teamName', 'ownerGroupLabel']),
+        })),
+    [allNodes, getMetadataString, nodeMap],
+  );
+
+  const processRoomParentOptions = useMemo(
+    () =>
+      allNodes
+        .filter((node) => node.nodeClass === 'ROOM' && node.nodeSubtype === 'MAIN_PROCESS')
+        .map((node) => ({
+          value: node.id,
+          label: buildNodePath(node.id, nodeMap)
+            .map((item) => item.nodeName)
+            .join(' / '),
+          departmentCode: node.departmentCode,
+          ownerGroupLabel: getMetadataString(node, ['teamLabel', 'teamName', 'ownerGroupLabel']),
+        })),
+    [allNodes, getMetadataString, nodeMap],
+  );
+
+  const siteParentOptions = useMemo(
+    () =>
+      allNodes
+        .filter((node) => node.nodeClass === 'SITE')
+        .map((node) => ({
+          value: node.id,
+          label: buildNodePath(node.id, nodeMap)
+            .map((item) => item.nodeName)
+            .join(' / '),
+          departmentCode: node.departmentCode,
+          ownerGroupLabel: getMetadataString(node, ['teamLabel', 'teamName', 'ownerGroupLabel']),
+        })),
+    [allNodes, getMetadataString, nodeMap],
+  );
+
+  const mainRoomOptions = useMemo(
+    () =>
+      allNodes
+        .filter((node) => node.nodeClass === 'ROOM' && node.nodeSubtype === 'MAIN_PROCESS')
+        .map((node) => ({
+          value: node.id,
+          label: buildNodePath(node.id, nodeMap)
+            .map((item) => item.nodeName)
+            .join(' / '),
+          departmentCode: node.departmentCode,
+          ownerGroupLabel: getMetadataString(node, ['teamLabel', 'teamName', 'ownerGroupLabel']),
+        })),
+    [allNodes, getMetadataString, nodeMap],
+  );
+
+  const roomParentOptions = useMemo(() => {
+    if (roomCreateDraft.template === 'UTILITY') {
+      return siteParentOptions;
+    }
+    if (roomCreateDraft.template === 'SUPPORT') {
+      return processRoomParentOptions;
+    }
+    const targetDepartmentCode = ROOM_TEMPLATE_OPTIONS.find((item) => item.value === roomCreateDraft.template)?.departmentCode;
+    const matching = lineParentOptions.filter((item) => !targetDepartmentCode || item.departmentCode === targetDepartmentCode);
+    return matching.length ? matching : lineParentOptions;
+  }, [lineParentOptions, processRoomParentOptions, roomCreateDraft.template, siteParentOptions]);
+
+  const createRoomPreview = useMemo<RoomCreatePreview | null>(() => {
+    if (!createRoomOpen) {
+      return null;
+    }
+
+    const parentNode = roomCreateDraft.parentId ? nodeMap.get(roomCreateDraft.parentId) ?? null : null;
+    const templateConfig = ROOM_TEMPLATE_OPTIONS.find((item) => item.value === roomCreateDraft.template);
+    if (!templateConfig) {
+      return null;
+    }
+
+    const ownerLabel =
+      roomCreateDraft.ownerGroupLabel ||
+      getMetadataString(parentNode, ['teamLabel', 'teamName', 'ownerGroupLabel']) ||
+      (templateConfig.departmentCode ? `${templateConfig.departmentCode} Department` : 'Shared Services');
+
+    const targetDepartmentCode =
+      templateConfig.departmentCode ?? parentNode?.departmentCode ?? selectedRoomAnchor?.departmentCode ?? null;
+    const targetGroupLabel =
+      groupBy === 'team'
+        ? ownerLabel
+        : targetDepartmentCode
+          ? `${targetDepartmentCode} Department`
+          : 'Shared Services';
+
+    return {
+      active: true,
+      roomName: roomCreateDraft.nodeName,
+      roomTypeLabel: templateConfig.label,
+      ownerLabel,
+      targetGroupKey: targetGroupLabel ? `${groupBy}:${targetGroupLabel}` : null,
+      targetGroupLabel,
+    };
+  }, [
+    createRoomOpen,
+    getMetadataString,
+    groupBy,
+    nodeMap,
+    roomCreateDraft.nodeName,
+    roomCreateDraft.ownerGroupLabel,
+    roomCreateDraft.parentId,
+    roomCreateDraft.template,
+    selectedRoomAnchor?.departmentCode,
+  ]);
 
   const childBlueprints = useMemo(() => allowedChildBlueprints(selectedNode), [selectedNode]);
 
@@ -547,21 +770,6 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
 
   const filteredNavigatorNodes = useMemo(() => filterNodesByQuery(nodes, workbenchSearch), [nodes, workbenchSearch]);
   const navigatorTreeData = useMemo(() => toTreeData(filteredNavigatorNodes), [filteredNavigatorNodes]);
-
-  const selectedCipNode = useMemo(() => {
-    if (!selectedNode || selectedNode.nodeClass !== 'UTILITY_STATION' || selectedNode.nodeSubtype !== 'CIP') {
-      return null;
-    }
-    return selectedNode;
-  }, [selectedNode]);
-
-  const cleanableTargetNodes = useMemo(
-    () =>
-      cleanableTargetIds
-        .map((nodeId) => nodeMap.get(nodeId))
-        .filter((node): node is ResourceNode => Boolean(node)),
-    [cleanableTargetIds, nodeMap],
-  );
 
   useEffect(() => {
     if (formMode === 'edit' && selectedNode) {
@@ -677,6 +885,67 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
     });
   }, [draftValues.nodeClass, draftValues.nodeScope]);
 
+  useEffect(() => {
+    if (!roomParentOptions.length) {
+      if (roomCreateDraft.parentId !== null) {
+        setRoomCreateDraft((current) => ({ ...current, parentId: null }));
+      }
+      return;
+    }
+
+    const matchingParent = roomParentOptions.find((item) => item.value === roomCreateDraft.parentId);
+    if (matchingParent) {
+      if (!roomCreateDraft.ownerGroupLabel && matchingParent.ownerGroupLabel) {
+        setRoomCreateDraft((current) => ({
+          ...current,
+          ownerGroupLabel: current.ownerGroupLabel || matchingParent.ownerGroupLabel || '',
+        }));
+      }
+      return;
+    }
+
+    const selectedRoomParent = selectedRoomAnchor?.id
+      ? roomParentOptions.find((item) => item.value === selectedRoomAnchor.id)
+      : undefined;
+    const selectedDirectParent = selectedNode?.id
+      ? roomParentOptions.find((item) => item.value === selectedNode.id)
+      : undefined;
+    const nextParent = selectedDirectParent ?? selectedRoomParent ?? roomParentOptions[0];
+
+    setRoomCreateDraft((current) => ({
+      ...current,
+      parentId: nextParent?.value ?? null,
+      ownerGroupLabel: current.ownerGroupLabel || nextParent?.ownerGroupLabel || '',
+    }));
+  }, [
+    roomCreateDraft.ownerGroupLabel,
+    roomCreateDraft.parentId,
+    roomParentOptions,
+    selectedNode?.id,
+    selectedRoomAnchor?.id,
+  ]);
+
+  useEffect(() => {
+    const currentRoom = equipmentCreateDraft.roomId
+      ? mainRoomOptions.find((item) => item.value === equipmentCreateDraft.roomId)
+      : undefined;
+    if (currentRoom) {
+      return;
+    }
+
+    const preferredRoom =
+      (selectedRoomAnchor?.nodeSubtype === 'MAIN_PROCESS'
+        ? mainRoomOptions.find((item) => item.value === selectedRoomAnchor.id)
+        : undefined) ?? mainRoomOptions[0];
+
+    if (preferredRoom || equipmentCreateDraft.roomId !== null) {
+      setEquipmentCreateDraft((current) => ({
+        ...current,
+        roomId: preferredRoom?.value ?? null,
+      }));
+    }
+  }, [equipmentCreateDraft.roomId, mainRoomOptions, selectedRoomAnchor]);
+
   const loadCleanableTargets = useCallback(async (node: ResourceNode | null) => {
     if (!node || node.nodeClass !== 'UTILITY_STATION' || node.nodeSubtype !== 'CIP') {
       setCleanableTargetIds([]);
@@ -784,6 +1053,157 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
       message.error(error?.response?.data?.error || error?.message || '保存资源节点失败');
     }
   };
+
+  const handleOpenCreateRoom = useCallback(() => {
+    setCreateRoomOpen(true);
+
+    const preferredTemplate: RoomTemplateKey =
+      selectedRoomAnchor?.nodeSubtype === 'MAIN_PROCESS'
+        ? 'SUPPORT'
+        : selectedNode?.departmentCode === 'DSP'
+          ? 'DSP_PROCESS'
+          : 'USP_PROCESS';
+
+    setRoomCreateDraft((current) => ({
+      ...current,
+      template: preferredTemplate,
+      nodeName:
+        preferredTemplate === 'SUPPORT'
+          ? 'USP Buffer Prep'
+          : preferredTemplate === 'DSP_PROCESS'
+            ? 'DSP Purification Room'
+            : 'USP Seed Suite',
+      ownerGroupLabel:
+        current.ownerGroupLabel ||
+        getMetadataString(selectedRoomAnchor, ['teamLabel', 'teamName', 'ownerGroupLabel']) ||
+        (selectedRoomAnchor?.departmentCode ? `${selectedRoomAnchor.departmentCode} Department / Team` : 'USP Department / Upstream Team'),
+    }));
+  }, [getMetadataString, selectedNode?.departmentCode, selectedRoomAnchor]);
+
+  const handleOpenCreateEquipment = useCallback((roomId?: number | null) => {
+    const targetRoomId = roomId ?? (selectedRoomAnchor?.nodeSubtype === 'MAIN_PROCESS' ? selectedRoomAnchor.id : null);
+    setCreateEquipmentOpen(true);
+    setEquipmentCreateDraft((current) => ({
+      ...current,
+      roomId: targetRoomId ?? current.roomId,
+      template: 'BIOREACTOR',
+      nodeName: 'BR-101',
+    }));
+  }, [selectedRoomAnchor]);
+
+  const handleCreateRoom = useCallback(async () => {
+    const templateConfig = ROOM_TEMPLATE_OPTIONS.find((item) => item.value === roomCreateDraft.template);
+    if (!templateConfig) {
+      message.error('请选择房间模板');
+      return;
+    }
+
+    if (!roomCreateDraft.nodeName.trim()) {
+      message.error('请输入房间名称');
+      return;
+    }
+
+    if (!roomCreateDraft.parentId) {
+      message.error('请选择房间落位的父节点');
+      return;
+    }
+
+    const parentNode = nodeMap.get(roomCreateDraft.parentId);
+    if (!parentNode) {
+      message.error('目标父节点不存在，请刷新后重试');
+      return;
+    }
+
+    try {
+      const createdId = await processTemplateV2Api.createResourceNode({
+        nodeName: roomCreateDraft.nodeName.trim(),
+        nodeClass: 'ROOM',
+        nodeSubtype: templateConfig.nodeSubtype,
+        parentId: roomCreateDraft.parentId,
+        nodeScope: templateConfig.nodeSubtype === 'UTILITY_SHARED' ? parentNode.nodeScope ?? 'GLOBAL' : parentNode.nodeScope ?? 'DEPARTMENT',
+        departmentCode:
+          templateConfig.nodeSubtype === 'UTILITY_SHARED'
+            ? null
+            : templateConfig.departmentCode ?? parentNode.departmentCode ?? null,
+        equipmentSystemType: null,
+        equipmentClass: null,
+        equipmentModel: null,
+        boundResourceId: null,
+        sortOrder: undefined,
+        isActive: true,
+        metadata: {
+          teamLabel: roomCreateDraft.ownerGroupLabel || undefined,
+          ownerGroupLabel: roomCreateDraft.ownerGroupLabel || undefined,
+          qualified: true,
+          sceneTemplate: templateConfig.value,
+        },
+      });
+
+      setSelectedNodeId(createdId);
+      setCreateRoomOpen(false);
+      message.success('房间已创建');
+      await loadData();
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '创建房间失败');
+    }
+  }, [loadData, nodeMap, roomCreateDraft]);
+
+  const handleCreateEquipment = useCallback(async () => {
+    const templateConfig = EQUIPMENT_TEMPLATE_OPTIONS.find((item) => item.value === equipmentCreateDraft.template);
+    if (!templateConfig) {
+      message.error('请选择设备模板');
+      return;
+    }
+
+    if (!equipmentCreateDraft.nodeName.trim()) {
+      message.error('请输入设备名称');
+      return;
+    }
+
+    if (!equipmentCreateDraft.roomId) {
+      message.error('请选择设备归属房间');
+      return;
+    }
+
+    const roomNode = nodeMap.get(equipmentCreateDraft.roomId);
+    if (!roomNode || roomNode.nodeClass !== 'ROOM') {
+      message.error('设备归属房间不存在，请刷新后重试');
+      return;
+    }
+
+    try {
+      const createdId = await processTemplateV2Api.createResourceNode({
+        nodeName: equipmentCreateDraft.nodeName.trim(),
+        nodeClass: 'EQUIPMENT_UNIT',
+        nodeSubtype: null,
+        parentId: equipmentCreateDraft.roomId,
+        nodeScope: roomNode.nodeScope,
+        departmentCode: roomNode.departmentCode,
+        equipmentSystemType: templateConfig.systemType,
+        equipmentClass: templateConfig.equipmentClass,
+        equipmentModel: templateConfig.equipmentModel,
+        boundResourceId: null,
+        sortOrder: undefined,
+        isActive: true,
+        metadata: {
+          teamLabel: getMetadataString(roomNode, ['teamLabel', 'teamName', 'ownerGroupLabel']) || undefined,
+          sceneTemplate: templateConfig.value,
+        },
+      });
+
+      setSelectedNodeId(createdId);
+      setCreateEquipmentOpen(false);
+      message.success('设备已创建');
+      await loadData();
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '创建设备失败');
+    }
+  }, [equipmentCreateDraft, getMetadataString, loadData, nodeMap]);
+
+  const handleOpenInspector = useCallback(() => {
+    setFormMode('edit');
+    setInspectorDrawerOpen(true);
+  }, []);
 
   const handleDeleteNode = async () => {
     if (!selectedNode) {
@@ -997,49 +1417,184 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         </Space>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_420px]">
-        <NodeWorkbenchNavigator
-          treeData={navigatorTreeData}
-          selectedNodeId={selectedNodeId}
-          canCreateChild={Boolean(selectedNode && allowedChildBlueprints(selectedNode).length)}
-          searchValue={workbenchSearch}
-          stats={nodeStats}
-          onSearchChange={setWorkbenchSearch}
-          onRefresh={() => void loadData()}
-          onCreateRoot={() => {
-            setFormMode('create-root');
-            setSelectedNodeId(null);
-          }}
-          onCreateChild={() => setFormMode('create-child')}
-          onLocateSelected={() => {
-            if (!selectedNode) {
-              return;
-            }
-            setWorkbenchSearch('');
-            message.success(`已定位到 ${selectedNode.nodeName}`);
-          }}
-          onSelect={(nodeId) => {
-            setSelectedNodeId(nodeId);
-            setFormMode('edit');
-          }}
-          onDrop={(info) => void handleTreeDrop(info)}
-        />
+      <FactoryLayoutCanvas
+        allNodes={allNodes}
+        selectedNodeId={selectedNodeId}
+        selectedNode={selectedNode}
+        teams={teams}
+        searchValue={workbenchSearch}
+        layoutDraft={layoutDraft}
+        groupBy={groupBy}
+        collapsedGroups={collapsedGroups}
+        activeDepartmentCodes={activeDepartmentCodes}
+        showInactive={showInactiveRooms}
+        qualifiedOnly={qualifiedOnly}
+        createRoomPreview={createRoomPreview}
+        onSelectNode={(nodeId) => {
+          setSelectedNodeId(nodeId);
+          setFormMode('edit');
+        }}
+        onLayoutChange={handleLayoutChange}
+        onToggleGroup={(groupKey) =>
+          setCollapsedGroups((current) => ({
+            ...current,
+            [groupKey]: !current[groupKey],
+          }))
+        }
+        onGroupByChange={(value) => setGroupBy(value)}
+        onOpenPalette={() => setPaletteDrawerOpen(true)}
+        onOpenFilters={() => setFilterDrawerOpen(true)}
+        onOpenInspector={handleOpenInspector}
+        onCreateRoom={handleOpenCreateRoom}
+        onAddEquipment={(roomId) => handleOpenCreateEquipment(roomId)}
+        onManageBinding={(nodeId) => {
+          setSelectedNodeId(nodeId);
+          setFormMode('edit');
+          setInspectorDrawerOpen(true);
+        }}
+        onAutoLayout={handleAutoLayout}
+      />
 
-        <NodeWorkbenchCanvas
-          allNodes={allNodes}
-          selectedNodeId={selectedNodeId}
-          searchValue={workbenchSearch}
-          layoutDraft={layoutDraft}
-          selectedCipNode={selectedCipNode}
-          cleanableTargets={cleanableTargetNodes}
-          onSelectNode={(nodeId) => {
-            setSelectedNodeId(nodeId);
-            setFormMode('edit');
-          }}
-          onLayoutChange={handleLayoutChange}
-          onAutoLayout={handleAutoLayout}
-        />
+      <Drawer
+        title="Palette"
+        placement="left"
+        width={420}
+        open={paletteDrawerOpen}
+        onClose={() => setPaletteDrawerOpen(false)}
+        destroyOnClose={false}
+      >
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-semibold text-slate-800">Quick actions</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="primary" onClick={handleOpenCreateRoom}>
+                Add room
+              </Button>
+              <Button onClick={() => handleOpenCreateEquipment()}>
+                Add equipment
+              </Button>
+              <Button
+                onClick={() => {
+                  setFormMode('create-root');
+                  setSelectedNodeId(null);
+                  setInspectorDrawerOpen(true);
+                }}
+              >
+                New root node
+              </Button>
+              <Button
+                disabled={!selectedNode || !allowedChildBlueprints(selectedNode).length}
+                onClick={() => {
+                  setFormMode('create-child');
+                  setInspectorDrawerOpen(true);
+                }}
+              >
+                New child node
+              </Button>
+            </div>
+          </div>
 
+          <NodeWorkbenchNavigator
+            treeData={navigatorTreeData}
+            selectedNodeId={selectedNodeId}
+            canCreateChild={Boolean(selectedNode && allowedChildBlueprints(selectedNode).length)}
+            searchValue={workbenchSearch}
+            stats={nodeStats}
+            onSearchChange={setWorkbenchSearch}
+            onRefresh={() => void loadData()}
+            onCreateRoot={() => {
+              setFormMode('create-root');
+              setSelectedNodeId(null);
+              setInspectorDrawerOpen(true);
+            }}
+            onCreateChild={() => {
+              setFormMode('create-child');
+              setInspectorDrawerOpen(true);
+            }}
+            onLocateSelected={() => {
+              if (!selectedNode) {
+                return;
+              }
+              setWorkbenchSearch('');
+              message.success(`已定位到 ${selectedNode.nodeName}`);
+            }}
+            onSelect={(nodeId) => {
+              setSelectedNodeId(nodeId);
+              setFormMode('edit');
+              setPaletteDrawerOpen(false);
+            }}
+            onDrop={(info) => void handleTreeDrop(info)}
+          />
+        </div>
+      </Drawer>
+
+      <Drawer
+        title="Filters"
+        placement="right"
+        width={360}
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Search</label>
+            <Input
+              allowClear
+              placeholder="搜索房间、设备、资源编码"
+              value={workbenchSearch}
+              onChange={(event) => setWorkbenchSearch(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Departments</label>
+            <Select
+              mode="multiple"
+              allowClear
+              value={activeDepartmentCodes}
+              onChange={(value) => setActiveDepartmentCodes(value)}
+              options={DEPARTMENT_OPTIONS}
+              style={{ width: '100%' }}
+              placeholder="全部部门"
+            />
+          </div>
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-slate-700">Show inactive rooms</div>
+              <div className="text-xs text-slate-500">停用房间也保留在布局图里</div>
+            </div>
+            <Switch checked={showInactiveRooms} onChange={setShowInactiveRooms} />
+          </div>
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-slate-700">Qualified only</div>
+              <div className="text-xs text-slate-500">只看已可用/可排产的房间</div>
+            </div>
+            <Switch checked={qualifiedOnly} onChange={setQualifiedOnly} />
+          </div>
+          <Button
+            onClick={() => {
+              setWorkbenchSearch('');
+              setActiveDepartmentCodes([]);
+              setShowInactiveRooms(true);
+              setQualifiedOnly(false);
+            }}
+          >
+            Reset filters
+          </Button>
+        </div>
+      </Drawer>
+
+      <Drawer
+        title={formMode === 'edit' ? 'Inspector' : formMode === 'create-root' ? 'Create root node' : 'Create child node'}
+        placement="right"
+        width={520}
+        open={inspectorDrawerOpen || formMode !== 'edit'}
+        onClose={() => {
+          setInspectorDrawerOpen(false);
+          setFormMode('edit');
+        }}
+        destroyOnClose={false}
+      >
         <NodeInspectorDrawer
           mode={formMode}
           selectedNodePath={selectedNodePath}
@@ -1426,7 +1981,211 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
             </div>
           </div>
         </NodeInspectorDrawer>
-      </div>
+      </Drawer>
+
+      <Drawer
+        title="Add room"
+        placement="left"
+        width={420}
+        open={createRoomOpen}
+        onClose={() => setCreateRoomOpen(false)}
+        destroyOnClose={false}
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Room template</label>
+            <div className="grid grid-cols-2 gap-3">
+              {ROOM_TEMPLATE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    roomCreateDraft.template === option.value
+                      ? 'border-sky-500 bg-sky-50 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-sky-300'
+                  }`}
+                  onClick={() =>
+                    setRoomCreateDraft((current) => ({
+                      ...current,
+                      template: option.value,
+                      nodeName:
+                        option.value === 'DSP_PROCESS'
+                          ? 'DSP Purification Room'
+                          : option.value === 'SUPPORT'
+                            ? 'USP Buffer Prep'
+                            : option.value === 'UTILITY'
+                              ? 'Shared Utilities'
+                              : 'USP Seed Suite',
+                    }))
+                  }
+                >
+                  <div className="text-sm font-semibold text-slate-900">{option.label}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {option.nodeSubtype === 'MAIN_PROCESS'
+                      ? '主工艺房间'
+                      : option.nodeSubtype === 'AUXILIARY'
+                        ? '辅助/支持房间'
+                        : '共享公用工程房间'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Room name</label>
+            <Input
+              placeholder="例如 USP Seed Suite"
+              value={roomCreateDraft.nodeName}
+              onChange={(event) =>
+                setRoomCreateDraft((current) => ({
+                  ...current,
+                  nodeName: event.target.value,
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Department / team</label>
+            <Input
+              placeholder="例如 USP Department / Upstream Team"
+              value={roomCreateDraft.ownerGroupLabel}
+              onChange={(event) =>
+                setRoomCreateDraft((current) => ({
+                  ...current,
+                  ownerGroupLabel: event.target.value,
+                }))
+              }
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Placement parent</label>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={roomCreateDraft.parentId ?? undefined}
+              onChange={(value) =>
+                setRoomCreateDraft((current) => ({
+                  ...current,
+                  parentId: value ?? null,
+                  ownerGroupLabel:
+                    current.ownerGroupLabel ||
+                    roomParentOptions.find((item) => item.value === value)?.ownerGroupLabel ||
+                    current.ownerGroupLabel,
+                }))
+              }
+              options={roomParentOptions}
+              style={{ width: '100%' }}
+              placeholder="选择房间插入位置"
+            />
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+            画布会高亮当前分组，并展示新房间的落位预览。保存后会自动回到主画布。
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setCreateRoomOpen(false)}>Cancel</Button>
+            <Button type="primary" onClick={() => void handleCreateRoom()}>
+              Place on canvas
+            </Button>
+          </div>
+        </div>
+      </Drawer>
+
+      <Drawer
+        title="Add equipment"
+        placement="left"
+        width={420}
+        open={createEquipmentOpen}
+        onClose={() => setCreateEquipmentOpen(false)}
+        destroyOnClose={false}
+      >
+        <div className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-700">Equipment template</label>
+            <div className="grid grid-cols-2 gap-3">
+              {EQUIPMENT_TEMPLATE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    equipmentCreateDraft.template === option.value
+                      ? 'border-sky-500 bg-sky-50 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-sky-300'
+                  }`}
+                  onClick={() =>
+                    setEquipmentCreateDraft((current) => ({
+                      ...current,
+                      template: option.value,
+                      nodeName:
+                        option.value === 'SEED_TRAIN'
+                          ? 'Seed Train'
+                          : option.value === 'CHROM_SKID'
+                            ? 'Chrom-01'
+                            : option.value === 'UFDF_SKID'
+                              ? 'UFDF-01'
+                              : option.value === 'BUFFER_TANK'
+                                ? 'Buffer Tank'
+                                : 'BR-101',
+                    }))
+                  }
+                >
+                  <div className="text-sm font-semibold text-slate-900">{option.label}</div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {[option.systemType, option.equipmentClass, option.equipmentModel].join(' / ')}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Target room</label>
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={equipmentCreateDraft.roomId ?? undefined}
+              onChange={(value) =>
+                setEquipmentCreateDraft((current) => ({
+                  ...current,
+                  roomId: value ?? null,
+                }))
+              }
+              options={mainRoomOptions}
+              style={{ width: '100%' }}
+              placeholder="选择设备所属房间"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Equipment name</label>
+            <Input
+              placeholder="例如 BR-101"
+              value={equipmentCreateDraft.nodeName}
+              onChange={(event) =>
+                setEquipmentCreateDraft((current) => ({
+                  ...current,
+                  nodeName: event.target.value,
+                }))
+              }
+            />
+          </div>
+
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+            新增设备会自动放入目标房间，并进入当前房间的设备布局区等待进一步拖拽调整。
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button onClick={() => setCreateEquipmentOpen(false)}>Cancel</Button>
+            <Button type="primary" onClick={() => void handleCreateEquipment()}>
+              Add equipment
+            </Button>
+          </div>
+        </div>
+      </Drawer>
 
       <ResourceFormModal
         open={resourceModalOpen}
