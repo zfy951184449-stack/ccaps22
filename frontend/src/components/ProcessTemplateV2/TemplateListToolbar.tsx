@@ -1,5 +1,6 @@
 import React from 'react';
-import { Input, Segmented, Select } from 'antd';
+import { DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { Button, Input, Segmented, Select, Space, Tag } from 'antd';
 
 export type TemplateStatusFilter = 'all' | 'risk' | 'recent';
 export type TemplateSortBy = 'updated' | 'cycle' | 'name';
@@ -15,6 +16,11 @@ interface TemplateListToolbarProps {
   density: TemplateDensity;
   onDensityChange: (value: TemplateDensity) => void;
   resultCount: number;
+  selectedTemplateLabel?: string | null;
+  onImport: () => void;
+  onExport: () => void;
+  exportDisabled: boolean;
+  exportLoading?: boolean;
 }
 
 const TemplateListToolbar: React.FC<TemplateListToolbarProps> = ({
@@ -27,6 +33,11 @@ const TemplateListToolbar: React.FC<TemplateListToolbarProps> = ({
   density,
   onDensityChange,
   resultCount,
+  selectedTemplateLabel,
+  onImport,
+  onExport,
+  exportDisabled,
+  exportLoading = false,
 }) => {
   return (
     <section className="sticky top-2 z-20 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
@@ -70,10 +81,30 @@ const TemplateListToolbar: React.FC<TemplateListToolbarProps> = ({
           ]}
         />
 
-        <div className="ml-auto text-xs text-slate-500">共 {resultCount} 个模板</div>
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          {selectedTemplateLabel ? <Tag color="blue">已选: {selectedTemplateLabel}</Tag> : null}
+          <TextButtonLabel resultCount={resultCount} />
+          <Space>
+            <Button icon={<UploadOutlined />} onClick={onImport}>
+              导入 Excel
+            </Button>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={onExport}
+              disabled={exportDisabled}
+              loading={exportLoading}
+            >
+              导出 Excel
+            </Button>
+          </Space>
+        </div>
       </div>
     </section>
   );
 };
+
+const TextButtonLabel: React.FC<{ resultCount: number }> = ({ resultCount }) => (
+  <div className="text-xs text-slate-500">共 {resultCount} 个模板</div>
+);
 
 export default TemplateListToolbar;

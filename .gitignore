@@ -6,6 +6,8 @@ admin/node_modules/
 
 # Python virtual environments and caches
 solver/.venv/
+solver_v4/.venv/
+solver_v4/.pytest_cache/
 **/__pycache__/
 *.pyc
 
@@ -35,7 +37,9 @@ database/backups/*.sql
 *.bak
 *.bak.*
 *.legacy.*
+*.pid
 backend/over_allocation_report.txt
+archive/**/v4-result.json
 
 # Database engine files
 *.ibd
@@ -46,3 +50,5 @@ database/aps_system/
 .env.local
 .vscode/
 .DS_Store
+.codex-*
+solver_v4/docs/defects_report.html

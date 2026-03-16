@@ -22,10 +22,14 @@ import {
   EditOutlined,
   DeleteOutlined,
   CopyOutlined,
-  ProjectOutlined
+  ProjectOutlined,
+  UploadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import ProcessTemplateGantt from './ProcessTemplateGantt';
+import TemplateWorkbookImportModal from './TemplateWorkbookImportModal';
+import { exportTemplateWorkbook } from '../services/templateWorkbookApi';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -56,7 +60,10 @@ const ProcessTemplate: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTeamId, setActiveTeamId] = useState<string>('all');
+  const [workbookImportOpen, setWorkbookImportOpen] = useState(false);
+  const [exportingWorkbook, setExportingWorkbook] = useState(false);
   const [form] = Form.useForm();
 
   const API_BASE_URL = 'http://localhost:3001/api';
@@ -92,6 +99,12 @@ const ProcessTemplate: React.FC = () => {
   useEffect(() => {
     fetchTemplates(activeTeamId);
   }, [activeTeamId, fetchTemplates]);
+
+  useEffect(() => {
+    setSelectedRowKeys((prev) =>
+      prev.filter((key) => templates.some((template) => template.id === Number(key))),
+    );
+  }, [templates]);
 
   const handleCreate = () => {
     setEditingTemplate(null);
@@ -171,6 +184,29 @@ const ProcessTemplate: React.FC = () => {
   const handleManageStages = (template: Template) => {
     setSelectedTemplate(template);
   };
+
+  const selectedTemplateRecord = useMemo(
+    () => templates.find((template) => template.id === Number(selectedRowKeys[0])) ?? null,
+    [selectedRowKeys, templates],
+  );
+
+  const handleExportWorkbook = useCallback(async () => {
+    if (!selectedTemplateRecord) {
+      message.warning('请先单选一个模板');
+      return;
+    }
+
+    try {
+      setExportingWorkbook(true);
+      await exportTemplateWorkbook(selectedTemplateRecord.id);
+      message.success(`已导出 ${selectedTemplateRecord.template_code}`);
+    } catch (error) {
+      console.error('Failed to export template workbook:', error);
+      message.error('导出 Excel 失败');
+    } finally {
+      setExportingWorkbook(false);
+    }
+  }, [selectedTemplateRecord]);
 
   const tabItems = useMemo(() => [
     { key: 'all', label: `全部 (${templates.length})` },
@@ -302,13 +338,29 @@ const ProcessTemplate: React.FC = () => {
             </Title>
           </Col>
           <Col>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              新增模版
-            </Button>
+            <Space>
+              <Button
+                icon={<UploadOutlined />}
+                onClick={() => setWorkbookImportOpen(true)}
+              >
+                导入 Excel
+              </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={handleExportWorkbook}
+                loading={exportingWorkbook}
+                disabled={!selectedTemplateRecord}
+              >
+                导出 Excel
+              </Button>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleCreate}
+              >
+                新增模版
+              </Button>
+            </Space>
           </Col>
         </Row>
 
@@ -323,6 +375,11 @@ const ProcessTemplate: React.FC = () => {
           columns={columns}
           dataSource={templates}
           rowKey="id"
+          rowSelection={{
+            type: 'radio',
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys),
+          }}
           loading={loading}
           pagination={{
             pageSize: 10,
@@ -377,9 +434,17 @@ const ProcessTemplate: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      <TemplateWorkbookImportModal
+        open={workbookImportOpen}
+        onClose={() => setWorkbookImportOpen(false)}
+        onImported={() => {
+          setSelectedRowKeys([]);
+          fetchTemplates(activeTeamId);
+        }}
+      />
     </div>
   );
 };
 
 export default ProcessTemplate;
-

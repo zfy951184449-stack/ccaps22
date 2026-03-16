@@ -11,7 +11,6 @@
 - 当前有效求解器是 `solver_v4/`，技术栈是 Flask + OR-Tools CP-SAT，默认端口 `5005`。
 - 仓库里仍保留 V2 / V3 / V4 多套排班接口与页面，属于并行演进状态，不是完全清理后的单版本代码库。
 - 最近新增和正在集成的是平台资源建模链路，包括平台总览、资源中心、项目排产中心、维护窗口、模板资源规则、批次资源快照。
-- 另有一个独立的 Vite 管理端原型在 `admin/`，不在主启动脚本里。
 
 ## 真实模块范围
 
@@ -78,7 +77,6 @@ MFG8APS/
 │   └── backups/               # 数据库备份输出
 ├── docs/                      # 设计和历史文档
 ├── scripts/                   # 校验和辅助脚本
-├── admin/                     # 独立 Vite 管理端原型
 └── archive/                   # 历史实现与归档代码
 ```
 
@@ -149,13 +147,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. 可选：安装独立 admin 原型依赖
-
-```bash
-cd admin
-npm install
-```
-
 ## 启动方式
 
 ### 推荐：一键启动当前主链路
@@ -192,13 +183,6 @@ Solver V4：
 cd solver_v4
 source .venv/bin/activate
 python app.py
-```
-
-独立 admin 原型：
-
-```bash
-cd admin
-npm run dev
 ```
 
 ## 前端代理与端口

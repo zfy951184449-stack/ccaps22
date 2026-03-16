@@ -252,41 +252,7 @@ npm start
 
 ## docs/admin/README.md
 
-# APS 管理后台（Admin）
-
-独立于主前端的后台管理界面，主要面向管理员维护基础数据（工艺模版、阶段、操作、人员、班次、节假日等）并执行批量校验、导入导出和监控任务。
-
-## 技术栈
-- Vite + React + TypeScript
-- Ant Design 组件体系（后续接入）
-- Axios 请求封装（计划与主系统共享 API 类型定义）
-
-## 目录规划
-```
-admin/
-├── src/
-│   ├── modules/         # 各业务模块（如 templates、employees、scheduling）
-│   ├── components/      # 通用组件（表格、表单、图表、布局）
-│   ├── pages/           # 路由页面（Dashboard、Login 等）
-│   ├── hooks/           # 数据拉取与表单逻辑
-│   ├── services/        # API 封装、权限控制
-│   ├── layouts/         # 主布局、认证布局
-│   └── router/          # React Router 配置
-└── README.md
-```
-
-## 近期目标
-1. 接入登录/权限占位，构建基础布局（侧边导航 + 顶部工具条 + 面包屑）。
-2. 搭建模板管理模块原型（数据表格 + 详情表单 + 基本 CRUD 调用）。
-3. 与主仓库共享接口类型定义和请求封装，避免重复造轮子。
-
-## 启动
-```
-npm install
-npm run dev
-```
-
-默认开发端口为 `http://localhost:5173`，可在 `.env` 中调整。部署时可独立发布或通过反向代理挂载在 `admin/` 子路径。
+该独立 admin 原型已从当前仓库移除，现阶段仅保留主前端 `frontend/` 与主后端 `backend/` 作为有效运行链路。
 
 
 ## docs/ai_optimization_system_design.md
@@ -7830,7 +7796,7 @@ function detectConflicts(operations, constraints) {
 - **前端应用**
   - 组件库包含 24 个重点组件：`PersonnelScheduling.tsx`、`PersonnelCalendar.tsx`、`ScheduleCalendar.tsx`、`EnhancedGanttEditor.tsx`、`ProcessTemplate.tsx`、`OperationTable.tsx`、`QualificationMatrix.tsx`、`WorkHoursStatistics.tsx`、`ShiftTypeManagement.tsx` 等，支撑人员、工艺、排班三个主流程。
   - `EnhancedGanttEditor.tsx` 提供工艺模版甘特图编辑与拖拽排程能力；`ActivatedBatchGantt.tsx` 展示批次执行计划；`PersonnelCalendar.tsx` 和 `ScheduleCalendar.tsx` 支持按员工和按班次双维度浏览排班。
-  - 前端路由拆分为管理端 `admin` 与主前端 `frontend`，登录、权限、仪表盘、模板管理已具备基础界面；大部分页面采用 Ant Design 5 组件并集成 @ant-design/plots 绘制统计视图。
+  - 当前仅保留主前端 `frontend` 作为有效 Web 入口；界面采用 Ant Design 组件体系承载工艺、批次、排班与资源管理流程。
   - 当前迭代聚焦排班日历交互优化（拖拽反馈、跨天排班展示）、甘特图缩放性能、表单校验提示与导出功能。
 
 - **联调与测试情况**
@@ -11292,7 +11258,7 @@ class MLSchedulingService {
 ### 阶段7：前端集成 (2周)
 
 #### 7.1 智能排班界面
-**文件**: `admin/src/pages/Scheduling.tsx` 或新建 `admin/src/pages/MLScheduling.tsx`
+**文件**: 主前端相关排班页面（不再使用独立 `admin` 应用）
 
 **功能**:
 - 智能排班按钮和配置面板

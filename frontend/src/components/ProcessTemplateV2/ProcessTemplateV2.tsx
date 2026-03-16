@@ -9,6 +9,8 @@ import TemplateCardV2 from './TemplateCardV2';
 import TemplateListToolbar, { TemplateDensity, TemplateSortBy, TemplateStatusFilter } from './TemplateListToolbar';
 import { TemplateRiskFocus } from './TemplateRiskBadges';
 import { TeamSummary, TemplateSummary } from './types';
+import TemplateWorkbookImportModal from '../TemplateWorkbookImportModal';
+import { exportTemplateWorkbook } from '../../services/templateWorkbookApi';
 
 const RECENT_DAYS = 14;
 
@@ -44,6 +46,9 @@ const ProcessTemplateV2: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<TemplateStatusFilter>('all');
   const [sortBy, setSortBy] = useState<TemplateSortBy>('updated');
   const [density, setDensity] = useState<TemplateDensity>('card');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [workbookImportOpen, setWorkbookImportOpen] = useState(false);
+  const [exportingWorkbook, setExportingWorkbook] = useState(false);
 
   const loadTeams = useCallback(async () => {
     try {
@@ -77,6 +82,12 @@ const ProcessTemplateV2: React.FC = () => {
   useEffect(() => {
     void loadTemplates(activeTeamId);
   }, [activeTeamId, loadTemplates]);
+
+  useEffect(() => {
+    setSelectedTemplateId((current) =>
+      current !== null && templates.some((template) => template.id === current) ? current : null,
+    );
+  }, [templates]);
 
   const tabItems = useMemo(
     () => [
@@ -155,6 +166,11 @@ const ProcessTemplateV2: React.FC = () => {
     ];
   }, [displayedTemplates]);
 
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === selectedTemplateId) ?? null,
+    [selectedTemplateId, templates],
+  );
+
   const handleCreateTemplate = async (payload: {
     templateName: string;
     teamId?: number | null;
@@ -206,6 +222,24 @@ const ProcessTemplateV2: React.FC = () => {
     },
     [navigate],
   );
+
+  const handleExportWorkbook = useCallback(async () => {
+    if (!selectedTemplate) {
+      message.warning('请先单选一个模板');
+      return;
+    }
+
+    try {
+      setExportingWorkbook(true);
+      await exportTemplateWorkbook(selectedTemplate.id);
+      message.success(`已导出 ${selectedTemplate.template_code}`);
+    } catch (error) {
+      console.error('Failed to export workbook from V2 list:', error);
+      message.error('导出 Excel 失败');
+    } finally {
+      setExportingWorkbook(false);
+    }
+  }, [selectedTemplate]);
 
   return (
     <>
@@ -262,6 +296,11 @@ const ProcessTemplateV2: React.FC = () => {
           density={density}
           onDensityChange={setDensity}
           resultCount={displayedTemplates.length}
+          selectedTemplateLabel={selectedTemplate ? `${selectedTemplate.template_code} · ${selectedTemplate.template_name}` : null}
+          onImport={() => setWorkbookImportOpen(true)}
+          onExport={handleExportWorkbook}
+          exportDisabled={!selectedTemplate}
+          exportLoading={exportingWorkbook}
         />
 
         {errorMessage ? (
@@ -301,6 +340,8 @@ const ProcessTemplateV2: React.FC = () => {
                 key={template.id}
                 template={template}
                 density={density}
+                selected={selectedTemplateId === template.id}
+                onSelect={(selected) => setSelectedTemplateId(selected.id)}
                 onContinue={handleContinueEdit}
                 onCopy={handleCopyTemplate}
                 onFocus={handleFocusRisk}
@@ -314,6 +355,8 @@ const ProcessTemplateV2: React.FC = () => {
                 key={template.id}
                 template={template}
                 density={density}
+                selected={selectedTemplateId === template.id}
+                onSelect={(selected) => setSelectedTemplateId(selected.id)}
                 onContinue={handleContinueEdit}
                 onCopy={handleCopyTemplate}
                 onFocus={handleFocusRisk}
@@ -329,6 +372,15 @@ const ProcessTemplateV2: React.FC = () => {
         loading={creating}
         onCancel={() => setCreateOpen(false)}
         onSubmit={handleCreateTemplate}
+      />
+      <TemplateWorkbookImportModal
+        open={workbookImportOpen}
+        onClose={() => setWorkbookImportOpen(false)}
+        onImported={() => {
+          setSelectedTemplateId(null);
+          void loadTemplates(activeTeamId);
+        }}
+        title="导入 Excel"
       />
     </>
   );

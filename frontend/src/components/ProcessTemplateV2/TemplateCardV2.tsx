@@ -1,12 +1,14 @@
 import React from 'react';
 import { ApartmentOutlined, CalendarOutlined, CopyOutlined } from '@ant-design/icons';
-import { Button, Space } from 'antd';
+import { Button, Radio, Space } from 'antd';
 import TemplateRiskBadges, { TemplateRiskFocus } from './TemplateRiskBadges';
 import { TemplateSummary } from './types';
 
 interface TemplateCardV2Props {
   template: TemplateSummary;
   density: 'card' | 'compact';
+  selected: boolean;
+  onSelect: (template: TemplateSummary) => void;
   onContinue: (template: TemplateSummary) => void;
   onCopy: (template: TemplateSummary, event?: React.MouseEvent) => void;
   onFocus: (template: TemplateSummary, focus: TemplateRiskFocus) => void;
@@ -26,6 +28,8 @@ const formatTemplateDate = (value: string) => {
 const TemplateCardV2: React.FC<TemplateCardV2Props> = ({
   template,
   density,
+  selected,
+  onSelect,
   onContinue,
   onCopy,
   onFocus,
@@ -49,6 +53,14 @@ const TemplateCardV2: React.FC<TemplateCardV2Props> = ({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
+              <Radio
+                checked={selected}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  event.stopPropagation();
+                  onSelect(template);
+                }}
+              />
               <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-sky-700">
                 {template.template_code}
               </span>
@@ -103,9 +115,19 @@ const TemplateCardV2: React.FC<TemplateCardV2Props> = ({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-sky-700">
-            {template.template_code}
-          </div>
+          <Space size={8}>
+            <Radio
+              checked={selected}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => {
+                event.stopPropagation();
+                onSelect(template);
+              }}
+            />
+            <div className="inline-flex rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-semibold tracking-wide text-sky-700">
+              {template.template_code}
+            </div>
+          </Space>
           <h3 className="mt-3 truncate text-lg font-semibold text-slate-900 transition-colors group-hover:text-sky-700">
             {template.template_name}
           </h3>

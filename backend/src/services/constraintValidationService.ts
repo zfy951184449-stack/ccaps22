@@ -1,4 +1,4 @@
-import pool from '../config/database';
+import pool, { DbExecutor } from '../config/database';
 import { RowDataPacket } from 'mysql2';
 
 interface OperationScheduleInfo {
@@ -149,8 +149,11 @@ const severityCounter = (conflicts: ConstraintConflict[]) => {
   return counts;
 };
 
-export const runConstraintValidation = async (templateId: number): Promise<ConstraintValidationResult> => {
-  const [operationRows] = await pool.execute<RowDataPacket[]>(
+export const runConstraintValidation = async (
+  templateId: number,
+  executor: DbExecutor = pool,
+): Promise<ConstraintValidationResult> => {
+  const [operationRows] = await executor.execute<RowDataPacket[]>(
     `SELECT 
        sos.id AS schedule_id,
        sos.operation_id,
@@ -173,7 +176,7 @@ export const runConstraintValidation = async (templateId: number): Promise<Const
 
   const operations = buildOperationMap(operationRows);
 
-  const [constraintRows] = await pool.execute<RowDataPacket[]>(
+  const [constraintRows] = await executor.execute<RowDataPacket[]>(
     `SELECT 
        oc.id,
        oc.schedule_id,
