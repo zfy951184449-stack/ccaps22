@@ -847,7 +847,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
         const windowStart = run.window_start;
         const windowEnd = run.window_end;
 
-        // 2a. Fetch Operations Metadata (filtered by solve window, with share groups)
+        // 2a. Fetch Batch Operations Metadata (filtered by solve window, with share groups)
         let opMap = new Map<number, any>();
         if (batchIds.length > 0 && windowStart && windowEnd) {
             const placeholders = batchIds.map(() => '?').join(',');
@@ -875,6 +875,52 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
 
 
             opRows.forEach(r => opMap.set(r.operation_plan_id, r));
+        }
+
+        // 2a-2. Fetch Standalone Task Metadata from solver output (negative operation IDs)
+        const standaloneTaskIds = new Set<number>();
+        if (Array.isArray(rawResult.schedules)) {
+            rawResult.schedules.forEach((sched: any) => {
+                (sched.tasks || []).forEach((task: any) => {
+                    const opId = Number(task.operation_id);
+                    if (Number.isFinite(opId) && opId < 0) {
+                        standaloneTaskIds.add(Math.abs(opId));
+                    }
+                });
+            });
+        } else {
+            rawAssignments.forEach((assignment: any) => {
+                const opId = Number(assignment.operation_id);
+                if (Number.isFinite(opId) && opId < 0) {
+                    standaloneTaskIds.add(Math.abs(opId));
+                }
+            });
+        }
+
+        if (standaloneTaskIds.size > 0) {
+            const taskIds = Array.from(standaloneTaskIds);
+            const placeholders = taskIds.map(() => '?').join(',');
+            const [taskRows] = await pool.execute<RowDataPacket[]>(`
+                SELECT id, task_code, task_name, required_people, earliest_start, deadline
+                FROM standalone_tasks
+                WHERE id IN (${placeholders})
+            `, taskIds);
+
+            taskRows.forEach((taskRow) => {
+                const opId = -Number(taskRow.id);
+                const taskCode = String(taskRow.task_code || 'STANDALONE');
+                const taskName = String(taskRow.task_name || `Task ${taskRow.id}`);
+                opMap.set(opId, {
+                    operation_plan_id: opId,
+                    batch_code: 'STANDALONE',
+                    operation_name: `${taskCode} - ${taskName}`,
+                    required_people: Number(taskRow.required_people || 1),
+                    planned_start_datetime: taskRow.earliest_start || taskRow.deadline || null,
+                    planned_end_datetime: taskRow.deadline || taskRow.earliest_start || null,
+                    share_group_ids: null,
+                    share_group_name: null,
+                });
+            });
         }
 
         // 2b. Fetch Employees (from BOTH assignments AND shift_schedule, OR from Unified schedules)

@@ -34,6 +34,23 @@ const getShiftColor = (shiftCode: string, hasOperation: boolean): string => {
     return hasOperation ? colorConfig.withOp : colorConfig.noOp;
 };
 
+// 固定堆叠顺序（从下到上）
+const CATEGORY_ORDER = [
+    '基础班(待命)',
+    '标准日班(待命)',
+    '长白班(待命)',
+    '夜班(待命)',
+    '基础班(有操作)',
+    '标准日班(有操作)',
+    '长白班(有操作)',
+    '夜班(有操作)',
+];
+
+const getCategoryWeight = (category: string): number => {
+    const index = CATEGORY_ORDER.indexOf(category);
+    return index >= 0 ? index : 999;
+};
+
 const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
     date,
     orgPath,
@@ -41,6 +58,17 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
 }) => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<ManpowerCurveData | null>(null);
+    const dailyData = useMemo(() => (
+        Array.isArray(data?.daily_data) ? (data?.daily_data ?? []) : []
+    ), [data?.daily_data]);
+
+    const summary = data?.summary ?? {
+        avg_gap: '0',
+        max_gap: 0,
+        max_gap_date: '',
+        sufficiency_rate: 100,
+        gap_days: 0,
+    };
 
     // 加载曲线数据
     useEffect(() => {
@@ -64,30 +92,10 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
         loadData();
     }, [date, orgPath, shiftId]);
 
-    // 定义固定的堆叠顺序（从下到上）
-    const CATEGORY_ORDER = [
-        '基础班(待命)',
-        '标准日班(待命)',
-        '长白班(待命)',
-        '夜班(待命)',
-        '基础班(有操作)',
-        '标准日班(有操作)',
-        '长白班(有操作)',
-        '夜班(有操作)',
-    ];
-
-    // 获取分类的排序权重
-    const getCategoryWeight = (category: string): number => {
-        const index = CATEGORY_ORDER.indexOf(category);
-        return index >= 0 ? index : 999; // 未知分类放最后
-    };
-
     // 转换为堆叠柱状图数据（按班次+操作状态分组）
     const stackedBarData = useMemo(() => {
-        if (!data?.daily_data) return [];
-
         const result: any[] = [];
-        data.daily_data.forEach((d) => {
+        dailyData.forEach((d) => {
             // 如果有班次分组数据，使用分组数据
             if (d.shift_breakdown && d.shift_breakdown.length > 0) {
                 // 先按固定顺序排序
@@ -121,16 +129,15 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
             }
         });
         return result;
-    }, [data]);
+    }, [dailyData]);
 
     // 需求折线图数据
     const demandLineData = useMemo(() => {
-        if (!data?.daily_data) return [];
-        return data.daily_data.map((d) => ({
+        return dailyData.map((d) => ({
             date: d.date,
             demand: d.demand_count,
         }));
-    }, [data]);
+    }, [dailyData]);
 
     // 获取所有班次分类（用于图例和颜色）
     const allCategories = useMemo(() => {
@@ -158,10 +165,9 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
 
     // 生成非工作日标记注释
     const holidayAnnotations = useMemo(() => {
-        if (!data?.daily_data) return [];
         const annotations: any[] = [];
 
-        data.daily_data.forEach((d) => {
+        dailyData.forEach((d) => {
             if (!d.is_workday) {
                 const startTime = new Date(d.date).getTime();
                 const endTime = new Date(dayjs(d.date).add(1, 'day').format('YYYY-MM-DD')).getTime();
@@ -196,7 +202,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
         });
 
         return annotations;
-    }, [data]);
+    }, [dailyData]);
 
     // 双轴图配置
     const chartConfig = useMemo(() => ({
@@ -260,7 +266,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                 if (!items || items.length === 0) return '';
 
                 const date = dayjs(title).format('M月D日');
-                const dayInfo = data?.daily_data.find(d => d.date === title);
+                const dayInfo = dailyData.find(d => d.date === title);
 
                 let holidayLabel = '';
                 if (dayInfo && !dayInfo.is_workday) {
@@ -322,7 +328,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                 }] : []),
             ],
         },
-    }), [stackedBarData, demandLineData, categoryColors, data, holidayAnnotations]);
+    }), [stackedBarData, demandLineData, categoryColors, data, dailyData, holidayAnnotations]);
 
     return (
         <GlassCard>
@@ -345,14 +351,14 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
             </div>
 
             <Spin spinning={loading}>
-                {data && data.daily_data.length > 0 ? (
+                {data && dailyData.length > 0 ? (
                     <>
                         <div className="summary-row" style={{ marginBottom: 24 }}>
                             <Row gutter={24}>
                                 <Col span={6}>
                                     <Statistic
                                         title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>团队总人数</span>}
-                                        value={data.total_headcount}
+                                        value={data.total_headcount ?? 0}
                                         suffix="人"
                                         valueStyle={{ fontSize: 24, fontWeight: 600 }}
                                     />
@@ -360,14 +366,14 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                                 <Col span={6}>
                                     <Statistic
                                         title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>人力充足率</span>}
-                                        value={data.summary.sufficiency_rate}
+                                        value={summary.sufficiency_rate}
                                         suffix="%"
                                         valueStyle={{
-                                            color: data.summary.sufficiency_rate >= 80 ? '#52c41a' : '#faad14',
+                                            color: summary.sufficiency_rate >= 80 ? '#52c41a' : '#faad14',
                                             fontSize: 24, fontWeight: 600
                                         }}
                                         prefix={
-                                            data.summary.sufficiency_rate >= 80
+                                            summary.sufficiency_rate >= 80
                                                 ? <CheckCircleOutlined />
                                                 : <WarningOutlined />
                                         }
@@ -376,10 +382,10 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                                 <Col span={6}>
                                     <Statistic
                                         title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>平均缺口</span>}
-                                        value={data.summary.avg_gap}
+                                        value={summary.avg_gap}
                                         suffix="人/天"
                                         valueStyle={{
-                                            color: Number(data.summary.avg_gap) > 0 ? '#ff4d4f' : '#52c41a',
+                                            color: Number(summary.avg_gap) > 0 ? '#ff4d4f' : '#52c41a',
                                             fontSize: 24, fontWeight: 600
                                         }}
                                     />
@@ -387,10 +393,10 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                                 <Col span={6}>
                                     <Statistic
                                         title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>峰值缺口</span>}
-                                        value={data.summary.max_gap}
-                                        suffix={data.summary.max_gap_date ? `人 (${dayjs(data.summary.max_gap_date).format('M/D')})` : '人'}
+                                        value={summary.max_gap}
+                                        suffix={summary.max_gap_date ? `人 (${dayjs(summary.max_gap_date).format('M/D')})` : '人'}
                                         valueStyle={{
-                                            color: data.summary.max_gap > 0 ? '#ff4d4f' : '#52c41a',
+                                            color: summary.max_gap > 0 ? '#ff4d4f' : '#52c41a',
                                             fontSize: 24, fontWeight: 600
                                         }}
                                     />

@@ -13,7 +13,7 @@ import {
     TeamOutlined,
     ClockCircleOutlined,
 } from '@ant-design/icons';
-import dayjs, { Dayjs } from 'dayjs';
+import { Dayjs } from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import GlassCard from '../common/GlassCard';
 import { dashboardService } from '../../services/dashboardService';
@@ -73,13 +73,17 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
     }, [updateScrollState, data, selectedBatches]);
 
     // 批次颜色映射
+    const safeBatches = React.useMemo(() => (
+        Array.isArray(data?.batches) ? (data?.batches ?? []) : []
+    ), [data?.batches]);
+
     const batchColorMap = React.useMemo(() => {
         const map: Record<number, string> = {};
-        data?.batches.forEach((batch, index) => {
+        safeBatches.forEach((batch, index) => {
             map[batch.batch_id] = BATCH_COLORS[index % BATCH_COLORS.length];
         });
         return map;
-    }, [data?.batches]);
+    }, [safeBatches]);
 
     const [selectedDate, setSelectedDate] = useState<Dayjs>(date);
 
@@ -89,7 +93,7 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
         if (!selectedDate.isSame(date, 'month')) {
             setSelectedDate(date.startOf('month'));
         }
-    }, [date]);
+    }, [date, selectedDate]);
 
     // 加载数据
     useEffect(() => {
@@ -99,8 +103,9 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                 const resData = await dashboardService.getDailyAssignments(selectedDate.format('YYYY-MM-DD'));
                 setData(resData);
                 // 每次日期变化时，自动选中所有批次
-                if (resData.batches?.length > 0) {
-                    setSelectedBatches(resData.batches.map((b: BatchData) => b.batch_id));
+                const batches = Array.isArray(resData?.batches) ? resData.batches : [];
+                if (batches.length > 0) {
+                    setSelectedBatches(batches.map((b: BatchData) => b.batch_id));
                 } else {
                     setSelectedBatches([]);
                 }
@@ -116,15 +121,15 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
     }, [selectedDate]);
 
     // 批次筛选选项
-    const batchOptions = data?.batches.map(b => ({
+    const batchOptions = safeBatches.map(b => ({
         value: b.batch_id,
         label: b.batch_code,
-    })) || [];
+    }));
 
     // 过滤后的批次数据
-    const filteredBatches = data?.batches.filter(b =>
+    const filteredBatches = safeBatches.filter(b =>
         selectedBatches.includes(b.batch_id)
-    ) || [];
+    );
 
     // 左右滚动卡片区域
     const scrollLeft = () => {

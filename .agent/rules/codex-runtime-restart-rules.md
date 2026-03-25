@@ -3,9 +3,15 @@ trigger: always_on
 description: Codex runtime sync and restart rules for the APS monorepo. Use to avoid false manual test results caused by stale backend, frontend, or solver processes.
 ---
 
-# Role: Codex Runtime Sync Operator
+# Codex Runtime Sync Rules
 
 这份规则的目标不是把“重启”当作验证，而是避免手动测试命中旧进程、旧配置、旧内存状态，产生假结果。
+
+先读：
+
+- `AGENTS.md`
+- `.agent/rules/codex-coding-rules.md`
+- 触发本次改动的专项规则文件
 
 ## 1. 核心原则
 

@@ -3,7 +3,7 @@ import {
     Table, Button, Space, Tag, Popconfirm, Select, DatePicker, message, Badge
 } from 'antd';
 import {
-    PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined,
+    EditOutlined, DeleteOutlined, CheckCircleOutlined,
     CalendarOutlined, SyncOutlined, ClockCircleOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -23,6 +23,8 @@ const TaskPoolList: React.FC<TaskPoolListProps> = ({ onEditTask, onRefreshTrigge
     const [filterType, setFilterType] = useState<string>('ALL');
     const [filterStatus, setFilterStatus] = useState<string>('ALL');
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
+    const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
+    const [batchDeleting, setBatchDeleting] = useState(false);
 
     const fetchTasks = async () => {
         setLoading(true);
@@ -35,10 +37,17 @@ const TaskPoolList: React.FC<TaskPoolListProps> = ({ onEditTask, onRefreshTrigge
             }
 
             const response = await axios.get(`/api/standalone-tasks`, { params });
-            setTasks(response.data);
+            const payload = response.data;
+            const rows = Array.isArray(payload)
+                ? payload
+                : (Array.isArray(payload?.data) ? payload.data : []);
+            setTasks(rows);
+            setSelectedTaskIds((prev) => prev.filter((id) => rows.some((task: StandaloneTask) => task.id === id)));
         } catch (error) {
             console.error('Failed to fetch tasks', error);
             message.error('获取任务列表失败');
+            setTasks([]);
+            setSelectedTaskIds([]);
         } finally {
             setLoading(false);
         }
@@ -52,6 +61,7 @@ const TaskPoolList: React.FC<TaskPoolListProps> = ({ onEditTask, onRefreshTrigge
         try {
             await axios.delete(`/api/standalone-tasks/${id}`);
             message.success('删除成功');
+            setSelectedTaskIds((prev) => prev.filter((taskId) => taskId !== id));
             fetchTasks();
         } catch (error) {
             message.error('删除失败');
@@ -65,6 +75,44 @@ const TaskPoolList: React.FC<TaskPoolListProps> = ({ onEditTask, onRefreshTrigge
             fetchTasks();
         } catch (error) {
             message.error('操作失败');
+        }
+    };
+
+    const handleSelectAllFiltered = () => {
+        setSelectedTaskIds(tasks.map((task) => task.id));
+    };
+
+    const handleClearSelection = () => {
+        setSelectedTaskIds([]);
+    };
+
+    const handleBatchDelete = async () => {
+        if (selectedTaskIds.length === 0) {
+            return;
+        }
+
+        setBatchDeleting(true);
+        try {
+            const deleteResults = await Promise.allSettled(
+                selectedTaskIds.map((id) => axios.delete(`/api/standalone-tasks/${id}`))
+            );
+
+            const failedCount = deleteResults.filter((result) => result.status === 'rejected').length;
+            const successCount = deleteResults.length - failedCount;
+
+            if (successCount > 0) {
+                message.success(`已删除 ${successCount} 个任务`);
+            }
+            if (failedCount > 0) {
+                message.warning(`${failedCount} 个任务删除失败，请刷新后重试`);
+            }
+
+            setSelectedTaskIds([]);
+            fetchTasks();
+        } catch (error) {
+            message.error('批量删除失败');
+        } finally {
+            setBatchDeleting(false);
         }
     };
 
@@ -193,6 +241,13 @@ const TaskPoolList: React.FC<TaskPoolListProps> = ({ onEditTask, onRefreshTrigge
         },
     ];
 
+    const rowSelection = {
+        selectedRowKeys: selectedTaskIds,
+        onChange: (newSelectedRowKeys: React.Key[]) => {
+            setSelectedTaskIds(newSelectedRowKeys.map((key) => Number(key)));
+        },
+    };
+
     return (
         <div className="task-pool-list bg-white rounded-2xl shadow-sm border border-slate-200">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl">
@@ -236,15 +291,49 @@ const TaskPoolList: React.FC<TaskPoolListProps> = ({ onEditTask, onRefreshTrigge
                     </div>
                 </Space>
 
-                <Button icon={<SyncOutlined />} onClick={fetchTasks} loading={loading}>
-                    刷新
-                </Button>
+                <Space size="small">
+                    <span className="text-slate-500 text-sm">已选 {selectedTaskIds.length} 项</span>
+                    <Button
+                        size="small"
+                        onClick={handleSelectAllFiltered}
+                        disabled={tasks.length === 0 || selectedTaskIds.length === tasks.length}
+                    >
+                        全选当前筛选 ({tasks.length})
+                    </Button>
+                    <Button
+                        size="small"
+                        onClick={handleClearSelection}
+                        disabled={selectedTaskIds.length === 0}
+                    >
+                        清空选择
+                    </Button>
+                    <Popconfirm
+                        title={`确认删除已选中的 ${selectedTaskIds.length} 个任务？`}
+                        onConfirm={handleBatchDelete}
+                        okButtonProps={{ danger: true, loading: batchDeleting }}
+                        disabled={selectedTaskIds.length === 0}
+                    >
+                        <Button
+                            danger
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            loading={batchDeleting}
+                            disabled={selectedTaskIds.length === 0}
+                        >
+                            批量删除
+                        </Button>
+                    </Popconfirm>
+                    <Button icon={<SyncOutlined />} onClick={fetchTasks} loading={loading || batchDeleting}>
+                        刷新
+                    </Button>
+                </Space>
             </div>
 
             <Table
                 columns={columns}
                 dataSource={tasks}
                 rowKey="id"
+                rowSelection={rowSelection}
                 loading={loading}
                 pagination={{ pageSize: 15 }}
             />

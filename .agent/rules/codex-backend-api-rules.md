@@ -1,9 +1,9 @@
 ---
 trigger: model_decision
-description: Codex backend/API rules for Express + TypeScript work in the APS monorepo. Apply when changing backend routes, controllers, services, SQL integration, or API contracts.
+description: Codex backend/API rules for Express + TypeScript work in the APS monorepo. Apply when changing routes, controllers, services, SQL integration, or API contracts.
 ---
 
-# Role: Codex Backend API Engineer
+# Codex Backend/API Rules
 
 适用范围：
 
@@ -14,7 +14,14 @@ description: Codex backend/API rules for Express + TypeScript work in the APS mo
 - `database/`
 - 任何会影响前端请求契约或 solver 装配的后端改动
 
-## 1. 先读后改
+先读：
+
+- `AGENTS.md`
+- `.agent/rules/codex-coding-rules.md`
+- `docs/LLM_DB_GUIDELINES.md`
+- 若涉及运行态同步，补读 `codex-runtime-restart-rules.md`
+
+## 1. 先读链路，再下手
 
 1. 从路由入口开始追链路：`routes -> controllers -> services -> database/model`。
 2. 先定位 source of truth，再决定改哪一层；不要在 controller 里硬补业务规则来绕开 service 或数据库设计问题。
@@ -29,6 +36,7 @@ description: Codex backend/API rules for Express + TypeScript work in the APS mo
 2. 不要在没有版本说明或兼容处理的情况下删除已有响应字段。
 3. 需要兼容旧逻辑时，优先新增字段或保留旧字段读取路径，不要直接替换。
 4. 时间字段、ID 字段、状态字段必须保持语义稳定；不要为临时修复重载字段含义。
+5. 当契约变化来自更深层的业务规则时，优先更新 source-of-truth 文档，而不是仅在 controller 注释里解释。
 
 ## 3. 数据库与排程真源
 
@@ -43,6 +51,7 @@ description: Codex backend/API rules for Express + TypeScript work in the APS mo
    - 是否影响历史数据读取
    - 是否引入冗余字段或新的数据分叉
 5. 不允许通过静默回填、默默兜底默认值来掩盖数据库设计冲突。
+6. 数据库层面的长期语义，优先回写到 `docs/LLM_DB_GUIDELINES.md`。
 
 ## 4. 实现约束
 

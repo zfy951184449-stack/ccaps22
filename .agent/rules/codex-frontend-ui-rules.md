@@ -3,7 +3,7 @@ trigger: model_decision
 description: Codex frontend/UI rules for React + Ant Design work in the APS monorepo. Apply when changing pages, components, services, types, interaction flows, or scheduling visualization.
 ---
 
-# Role: Codex Frontend Implementation Engineer
+# Codex Frontend/UI Rules
 
 适用范围：
 
@@ -12,6 +12,13 @@ description: Codex frontend/UI rules for React + Ant Design work in the APS mono
 - `frontend/src/services/`
 - `frontend/src/types/`
 - 甘特图、排程、求解监控、任务池等高交互页面
+
+先读：
+
+- `AGENTS.md`
+- `.agent/rules/codex-coding-rules.md`
+- 相关页面、组件、`services/`、`types/`
+- 若涉及接口契约，补读 `codex-backend-api-rules.md`
 
 ## 1. 先读页面链路
 
@@ -28,6 +35,7 @@ description: Codex frontend/UI rules for React + Ant Design work in the APS mono
    - 错误可诊断性
 3. 排程/甘特/监控类页面优先保证时间、状态、资源信息表达准确，不要为了美观牺牲业务可读性。
 4. 不要引入和现有项目风格脱节的新组件体系或状态管理方式。
+5. 对未来 agent 可读性友好的界面状态，优先是显式的 loading / empty / error / success，而不是隐藏式状态分支。
 
 ## 3. 数据与状态规则
 
@@ -43,6 +51,7 @@ description: Codex frontend/UI rules for React + Ant Design work in the APS mono
    - 重置逻辑
    - 编辑态与新建态差异
 4. 不要为了临时兼容后端异常数据，在前端静默改写核心业务字段。
+5. 如果 UI 逻辑已经开始承载业务约束，优先把该约束回推到后端契约或 source-of-truth 文档，而不是继续堆前端补丁。
 
 ## 4. 性能与可维护性
 

@@ -66,6 +66,8 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
     const [data, setData] = useState<ResultData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [activeView, setActiveView] = useState<ViewType>('overview');
+    const [applying, setApplying] = useState(false);
+    const [runStatus, setRunStatus] = useState<string>('INIT');
 
     const fetchResult = useCallback(async () => {
         if (!runId) return;
@@ -104,14 +106,30 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
         }
     }, [runId]);
 
+    const fetchRunStatus = useCallback(async () => {
+        if (!runId) return;
+        try {
+            const response = await fetch(`/api/v4/scheduling/runs/${runId}/status`);
+            const json = await response.json();
+            if (json.success && json.data?.status) {
+                setRunStatus(json.data.status);
+            }
+        } catch (e) {
+            console.warn('Failed to fetch run status:', e);
+        }
+    }, [runId]);
+
     useEffect(() => {
         if (visible && runId) {
             fetchResult();
+            fetchRunStatus();
             setActiveView('overview');
         } else {
             setData(null);
+            setRunStatus('INIT');
+            setApplying(false);
         }
-    }, [visible, runId, fetchResult]);
+    }, [visible, runId, fetchResult, fetchRunStatus]);
 
     const employeeMap = useMemo(() => {
         const map = new Map<number, { name: string; code: string }>();
@@ -182,6 +200,40 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                 return <AssignmentsView operations={data.operations || []} />;
             default:
                 return null;
+        }
+    };
+
+    const handleApplyResult = async () => {
+        if (!runId || applying || runStatus === 'APPLIED') return;
+
+        setApplying(true);
+        try {
+            const res = await fetch(`/api/v4/scheduling/runs/${runId}/apply`, { method: 'POST' });
+            const json = await res.json();
+
+            if (!res.ok || !json.success) {
+                message.error(json.error || '应用失败');
+                return;
+            }
+
+            const summary = [
+                `批次分配 ${json.data?.batch_assignments_inserted ?? 0} 条`,
+                `独立任务 ${json.data?.standalone_assignments_inserted ?? 0} 条`,
+                `新班次 ${json.data?.shift_plans_inserted ?? 0} 条`,
+            ];
+
+            if ((json.data?.shift_plans_reused ?? 0) > 0) {
+                summary.push(`复用锁定班次 ${json.data.shift_plans_reused} 条`);
+            }
+
+            message.success(`排班结果已应用：${summary.join('，')}`);
+            setRunStatus('APPLIED');
+            fetchResult();
+        } catch (e) {
+            console.error('Apply result failed:', e);
+            message.error('应用失败，请重试');
+        } finally {
+            setApplying(false);
         }
     };
 
@@ -300,9 +352,19 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                     <ExportOutlined /> 导出 <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
                                 </button>
                             </Dropdown>
-                            <button className="v4-btn v4-btn-primary" onClick={() => message.success('已应用排班方案')}>
-                                <SaveOutlined /> 应用排班
-                            </button>
+                            {runStatus === 'APPLIED' ? (
+                                <button className="v4-btn v4-btn-primary" disabled>
+                                    <CheckCircleOutlined /> 已应用
+                                </button>
+                            ) : (
+                                <button
+                                    className="v4-btn v4-btn-primary"
+                                    onClick={handleApplyResult}
+                                    disabled={applying}
+                                >
+                                    <SaveOutlined /> {applying ? '应用中...' : '应用排班'}
+                                </button>
+                            )}
                         </div>
                     </>
                 ) : null}

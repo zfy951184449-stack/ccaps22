@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DatePicker, Cascader, Select, Button, Space } from 'antd';
 import { LeftOutlined, RightOutlined, CalendarOutlined, TeamOutlined, ClockCircleOutlined } from '@ant-design/icons';
-import dayjs, { Dayjs } from 'dayjs';
+import { Dayjs } from 'dayjs';
 import GlassCard from '../common/GlassCard';
 import { dashboardService } from '../../services/dashboardService';
 import { DepartmentOption, ShiftOption } from '../../types/dashboard';
@@ -35,10 +35,12 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
                     dashboardService.getOrgOptions(),
                     dashboardService.getShiftOptions()
                 ]);
-                setOrgOptions(orgs);
-                setShiftOptions(shifts);
+                setOrgOptions(Array.isArray(orgs) ? orgs : []);
+                setShiftOptions(Array.isArray(shifts) ? shifts : []);
             } catch (error) {
                 console.error('Failed to load filter options:', error);
+                setOrgOptions([]);
+                setShiftOptions([]);
             }
         };
         loadOptions();

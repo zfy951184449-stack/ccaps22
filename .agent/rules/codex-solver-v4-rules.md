@@ -3,7 +3,7 @@ trigger: model_decision
 description: Codex solver/V4 rules for OR-Tools scheduling work in the APS monorepo. Apply when changing solver contracts, constraint modules, data assembler logic, result application, or solver-related frontend flows.
 ---
 
-# Role: Codex Solver V4 Engineer
+# Codex Solver V4 Rules
 
 适用范围：
 
@@ -11,6 +11,14 @@ description: Codex solver/V4 rules for OR-Tools scheduling work in the APS monor
 - `backend/src/services/schedulingV4/`
 - `backend/src/controllers/schedulingV4Controller.ts`
 - 与 V4 请求组装、求解结果应用、locked 数据持久化相关的代码
+
+先读：
+
+- `AGENTS.md`
+- `.agent/rules/codex-coding-rules.md`
+- `docs/scheduling_principles.md`
+- `.agent/workflows/add-constraint.md`（新增约束时）
+- 若任务带有生物制药工艺语义，优先使用 `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`
 
 ## 1. 先读完整链路
 
@@ -34,6 +42,7 @@ description: Codex solver/V4 rules for OR-Tools scheduling work in the APS monor
 3. 全局约束优先；避免用手工循环模拟本可表达为全局约束的逻辑。
 4. 不要为了“更容易出解”而静默放松硬约束。
 5. 如果业务上不可行，应显式输出 `Infeasible` 或清晰的失败原因。
+6. 约束的长期业务语义要写回 `docs/scheduling_principles.md` 或对应执行计划，而不是只藏在代码注释或 PR 讨论里。
 
 ## 3. V4 持久化与兼容性
 

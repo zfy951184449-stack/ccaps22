@@ -44,8 +44,17 @@ const TaskPoolGantt: React.FC = () => {
                 })
             ]);
 
+            const tasksPayload = tasksRes.data;
+            const taskRows: StandaloneTask[] = Array.isArray(tasksPayload)
+                ? tasksPayload
+                : (Array.isArray(tasksPayload?.data) ? tasksPayload.data : []);
+            const assignmentsPayload = assignmentsRes.data;
+            const assignmentRows: TaskAssignment[] = Array.isArray(assignmentsPayload)
+                ? assignmentsPayload
+                : (Array.isArray(assignmentsPayload?.data) ? assignmentsPayload.data : []);
+
             // Also include tasks that span across this month
-            const allTasks: StandaloneTask[] = tasksRes.data.filter((t: StandaloneTask) => {
+            const allTasks: StandaloneTask[] = taskRows.filter((t: StandaloneTask) => {
                 const tStart = t.earliest_start ? dayjs(t.earliest_start) : dayjs(t.deadline);
                 const tEnd = dayjs(t.deadline);
                 const mStart = currentMonth.startOf('month');
@@ -54,10 +63,12 @@ const TaskPoolGantt: React.FC = () => {
             });
 
             setTasks(allTasks);
-            setAssignments(assignmentsRes.data);
+            setAssignments(assignmentRows);
         } catch (error) {
             console.error('Failed to fetch gantt data:', error);
             message.error('加载任务数据失败');
+            setTasks([]);
+            setAssignments([]);
         } finally {
             setLoading(false);
         }

@@ -331,7 +331,14 @@ export const generateRecurringTasks = async (req: Request, res: Response) => {
             }
 
             const freq = rule.freq || 'WEEKLY';
-            const interval = rule.interval || 1;
+            const intervalRaw = Number(rule.interval);
+            const interval = Number.isFinite(intervalRaw) && intervalRaw > 0 ? Math.floor(intervalRaw) : 1;
+            // Keep recurring instances deterministic by default: same-day execution window.
+            // If business needs a flexible window, pass recurrence_rule.window_days explicitly.
+            const windowDaysRaw = Number(rule.window_days ?? rule.windowDays);
+            const windowDays = Number.isFinite(windowDaysRaw) && windowDaysRaw >= 0
+                ? Math.floor(windowDaysRaw)
+                : 0;
             const targetDays = new Set(rule.days || []);
 
             const generateDates: string[] = [];
@@ -362,7 +369,7 @@ export const generateRecurringTasks = async (req: Request, res: Response) => {
             // Generate FLEXIBLE instances for each hit
             for (const gDate of generateDates) {
                 const earliestStart = gDate;
-                const deadline = dayjs(gDate).add(interval === 1 ? 3 : interval, 'day').format('YYYY-MM-DD');
+                const deadline = dayjs(gDate).add(windowDays, 'day').format('YYYY-MM-DD');
                 const taskName = `${rTask.task_name} (${gDate})`;
                 const taskCode = allocateTaskCode();
 

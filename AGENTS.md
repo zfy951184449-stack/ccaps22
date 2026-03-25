@@ -1,36 +1,104 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
-This monorepo separates the Ant Design React client under `frontend/` from the Express + Vitest API in `backend/`. Inside `frontend/src`, routes stay in `pages/`, shared widgets in `components/`, HTTP adapters in `services/`, and request contracts under `types/`. Backend code is layered with controllers, services, models, and routes in their respective folders, while SQL lives under `database/` and design references stay inside `docs/` and `archive/`.
+This file is a map, not the full manual.
 
-## Build, Test, and Development Commands
-Install dependencies separately (`cd backend && npm install`, `cd frontend && npm install`). Run `cd backend && npm run dev` for the hot-reload API on port 3001, `npm run build && npm start` for the compiled server, and `npm run migrate:metrics|migrate:personnel` whenever the SQL in `database/` changes. The UI workflows use `cd frontend && npm start` for local development, `npm run build` for the production bundle, and `npm test -- --watchAll=false` for deterministic Jest runs.
+Keep durable knowledge in versioned repo artifacts that agents can re-read:
 
-## Coding Style & Naming Conventions
-TypeScript is standard everywhere with 2-space indentation, single quotes, and terminating semicolons (`frontend/src/App.tsx`). React components, pages, and context wrappers use PascalCase, hooks adopt `useCamelCase`, and colocated files should stay inside their feature folder. Backend exports follow the `{Domain}{Controller|Service}` pattern, async/await plus typed DTOs are preferred, and CRA ESLint together with `tsc --noEmit` (or `npm run build`) should run before pushing.
+- task routing and hard repo-wide invariants stay here
+- detailed behavior lives in `.agent/rules/`
+- durable domain and product context lives in `docs/`
+- multi-step work and decision logs live in `docs/exec-plans/`
+- repeated review feedback should graduate into scripts, tests, or lint rules
 
-## Testing Guidelines
-Backend units and integration flows live in `backend/src/tests` (or adjacent `*.test.ts`) and execute with `cd backend && npm test`; stub `mysql2` pools or rely on supertest when endpoints touch the DB. The frontend inherits Jest via `react-scripts test`, so create `*.test.tsx` next to the component or hook, assert UI state transitions, regenerate snapshots when layouts shift, and explain any coverage gaps in the PR.
+## Mission
 
-## Commit & Pull Request Guidelines
-History already uses conventional prefixes (`feat`, `refactor`, `chore`); keep that format (`feat: add auto scheduling endpoint`) and keep bodies concise. Pull requests should summarize scope, list impacted endpoints or routes, mention required migrations or env toggles, attach UI screenshots for visual work, link the issue being closed, and capture the manual verification steps you ran.
+Treat repository work as an end-to-end implementation task. Read the affected chain first, make the smallest coherent change that closes the request, and verify it with deterministic checks instead of narrative confidence.
 
-## Configuration & Security Notes
-Store secrets in `backend/.env` (e.g., `MYSQL_USER`, `MYSQL_PASSWORD`) and share updates via sanitized `.env.sample` entries rather than the real values. The CRA dev server proxies to `http://localhost:3001`, so keep backend ports consistent with `start.sh`, and anonymize any sample data pulled from `database/` or archived queries.
+Optimize for agent readability:
 
-## Codex Working Rules
-For Codex sessions, treat repository work as an end-to-end implementation task instead of isolated file editing. Read the affected chain first (`routes/controllers/services/models` for backend, `pages/components/services/types` for frontend, and `assembler/contracts/constraints` for V4 solver work), then make the smallest coherent change that closes the request.
+- the repository is the source of truth
+- chat history is not a source of truth
+- undocumented decisions effectively do not exist for future runs
 
-Keep cross-layer contracts aligned whenever API fields, scheduling payloads, or solver inputs change. Use `shift_plan_id` as the source of truth for shift linkage, do not mix Batch/Shift/Run status fields, and serialize `BigInt` values safely in responses. For scheduling or biopharma constraints, prefer explicit validation or `Infeasible` outcomes over silent auto-correction.
+## Start Here
 
-Do not treat restarts as verification. Run deterministic checks for the touched area: `cd backend && npm run build`, `cd backend && npm test`, `cd frontend && npm run build`, `cd frontend && npm test -- --watchAll=false`, plus `scripts/verify_v4_archive.sh` for relevant V4 persistence/apply changes. If a check cannot run, state that explicitly in the handoff.
+1. Identify the task lane and load only the smallest relevant rule set.
+2. Read code before proposing structure changes.
+3. Update docs in the same change when code semantics or operating rules change.
 
-Use the Codex rule split under `.agent/rules/` as the working set:
-- `codex-coding-rules.md`: repository-wide base rules
-- `codex-plan-collaboration-rules.md`: Plan mode 下遇到关键不确定性时优先提问、减少错误假设推进
-- `codex-backend-api-rules.md`: backend/API/database focused tasks
-- `codex-frontend-ui-rules.md`: frontend/UI/interaction focused tasks
-- `codex-solver-v4-rules.md`: solver V4 / assembler / apply-result focused tasks
-- `codex-runtime-restart-rules.md`: runtime sync and restart rules to avoid stale-process manual test results
+Task routing:
 
-For biopharma CMO process, scheduling, solver-constraint, QC, CIP/SIP, hold-time, suite-segregation, or qualification-related work, prefer the local Codex skill at `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`.
+- Backend / API / DB: read `routes -> controllers -> services -> models/database`, then `.agent/rules/codex-backend-api-rules.md`
+- Frontend / UI: read `pages/components -> services -> types`, then `.agent/rules/codex-frontend-ui-rules.md`
+- Solver V4 / scheduling: read `backend assembler -> solver contracts -> constraints/core -> apply/result consumer`, then `.agent/rules/codex-solver-v4-rules.md`
+- Runtime sync / local verification: `.agent/rules/codex-runtime-restart-rules.md`
+- Planning ambiguity or competing interpretations: `.agent/rules/codex-plan-collaboration-rules.md`
+- Biopharma process semantics: use `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md` and relevant scheduling docs
+
+## Source Of Truth
+
+Read these before inventing new rules:
+
+- `.agent/rules/README.md`: rule index, load order, maintenance policy
+- `.agent/rules/codex-coding-rules.md`: repo-wide Codex invariants
+- `docs/README.md`: documentation map for durable repo knowledge
+- `docs/LLM_DB_GUIDELINES.md`: APS database source-of-truth rules
+- `docs/scheduling_principles.md`: scheduling and roster semantics already agreed in-repo
+- `.agent/workflows/add-constraint.md`: V4 constraint workflow
+- `docs/exec-plans/`: active plans, completed plans, and tech debt tracker
+- `scripts/lint_agent_docs.sh`: structural sanity check for this agent-doc layout
+
+If a decision only lives in Slack, chat, or someone’s memory, it is not reliably available to agents. Move it into the repo.
+
+## Repository Map
+
+- `backend/`: Express + TypeScript API, controllers/services/models/tests
+- `frontend/`: CRA + React + Ant Design UI, pages/components/services/types
+- `solver_v4/`: Python solver, contracts, constraints, apply logic
+- `database/`: SQL, schema changes, migrations, seed/reference data
+- `docs/`: durable knowledge, schema references, scheduling semantics, execution plans
+- `.agent/rules/`: Codex rule set and supporting references
+- `.agent/workflows/`: task-specific workflows that are too detailed for `AGENTS.md`
+- `scripts/`: verification, doc generation, and repo utility scripts
+
+## Non-Negotiable Invariants
+
+- Use `shift_plan_id` as the source of truth for shift linkage. Do not drive core logic from `shift_code`.
+- Keep Batch, Shift, and Run status semantics separate. Do not mix `plan_status`, `plan_state`, `result_state`, or run `status`.
+- Serialize `BigInt` values safely in API responses.
+- For invalid scheduling or biopharma constraints, prefer explicit validation errors or `Infeasible` outcomes over silent auto-correction.
+- Cross-layer changes are not complete until backend, frontend, and solver contracts are aligned where applicable.
+- Restarts synchronize runtime state; they do not prove correctness. Build, test, and scripted checks do.
+
+## Verification Matrix
+
+Run the smallest sufficient deterministic checks for the touched area:
+
+- Backend changes: `cd backend && npm run build`
+- Backend logic changes: `cd backend && npm test`
+- Frontend changes: `cd frontend && npm run build`
+- Frontend interaction/state changes: `cd frontend && npm test -- --watchAll=false`
+- Solver / V4 changes: syntax or test-level validation as applicable
+- V4 persistence / apply / archive changes: `scripts/verify_v4_archive.sh`
+- Agent-doc structure changes: `scripts/lint_agent_docs.sh`
+
+If a check cannot run, say so explicitly and explain why.
+
+## Handoff Contract
+
+Final delivery should state:
+
+- what changed and why
+- which files are the key source files
+- which verification commands actually ran
+- which checks were not run
+- whether runtime restarts were required and whether they were performed
+- any residual risk or follow-up needed
+
+## Maintenance Rules
+
+- Keep `AGENTS.md` short. If a section becomes detailed, move it into `docs/`, `.agent/rules/`, or `.agent/workflows/`.
+- Prefer progressive disclosure: start from this file, then load only the relevant specialized rules.
+- When the same review feedback appears repeatedly, encode it in repo artifacts instead of repeating it manually.
+- When a rule can be checked mechanically, prefer a script, test, or lint rule over prose.
+- For work that spans sessions or needs decision logs, create an execution plan in `docs/exec-plans/active/` and move it to `docs/exec-plans/completed/` when finished.
