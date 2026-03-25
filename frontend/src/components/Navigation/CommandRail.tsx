@@ -5,16 +5,11 @@ import {
     SafetyOutlined,
     SettingOutlined,
     ProjectOutlined,
-    LinkOutlined,
     TableOutlined,
     ClockCircleOutlined,
     ApartmentOutlined,
     ScheduleOutlined,
-    AppstoreOutlined,
     DashboardOutlined,
-    ControlOutlined,
-    BugOutlined,
-    RobotOutlined,
     RocketOutlined,
 } from '@ant-design/icons';
 
@@ -37,19 +32,6 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             path: '/dashboard',
         },
         {
-            key: 'platform',
-            icon: <AppstoreOutlined />,
-            label: '平台协同',
-            children: [
-                { key: 'platform-overview', icon: <DashboardOutlined />, label: '平台总览', path: '/platform-overview' },
-                { key: 'resource-center', icon: <SettingOutlined />, label: '资源中心', path: '/resource-center' },
-                { key: 'project-planning-center', icon: <ProjectOutlined />, label: '项目排产中心', path: '/project-planning-center' },
-                { key: 'maintenance-windows', icon: <ControlOutlined />, label: '维护窗口', path: '/maintenance-windows' },
-                { key: 'business-rules-center', icon: <LinkOutlined />, label: '业务规则中心', path: '/business-rules-center' },
-                { key: 'platform-run-monitor', icon: <BugOutlined />, label: '运行监控', path: '/platform-run-monitor' },
-            ],
-        },
-        {
             key: 'base-data',
             icon: <SettingOutlined />,
             label: '基础数据',
@@ -57,7 +39,7 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
                 { key: 'qualifications', icon: <SafetyOutlined />, label: '资质管理', path: '/qualifications' },
                 { key: 'qualification-matrix', icon: <TableOutlined />, label: '资质矩阵', path: '/qualification-matrix' },
                 { key: 'operations', icon: <SettingOutlined />, label: '操作管理', path: '/operations' },
-                { key: 'operation-types', icon: <AppstoreOutlined />, label: '操作类型', path: '/operation-types' },
+                { key: 'operation-types', icon: <ProjectOutlined />, label: '操作类型', path: '/operation-types' },
             ],
         },
         {
@@ -67,10 +49,7 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             children: [
                 { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
                 { key: 'process-templates-v2', icon: <ProjectOutlined />, label: '工艺模版 V2', path: '/process-templates-v2' },
-                { key: 'batch-management', icon: <AppstoreOutlined />, label: '批次管理', path: '/batch-management' },
-                { key: 'batch-management-v4', icon: <AppstoreOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
-                { key: 'task-pool', icon: <AppstoreOutlined />, label: '任务池', path: '/task-pool' },
-                { key: 'schedule-overview', icon: <AppstoreOutlined />, label: '排班总览', path: '/schedule-overview' },
+                { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
             ],
         },
         {
@@ -80,30 +59,8 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             children: [
                 { key: 'organization-workbench', icon: <ApartmentOutlined />, label: '组织与人员', path: '/organization-workbench' },
                 { key: 'personnel-scheduling', icon: <ClockCircleOutlined />, label: '人员排班', path: '/personnel-scheduling' },
-                { key: 'special-shift-windows', icon: <ScheduleOutlined />, label: '专项班次窗口', path: '/special-shift-windows' },
-                { key: 'auto-scheduling', icon: <RobotOutlined />, label: '自动排班', path: '/auto-scheduling' },
-                { key: 'modular-scheduling', icon: <RobotOutlined />, label: '自动排班（模块化）', path: '/modular-scheduling' },
-                { key: 'scheduling-v3', icon: <RocketOutlined />, label: 'V3 自动排班', path: '/scheduling-v3' },
                 { key: 'solver-v4', icon: <RocketOutlined />, label: 'V4 自动排班', path: '/solver-v4' },
                 { key: 'shift-definitions', icon: <ScheduleOutlined />, label: '班次定义', path: '/shift-definitions' },
-            ],
-        },
-        {
-            key: 'constraints',
-            icon: <LinkOutlined />,
-            label: '约束配置',
-            children: [
-                { key: 'operation-constraints', icon: <LinkOutlined />, label: '操作约束', path: '/operation-constraints' },
-            ],
-        },
-        {
-            key: 'system',
-            icon: <ControlOutlined />,
-            label: '系统管理',
-            children: [
-                { key: 'system-monitor', icon: <DashboardOutlined />, label: '系统监控', path: '/system-monitor' },
-                { key: 'system-settings', icon: <ControlOutlined />, label: '系统设置', path: '/system-settings' },
-                { key: 'auto-scheduling-debug', icon: <BugOutlined />, label: '排班调试', path: '/auto-scheduling-debug' },
             ],
         },
     ];

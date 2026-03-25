@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest",
-    "test:ci": "vitest run src/tests/schedulingV2.test.ts src/tests/schedulingV2Integration.test.ts src/tests/templateResourceRoutes.test.ts src/tests/platformRoutes.test.ts src/tests/processTemplateWorkbookService.test.ts",
+    "test:ci": "vitest run src/tests/templateResourceRoutes.test.ts src/tests/processTemplateWorkbookService.test.ts",
     "test:db": "vitest run src/tests/batchLifecycleService.test.ts",
     "migrate:metrics": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/create_personnel_scheduling_tables.sql'",
     "migrate:personnel": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/update_personnel_scheduling_schema.sql'",

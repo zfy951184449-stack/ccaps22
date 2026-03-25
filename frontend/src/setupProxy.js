@@ -8,15 +8,4 @@ module.exports = function setupProxy(app) {
       changeOrigin: true,
     }),
   );
-
-  app.use(
-    '/solver-api',
-    createProxyMiddleware({
-      target: 'http://localhost:5005',
-      changeOrigin: true,
-      pathRewrite: {
-        '^/solver-api': '/api',
-      },
-    }),
-  );
 };
