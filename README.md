@@ -10,7 +10,7 @@
 - 主后端在 `backend/`，技术栈是 Express + TypeScript + MySQL。
 - 当前有效求解器是 `solver_v4/`，技术栈是 Flask + OR-Tools CP-SAT，默认端口 `5005`。
 - 当前主运行面的求解链路已收敛到 V4；前端仍保留工艺模板 V1 和 V2 两套编辑入口。
-- 资源建模仍保留对 MVP 必需的模板/批次资源规则与甘特支撑接口，但平台中心类页面已退役。
+- 资源建模仍保留对 MVP 必需的模板/批次资源规则、资源节点管理与甘特支撑接口，但平台中心类页面已退役。
 
 ## 真实模块范围
 
@@ -38,7 +38,7 @@
 - 批次与日历：`/api/batch-plans`、`/api/calendar`、`/api/share-groups`
 - 排班：`/api/v4/scheduling`、`/api/personnel-schedules`、`/api/personnel-schedules/v2`、`/api/scheduling`
 - 甘特：`/api/v4/gantt`、`/api/v5/gantt`
-- 资源规则：`/api/resources`
+- 资源建模：`/api/resources`、`/api/resource-nodes`
 - 模板/批次资源规则：`/api/template-stage-operations/:scheduleId/resources`、`/api/batch-operations/:operationPlanId/resources`
 - 辅助模块：`/api/dashboard`、`/api/system`
 
@@ -234,7 +234,7 @@ cd frontend && npm test -- --watchAll=false
 
 ## 资源平台相关现状
 
-资源建模链路当前主要保留在模板/批次规则和甘特接口层，作为 MVP 支撑能力；平台中心类页面和聚合入口已从主应用移除。
+资源建模链路当前主要保留在模板/批次规则、资源节点管理和甘特接口层，作为 MVP 支撑能力；平台中心类页面和聚合入口已从主应用移除。
 
 ## 已知限制
 

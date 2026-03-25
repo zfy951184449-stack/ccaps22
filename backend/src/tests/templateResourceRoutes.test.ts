@@ -97,5 +97,14 @@ describe('Template Resource Rule Routes', () => {
     expect(response.status).toBe(409);
     expect(response.body.error).toContain('disabled');
   });
-});
 
+  it('serves resource node reads for the V2 node-management workspace', async () => {
+    mockPool.execute.mockResolvedValue([[], []]);
+
+    const response = await request(app).get('/api/resource-nodes?tree=false');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
+    expect(mockPool.execute).toHaveBeenCalled();
+  });
+});

@@ -182,6 +182,70 @@
 - 当前最大的 context 污染源已从临时文件转成“历史文档和未挂载旧代码”
 - 这批清理可以降低后续 agent 和人工 review 被旧平台/V2/V3 语义误导的概率
 
+### 2026-03-25: Remaining Legacy Inventory
+
+盘点范围：
+
+- `backend/src/services/schedulingV2`
+- `backend/src/services/schedulingV3`
+- 资源建模与资源节点相关链路
+
+结论：
+
+- `schedulingV2` / `schedulingV3`
+  - 当前活代码里未发现运行时引用
+  - 对应目录在 `backend/src/services/` 下已经没有有效文件
+  - 相关命中仅剩归档文档和执行计划历史记录
+  - 归类：`safe-to-retire`
+
+- 资源建模主链
+  - 当前仍被活代码使用，不能按“历史残留”处理
+  - 活跃 backend 依赖包括：
+    - `resources.ts` / `resourcesController.ts`
+    - `templateStageOperationResources.ts` / `templateStageOperationResourceController.ts`
+    - `batchOperationResources.ts` / `batchOperationResourceController.ts`
+    - `templateResourceRuleService.ts`
+    - `batchResourceSnapshotService.ts`
+    - `processTemplateWorkbookService.ts`
+    - `resourceNodeService.ts`
+    - `platformFeatureGuard.ts`
+  - 活跃 frontend 依赖包括：
+    - `services/processTemplateV2Api.ts`
+    - `types/platform.ts`
+    - `components/Platform/PlatformEditors.tsx`
+    - `components/ProcessTemplateV2/TemplateResourceEditorTab.tsx`
+    - `components/ProcessTemplateV2/TemplateResourcePlannerTab.tsx`
+    - `components/ProcessTemplateV2/TemplateResourceNodeManagementTab.tsx`
+  - 归类：`active dependency`
+
+发现的契约漂移：
+
+- frontend V2 资源节点管理仍请求 `/resource-nodes`
+- `backend/src/routes/resourceNodes.ts` 和 `backend/src/controllers/resourceNodeController.ts` 仍存在
+- 当时 `backend/src/server.ts` 未挂载 `/api/resource-nodes`
+- 这意味着资源节点管理链路不是“可删除遗留”，而是“仍被前端使用但后端入口缺失”的不一致状态
+
+建议的下一步：
+
+1. 修复 `/api/resource-nodes` 契约漂移：
+   - 恢复后端挂载，保持 V2 资源节点管理可用
+2. 在资源节点链路修复前，不继续删除资源建模相关文件
+3. 若继续做删除清理，仅对 `schedulingV2/V3` 的残余空目录和历史引用做最后收口
+
+### 2026-03-25: Resource Node Contract Repair
+
+已完成：
+
+- 在 `backend/src/server.ts` 恢复挂载 `/api/resource-nodes`
+- 保持 `frontend` 的 V2 资源节点管理 workspace 可继续访问已有 backend 路由/控制器/服务链
+- 为 `GET /api/resource-nodes` 增加 backend CI-safe 路由测试，避免后续再次被静默摘掉
+
+影响：
+
+- 这次是契约修复，不是新功能扩张
+- 不涉及数据库数据删除、表结构修改或 migration
+- 资源节点链路应继续被视为当前 MVP 的活跃依赖
+
 ### 2026-03-25: Second MVP Reduction Wave
 
 已完成：
@@ -194,7 +258,7 @@
   - `/api/independent-operations`
   - `/api/maintenance-windows`
   - `/api/special-shift-windows`
-  - `/api/resource-nodes`
+  - `/api/resource-nodes`（后续盘点确认仍被 V2 资源节点管理依赖，已在后续批次恢复挂载）
 - 前端删除了已经没有运行入口的旧页面：
   - 旧 `ProcessTemplatesPage`
   - 旧 `BatchManagementPage`
@@ -418,6 +482,7 @@
 - `/api/process-templates`
 - `/api/process-stages`
 - `/api/stage-operations`
+- `/api/resource-nodes`
 - `/api/resources`
 - `/api/batch-plans`
 - `/api/calendar`
@@ -439,7 +504,6 @@
 - `/api/independent-operations`
 - `/api/maintenance-windows`
 - `/api/special-shift-windows`
-- `/api/resource-nodes`
 
 本轮暂不下线：
 
