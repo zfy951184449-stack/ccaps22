@@ -9,7 +9,7 @@
 - 主前端在 `frontend/`，技术栈是 React 18 + Ant Design + CRA。
 - 主后端在 `backend/`，技术栈是 Express + TypeScript + MySQL。
 - 当前有效求解器是 `solver_v4/`，技术栈是 Flask + OR-Tools CP-SAT，默认端口 `5005`。
-- 当前主运行面已收敛到 V4 求解链路，旧页面与旧求解入口已从主应用移除。
+- 当前主运行面的求解链路已收敛到 V4；前端仍保留工艺模板 V1 和 V2 两套编辑入口。
 - 资源建模仍保留对 MVP 必需的模板/批次资源规则与甘特支撑接口，但平台中心类页面已退役。
 
 ## 真实模块范围
@@ -22,6 +22,7 @@
 - 组织与人员
 - 资质管理 / 资质矩阵
 - 操作管理 / 操作类型
+- 工艺模板 V1
 - 工艺模板 V2
 - 批次管理 V4
 - 人员排班
@@ -240,7 +241,7 @@ cd frontend && npm test -- --watchAll=false
 - 后端目前没有看到完整的认证、授权、RBAC 中间件。
 - 前端 `npm run build` 仍有历史 ESLint warnings，需要继续收敛。
 - 仓库没有现成的 Docker 或标准化部署编排文件。
-- 仍有少量历史求解文档与 schema 报告引用旧 V2/V3 名称，但主 runtime 已收敛到 V4。
+- `docs/archive/database_schema_report_cn.md` 这类生成型 schema 报告已归档；需要查 schema 时可以使用，但运行面判断仍以 `frontend/src/App.tsx` 和 `backend/src/server.ts` 为准。
 - README 现在只反映代码现状，不再假设所有模块都已达到生产级稳定性。
 
 ## 相关文件

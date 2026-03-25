@@ -50,5 +50,8 @@ database/aps_system/
 .env.local
 .vscode/
 .DS_Store
+*.swp
+*.swo
+*~
 .codex-*
 solver_v4/docs/defects_report.html

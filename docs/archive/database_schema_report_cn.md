@@ -1,5 +1,9 @@
 # 数据库架构图与字段说明（直连数据库生成）
 
+> 说明（2026-03-25）：这是数据库结构快照，不是当前 MVP 运行面的权威说明。
+> 表和字段关系可用于查 schema，但文中的“引用样例文件”可能仍包含已退役或未挂载模块。
+> 判断当前活跃运行面，请以 `frontend/src/App.tsx`、`backend/src/server.ts` 和 `docs/exec-plans/active/mvp-scope-cleanup.md` 为准。
+
 - 生成时间: 2026-03-24T09:04:49.730Z
 - 数据库: aps_system @ localhost:3306
 - 结构来源: `INFORMATION_SCHEMA`（真实库）

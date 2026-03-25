@@ -22,6 +22,7 @@
 - `QualificationMatrixPage`
 - `OperationsPage`
 - `OperationTypesPage`
+- `ProcessTemplatesPage`
 - `ProcessTemplatesV2Page`
 - `BatchManagementV4Page`
 - `PersonnelSchedulingPage`
@@ -57,7 +58,6 @@
 - `AutoSchedulingPage`
 - `AutoSchedulingDebugPage`
 - 旧 `BatchManagementPage`
-- 旧 `ProcessTemplatesPage`
 - `SystemMonitorPage`
 - `BusinessRulesCenterPage`
 - `PlatformRunMonitorPage`
@@ -150,6 +150,37 @@
 1. 画出“保留页面 -> 实际 API”依赖图
 2. 对没有被保留页面引用的后端业务路由做第二波摘除
 3. 再删除真正失联的前端页面、组件、controller、service
+
+### 2026-03-25: Semantic Context Cleanup
+
+已完成：
+
+- 恢复并保留 V1 工艺模板入口，当前主应用同时保留：
+  - `ProcessTemplatesPage`
+  - `ProcessTemplatesV2Page`
+- 删除了已不在主运行面、且无代码引用的旧后端文件：
+  - `backend/src/routes/platform.ts`
+  - `backend/src/controllers/platformController.ts`
+  - `backend/src/routes/scheduleOverviewRoutes.ts`
+  - `backend/src/controllers/scheduleOverviewController.ts`
+- 为 schema 报告增加“结构快照而非运行面真相”的提示，并归档到 `docs/archive/database_schema_report_cn.md`
+- 更新 `README.md` 与 `docs/README.md`，把当前入口和文档可信度说明写清楚
+- 将生成型历史文档归档到 `docs/archive/`，降低默认 docs 路径的噪音：
+  - `docs/archive/all_documents.md`
+  - `docs/archive/database_api_dictionary.html`
+  - `docs/archive/database_schema_report_cn.md`
+
+本轮刻意未做：
+
+- 不删除数据库现有数据
+- 不删除数据库表
+- 不执行 destructive migration
+- 不处理仍被模板/批次资源规则复用的资源建模代码
+
+原因：
+
+- 当前最大的 context 污染源已从临时文件转成“历史文档和未挂载旧代码”
+- 这批清理可以降低后续 agent 和人工 review 被旧平台/V2/V3 语义误导的概率
 
 ### 2026-03-25: Second MVP Reduction Wave
 
@@ -291,6 +322,29 @@
 1. 继续清 README 和生成型文档里残留的旧平台/旧接口描述
 2. 评估 `SystemSettingsService`、`database` 相关控制器/脚本是否还需要保留为离线工具
 3. 若未来确认资源平台也要进一步收口，再做“保留表、归档接口”的单独方案
+
+## Context Hygiene Checkpoint
+
+目的：
+
+- 降低 agent/search/review 被临时文件和编辑器垃圾文件污染的概率
+- 不改变业务语义，不触碰数据库现有数据
+
+执行：
+
+- 更新 `.gitignore`，补充忽略：
+  - `*.swp`
+  - `*.swo`
+  - `*~`
+- 删除已确认存在的临时文件：
+  - `.agent/rules/.README.md.swp`
+  - `docs/exec-plans/active/.mvp-scope-cleanup.md.swp`
+  - `docs/.DS_Store`
+
+结果：
+
+- 仓库根范围内已知的 swap / Finder 垃圾文件不再出现在工作区可见面
+- `node_modules/` 内的垃圾文件仍可能存在，但因目录整体已被 `.gitignore` 忽略，不作为当前 context hygiene 的阻塞项
 
 ## Dependency Matrix Snapshot
 
