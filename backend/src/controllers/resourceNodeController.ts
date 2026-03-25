@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import pool from '../config/database';
+import { extractMissingTableName, isMissingTableError } from '../utils/missingTableGuard';
 import {
   buildResourceNodeTree,
   clearResourceNodeTreeForRebuild,
@@ -12,6 +13,15 @@ import {
   replaceCipCleanableTargets,
   updateResourceNode,
 } from '../services/resourceNodeService';
+
+const buildResourceNodeModelUnavailableWarning = (error: unknown) =>
+  `Resource node model is not available because table ${extractMissingTableName(error) ?? 'resource_nodes'} is missing.`;
+
+const sendResourceNodeModelUnavailable = (res: Response, error: unknown, status = 409) =>
+  res.status(status).json({
+    error: 'Resource node model is not available',
+    warning: `Missing table: ${extractMissingTableName(error) ?? 'resource_nodes'}`,
+  });
 
 export const getResourceNodes = async (req: Request, res: Response) => {
   try {
@@ -26,6 +36,12 @@ export const getResourceNodes = async (req: Request, res: Response) => {
 
     res.json(treeMode ? buildResourceNodeTree(rows) : rows);
   } catch (error) {
+    if (isMissingTableError(error)) {
+      return res.json({
+        data: [],
+        warnings: [buildResourceNodeModelUnavailableWarning(error)],
+      });
+    }
     console.error('Error fetching resource nodes:', error);
     res.status(500).json({ error: 'Failed to fetch resource nodes' });
   }
@@ -81,6 +97,9 @@ export const postResourceNode = async (req: Request, res: Response) => {
     res.status(201).json({ id: nodeId, message: 'Resource node created successfully' });
   } catch (error) {
     await connection.rollback();
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -106,6 +125,9 @@ export const patchResourceNode = async (req: Request, res: Response) => {
     res.json({ message: 'Resource node updated successfully' });
   } catch (error) {
     await connection.rollback();
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -136,6 +158,9 @@ export const moveResourceNodeController = async (req: Request, res: Response) =>
     res.json({ message: 'Resource node moved successfully' });
   } catch (error) {
     await connection.rollback();
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -161,6 +186,9 @@ export const removeResourceNode = async (req: Request, res: Response) => {
     res.json({ message: 'Resource node deleted successfully' });
   } catch (error) {
     await connection.rollback();
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -190,6 +218,9 @@ export const getResourceNodeCleanableTargets = async (req: Request, res: Respons
       candidate_targets: candidateTargets,
     });
   } catch (error) {
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error, 404);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -226,6 +257,9 @@ export const putResourceNodeCleanableTargets = async (req: Request, res: Respons
     });
   } catch (error) {
     await connection.rollback();
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }
@@ -251,6 +285,9 @@ export const clearResourceNodeTreeController = async (req: Request, res: Respons
     res.json({ message: 'Resource node tree and bindings cleared' });
   } catch (error) {
     await connection.rollback();
+    if (isMissingTableError(error)) {
+      return sendResourceNodeModelUnavailable(res, error);
+    }
     if (error instanceof Error) {
       return res.status(400).json({ error: error.message });
     }

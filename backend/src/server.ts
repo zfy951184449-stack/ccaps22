@@ -26,7 +26,6 @@ import organizationHierarchyRoutes from './routes/organizationHierarchy';
 import shiftDefinitionRoutes from './routes/shiftDefinitions';
 import HolidayScheduler from './scheduler/holidayScheduler';
 import HolidayService from './services/holidayService';
-import SystemSettingsService from './services/systemSettingsService';
 import systemRoutes from './routes/system';
 import schedulingV4Routes from './routes/schedulingV4';
 import schedulingRoutes from './routes/scheduling';

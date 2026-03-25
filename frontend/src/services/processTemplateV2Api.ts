@@ -380,6 +380,16 @@ const mapResourceNodeCleanableTargetsResponse = (data: any): ResourceNodeCleanab
   candidateTargets: (data.candidateTargets ?? data.candidate_targets ?? []).map((item: any) => mapResourceNode(item)),
 });
 
+const extractCollectionPayload = (data: any): any[] => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+  return [];
+};
+
 const mapResource = (data: any): Resource => ({
   id: Number(data.id),
   resourceCode: data.resourceCode ?? data.resource_code,
@@ -577,7 +587,7 @@ export const processTemplateV2Api = {
         tree: params?.tree,
       },
     });
-    return (response.data ?? []).map((item: any) => mapResourceNode(item));
+    return extractCollectionPayload(response.data).map((item: any) => mapResourceNode(item));
   },
   createResourceNode: async (payload: ResourceNodePayload) => {
     const response = await client.post('/resource-nodes', toResourceNodePayload(payload));

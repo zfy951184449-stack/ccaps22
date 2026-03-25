@@ -107,4 +107,35 @@ describe('Template Resource Rule Routes', () => {
     expect(response.body).toEqual([]);
     expect(mockPool.execute).toHaveBeenCalled();
   });
+
+  it('degrades resource node reads gracefully when resource_nodes is missing', async () => {
+    mockPool.execute.mockRejectedValue({
+      code: 'ER_NO_SUCH_TABLE',
+      sqlMessage: "Table 'aps_system.resource_nodes' doesn't exist",
+    });
+
+    const response = await request(app).get('/api/resource-nodes?tree=false');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+    expect(response.body.warnings).toEqual([
+      'Resource node model is not available because table resource_nodes is missing.',
+    ]);
+  });
+
+  it('blocks resource node rebuild clears with a clear unavailable-model error when resource_nodes is missing', async () => {
+    mockConnection.execute.mockRejectedValue({
+      code: 'ER_NO_SUCH_TABLE',
+      sqlMessage: "Table 'aps_system.resource_nodes' doesn't exist",
+    });
+
+    const response = await request(app).post('/api/resource-nodes/rebuild/clear').send({
+      confirm: true,
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('Resource node model is not available');
+    expect(response.body.warning).toBe('Missing table: resource_nodes');
+    expect(mockConnection.rollback).toHaveBeenCalled();
+  });
 });

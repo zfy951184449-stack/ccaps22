@@ -4,9 +4,9 @@ Track recurring cleanup items that should survive beyond a single PR or chat thr
 
 ## Open
 
-- `resource_nodes` missing-table fallback. Impacted area: backend resource-model APIs. Why it matters: `resourcesController` and template/batch resource rule endpoints already degrade gracefully when optional tables are absent, but the resource node CRUD chain still assumes `resource_nodes` exists. Reference: `backend/src/controllers/resourceNodeController.ts`, `backend/src/services/resourceNodeService.ts`.
-- `SystemSettingsService` unused import. Impacted area: backend bootstrap hygiene. Why it matters: `backend/src/server.ts` still imports `SystemSettingsService` without using it, which keeps dead naming/context around and can hide future bootstrap drift. Reference: `backend/src/server.ts`.
+- No open cleanup items right now.
 
 ## Closed
 
-- Move resolved items here with the closing PR or commit reference.
+- `resource_nodes` missing-table fallback. Closed in working tree cleanup after `ca6de14`. Result: read endpoints now degrade gracefully, mutation endpoints fail with explicit unavailable-model errors, and frontend resource-node collection parsing accepts warning-wrapped payloads. Reference: `backend/src/controllers/resourceNodeController.ts`, `frontend/src/services/processTemplateV2Api.ts`, `backend/src/tests/templateResourceRoutes.test.ts`.
+- `SystemSettingsService` unused import. Closed in working tree cleanup after `ca6de14`. Result: removed dead bootstrap import from `backend/src/server.ts`.
