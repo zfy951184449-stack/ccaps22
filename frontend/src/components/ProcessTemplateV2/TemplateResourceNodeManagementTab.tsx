@@ -25,7 +25,7 @@ import {
 import axios from 'axios';
 import { DataNode } from 'antd/es/tree';
 import { ResourceFormModal } from '../Platform/PlatformEditors';
-import { Resource } from '../../types/platform';
+import { Resource } from '../../types/resourceModel';
 import { processTemplateV2Api } from '../../services';
 import {
   EquipmentSystemType,

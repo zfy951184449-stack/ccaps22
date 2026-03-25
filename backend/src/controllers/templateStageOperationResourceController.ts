@@ -6,7 +6,7 @@ import {
   replaceTemplateScheduleRules,
 } from '../services/templateResourceRuleService';
 import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
-import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import { extractMissingTableName, isMissingTableError } from '../utils/missingTableGuard';
 
 const featureDisabled = (res: Response) =>
   res.status(404).json({ error: 'Template resource rules feature is disabled' });

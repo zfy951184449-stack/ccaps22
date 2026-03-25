@@ -6,7 +6,7 @@ import { runConstraintValidation } from './constraintValidationService';
 import { getEffectiveRulesForSchedules, replaceTemplateScheduleRules } from './templateResourceRuleService';
 import { upsertTemplateScheduleBinding } from './resourceNodeService';
 import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
-import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import { extractMissingTableName, isMissingTableError } from '../utils/missingTableGuard';
 
 const WORKBOOK_VERSION = 1;
 const WORKBOOK_SOURCE = 'process-template';

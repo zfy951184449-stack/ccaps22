@@ -1,6 +1,6 @@
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../config/database';
-import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import { extractMissingTableName, isMissingTableError } from '../utils/missingTableGuard';
 import { SqlExecutor, toCandidateResourceIds, validateCandidateResources } from './operationResourceBindingService';
 
 export type ResourceRuleSourceScope = 'GLOBAL_DEFAULT' | 'TEMPLATE_OVERRIDE' | 'BATCH_OVERRIDE' | 'NONE';
@@ -501,4 +501,3 @@ export const explainTemplateRuleLoadError = (error: unknown): string | null => {
 
   return `Missing table: ${extractMissingTableName(error) ?? 'template_operation_resource_requirements'}`;
 };
-

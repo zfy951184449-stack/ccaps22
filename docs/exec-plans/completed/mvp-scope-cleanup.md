@@ -1,5 +1,7 @@
 # MVP Scope Cleanup Plan
 
+Status: completed on 2026-03-25 after the MVP runtime was reduced, legacy docs were archived, and remaining active resource-model contracts were restored.
+
 ## Goal
 
 将当前仓库从“并行演进中的 APS 平台”收敛成一个可交付、可维护、上下文更干净的 MVP。

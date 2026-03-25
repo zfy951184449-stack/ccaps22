@@ -1,4 +1,4 @@
-import { Resource } from '../../types/platform';
+import { Resource } from '../../types/resourceModel';
 import { ResourceRequirementRule } from '../ProcessTemplateGantt/types';
 import { ConstraintConflict } from '../ProcessTemplateGantt/types';
 

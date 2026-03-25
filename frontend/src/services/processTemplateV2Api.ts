@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Resource } from '../types/platform';
+import { Resource } from '../types/resourceModel';
 import {
   CreateStageOperationPayload,
   CreateStagePayload,

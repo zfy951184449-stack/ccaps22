@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import pool from '../config/database';
 import { RowDataPacket } from 'mysql2';
-import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import { extractMissingTableName, isMissingTableError } from '../utils/missingTableGuard';
 import {
   DEFAULT_DEPARTMENT_CODE,
   normalizeDepartmentCode,

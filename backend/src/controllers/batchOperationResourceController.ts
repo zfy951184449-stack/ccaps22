@@ -5,7 +5,7 @@ import {
   replaceBatchOperationRules,
 } from '../services/batchResourceSnapshotService';
 import { isBatchResourceSnapshotsEnabled } from '../utils/featureFlags';
-import { extractMissingTableName, isMissingTableError } from '../utils/platformFeatureGuard';
+import { extractMissingTableName, isMissingTableError } from '../utils/missingTableGuard';
 
 const writeDisabled = (res: Response) =>
   res.status(409).json({ error: 'Batch resource snapshots feature is disabled' });
@@ -77,4 +77,3 @@ export const putBatchOperationResources = async (req: Request, res: Response) =>
     connection.release();
   }
 };
-

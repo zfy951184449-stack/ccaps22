@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Form, Input, InputNumber, Modal, Select, Switch } from 'antd';
-import { Resource, ResourceInput, ResourceType } from '../../types/platform';
+import { Resource, ResourceInput, ResourceType } from '../../types/resourceModel';
 
 const resourceTypeOptions: Array<{ label: string; value: ResourceType }> = [
   { label: '房间', value: 'ROOM' },
