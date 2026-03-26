@@ -7,6 +7,7 @@
 ## 当前代码快照
 
 - 主前端在 `frontend/`，技术栈是 React 18 + Ant Design + CRA。
+- 独立迁移中的新前端在 `frontend-next/`，技术栈是 Next App Router + Tailwind + first-party Precision Lab design system。
 - 主后端在 `backend/`，技术栈是 Express + TypeScript + MySQL。
 - 当前有效求解器是 `solver_v4/`，技术栈是 Flask + OR-Tools CP-SAT，默认端口 `5005`。
 - 当前主运行面的求解链路已收敛到 V4；前端仍保留工艺模板 V1 和 V2 两套编辑入口。
@@ -67,6 +68,7 @@
 ```text
 MFG8APS/
 ├── frontend/                  # 主 Web 前端（React 18 + CRA）
+├── frontend-next/             # 独立 Next.js 迁移工作区（Precision Lab）
 ├── backend/                   # 主 API 服务（Express + TypeScript）
 ├── solver_v4/                 # 当前有效求解器（Flask + OR-Tools）
 ├── database/
@@ -132,7 +134,14 @@ cd frontend
 npm install
 ```
 
-### 3. 安装 Solver V4 依赖
+### 3. 安装 frontend-next 依赖
+
+```bash
+cd frontend-next
+npm install
+```
+
+### 4. 安装 Solver V4 依赖
 
 ```bash
 cd solver_v4
@@ -171,6 +180,13 @@ cd frontend
 npm start
 ```
 
+frontend-next：
+
+```bash
+cd frontend-next
+npm run dev
+```
+
 Solver V4：
 
 ```bash
@@ -185,9 +201,15 @@ python app.py
 
 - `/api` 转发到 `http://localhost:3001`
 
+`frontend-next/` 当前默认行为：
+
+- 浏览器侧 `NEXT_PUBLIC_API_BASE_URL` 默认 `/api`
+- 开发态 `/api` rewrite 到 `http://127.0.0.1:3001`
+
 默认端口：
 
-- 前端：`3000`
+- legacy 前端：`3000`
+- frontend-next：`3002`
 - 后端：`3001`
 - Solver V4：`5005`
 
@@ -213,6 +235,8 @@ cd backend && npm run build
 cd backend && npm test -- --run
 cd frontend && npm run build
 cd frontend && npm test -- --watchAll=false
+cd frontend-next && npm run build
+cd frontend-next && npm run test:ci
 ./scripts/verify_v4_archive.sh
 ```
 
@@ -223,6 +247,8 @@ cd frontend && npm test -- --watchAll=false
 - `cd backend && npm run build`：通过
 - `cd frontend && npm run build`：通过，但有较多 ESLint warnings
 - `cd frontend && npm test -- --watchAll=false`：通过
+- `cd frontend-next && npm run build`：需按独立工作区单独验证
+- `cd frontend-next && npm run test:ci`：需按独立工作区单独验证
 - `./scripts/verify_v4_archive.sh`：通过
 - `cd backend && npm test -- --run`：本轮未执行
 
@@ -247,7 +273,9 @@ cd frontend && npm test -- --watchAll=false
 ## 相关文件
 
 - 主前端入口：`frontend/src/App.tsx`
+- frontend-next 入口：`frontend-next/src/app/layout.tsx`
 - 后端入口：`backend/src/server.ts`
 - Solver V4 入口：`solver_v4/app.py`
 - 推荐启动脚本：`start_v4.sh`
+- frontend-next 启动脚本：`start_frontend_next.sh`
 - V4 校验脚本：`scripts/verify_v4_archive.sh`

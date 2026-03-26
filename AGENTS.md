@@ -30,6 +30,7 @@ Task routing:
 
 - Backend / API / DB: read `routes -> controllers -> services -> models/database`, then `.agent/rules/codex-backend-api-rules.md`
 - Frontend / UI: read `pages/components -> services -> types`, then `.agent/rules/codex-frontend-ui-rules.md`
+- Frontend Next / design-system: read `app routes -> features/design-system -> services -> entities`, then `.agent/rules/codex-frontend-ui-rules.md`
 - Solver V4 / scheduling: read `backend assembler -> solver contracts -> constraints/core -> apply/result consumer`, then `.agent/rules/codex-solver-v4-rules.md`
 - Runtime sync / local verification: `.agent/rules/codex-runtime-restart-rules.md`
 - Planning ambiguity or competing interpretations: `.agent/rules/codex-plan-collaboration-rules.md`
@@ -58,6 +59,7 @@ If a decision only lives in Slack, chat, or someone’s memory, it is not reliab
 
 - `backend/`: Express + TypeScript API, controllers/services/models/tests
 - `frontend/`: CRA + React + Ant Design UI, pages/components/services/types
+- `frontend-next/`: Next App Router + Tailwind + first-party Precision Lab design system
 - `solver_v4/`: Python solver, contracts, constraints, apply logic
 - `database/`: SQL, schema changes, migrations, seed/reference data
 - `docs/`: durable knowledge, schema references, scheduling semantics, execution plans
@@ -82,6 +84,8 @@ Run the smallest sufficient deterministic checks for the touched area:
 - Backend logic changes: `cd backend && npm test`
 - Frontend changes: `cd frontend && npm run build`
 - Frontend interaction/state changes: `cd frontend && npm test -- --watchAll=false`
+- Frontend Next changes: `cd frontend-next && npm run build`
+- Frontend Next interaction/state changes: `cd frontend-next && npm run test:ci`
 - Solver / V4 changes: syntax or test-level validation as applicable
 - V4 persistence / apply / archive changes: `scripts/verify_v4_archive.sh`
 - Agent-doc structure changes: `scripts/lint_agent_docs.sh`

@@ -5,9 +5,26 @@ export const getQualificationMatrix = async (req: Request, res: Response) => {
   try {
     // 获取所有人员
     const [employees] = await pool.execute(`
-      SELECT id, employee_code, employee_name, department, position
-      FROM employees
-      ORDER BY employee_name
+      SELECT
+        e.id,
+        e.employee_code,
+        e.employee_name,
+        COALESCE(
+          CASE
+            WHEN u1.unit_type = 'DEPARTMENT' THEN u1.unit_name
+            WHEN u1.unit_type = 'TEAM' AND u2.unit_type = 'DEPARTMENT' THEN u2.unit_name
+            WHEN u1.unit_type IN ('GROUP', 'SHIFT') AND u3.unit_type = 'DEPARTMENT' THEN u3.unit_name
+            ELSE NULL
+          END,
+          ''
+        ) AS department,
+        COALESCE(r.role_name, '') AS position
+      FROM employees e
+      LEFT JOIN organization_units u1 ON u1.id = e.unit_id
+      LEFT JOIN organization_units u2 ON u2.id = u1.parent_id
+      LEFT JOIN organization_units u3 ON u3.id = u2.parent_id
+      LEFT JOIN employee_roles r ON r.id = e.primary_role_id
+      ORDER BY e.employee_name
     `);
 
     // 获取所有资质

@@ -7,7 +7,8 @@ Use it to decide where to read first before making changes.
 ## Runtime Entrypoints
 
 - Backend API: `backend/src/server.ts`
-- Frontend app shell and routing: `frontend/src/App.tsx`
+- Legacy frontend app shell and routing: `frontend/src/App.tsx`
+- Frontend Next app shell and routing: `frontend-next/src/app/layout.tsx`
 - Solver V4 service: `solver_v4/app.py`
 
 ## Layer Boundaries And Read Order
@@ -33,6 +34,17 @@ Read in this order:
 4. `frontend/src/types/`
 
 Use this lane when changing screens, interactions, or client-side contract handling.
+
+### Frontend Next / Design System
+
+Read in this order:
+
+1. `frontend-next/src/app/` route entry or layout
+2. `frontend-next/src/features/` and `frontend-next/src/design-system/`
+3. `frontend-next/src/services/`
+4. `frontend-next/src/entities/`
+
+Use this lane when changing the independent Next.js workspace, first-party design system, or frontend-next route shells.
 
 ### Solver V4 / Scheduling
 

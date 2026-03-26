@@ -47,4 +47,4 @@ Use it for facts that must survive beyond a single chat or PR:
 - Put durable knowledge here instead of relying on chat history, Slack, or oral memory.
 - If guidance becomes checkable, prefer moving it into scripts, tests, or lint rules.
 - Keep cross-layer navigation current in `ARCHITECTURE.md` when entrypoints or ownership boundaries change.
-- For active runtime surface, trust executable entry points first (`frontend/src/App.tsx`, `backend/src/server.ts`) and treat generated reports as secondary evidence unless regenerated.
+- For active runtime surface, trust executable entry points first (`frontend/src/App.tsx`, `frontend-next/src/app/layout.tsx`, `backend/src/server.ts`) and treat generated reports as secondary evidence unless regenerated.
