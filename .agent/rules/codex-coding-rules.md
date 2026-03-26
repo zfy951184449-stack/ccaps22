@@ -5,7 +5,9 @@ description: Base Codex rules for the APS monorepo. Apply after AGENTS.md and be
 
 # Codex Base Rules
 
-This file carries only repo-wide workflow and invariants.
+This file carries only repo-wide workflow and rule-hygiene guidance.
+
+Hard invariants, verification matrix, and final handoff requirements live in `AGENTS.md` and are not duplicated here.
 
 Load order:
 
@@ -23,46 +25,17 @@ Load order:
    - solver V4: `assembler -> contracts -> constraints/core -> apply/result consumer`
 3. Make the smallest coherent change that closes the request.
 4. When code semantics change, update the relevant repo docs in the same change.
-5. If repeated review feedback keeps appearing, promote it into a rule, workflow, script, test, or lint check.
+5. For cross-layer tasks, anchor on `docs/ARCHITECTURE.md` before chasing leaf files.
 
-## 2. Repo-Wide Invariants
+## 2. Use Repo Artifacts Deliberately
 
-1. `shift_plan_id` is the source of truth for shift linkage.
-2. Do not mix Batch, Shift, and Run status fields:
-   - `production_batch_plans.plan_status`
-   - `employee_shift_plans.plan_state`
-   - `scheduling_results.result_state`
-   - `scheduling_runs.status`
-3. Serialize `BigInt` values safely in API responses.
-4. For invalid scheduling states, prefer explicit validation failures or `Infeasible` over silent auto-correction.
-5. Cross-layer changes are incomplete until backend, frontend, and solver-facing contracts stay aligned where applicable.
+1. Prefer versioned repo artifacts over chat-only guidance.
+2. Durable domain knowledge belongs in `docs/`; manual procedures belong in `.agent/workflows/`.
+3. If repeated review feedback keeps appearing, promote it into a rule, workflow, script, test, or lint check.
+4. If a doc or rule stops matching code, update or delete it quickly instead of keeping drift alive.
 
-## 3. Verification Principles
-
-1. Restarts synchronize runtime state; they do not prove correctness.
-2. Prefer deterministic checks over informal manual confidence.
-3. Run the smallest sufficient validation set for the touched area:
-   - backend: `cd backend && npm run build`
-   - backend logic: `cd backend && npm test`
-   - frontend: `cd frontend && npm run build`
-   - frontend interaction/state: `cd frontend && npm test -- --watchAll=false`
-   - V4 archive/apply/persistence: `scripts/verify_v4_archive.sh`
-   - agent-doc structure: `scripts/lint_agent_docs.sh`
-4. If a check cannot run, report that explicitly with the blocking reason.
-
-## 4. Output Contract
-
-Final delivery should include:
-
-1. what changed and the intended outcome
-2. the key files involved
-3. the commands actually executed
-4. any checks that did not run
-5. whether runtime restarts were required or performed
-6. residual risk or follow-up
-
-## 5. Keep The Rules Healthy
+## 3. Keep The Rules Healthy
 
 1. Keep this file short. Push detail into specialized rules, workflows, or docs.
-2. Prefer repo-local versioned artifacts over chat-only guidance.
+2. The active executable ruleset is the manifest in `.agent/rules/README.md`; do not leave shadow rules beside it.
 3. If a prose rule can be enforced mechanically, prefer code over documentation.

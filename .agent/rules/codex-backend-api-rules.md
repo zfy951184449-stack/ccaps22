@@ -18,7 +18,9 @@ description: Codex backend/API rules for Express + TypeScript work in the APS mo
 
 - `AGENTS.md`
 - `.agent/rules/codex-coding-rules.md`
+- `docs/ARCHITECTURE.md`
 - `docs/LLM_DB_GUIDELINES.md`
+- 若涉及数据库语义歧义，补读 `docs/db-consistency-rules.md`
 - 若涉及运行态同步，补读 `codex-runtime-restart-rules.md`
 
 ## 1. 先读链路，再下手
@@ -51,7 +53,7 @@ description: Codex backend/API rules for Express + TypeScript work in the APS mo
    - 是否影响历史数据读取
    - 是否引入冗余字段或新的数据分叉
 5. 不允许通过静默回填、默默兜底默认值来掩盖数据库设计冲突。
-6. 数据库层面的长期语义，优先回写到 `docs/LLM_DB_GUIDELINES.md`。
+6. 数据库层面的长期语义，优先回写到 `docs/LLM_DB_GUIDELINES.md` 或 `docs/db-consistency-rules.md`。
 
 ## 4. 实现约束
 
@@ -71,7 +73,7 @@ description: Codex backend/API rules for Express + TypeScript work in the APS mo
 - `cd backend && npm test`
 - 相关脚本校验
 - 若影响前端调用，补前端 build
-- 若影响 V4 装配或应用逻辑，补 `scripts/verify_v4_archive.sh`
+- 若影响 V4 装配或应用逻辑，补 `scripts/verify_v4_archive.sh`，必要时参照 `.agent/workflows/codex-v4-verification.md`
 
 如果改动属于运行时需要重新加载才生效的类型，按 `codex-runtime-restart-rules.md` 重启 backend，必要时同步重启联动服务。
 

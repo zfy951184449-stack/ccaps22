@@ -38,10 +38,7 @@ jobs:
             agent_docs:
               - 'AGENTS.md'
               - '.agent/**'
-              - 'docs/README.md'
-              - 'docs/exec-plans/**'
-              - 'docs/LLM_DB_GUIDELINES.md'
-              - 'docs/scheduling_principles.md'
+              - 'docs/**'
               - 'scripts/lint_agent_docs.sh'
               - '.github/workflows/ci.yml'
             backend:

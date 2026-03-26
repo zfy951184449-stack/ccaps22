@@ -1,6 +1,6 @@
 ---
 trigger: model_decision
-description: Codex frontend/UI rules for React + Ant Design work in the APS monorepo. Apply when changing pages, components, services, types, interaction flows, or scheduling visualization.
+description: Codex frontend/UI rules for APS frontend work. Apply when changing pages, components, services, types, interaction flows, or scheduling visualization.
 ---
 
 # Codex Frontend/UI Rules
@@ -17,6 +17,8 @@ description: Codex frontend/UI rules for React + Ant Design work in the APS mono
 
 - `AGENTS.md`
 - `.agent/rules/codex-coding-rules.md`
+- `docs/ARCHITECTURE.md`
+- `docs/frontend-visual-language.md`
 - 相关页面、组件、`services/`、`types/`
 - 若涉及接口契约，补读 `codex-backend-api-rules.md`
 
@@ -28,14 +30,16 @@ description: Codex frontend/UI rules for React + Ant Design work in the APS mono
 
 ## 2. UI 改动边界
 
-1. 默认沿用现有 Ant Design + CRA 风格，不做无请求的视觉重构。
-2. 改动应优先提升：
+1. 默认遵循 `docs/frontend-visual-language.md` 定义的“工业生产工作台”风格：浅色、高信息密度、结构清晰、状态可读性优先、装饰克制、动效节制。
+2. 当前实现可以继续基于现有组件库落地，但不要把组件库名、脚手架名或外部设计体系名当作风格定义。
+3. 新建页面必须遵守该风格；触达的旧页面应向该风格收敛，但这不等于一次性重做整站视觉。
+4. 改动应优先提升：
    - 信息正确性
    - 交互清晰度
    - 错误可诊断性
-3. 排程/甘特/监控类页面优先保证时间、状态、资源信息表达准确，不要为了美观牺牲业务可读性。
-4. 不要引入和现有项目风格脱节的新组件体系或状态管理方式。
-5. 对未来 agent 可读性友好的界面状态，优先是显式的 loading / empty / error / success，而不是隐藏式状态分支。
+5. 排程/甘特/监控类页面优先保证时间、状态、资源信息表达准确，不要为了美观牺牲业务可读性。
+6. 不要引入和现有项目风格脱节的新组件体系或状态管理方式。
+7. 对未来 agent 可读性友好的界面状态，优先是显式的 loading / empty / error / success，而不是隐藏式状态分支。
 
 ## 3. 数据与状态规则
 

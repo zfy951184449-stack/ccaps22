@@ -5,7 +5,7 @@ This file is a map, not the full manual.
 Keep durable knowledge in versioned repo artifacts that agents can re-read:
 
 - task routing and hard repo-wide invariants stay here
-- detailed behavior lives in `.agent/rules/`
+- active executable rules live in `.agent/rules/`
 - durable domain and product context lives in `docs/`
 - multi-step work and decision logs live in `docs/exec-plans/`
 - repeated review feedback should graduate into scripts, tests, or lint rules
@@ -33,18 +33,22 @@ Task routing:
 - Solver V4 / scheduling: read `backend assembler -> solver contracts -> constraints/core -> apply/result consumer`, then `.agent/rules/codex-solver-v4-rules.md`
 - Runtime sync / local verification: `.agent/rules/codex-runtime-restart-rules.md`
 - Planning ambiguity or competing interpretations: `.agent/rules/codex-plan-collaboration-rules.md`
-- Biopharma process semantics: use `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md` and relevant scheduling docs
+- Biopharma process semantics: use `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`, then `docs/biopharma-cmo-domain.md` and `docs/biopharma-cmo-rules.md`
 
 ## Source Of Truth
 
 Read these before inventing new rules:
 
 - `.agent/rules/README.md`: rule index, load order, maintenance policy
-- `.agent/rules/codex-coding-rules.md`: repo-wide Codex invariants
+- `.agent/rules/codex-coding-rules.md`: base workflow and rules hygiene
+- `docs/ARCHITECTURE.md`: cross-layer entrypoints, read order, and contract hotspots
 - `docs/README.md`: documentation map for durable repo knowledge
+- `docs/frontend-visual-language.md`: frontend visual and interaction language source of truth
 - `docs/LLM_DB_GUIDELINES.md`: APS database source-of-truth rules
 - `docs/scheduling_principles.md`: scheduling and roster semantics already agreed in-repo
 - `.agent/workflows/add-constraint.md`: V4 constraint workflow
+- `.agent/workflows/codex-v4-verification.md`: V4 verification workflow
+- `.agent/workflows/maintain-rules.md`: rule quality and maintenance workflow
 - `docs/exec-plans/`: active plans, completed plans, and tech debt tracker
 - `scripts/lint_agent_docs.sh`: structural sanity check for this agent-doc layout
 
@@ -57,7 +61,7 @@ If a decision only lives in Slack, chat, or someone’s memory, it is not reliab
 - `solver_v4/`: Python solver, contracts, constraints, apply logic
 - `database/`: SQL, schema changes, migrations, seed/reference data
 - `docs/`: durable knowledge, schema references, scheduling semantics, execution plans
-- `.agent/rules/`: Codex rule set and supporting references
+- `.agent/rules/`: active Codex rule set
 - `.agent/workflows/`: task-specific workflows that are too detailed for `AGENTS.md`
 - `scripts/`: verification, doc generation, and repo utility scripts
 

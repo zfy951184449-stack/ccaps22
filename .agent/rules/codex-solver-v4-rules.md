@@ -16,9 +16,11 @@ description: Codex solver/V4 rules for OR-Tools scheduling work in the APS monor
 
 - `AGENTS.md`
 - `.agent/rules/codex-coding-rules.md`
+- `docs/ARCHITECTURE.md`
 - `docs/scheduling_principles.md`
 - `.agent/workflows/add-constraint.md`（新增约束时）
-- 若任务带有生物制药工艺语义，优先使用 `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`
+- 涉及 V4 归档、locked、apply、结果兼容时，补读 `.agent/workflows/codex-v4-verification.md`
+- 若任务带有生物制药工艺语义，优先使用 `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`，再读 `docs/biopharma-cmo-domain.md` 和 `docs/biopharma-cmo-rules.md`
 
 ## 1. 先读完整链路
 
@@ -65,6 +67,7 @@ description: Codex solver/V4 rules for OR-Tools scheduling work in the APS monor
 - `scripts/verify_v4_archive.sh`（涉及 V4 归档、apply、locked、result persistence 时）
 - `cd backend && npm run build`（assembler / controller / service 有改动时）
 - `cd frontend && npm run build`（前端 Solver V4 展示有改动时）
+- 必要时按 `.agent/workflows/codex-v4-verification.md` 补完整走查
 
 只要涉及 `solver_v4/**/*.py`、assembler、contract、apply 流程或联动 API，按 `codex-runtime-restart-rules.md` 重启 solver；必要时同步重启 backend，避免拿旧模型内存做手测。
 

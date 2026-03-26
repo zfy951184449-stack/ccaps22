@@ -12,14 +12,24 @@ Use it for facts that must survive beyond a single chat or PR:
 
 ## Read By Topic
 
-- Agent and rule navigation:
+- Architecture and agent navigation:
+  - `ARCHITECTURE.md`
+  - `agent-rule-coverage-matrix.md`
+  - `frontend-visual-language.md`
   - `../AGENTS.md`
   - `../.agent/rules/README.md`
+  - `../.agent/workflows/add-constraint.md`
+  - `../.agent/workflows/codex-v4-verification.md`
+  - `../.agent/workflows/maintain-rules.md`
 - Database and API semantics:
   - `LLM_DB_GUIDELINES.md`
+  - `db-consistency-rules.md`
   - `database_api_dictionary.md`
 - Scheduling and roster semantics:
   - `scheduling_principles.md`
+- Biopharma CMO semantics:
+  - `biopharma-cmo-domain.md`
+  - `biopharma-cmo-rules.md`
 - Archived and generated reference material:
   - `archive/README.md`
   - `archive/database_schema_report_cn.md`
@@ -36,4 +46,5 @@ Use it for facts that must survive beyond a single chat or PR:
 - Update docs in the same change when code behavior or business semantics change.
 - Put durable knowledge here instead of relying on chat history, Slack, or oral memory.
 - If guidance becomes checkable, prefer moving it into scripts, tests, or lint rules.
+- Keep cross-layer navigation current in `ARCHITECTURE.md` when entrypoints or ownership boundaries change.
 - For active runtime surface, trust executable entry points first (`frontend/src/App.tsx`, `backend/src/server.ts`) and treat generated reports as secondary evidence unless regenerated.
