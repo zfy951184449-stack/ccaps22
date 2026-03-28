@@ -2,6 +2,7 @@ import type { Route } from "next";
 
 export type WorkspaceRouteKey =
   | "dashboard"
+  | "design-review"
   | "organization-workbench"
   | "qualifications"
   | "qualification-matrix"
@@ -10,6 +11,7 @@ export type WorkspaceRouteKey =
   | "shift-definitions"
   | "process-templates"
   | "process-templates-v2"
+  | "resource-planning-v3"
   | "batch-management-v4"
   | "personnel-scheduling"
   | "solver-v4";
@@ -44,6 +46,22 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     ],
   },
   {
+    key: "design-review",
+    href: "/design-review",
+    label: "组件体检",
+    railCode: "UI",
+    title: "组件库与 UI 风格体检",
+    description:
+      "Persistent internal review surface for auditing Precision Lab tokens, primitives, patterns, and representative workbench compositions inside the live Next workspace shell.",
+    status: "active",
+    wave: 0,
+    checkpoints: [
+      "Token, primitive, and pattern baselines are visible in one workbench route.",
+      "Current style drift is explicit instead of hidden in scattered stories and business pages.",
+      "The review surface stays static and does not depend on backend contracts.",
+    ],
+  },
+  {
     key: "organization-workbench",
     href: "/organization-workbench",
     label: "组织与人员",
@@ -66,13 +84,13 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     railCode: "QF",
     title: "资质管理",
     description:
-      "Wave 1 CRUD surface for validating forms, list states, and modal patterns in frontend-next.",
-    status: "planned",
+      "Wave 1 pilot workspace for the qualifications operations desk. This route consolidates qualification inventory, dependency visibility, and safe-delete behavior in the new design system.",
+    status: "active",
     wave: 1,
     checkpoints: [
-      "Loading, empty, error, and success states are explicit.",
-      "Table and form patterns replace ad hoc page markup.",
-      "Legacy route path stays unchanged for eventual cutover.",
+      "Qualification inventory, impact visibility, and safe deletion share a single operating surface.",
+      "Create and edit flows use the shared side-sheet pattern instead of ad hoc modal flows.",
+      "Cross-page links preserve the legacy route surface while upgrading the operating model.",
     ],
   },
   {
@@ -82,13 +100,13 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     railCode: "QM",
     title: "资质矩阵",
     description:
-      "Wave 1 matrix route for validating dense comparative views and sticky workbench patterns.",
-    status: "planned",
+      "Wave 1 matrix shortcut. In frontend-next this route resolves into the integrated qualifications workspace matrix tab while preserving the legacy URL surface.",
+    status: "active",
     wave: 1,
     checkpoints: [
-      "Matrix grid remains readable at 1080p.",
-      "Legend, filters, and row states use shared semantic tokens.",
-      "Keyboard navigation remains available for matrix cells.",
+      "Qualification matrix lives inside the integrated qualifications operating desk.",
+      "Legacy CRA route and backend contracts remain intact.",
+      "Dense comparative coverage view stays readable at desktop density.",
     ],
   },
   {
@@ -172,6 +190,22 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     ],
   },
   {
+    key: "resource-planning-v3",
+    href: "/resource-planning-v3" as Route,
+    label: "资源规划 V3",
+    railCode: "RP3",
+    title: "资源规划 / 风险沙盘",
+    description:
+      "Wave 6 pilot route for the process-first V3 sandbox: main flow semantics, trigger-derived auxiliary operations, mirrored resource context, and a unified gantt surface.",
+    status: "active",
+    wave: 6,
+    checkpoints: [
+      "A single gantt surface shows main operations, auxiliary operations, and equipment state bands per resource row.",
+      "Legacy APS contracts stay intact while V3 uses its own schema and preview endpoints.",
+      "Overview and micro-adjustment share the same timeline through zoom presets instead of separate screens.",
+    ],
+  },
+  {
     key: "batch-management-v4",
     href: "/batch-management-v4",
     label: "批次管理 V4",
@@ -231,7 +265,9 @@ export const workspaceNavSections: WorkspaceNavSection[] = [
   {
     key: "overview",
     label: "Overview",
-    routes: routeDefinitions.filter((route) => route.key === "dashboard"),
+    routes: routeDefinitions.filter((route) =>
+      ["dashboard", "design-review"].includes(route.key),
+    ),
   },
   {
     key: "master-data",
@@ -254,6 +290,7 @@ export const workspaceNavSections: WorkspaceNavSection[] = [
       [
         "process-templates",
         "process-templates-v2",
+        "resource-planning-v3",
         "batch-management-v4",
       ].includes(route.key),
     ),

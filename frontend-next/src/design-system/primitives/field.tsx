@@ -2,22 +2,31 @@ import { cn } from "@/lib/cn";
 import type { InputHTMLAttributes, PropsWithChildren, SelectHTMLAttributes } from "react";
 
 type FieldShellProps = {
+  error?: string;
+  required?: boolean;
   label: string;
   hint?: string;
 };
 
 function FieldShell({
   children,
+  error,
   hint,
   label,
+  required,
 }: PropsWithChildren<FieldShellProps>) {
   return (
     <label className="flex min-w-0 flex-col gap-2">
       <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--pl-text-tertiary)]">
         {label}
+        {required ? (
+          <span className="ml-1 text-[var(--pl-danger)]">*</span>
+        ) : null}
       </span>
       {children}
-      {hint ? (
+      {error ? (
+        <span className="text-xs text-[var(--pl-danger)]">{error}</span>
+      ) : hint ? (
         <span className="text-xs text-[var(--pl-text-tertiary)]">{hint}</span>
       ) : null}
     </label>
@@ -29,10 +38,24 @@ const inputClassName =
 
 export type TextInputProps = InputHTMLAttributes<HTMLInputElement> & FieldShellProps;
 
-export function TextInput({ hint, label, className, ...props }: TextInputProps) {
+export function TextInput({
+  error,
+  hint,
+  label,
+  className,
+  required,
+  ...props
+}: TextInputProps) {
   return (
-    <FieldShell hint={hint} label={label}>
-      <input className={cn(inputClassName, className)} {...props} />
+    <FieldShell error={error} hint={hint} label={label} required={required}>
+      <input
+        className={cn(
+          inputClassName,
+          error && "border-[var(--pl-danger)] bg-[var(--pl-danger-soft)]",
+          className,
+        )}
+        {...props}
+      />
     </FieldShell>
   );
 }
@@ -43,13 +66,22 @@ export type SelectInputProps = SelectHTMLAttributes<HTMLSelectElement> &
 export function SelectInput({
   children,
   className,
+  error,
   hint,
   label,
+  required,
   ...props
 }: PropsWithChildren<SelectInputProps>) {
   return (
-    <FieldShell hint={hint} label={label}>
-      <select className={cn(inputClassName, className)} {...props}>
+    <FieldShell error={error} hint={hint} label={label} required={required}>
+      <select
+        className={cn(
+          inputClassName,
+          error && "border-[var(--pl-danger)] bg-[var(--pl-danger-soft)]",
+          className,
+        )}
+        {...props}
+      >
         {children}
       </select>
     </FieldShell>

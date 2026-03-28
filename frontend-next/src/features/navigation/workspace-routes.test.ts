@@ -10,4 +10,14 @@ describe("resolveRouteFromPath", () => {
       "process-templates-v2",
     );
   });
+
+  it("resolves the V3 resource-planning sandbox route", () => {
+    expect(resolveRouteFromPath("/resource-planning-v3")?.key).toBe(
+      "resource-planning-v3",
+    );
+  });
+
+  it("resolves the persistent design review route", () => {
+    expect(resolveRouteFromPath("/design-review")?.key).toBe("design-review");
+  });
 });

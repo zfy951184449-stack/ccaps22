@@ -25,7 +25,7 @@ export function RoutePlaceholderPage({
       <Panel
         action={<Badge tone={statusToneMap[route.status]}>{route.status}</Badge>}
         description={route.description}
-        eyebrow={route.wave ? `Wave ${route.wave}` : "Legacy hold"}
+        eyebrow={route.wave != null ? `Wave ${route.wave}` : "Legacy hold"}
         title={route.title}
       >
         <div className="space-y-6">

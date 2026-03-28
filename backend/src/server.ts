@@ -38,8 +38,10 @@ import personnelSchedulesV2Routes from './routes/personnelSchedulesV2';
 import unavailabilityRoutes from './routes/unavailabilityRoutes';
 import resourceNodeRoutes from './routes/resourceNodes';
 import resourcesRoutes from './routes/resources';
+import maintenanceWindowRoutes from './routes/maintenanceWindows';
 import templateStageOperationResourceRoutes from './routes/templateStageOperationResources';
 import batchOperationResourceRoutes from './routes/batchOperationResources';
+import v3BioprocessRoutes from './routes/v3Bioprocess';
 
 dotenv.config();
 
@@ -106,8 +108,10 @@ app.use('/api/personnel-schedules/v2', personnelSchedulesV2Routes);
 app.use('/api/unavailability', unavailabilityRoutes);
 app.use('/api/resource-nodes', resourceNodeRoutes);
 app.use('/api/resources', resourcesRoutes);
+app.use('/api/maintenance-windows', maintenanceWindowRoutes);
 app.use('/api/template-stage-operations', templateStageOperationResourceRoutes);
 app.use('/api/batch-operations', batchOperationResourceRoutes);
+app.use('/api/v3/bioprocess', v3BioprocessRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

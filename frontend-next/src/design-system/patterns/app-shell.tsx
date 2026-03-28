@@ -10,30 +10,29 @@ import { CommandRail } from "./command-rail";
 function TopBar() {
   const pathname = usePathname();
   const route = resolveRouteFromPath(pathname);
+  const routeWaveLabel = route?.wave != null ? `Wave ${route.wave}` : "Legacy hold";
+  const routeStatusTone =
+    route?.status === "active"
+      ? "success"
+      : route?.status === "planned"
+        ? "warning"
+        : "neutral";
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--pl-border)] bg-[rgba(248,250,252,0.92)] px-8 py-5 backdrop-blur-xl">
-      <div className="flex items-start justify-between gap-6">
-        <div className="space-y-2">
+    <header className="sticky top-0 z-20 border-b border-[var(--pl-border)] bg-[rgba(248,250,252,0.92)] px-8 py-4 backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-6">
+        <div className="space-y-1">
           <div className="flex items-center gap-3">
             <Badge tone="accent">Precision Lab</Badge>
             <Badge tone="neutral">Desktop 1080p / 2K</Badge>
+            <Badge tone={routeStatusTone}>{routeWaveLabel}</Badge>
           </div>
-          <div>
-            <h1 className="text-3xl font-semibold tracking-[-0.05em] text-[var(--pl-text-primary)]">
-              {route?.title ?? "MFG8APS Next Workspace"}
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--pl-text-secondary)]">
-              {route?.description ??
-                "Independent Next.js migration workspace for the APS Precision Lab design system."}
-            </p>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-[-0.04em] text-[var(--pl-text-primary)]">
+            {route?.title ?? "MFG8APS Next Workspace"}
+          </h1>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <Button size="sm" variant="ghost">
-            Wave 0 scaffold
-          </Button>
-          <Button size="sm" variant="secondary">
+          <Button disabled size="sm" variant="ghost">
             Legacy remains default
           </Button>
         </div>
