@@ -10,9 +10,9 @@ export function TableShell({
   title: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)]">
-      <div className="border-b border-[var(--pl-border)] bg-[var(--pl-surface)] px-5 py-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--pl-text-tertiary)]">
+    <div className="overflow-hidden rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)]">
+      <div className="border-b border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-3">
+        <h3 className="text-xs font-semibold leading-4 text-[var(--pl-text-tertiary)]">
           {title}
         </h3>
       </div>
@@ -20,7 +20,7 @@ export function TableShell({
         {columns.map((column) => (
           <div
             key={column}
-            className="bg-[var(--pl-surface)] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--pl-text-tertiary)]"
+            className="bg-[var(--pl-surface)] px-3 py-2.5 text-[11px] font-semibold leading-4 text-[var(--pl-text-tertiary)]"
           >
             {column}
           </div>

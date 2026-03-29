@@ -21,7 +21,7 @@ export function Tabs<T extends string>({
     <div
       aria-label="View tabs"
       className={cn(
-        "inline-flex flex-wrap gap-2 rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] p-2",
+        "inline-flex flex-wrap gap-1.5 rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] p-1.5",
         className,
       )}
       role="tablist"
@@ -33,9 +33,9 @@ export function Tabs<T extends string>({
           <button
             aria-selected={active}
             className={cn(
-              "rounded-2xl px-4 py-3 text-left transition-colors",
+              "max-w-full rounded-[var(--pl-radius-sm)] px-3 py-2 text-left transition-colors",
               active
-                ? "bg-[var(--pl-accent-soft)] text-[var(--pl-accent-strong)] shadow-[var(--pl-shadow-soft)]"
+                ? "bg-[var(--pl-surface-elevated)] text-[var(--pl-text-primary)]"
                 : "text-[var(--pl-text-secondary)] hover:bg-[rgba(11,106,162,0.08)] hover:text-[var(--pl-text-primary)]",
             )}
             key={option.value}
@@ -43,9 +43,9 @@ export function Tabs<T extends string>({
             role="tab"
             type="button"
           >
-            <div className="text-sm font-semibold">{option.label}</div>
+            <div className="text-sm font-semibold leading-5">{option.label}</div>
             {option.description ? (
-              <div className="mt-1 text-xs leading-5 text-inherit/80">
+              <div className="mt-0.5 text-[11px] leading-4 text-inherit/80">
                 {option.description}
               </div>
             ) : null}

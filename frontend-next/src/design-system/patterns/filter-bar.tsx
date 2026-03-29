@@ -9,12 +9,12 @@ export function FilterBar({
   return (
     <div
       className={cn(
-        "rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] p-4",
+        "rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3 py-3",
         className,
       )}
       {...props}
     >
-      <div className="grid gap-4 xl:grid-cols-4">{children}</div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{children}</div>
     </div>
   );
 }

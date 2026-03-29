@@ -17,7 +17,7 @@ function FieldShell({
 }: PropsWithChildren<FieldShellProps>) {
   return (
     <label className="flex min-w-0 flex-col gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--pl-text-tertiary)]">
+      <span className="text-[11px] font-medium leading-4 text-[var(--pl-text-tertiary)]">
         {label}
         {required ? (
           <span className="ml-1 text-[var(--pl-danger)]">*</span>
@@ -34,7 +34,7 @@ function FieldShell({
 }
 
 const inputClassName =
-  "h-11 w-full rounded-2xl border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 text-sm text-[var(--pl-text-primary)] outline-none transition-colors duration-200 placeholder:text-[var(--pl-text-tertiary)] focus:border-[var(--pl-accent)]";
+  "h-10 w-full rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 text-sm leading-5 text-[var(--pl-text-primary)] outline-none transition-colors duration-200 placeholder:text-[var(--pl-text-tertiary)] focus:border-[var(--pl-accent)]";
 
 export type TextInputProps = InputHTMLAttributes<HTMLInputElement> & FieldShellProps;
 

@@ -14,6 +14,7 @@ Use it for facts that must survive beyond a single chat or PR:
 
 - Architecture and agent navigation:
   - `ARCHITECTURE.md`
+  - `codex-harness.md`
   - `agent-rule-coverage-matrix.md`
   - `frontend-visual-language.md`
   - `../AGENTS.md`

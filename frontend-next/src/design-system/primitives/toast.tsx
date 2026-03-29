@@ -34,12 +34,12 @@ export function ToastStack({
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[70] flex w-full max-w-[420px] flex-col gap-3">
+    <div className="pointer-events-none fixed bottom-5 right-5 z-[70] flex w-full max-w-[360px] flex-col gap-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}
           className={cn(
-            "pointer-events-auto rounded-[var(--pl-radius-md)] border px-4 py-4 shadow-[var(--pl-shadow-strong)]",
+            "pointer-events-auto rounded-[var(--pl-radius-sm)] border px-3.5 py-3",
             toneClassName[toast.tone],
           )}
         >
@@ -47,13 +47,13 @@ export function ToastStack({
             <div className="space-y-1">
               <div className="text-sm font-semibold">{toast.title}</div>
               {toast.description ? (
-                <p className="text-sm leading-6 text-[var(--pl-text-secondary)]">
+                <p className="text-sm leading-5 text-[var(--pl-text-secondary)]">
                   {toast.description}
                 </p>
               ) : null}
             </div>
             <button
-              className="rounded-full px-2 py-1 text-sm font-semibold text-[var(--pl-text-secondary)] transition-colors hover:text-[var(--pl-text-primary)]"
+              className="rounded-[var(--pl-radius-sm)] px-2 py-1 text-sm font-semibold text-[var(--pl-text-secondary)] transition-colors hover:text-[var(--pl-text-primary)]"
               onClick={() => onDismiss(toast.id)}
               type="button"
             >

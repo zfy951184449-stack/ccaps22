@@ -5,6 +5,7 @@ Use `docs/exec-plans/` for work that is too large, risky, or long-running to kee
 ## Layout
 
 - `active/`: plans currently in progress
+  - `active/harness-runs/`: runtime artifacts emitted by the Codex harness manager
 - `completed/`: finished plans kept for historical context
 - `tech-debt-tracker.md`: lightweight backlog of cleanup items and follow-ups
 

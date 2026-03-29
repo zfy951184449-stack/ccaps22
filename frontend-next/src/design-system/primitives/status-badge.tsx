@@ -29,7 +29,7 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex min-h-8 items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]",
+        "inline-flex max-w-full items-center rounded-[var(--pl-radius-sm)] border px-2.5 py-1 text-[11px] font-semibold leading-4",
         toneClassName[tone],
       )}
       data-tone={tone}

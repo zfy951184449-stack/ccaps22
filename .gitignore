@@ -61,3 +61,6 @@ database/aps_system/
 *~
 .codex-*
 solver_v4/docs/defects_report.html
+docs/exec-plans/active/harness-runs/*
+!docs/exec-plans/active/harness-runs/.gitignore
+!docs/exec-plans/active/harness-runs/README.md

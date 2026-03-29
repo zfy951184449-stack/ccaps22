@@ -25,6 +25,7 @@ Optimize for agent readability:
 1. Identify the task lane and load only the smallest relevant rule set.
 2. Read code before proposing structure changes.
 3. Update docs in the same change when code semantics or operating rules change.
+4. For long-running, cross-file implementation tasks triggered from Codex App, prefer the `mfg8aps-harness` skill and `scripts/codex_harness_entry.sh`.
 
 Task routing:
 
@@ -44,6 +45,7 @@ Read these before inventing new rules:
 - `.agent/rules/codex-coding-rules.md`: base workflow and rules hygiene
 - `docs/ARCHITECTURE.md`: cross-layer entrypoints, read order, and contract hotspots
 - `docs/README.md`: documentation map for durable repo knowledge
+- `docs/codex-harness.md`: Codex harness entry flow, artifacts, and recovery model
 - `docs/frontend-visual-language.md`: frontend visual and interaction language source of truth
 - `docs/LLM_DB_GUIDELINES.md`: APS database source-of-truth rules
 - `docs/scheduling_principles.md`: scheduling and roster semantics already agreed in-repo
@@ -63,6 +65,7 @@ If a decision only lives in Slack, chat, or someone’s memory, it is not reliab
 - `solver_v4/`: Python solver, contracts, constraints, apply logic
 - `database/`: SQL, schema changes, migrations, seed/reference data
 - `docs/`: durable knowledge, schema references, scheduling semantics, execution plans
+- `harness/`: repo-local Codex harness manager, prompts, schemas, and tests
 - `.agent/rules/`: active Codex rule set
 - `.agent/workflows/`: task-specific workflows that are too detailed for `AGENTS.md`
 - `scripts/`: verification, doc generation, and repo utility scripts

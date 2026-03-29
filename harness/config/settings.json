@@ -1,0 +1,91 @@
+{
+  "max_repair_rounds": 2,
+  "codex": {
+    "model": "gpt-5.4",
+    "approval_policy": "never",
+    "workers": {
+      "planner": {
+        "sandbox": "read-only"
+      },
+      "generator": {
+        "sandbox": "workspace-write"
+      },
+      "evaluator": {
+        "sandbox": "workspace-write"
+      }
+    }
+  },
+  "verification": {
+    "backend": {
+      "prefixes": [
+        "backend/"
+      ],
+      "always": [
+        "cd backend && npm run build"
+      ],
+      "logic_prefixes": [
+        "backend/src/routes/",
+        "backend/src/controllers/",
+        "backend/src/services/",
+        "backend/src/models/",
+        "backend/src/tests/",
+        "backend/src/server.ts"
+      ],
+      "logic_commands": [
+        "cd backend && npm run test:ci"
+      ]
+    },
+    "frontend": {
+      "prefixes": [
+        "frontend/"
+      ],
+      "always": [
+        "cd frontend && npm run build"
+      ],
+      "interaction_prefixes": [
+        "frontend/src/"
+      ],
+      "interaction_commands": [
+        "cd frontend && npm run test:ci"
+      ]
+    },
+    "frontend_next": {
+      "prefixes": [
+        "frontend-next/"
+      ],
+      "always": [
+        "cd frontend-next && npm run build",
+        "cd frontend-next && npm run test:ci"
+      ],
+      "ui_prefixes": [
+        "frontend-next/src/app/",
+        "frontend-next/src/features/",
+        "frontend-next/src/design-system/"
+      ],
+      "ui_commands": [
+        "cd frontend-next && npm run e2e"
+      ]
+    },
+    "solver_v4": {
+      "prefixes": [
+        "solver_v4/"
+      ],
+      "always": [
+        "cd solver_v4 && python3 -m unittest discover -s tests"
+      ]
+    },
+    "agent_docs": {
+      "prefixes": [
+        "AGENTS.md",
+        ".agent/",
+        "docs/"
+      ],
+      "always": [
+        "scripts/lint_agent_docs.sh"
+      ],
+      "ignore_prefixes": [
+        "docs/exec-plans/active/harness-runs/"
+      ]
+    }
+  }
+}

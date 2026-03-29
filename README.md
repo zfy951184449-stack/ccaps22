@@ -71,6 +71,7 @@ MFG8APS/
 ├── frontend-next/             # 独立 Next.js 迁移工作区（Precision Lab）
 ├── backend/                   # 主 API 服务（Express + TypeScript）
 ├── solver_v4/                 # 当前有效求解器（Flask + OR-Tools）
+├── harness/                   # Codex harness manager、prompts、schemas、tests
 ├── database/
 │   ├── migrations/            # 版本化 SQL 迁移
 │   └── backups/               # 数据库备份输出

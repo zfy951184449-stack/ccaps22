@@ -20,26 +20,26 @@ export function Panel({
   return (
     <section
       className={cn(
-        "rounded-[var(--pl-radius-lg)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)] p-6 shadow-[var(--pl-shadow-soft)]",
+        "rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)] p-5",
         className,
       )}
       {...props}
     >
       {(eyebrow || title || description || action) ? (
-        <header className="mb-5 flex items-start justify-between gap-4">
-          <div className="space-y-1">
+        <header className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
             {eyebrow ? (
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[var(--pl-text-tertiary)]">
+              <div className="text-[11px] font-medium leading-4 text-[var(--pl-text-tertiary)]">
                 {eyebrow}
               </div>
             ) : null}
             {title ? (
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[var(--pl-text-primary)]">
+              <h2 className="break-words text-lg font-semibold leading-6 tracking-[-0.02em] text-[var(--pl-text-primary)]">
                 {title}
               </h2>
             ) : null}
             {description ? (
-              <p className="max-w-3xl text-sm leading-6 text-[var(--pl-text-secondary)]">
+              <p className="max-w-3xl text-sm leading-5 text-[var(--pl-text-secondary)]">
                 {description}
               </p>
             ) : null}

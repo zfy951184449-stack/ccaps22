@@ -13,10 +13,10 @@ export function StatCard({
   return (
     <Panel
       action={<Badge tone={tone}>{label}</Badge>}
-      className="p-5"
+      className="p-4"
       title={value}
     >
-      <p className="text-sm leading-6 text-[var(--pl-text-secondary)]">
+      <p className="text-sm leading-5 text-[var(--pl-text-secondary)]">
         {label}
       </p>
     </Panel>

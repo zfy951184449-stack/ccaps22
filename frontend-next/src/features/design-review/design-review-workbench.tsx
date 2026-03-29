@@ -72,9 +72,10 @@ const issueLedgerColumns: DataTableColumn<IssueLedgerRow>[] = [
   {
     key: "category",
     header: "类别 / 优先级",
+    className: "min-w-[160px]",
     render: (issue) => (
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2">
+      <div className="space-y-1">
+        <div className="flex flex-wrap gap-1.5">
           <Badge tone="neutral">{issue.category}</Badge>
           <Badge
             tone={
@@ -94,13 +95,13 @@ const issueLedgerColumns: DataTableColumn<IssueLedgerRow>[] = [
   {
     key: "issue",
     header: "问题",
-    className: "min-w-[240px]",
+    className: "min-w-[220px]",
     render: (issue) => (
       <div>
         <div className="font-semibold text-[var(--pl-text-primary)]">
           {issue.title}
         </div>
-        <p className="mt-1 text-sm leading-6 text-[var(--pl-text-secondary)]">
+        <p className="mt-1 text-sm leading-5 text-[var(--pl-text-secondary)]">
           {issue.symptom}
         </p>
       </div>
@@ -109,11 +110,13 @@ const issueLedgerColumns: DataTableColumn<IssueLedgerRow>[] = [
   {
     key: "evidence",
     header: "证据",
-    className: "min-w-[220px]",
+    className: "min-w-[180px]",
     render: (issue) => (
       <ul className="space-y-1 text-xs leading-5 text-[var(--pl-text-tertiary)]">
         {issue.evidence.map((path) => (
-          <li key={path}>{path}</li>
+          <li className="break-all" key={path}>
+            {path}
+          </li>
         ))}
       </ul>
     ),
@@ -121,9 +124,9 @@ const issueLedgerColumns: DataTableColumn<IssueLedgerRow>[] = [
   {
     key: "recommendation",
     header: "建议方向",
-    className: "min-w-[240px]",
+    className: "min-w-[220px]",
     render: (issue) => (
-      <p className="text-sm leading-6 text-[var(--pl-text-secondary)]">
+      <p className="text-sm leading-5 text-[var(--pl-text-secondary)]">
         {issue.recommendation}
       </p>
     ),
@@ -143,33 +146,33 @@ const reviewDebtLabel = `${designReviewCoverage.stories.length} stories / ${desi
 const densityBaseline = [
   {
     label: "Typography",
-    value: "IBM Plex Sans / Mono",
-    hint: "全局字体来自 RootLayout，但字号和 tracking 还没有单独 token 化。",
+    value: "正文优先 / 低强调",
+    hint: "默认正文、标签和辅助说明回到正常阅读节奏，不再依赖大量 uppercase 与 tracking。",
   },
   {
-    label: "Control height",
-    value: "44px",
-    hint: "Button、Field、Tabs 大体围绕 40-48px 运作，适合桌面高频操作。",
+    label: "Control scale",
+    value: "紧凑桌面 / 40-44px",
+    hint: "高频筛选和主动作保持桌面密度优先，不为了“呼吸感”无故拉高控件。",
   },
   {
-    label: "Panel spacing",
-    value: "24px / 16px",
-    hint: "大多数 card 和 section 采用 24px 外层节奏，局部 feature 仍有自定义回流。",
+    label: "Spacing rhythm",
+    value: "收紧 section / 强化分区",
+    hint: "留白只服务扫描和分组，不允许用大片空白制造高级感。",
   },
   {
     label: "Radius",
-    value: "10 / 16 / 24",
-    hint: "已建立 token，但 pill 与 control 语义仍不稳定。",
+    value: "低圆角 / 非 pill 默认",
+    hint: "control、panel、status 采用更工程化的边界语言，pill 只保留给显式例外。",
   },
   {
-    label: "Shadow",
-    value: "Soft / Strong",
-    hint: "Shadow 已归拢到 token，但使用范围仍偏宽。",
+    label: "Surface hierarchy",
+    value: "边界优先 / 阴影克制",
+    hint: "页面层级主要依赖 border、对比和布局分区，而不是 blur、厚阴影和发光表面。",
   },
   {
-    label: "Motion",
-    value: "160ms / 240ms",
-    hint: "有 reduced-motion 兜底，但动效规范还没有细化到 pattern 层。",
+    label: "Overflow safety",
+    value: "wrap / truncate / scroll",
+    hint: "任何可能变长的文本、数字和路径都必须有明确容器策略，不能等溢出后再补救。",
   },
 ];
 
@@ -182,16 +185,16 @@ function getSectionIssues(
 
 function DashboardSpecimen() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
         eyebrow="Dashboard specimen"
-        subtitle="展示 route header、overview strip 和 filter bar 在一张轻量工作台里的组合关系。"
+        subtitle="用更紧凑的 header、概览条和筛选区验证工作台上半屏的扫描效率。"
         title="调度中心基线"
       />
       <OverviewStrip className="md:grid-cols-3 xl:grid-cols-3">
         <StatCard label="Shell" tone="accent" value="稳定结构" />
         <StatCard label="Signal" tone="success" value="状态显式" />
-        <StatCard label="Risk" tone="warning" value="装饰偏重" />
+        <StatCard label="Risk" tone="warning" value="装饰需收敛" />
       </OverviewStrip>
       <FilterBar className="xl:grid-cols-3">
         <TextInput
@@ -227,10 +230,10 @@ function QualificationsSpecimen({
   onChangeTab: (value: DemoTab) => void;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
         eyebrow="Qualifications specimen"
-        subtitle="演示 tabs、filters、table 和状态标签在 CRUD 工作台里的组合。"
+        subtitle="演示 tabs、filters、table 和状态标签在 CRUD 工作台里的紧凑组合。"
         title="资质工作台"
       />
       <Tabs onChange={onChangeTab} options={demoTabOptions} value={demoTab} />
@@ -298,10 +301,10 @@ function QualificationsSpecimen({
 
 function V3Specimen() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <PageHeader
         eyebrow="Resource-planning-v3 specimen"
-        subtitle="用一个静态时间轴片段检查高密度 APS 场景下的层级、状态和 ornament 压力。"
+        subtitle="用一个静态时间轴片段检查高密度 APS 场景下的层级、状态和容器安全。"
         title="风险沙盘 / 时间轴样本"
       />
       <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -310,14 +313,14 @@ function V3Specimen() {
           eyebrow="Workbench focus"
           title="设备上下文"
         >
-          <div className="space-y-3 text-sm leading-6 text-[var(--pl-text-secondary)]">
-            <div className="rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-3">
+          <div className="space-y-2.5 text-sm leading-5 text-[var(--pl-text-secondary)]">
+            <div className="rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-2.5">
               Main + auxiliary bars share one timeline.
             </div>
-            <div className="rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-3">
+            <div className="rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-2.5">
               状态带和风险标记要优先保证可读，而不是视觉层次花样。
             </div>
-            <div className="rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-3">
+            <div className="rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-2.5">
               当前 feature 里仍有渐变条、条纹底和自定义 pill 回流。
             </div>
           </div>
@@ -370,16 +373,24 @@ function V3Specimen() {
             ].map((row) => (
               <div
                 key={row.code}
-                className="grid gap-3 rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-4 md:grid-cols-[100px_minmax(0,1fr)]"
+                className="grid gap-3 rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-3 md:grid-cols-[96px_minmax(0,1fr)]"
               >
-                <div className="text-sm font-semibold text-[var(--pl-text-primary)]">
+                <div className="text-sm font-semibold leading-5 text-[var(--pl-text-primary)]">
                   {row.code}
                 </div>
-                <div className="relative h-14 rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[linear-gradient(90deg,rgba(172,185,199,0.08)_1px,transparent_1px)] [background-size:56px_56px]">
+                <div className="relative h-12 overflow-hidden rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)]">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      aria-hidden="true"
+                      className="absolute inset-y-0 w-px bg-[var(--pl-border)]"
+                      key={`${row.code}-marker-${index}`}
+                      style={{ left: `${16 + index * 14}%` }}
+                    />
+                  ))}
                   {row.bars.map((bar) => (
                     <div
                       key={`${row.code}-${bar.label}`}
-                      className={`absolute top-3 inline-flex h-8 items-center rounded-[12px] border px-3 text-xs font-medium text-[var(--pl-text-primary)] shadow-[var(--pl-shadow-soft)] ${bar.className}`}
+                      className={`absolute top-2.5 inline-flex h-7 items-center overflow-hidden rounded-[var(--pl-radius-sm)] border px-2.5 text-[11px] font-medium leading-4 text-[var(--pl-text-primary)] ${bar.className}`}
                       style={{ left: bar.left, width: bar.width }}
                     >
                       {bar.label}
@@ -424,10 +435,10 @@ export function DesignReviewWorkbench() {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-5">
         <PageHeader
           eyebrow="Design review route"
-          subtitle="这是 Precision Lab 设计系统的常驻体检页。它在真实工作区壳层内同时展示 token、primitive、pattern 和业务样本，并把当前风格漂移显式列出来，帮助后续收敛。"
+          subtitle="这是 Precision Lab 设计系统的常驻体检页。它在真实工作区壳层里同时展示 token、primitive、pattern 和业务样本，并用更紧凑的桌面排版验证新的几何、密度和溢出规则。"
           title="组件库与 UI 风格体检"
           actions={
             <>
@@ -455,7 +466,7 @@ export function DesignReviewWorkbench() {
           }
         />
 
-        <OverviewStrip>
+        <OverviewStrip className="md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Token baseline"
             tone="accent"
@@ -488,19 +499,19 @@ export function DesignReviewWorkbench() {
           }
         >
           <Panel
-            description="Token baseline 负责把颜色、密度和表面层级放在一张桌面工作台语境里检查，而不是只看 isolated story。"
+            description="Token baseline 负责把颜色、密度和表面层级放在真实桌面工作台语境里检查，而不是只看 isolated story。"
             eyebrow="Token baseline"
             title="Token Baseline"
           >
-            <div className="space-y-6">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.92fr)]">
               <ShowcaseCard
-                subtitle="颜色层次已经形成 canvas / surface / text / status 体系，但 shell ornament 仍偏重。"
+                subtitle="颜色层次已形成 canvas / surface / text / status 体系，但业务面应持续压低 ornament 感。"
                 title="Color system"
               >
                 <SwatchGrid entries={Object.entries(precisionLabTokens.colors)} />
               </ShowcaseCard>
               <ShowcaseCard
-                subtitle="密度、圆角和阴影已经有 baseline，但还没有把所有视觉决定全部收束到 token。"
+                subtitle="这里记录新的默认方向，让后续 token 和 primitive 收敛时有明确参照。"
                 title="Density and semantics"
               >
                 <MetricGrid items={densityBaseline} />
@@ -523,12 +534,12 @@ export function DesignReviewWorkbench() {
             eyebrow="Component inventory"
             title="Primitive Gallery"
           >
-            <div className="grid gap-4 xl:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               <ShowcaseCard
-                subtitle="按钮已经形成主要动作层级，但 pill 形态和 control 形态还没完全分开。"
+                subtitle="按钮应优先表达动作层级和密度，不再默认采用 pill 几何。"
                 title="Buttons"
               >
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   <Button>Primary</Button>
                   <Button variant="secondary">Secondary</Button>
                   <Button variant="ghost">Ghost</Button>
@@ -541,7 +552,7 @@ export function DesignReviewWorkbench() {
                 subtitle="Badge 与 StatusBadge 都承担状态展示，需要在此对比语义边界。"
                 title="Badge semantics"
               >
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="accent">Route label</Badge>
                   <Badge tone="warning">Needs review</Badge>
                   <StatusBadge label="运行中" tone="info" />
@@ -554,7 +565,7 @@ export function DesignReviewWorkbench() {
                 subtitle="Field 负责高频筛选和编辑，错误状态要和正常状态并排检查。"
                 title="Field states"
               >
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-2">
                   <TextInput
                     defaultValue="Batch quality review"
                     hint="正常编辑态"
@@ -595,7 +606,7 @@ export function DesignReviewWorkbench() {
                 subtitle="Tabs 与 loader 代表高频切换和显式 loading，这两类状态不应该藏在 feature 自定义里。"
                 title="Tabs and loader"
               >
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <Tabs
                     onChange={setDemoTab}
                     options={demoTabOptions}
@@ -609,7 +620,7 @@ export function DesignReviewWorkbench() {
                 subtitle="空态和错误态是显式诊断的基础，后续 feature 页应该复用而不是重画。"
                 title="Empty and error states"
               >
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <EmptyState
                     description="Static review route intentionally avoids backend dependencies."
                     eyebrow="Empty"
@@ -644,10 +655,10 @@ export function DesignReviewWorkbench() {
                 subtitle="PageHeader、OverviewStrip 和 FilterBar 共同定义了大多数桌面工作台的上半屏节奏。"
                 title="Page composition"
               >
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <PageHeader
                     eyebrow="Pattern specimen"
-                    subtitle="说明、动作和筛选先于表格进入视线，帮助用户先建立上下文。"
+                    subtitle="说明、动作和筛选先于主体内容进入视线，帮助用户快速建立上下文。"
                     title="Composition baseline"
                   />
                   <OverviewStrip className="md:grid-cols-4 xl:grid-cols-4">
@@ -746,28 +757,28 @@ export function DesignReviewWorkbench() {
                     title="Review support ledger"
                   >
                     <div className="contents text-sm text-[var(--pl-text-secondary)]">
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         Story coverage
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         {designReviewCoverage.stories.length} surfaces
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         Component review baseline
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         Design system
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         Test coverage
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         {designReviewCoverage.tests.length} surface
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         Render and state smoke
                       </div>
-                      <div className="bg-[var(--pl-surface-elevated)] px-4 py-4">
+                      <div className="bg-[var(--pl-surface-elevated)] px-3 py-3">
                         UI review route
                       </div>
                     </div>
@@ -779,7 +790,7 @@ export function DesignReviewWorkbench() {
                 subtitle="所有交互演示都由页面内局部 state 驱动，不依赖真实 mutation 或 API。"
                 title="Interactive overlays"
               >
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2">
                   <Button onClick={() => setSheetOpen(true)} variant="secondary">
                     Open SideSheet
                   </Button>
@@ -859,26 +870,33 @@ export function DesignReviewWorkbench() {
 
         <ReviewSection
           notes={
-            <div className="space-y-6">
+            <div className="space-y-5">
               <Panel
                 description="Review debt 不会在这次页面里自动消失，但至少要变成一眼可见的治理面板。"
                 eyebrow="Coverage"
                 title="Coverage snapshot"
               >
-                <div className="space-y-4 text-sm leading-6 text-[var(--pl-text-secondary)]">
-                  <div>
-                    <div className="font-semibold text-[var(--pl-text-primary)]">
-                      Story coverage
-                    </div>
-                    <div>{designReviewCoverage.stories.join(", ")}</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-[var(--pl-text-primary)]">
-                      Test coverage
-                    </div>
-                    <div>{designReviewCoverage.tests.join(", ")}</div>
-                  </div>
-                  <div className="rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-4">
+                <div className="space-y-3">
+                  <MetricGrid
+                    items={[
+                      {
+                        label: "Story coverage",
+                        value: `${designReviewCoverage.stories.length} / ${showcaseCount}`,
+                        hint: designReviewCoverage.stories.join(", "),
+                      },
+                      {
+                        label: "Test coverage",
+                        value: `${designReviewCoverage.tests.length} / ${showcaseCount}`,
+                        hint: designReviewCoverage.tests.join(", "),
+                      },
+                      {
+                        label: "Missing baseline",
+                        value: `${storyDebt} story / ${testDebt} test`,
+                        hint: "治理页让缺口显性化，但后续仍需补基础 render 与 state coverage。",
+                      },
+                    ]}
+                  />
+                  <div className="rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-3 text-sm leading-5 text-[var(--pl-text-secondary)]">
                     当前仍有 {storyDebt} 个展示面缺 story，对应 {testDebt} 个展示面缺最基础 render/state coverage。
                   </div>
                 </div>
@@ -930,10 +948,10 @@ export function DesignReviewWorkbench() {
         title="SideSheet pattern review"
       >
         <div className="space-y-4 text-sm leading-6 text-[var(--pl-text-secondary)]">
-          <div className="rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-4">
+          <div className="rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-3">
             Overlay blur 目前仍然偏重，这是 design-review route 想持续暴露的问题。
           </div>
-          <div className="rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-4">
+          <div className="rounded-[var(--pl-radius-sm)] border border-[var(--pl-border)] bg-[var(--pl-surface)] px-3.5 py-3">
             标题、正文和 footer 动作的节奏已经稳定，后续应优先复用而不是 feature 内重画 drawer。
           </div>
         </div>

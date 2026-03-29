@@ -40,9 +40,9 @@ export function DataTablePattern<T>({
   const colSpan = columns.length;
 
   return (
-    <div className="overflow-hidden rounded-[var(--pl-radius-lg)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)] shadow-[var(--pl-shadow-soft)]">
-      <div className="border-b border-[var(--pl-border)] bg-[var(--pl-surface)] px-6 py-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--pl-text-tertiary)]">
+    <div className="overflow-hidden rounded-[var(--pl-radius-md)] border border-[var(--pl-border)] bg-[var(--pl-surface-elevated)]">
+      <div className="border-b border-[var(--pl-border)] bg-[var(--pl-surface)] px-4 py-3">
+        <h3 className="text-xs font-semibold leading-4 text-[var(--pl-text-tertiary)]">
           {title}
         </h3>
       </div>
@@ -54,7 +54,7 @@ export function DataTablePattern<T>({
                 <th
                   key={column.key}
                   className={cn(
-                    "px-5 py-4 text-left text-xs font-semibold uppercase tracking-[0.16em] text-[var(--pl-text-tertiary)]",
+                    "px-4 py-3 text-left text-[11px] font-semibold leading-4 text-[var(--pl-text-tertiary)]",
                     column.align === "center" && "text-center",
                     column.align === "right" && "text-right",
                   )}
@@ -68,13 +68,13 @@ export function DataTablePattern<T>({
           <tbody>
             {isLoading ? (
               <tr>
-                <td className="px-6 py-16" colSpan={colSpan}>
+                <td className="px-4 py-10" colSpan={colSpan}>
                   <Loader label={loadingLabel} />
                 </td>
               </tr>
             ) : isError ? (
               <tr>
-                <td className="px-6 py-14" colSpan={colSpan}>
+                <td className="px-4 py-10" colSpan={colSpan}>
                   <ErrorState
                     action={errorAction}
                     description={errorDescription}
@@ -84,7 +84,7 @@ export function DataTablePattern<T>({
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td className="px-6 py-14" colSpan={colSpan}>
+                <td className="px-4 py-10" colSpan={colSpan}>
                   <EmptyState
                     description={emptyDescription}
                     title={emptyTitle}
@@ -101,7 +101,7 @@ export function DataTablePattern<T>({
                     <td
                       key={column.key}
                       className={cn(
-                        "px-5 py-4 text-sm leading-6 text-[var(--pl-text-secondary)]",
+                        "break-words px-4 py-3.5 text-sm leading-5 text-[var(--pl-text-secondary)]",
                         column.align === "center" && "text-center",
                         column.align === "right" && "text-right",
                         column.className,
