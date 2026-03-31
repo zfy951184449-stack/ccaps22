@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import hashlib
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -49,6 +50,12 @@ def append_text(path: Path, text: str) -> None:
         handle.write(text.rstrip() + "\n")
 
 
+def write_context_bundle(run_dir: Path, filename: str, payload: Dict[str, Any]) -> Path:
+    bundle_path = run_dir / filename
+    write_json(bundle_path, payload)
+    return bundle_path
+
+
 def log_event(run_dir: Path, event_type: str, payload: Dict[str, Any]) -> None:
     timeline_path = run_dir / "timeline.jsonl"
     event = {
@@ -89,6 +96,58 @@ def git_status_is_clean(repo_root: Path) -> bool:
     return completed.returncode == 0 and completed.stdout.strip() == ""
 
 
+def _listed_files_from_command(command: List[str], repo_root: Path) -> List[str]:
+    completed = run_command(command, repo_root)
+    files: List[str] = []
+    for line in completed.stdout.splitlines():
+        value = line.strip()
+        if value and not value.startswith("docs/exec-plans/active/harness-runs/"):
+            files.append(value)
+    return files
+
+
+def list_dirty_files(repo_root: Path) -> List[str]:
+    tracked = _listed_files_from_command(["git", "diff", "--name-only", "--relative", "HEAD"], repo_root)
+    untracked = _listed_files_from_command(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        repo_root,
+    )
+    return sorted(set(tracked + untracked))
+
+
+def file_digest(path: Path) -> str:
+    if not path.exists():
+        return "__missing__"
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(65536)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def capture_file_hashes(repo_root: Path, files: Iterable[str]) -> Dict[str, str]:
+    hashes: Dict[str, str] = {}
+    for relative_path in files:
+        hashes[relative_path] = file_digest(repo_root / relative_path)
+    return hashes
+
+
+def compute_delta_files(repo_root: Path, baseline_hashes: Dict[str, str]) -> List[str]:
+    current_dirty_files = list_dirty_files(repo_root)
+    current_hashes = capture_file_hashes(repo_root, current_dirty_files)
+    delta_files: List[str] = []
+    for relative_path in current_dirty_files:
+        if relative_path not in baseline_hashes:
+            delta_files.append(relative_path)
+            continue
+        if current_hashes[relative_path] != baseline_hashes[relative_path]:
+            delta_files.append(relative_path)
+    return sorted(set(delta_files))
+
+
 def ensure_clean_worktree(repo_root: Path, allow_dirty: bool) -> None:
     if allow_dirty:
         return
@@ -100,18 +159,7 @@ def ensure_clean_worktree(repo_root: Path, allow_dirty: bool) -> None:
 
 
 def collect_changed_files(repo_root: Path) -> List[str]:
-    diff_completed = run_command(["git", "diff", "--name-only", "--relative", "HEAD"], repo_root)
-    untracked_completed = run_command(
-        ["git", "ls-files", "--others", "--exclude-standard"],
-        repo_root,
-    )
-    files: List[str] = []
-    for chunk in (diff_completed.stdout, untracked_completed.stdout):
-        for line in chunk.splitlines():
-            value = line.strip()
-            if value:
-                files.append(value)
-    return sorted(set(files))
+    return list_dirty_files(repo_root)
 
 
 def e2e_browsers_available() -> bool:
@@ -126,6 +174,61 @@ def e2e_browsers_available() -> bool:
             if child.name.startswith("chromium"):
                 return True
     return False
+
+
+_DO_NOT_RE_READ = [
+    "AGENTS.md",
+    ".agent/rules/",
+    "docs/ARCHITECTURE.md",
+]
+
+
+def fetch_file_excerpts(
+    plan: Dict[str, Any],
+    repo_root: Path,
+    char_limit: int = 3500,
+) -> Dict[str, str]:
+    """Pre-fetch targeted file content based on planner's file_read_hints.
+
+    Returns a mapping of relative path -> excerpt string so the generator
+    worker can consume pre-digested context instead of reading entire files.
+    """
+    excerpts: Dict[str, str] = {}
+    hints = plan.get("file_read_hints", [])
+    if not hints:
+        return excerpts
+
+    for hint in hints:
+        rel_path = hint.get("file", "").strip()
+        if not rel_path:
+            continue
+        file_path = repo_root / rel_path
+        strategy = hint.get("strategy", "head")
+        max_lines = int(hint.get("max_lines", 60))
+        pattern = hint.get("pattern", "")
+
+        if not file_path.exists():
+            excerpts[rel_path] = "[FILE NOT FOUND]"
+            continue
+
+        try:
+            if strategy in ("grep", "rg") and pattern:
+                tool = "rg" if strategy == "rg" else "grep"
+                cmd = f"{tool} -n '{pattern}' {str(file_path)} | head -{max_lines}"
+            else:  # head / full (always capped)
+                cmd = f"head -{max_lines} {str(file_path)}"
+
+            result = run_command(["/bin/zsh", "-lc", cmd], repo_root)
+            content = result.stdout
+
+            if len(content) > char_limit:
+                content = content[:char_limit] + f"\n... [truncated at {char_limit} chars]"
+
+            excerpts[rel_path] = content if content.strip() else "[EMPTY]"
+        except Exception as exc:  # noqa: BLE001
+            excerpts[rel_path] = f"[READ ERROR: {exc}]"
+
+    return excerpts
 
 
 def prefixes_match(changed_files: Iterable[str], prefixes: Iterable[str]) -> bool:
@@ -227,6 +330,7 @@ def initial_state(run_id: str, task: str, max_repair_rounds: int) -> Dict[str, A
         "plan_summary": None,
         "changed_files": [],
         "verification_commands": [],
+        "baseline_file_hashes": {},
         "last_completed_phase": None,
         "run_dir": str(RUNS_ROOT / run_id),
     }
@@ -237,6 +341,21 @@ def update_state(run_dir: Path, state: Dict[str, Any], **updates: Any) -> Dict[s
     state["updated_at"] = utc_now()
     write_json(run_dir / "run_state.json", state)
     return state
+
+
+def _render_file_read_hints(hints: List[Dict[str, Any]]) -> str:
+    if not hints:
+        return "- none"
+    lines = []
+    for h in hints:
+        strategy = h.get("strategy", "head")
+        max_lines = h.get("max_lines", 60)
+        pattern = h.get("pattern", "")
+        detail = f"strategy={strategy}, max_lines={max_lines}"
+        if pattern:
+            detail += f", pattern={pattern!r}"
+        lines.append(f"- `{h['file']}` ({detail})")
+    return "\n".join(lines)
 
 
 def format_spec_markdown(run_id: str, task: str, plan: Dict[str, Any]) -> str:
@@ -257,6 +376,9 @@ def format_spec_markdown(run_id: str, task: str, plan: Dict[str, Any]) -> str:
         "",
         "## Files Of Interest",
         render_list(plan["files_of_interest"]),
+        "",
+        "## File Read Hints",
+        _render_file_read_hints(plan.get("file_read_hints", [])),
         "",
         "## Acceptance Criteria",
         render_list(plan["acceptance_criteria"]),
@@ -398,6 +520,9 @@ def write_final_summary(run_dir: Path, state: Dict[str, Any]) -> None:
                 [
                     "plan.json",
                     "spec.md",
+                    "planner_input.json",
+                    "generator_input_round_N.json",
+                    "evaluator_input_round_N.json",
                     "implementation_log.md",
                     "evaluation.json",
                     "timeline.jsonl",
@@ -421,8 +546,9 @@ def run_codex_worker(
     codex_settings = settings["codex"]
     worker_settings = codex_settings["workers"][role]
     final_path = run_dir / output_name
-    events_path = run_dir / output_name.replace(".md", ".events.jsonl").replace(".json", ".events.jsonl")
-    stderr_path = run_dir / output_name.replace(".md", ".stderr.log").replace(".json", ".stderr.log")
+    output_stem = Path(output_name).stem
+    events_path = run_dir / f"{output_stem}.events.jsonl"
+    stderr_path = run_dir / f"{output_stem}.stderr.log"
 
     command = [
         "codex",
@@ -435,6 +561,8 @@ def run_codex_worker(
         codex_settings["model"],
         "-c",
         f"approval_policy=\"{codex_settings['approval_policy']}\"",
+        "-c",
+        f"model_reasoning_effort=\"{worker_settings.get('reasoning_effort', 'medium')}\"",
         "-s",
         worker_settings["sandbox"],
         "-o",
@@ -491,14 +619,24 @@ def run_codex_worker(
     return final_path.read_text(encoding="utf-8").strip()
 
 
-def new_run(task: str, settings: Dict[str, Any]) -> Tuple[Path, Dict[str, Any]]:
+def new_run(task: str, settings: Dict[str, Any], allow_dirty: bool) -> Tuple[Path, Dict[str, Any]]:
     run_id = create_run_id()
     run_dir = RUNS_ROOT / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     state = initial_state(run_id, task, settings["max_repair_rounds"])
+    baseline_dirty_files = list_dirty_files(REPO_ROOT) if allow_dirty else []
+    state["baseline_file_hashes"] = capture_file_hashes(REPO_ROOT, baseline_dirty_files)
     write_text(run_dir / "user_prompt.md", task)
     write_json(run_dir / "run_state.json", state)
-    log_event(run_dir, "run.created", {"task": task})
+    log_event(
+        run_dir,
+        "run.created",
+        {
+            "task": task,
+            "allow_dirty": allow_dirty,
+            "baseline_dirty_files": baseline_dirty_files,
+        },
+    )
     return run_dir, state
 
 
@@ -512,11 +650,37 @@ def load_run(run_id: str) -> Tuple[Path, Dict[str, Any]]:
 
 def run_planning(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
     print_stage(f"run={state['run_id']} phase=planning")
+    planner_bundle = write_context_bundle(
+        run_dir,
+        "planner_input.json",
+        {
+            "run_id": state["run_id"],
+            "task": state["task"],
+            "lane_options": [
+                "backend",
+                "frontend",
+                "frontend-next",
+                "solver-v4",
+                "cross-layer",
+                "docs",
+            ],
+            "source_of_truth": [
+                "AGENTS.md",
+                ".agent/rules/README.md",
+                ".agent/rules/codex-coding-rules.md",
+                "docs/ARCHITECTURE.md",
+                "docs/README.md",
+            ],
+            "policy": {
+                "minimal_reads": True,
+                "when_simple_task_avoid_repo_wide_reads": True,
+            },
+        },
+    )
     prompt = render_prompt(
         "planner.md",
         {
-            "task": state["task"],
-            "run_id": state["run_id"],
+            "context_bundle_path": str(planner_bundle),
         },
     )
     plan_text = run_codex_worker(
@@ -548,24 +712,53 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
     attempt = int(state["attempt"]) + 1
     update_state(run_dir, state, attempt=attempt, status="running")
     print_stage(f"run={state['run_id']} phase=implementing attempt={attempt}/{state['max_attempts']}")
-    plan = load_json(run_dir / "plan.json")
-    spec_markdown = (run_dir / "spec.md").read_text(encoding="utf-8")
+    plan_path = run_dir / "plan.json"
+    spec_path = run_dir / "spec.md"
+    plan = load_json(plan_path)
     prior_feedback_path = run_dir / f"qa_report_round_{attempt - 1}.md"
-    prior_feedback = (
-        prior_feedback_path.read_text(encoding="utf-8")
-        if prior_feedback_path.exists()
-        else "No prior evaluator feedback. This is the first implementation attempt."
+
+    # Pre-fetch targeted file excerpts so the generator worker does not need
+    # to read entire files. This is the primary token-reduction mechanism.
+    print_stage(f"run={state['run_id']} fetching file excerpts for attempt={attempt}")
+    file_excerpts = fetch_file_excerpts(plan, REPO_ROOT)
+    if file_excerpts:
+        write_json(run_dir / f"file_excerpts_round_{attempt}.json", file_excerpts)
+
+    generator_bundle = write_context_bundle(
+        run_dir,
+        f"generator_input_round_{attempt}.json",
+        {
+            "run_id": state["run_id"],
+            "attempt": attempt,
+            "max_attempts": state["max_attempts"],
+            "task": state["task"],
+            "lane": plan["lane"],
+            "plan_summary": plan["summary"],
+            "plan_path": str(plan_path),
+            "spec_path": str(spec_path),
+            "prior_feedback_path": str(prior_feedback_path) if prior_feedback_path.exists() else None,
+            "file_excerpts": file_excerpts,
+            "reading_policy": {
+                "do_not_re_read": _DO_NOT_RE_READ,
+                "reason": (
+                    "These files are already loaded in your system context via AGENTS.md. "
+                    "Re-reading them with shell commands wastes tokens and degrades performance."
+                ),
+                "for_additional_reads": (
+                    "If file_excerpts are insufficient, use targeted grep/rg commands. "
+                    "Never use sed or cat on large source files."
+                ),
+            },
+            "policy": {
+                "read_only_what_is_needed": True,
+                "do_not_modify_harness_run_artifacts": True,
+            },
+        },
     )
     prompt = render_prompt(
         "generator.md",
         {
-            "run_id": state["run_id"],
-            "attempt": str(attempt),
-            "max_attempts": str(state["max_attempts"]),
-            "task": state["task"],
-            "plan_json": json.dumps(plan, ensure_ascii=False, indent=2),
-            "spec_markdown": spec_markdown,
-            "prior_feedback": prior_feedback,
+            "context_bundle_path": str(generator_bundle),
         },
     )
     report_markdown = run_codex_worker(
@@ -576,7 +769,7 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
         settings=settings,
         output_name=f"generator_round_{attempt}.md",
     )
-    changed_files = collect_changed_files(REPO_ROOT)
+    changed_files = compute_delta_files(REPO_ROOT, state.get("baseline_file_hashes", {}))
     verification_commands = build_verification_commands(changed_files, settings, REPO_ROOT)
     append_implementation_log(run_dir, attempt, changed_files, report_markdown)
     update_state(
@@ -603,23 +796,43 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
 def run_evaluator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
     attempt = int(state["attempt"])
     print_stage(f"run={state['run_id']} phase=evaluating attempt={attempt}/{state['max_attempts']}")
-    plan = load_json(run_dir / "plan.json")
-    spec_markdown = (run_dir / "spec.md").read_text(encoding="utf-8")
-    implementation_summary = (run_dir / f"generator_round_{attempt}.md").read_text(encoding="utf-8")
+    plan_path = run_dir / "plan.json"
+    spec_path = run_dir / "spec.md"
+    implementation_summary_path = run_dir / f"generator_round_{attempt}.md"
+    plan = load_json(plan_path)
     changed_files = state.get("changed_files", [])
     verification_commands = state.get("verification_commands", [])
+    evaluator_bundle = write_context_bundle(
+        run_dir,
+        f"evaluator_input_round_{attempt}.json",
+        {
+            "run_id": state["run_id"],
+            "attempt": attempt,
+            "max_attempts": state["max_attempts"],
+            "task": state["task"],
+            "lane": plan["lane"],
+            "plan_summary": plan["summary"],
+            "plan_path": str(plan_path),
+            "spec_path": str(spec_path),
+            "changed_files": changed_files,
+            "verification_commands": verification_commands,
+            "implementation_summary_path": str(implementation_summary_path),
+            "grading_policy": {
+                "default_stance": "skeptical",
+                "criteria": ["CORRECTNESS", "COMPLETENESS", "COHERENCE", "SCOPE"],
+                "correctness_rule": "Run every command in verification_commands. Non-zero exit = automatic FAIL.",
+                "primary_evidence": "command exit codes and stdout; not source code reading",
+            },
+            "policy": {
+                "read_only_what_is_needed": True,
+                "run_exact_verification_commands_when_present": True,
+            },
+        },
+    )
     prompt = render_prompt(
         "evaluator.md",
         {
-            "run_id": state["run_id"],
-            "attempt": str(attempt),
-            "max_attempts": str(state["max_attempts"]),
-            "task": state["task"],
-            "plan_json": json.dumps(plan, ensure_ascii=False, indent=2),
-            "spec_markdown": spec_markdown,
-            "changed_files": render_list(changed_files),
-            "verification_commands": render_list(verification_commands),
-            "implementation_summary": implementation_summary,
+            "context_bundle_path": str(evaluator_bundle),
         },
     )
     evaluation_text = run_codex_worker(
@@ -719,7 +932,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         ensure_clean_worktree(REPO_ROOT, allow_dirty=args.allow_dirty)
         task = resolve_task(args)
-        run_dir, state = new_run(task, settings)
+        run_dir, state = new_run(task, settings, allow_dirty=args.allow_dirty)
 
     log_event(run_dir, "run.started", {"phase": state["phase"], "status": state["status"]})
     return run_loop(run_dir, state, settings)

@@ -7,6 +7,7 @@
     "summary",
     "scope",
     "files_of_interest",
+    "file_read_hints",
     "acceptance_criteria",
     "verification_plan",
     "risks"
@@ -29,42 +30,59 @@
     },
     "scope": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
+      "items": { "type": "string", "minLength": 1 },
       "minItems": 1
     },
     "files_of_interest": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
+      "items": { "type": "string", "minLength": 1 },
       "minItems": 1
+    },
+    "file_read_hints": {
+      "description": "Targeted read instructions for each file. The manager pre-fetches these before the generator runs, so the generator does not need to read entire files.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "strategy"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relative path from repo root."
+          },
+          "strategy": {
+            "type": "string",
+            "enum": ["head", "grep", "rg"],
+            "description": "head = first N lines; grep/rg = pattern match with context."
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Required when strategy is grep or rg."
+          },
+          "max_lines": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 200,
+            "default": 60,
+            "description": "Max output lines to capture. Keep as small as useful."
+          }
+        }
+      }
     },
     "acceptance_criteria": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
+      "items": { "type": "string", "minLength": 1 },
       "minItems": 1
     },
     "verification_plan": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
+      "items": { "type": "string", "minLength": 1 },
       "minItems": 1
     },
     "risks": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
+      "items": { "type": "string", "minLength": 1 }
     }
   }
 }

@@ -5,13 +5,16 @@
     "approval_policy": "never",
     "workers": {
       "planner": {
-        "sandbox": "read-only"
+        "sandbox": "read-only",
+        "reasoning_effort": "medium"
       },
       "generator": {
-        "sandbox": "workspace-write"
+        "sandbox": "workspace-write",
+        "reasoning_effort": "medium"
       },
       "evaluator": {
-        "sandbox": "workspace-write"
+        "sandbox": "workspace-write",
+        "reasoning_effort": "medium"
       }
     }
   },

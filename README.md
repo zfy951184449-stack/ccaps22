@@ -80,6 +80,8 @@ MFG8APS/
 └── archive/                   # 历史实现与归档代码
 ```
 
+如需通过 Codex harness 执行实现任务，可在仓库根目录运行 `scripts/codex_harness_entry.sh "<任务描述>"`，manager 会按本次变更路径执行对应验证。
+
 ## 环境要求
 
 - Node.js 与 npm

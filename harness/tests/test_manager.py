@@ -2,8 +2,15 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+import subprocess
 
-from harness.manager import build_verification_commands, determine_next_state
+from harness.manager import (
+    build_verification_commands,
+    capture_file_hashes,
+    compute_delta_files,
+    determine_next_state,
+    list_dirty_files,
+)
 
 
 class VerificationPlanTests(unittest.TestCase):
@@ -95,6 +102,29 @@ class EvaluationTransitionTests(unittest.TestCase):
 
     def test_fail_at_limit_blocks(self) -> None:
         self.assertEqual(determine_next_state("fail", 3, 3), ("blocked", "blocked"))
+
+
+class DirtyWorktreeIsolationTests(unittest.TestCase):
+    def test_delta_files_only_include_changes_since_baseline(self) -> None:
+        repo_root = Path(tempfile.mkdtemp())
+        subprocess.run(["git", "init"], cwd=repo_root, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "codex@example.com"], cwd=repo_root, check=True)
+        subprocess.run(["git", "config", "user.name", "Codex"], cwd=repo_root, check=True)
+
+        tracked = repo_root / "tracked.txt"
+        untouched_dirty = repo_root / "untouched.txt"
+        tracked.write_text("base\n", encoding="utf-8")
+        untouched_dirty.write_text("base\n", encoding="utf-8")
+        subprocess.run(["git", "add", "tracked.txt", "untouched.txt"], cwd=repo_root, check=True)
+        subprocess.run(["git", "commit", "-m", "initial"], cwd=repo_root, check=True, capture_output=True)
+
+        untouched_dirty.write_text("already dirty\n", encoding="utf-8")
+        baseline = capture_file_hashes(repo_root, list_dirty_files(repo_root))
+
+        tracked.write_text("changed in run\n", encoding="utf-8")
+        delta = compute_delta_files(repo_root, baseline)
+
+        self.assertEqual(delta, ["tracked.txt"])
 
 
 if __name__ == "__main__":
