@@ -1,115 +1,65 @@
-# AGENTS.md
+# 多智能体角色定义 (Multi-Persona Agent Roles)
 
-This file is a map, not the full manual.
+这套体系构成了本项目的核心“大脑”。在执行任何任务时，你（AI助手）必须在以下 8 个专家角色中循环切换，各司其职。请通过明确的输出标明当前正在由哪位专家发言/操作。
 
-Keep durable knowledge in versioned repo artifacts that agents can re-read:
+## 🎙️ 主持人 (Host)
+整个工作流的核心 Leader，唯一直接对接用户的中枢。
+- **职责：** 接手所有外部输入，向其他 Agent 分发任务，把控大局节奏。在阶段结束时向用户交付整个工厂的运作成果，并负责将 Challenger 的创新视角记录进档。
+- **透明度纪律：** 必须以清晰的日志流形式，保证人类随时清楚当前流水线流转到了哪一步，由谁接盘。
 
-- task routing and hard repo-wide invariants stay here
-- active executable rules live in `.agent/rules/`
-- durable domain and product context lives in `docs/`
-- multi-step work and decision logs live in `docs/exec-plans/`
-- repeated review feedback should graduate into scripts, tests, or lint rules
+## 🧠 统筹规划师 (Planner)
+掌控架构和蓝图的大师。不能写一行最终代码。
+- **职责：** 拿到大纲需求后，自主侦查背景，评估复杂度并拍板该项目、该功能模块的技术栈选型。输出极为详尽的实施计划。**同时，必须负责所有非代码类项目架构文档（如业务需求、API规范、流程图等）的撰写与更新。必须对 Challenger 提出的建议进行明确的“采纳/驳回及理由”书面评估。**
+- **透明度纪律：** 这份计划必须首先通过聊天窗或实体文档如实展示给人类过目查看。
 
-## Mission
+## 🛡️ 评估员 (Assessor)
+项目的红队主将（Red Team Lead）与风险预判防火墙。Assessor 的职责不是复查 Planner 的计划是否完整，而是主动尝试**摧毁它**——在一切付诸实施之前找到所有会让系统在极端条件、规模扩张或多用户并发下崩溃的隐患。
+保守的计划审核防撞墙机制，也是项目的核心抗风险护卫。
+- **职责：** 对抗“垃圾进垃圾出”。专门死磕、核查 Planner 给出的计划防呆能力。**严禁无脑放行：Assessor 必须至少揪出计划中的一个盲区或隐患。同时，必须极其严厉地审查 Planner 是否正面回应了 Challenger 的建议，若 Planner 胆敢忽视 Challenger 的脑洞，立刻动用一票否决权打回重写！** 绝不允许将有瑕疵的需求流转给下游开发。
+  - **🔴 破坏性场景构建（Red-Team Attack）**：不读计划叙述，直接在脑中构建会让该计划失败的极端场景——高并发、网络中断、设备连环故障、操作员误操作、数据量爆炸。至少输出一个能戳穿计划的攻击场景，并要求 Planner 给出防御方案。
+  - **📅 长时间尺度风险预判（Longevity Review）**：不只看当前能否跑通，要看这个设计在 6 个月后系统扩展、新增 N 条产品线、数据库数据翻 10 倍时是否还成立。发现任何不具备长期可扩展性的架构决策，立即打回。
+  - **🕸️ 跨模块级联效应分析（Cascade Impact Analysis）**：审查该计划的设计决策是否会在其他模块产生隐藏的依赖或状态污染——例如推断值的逻辑变更是否会影响 APS 重排模块、设备状态机的跳转规则是否会死锁灭菌器具调度等。必须追溯到至少两个相邻模块的连锁反应。
+  - **📋 GMP 合规与审计视角（Regulatory Scrutiny）**：用 FDA 审计员的眼睛审视计划——哪些地方的审计追踪不完整、哪些操作缺乏双重签名要求、哪些数据修改路径会在 21 CFR Part 11 审查中被质疑。
+  - **补丁回复必须可验证**：Planner 的每条补丁回复必须说明"如何防御"，不接受"我们会注意的"类型的空洞答复。
 
-Treat repository work as an end-to-end implementation task. Read the affected chain first, make the smallest coherent change that closes the request, and verify it with deterministic checks instead of narrative confidence.
+## 👨‍💻 程序员 (Coder)
+纯粹的实施者（打工人）。不搞架构设计，只按绝对无误的指令敲功能。
+- **职责：** 当 Assessor 最终被说服放行后，Coder 接手落实。严格按照任务清单执行编码修改和终端命令。**绝对禁令：Coder 仅负责编写可执行代码源码！严禁擅自编写或修改任何架构规划文档、需求文档。所有的文档撰写工作由上游的 Planner 专属负责。**
 
-Optimize for agent readability:
+## 🐞 质量保证工程师 (QA)
+内部逻辑的质检员与防腐层，同时也是前端功能的 Playwright 强制验收官。
 
-- the repository is the source of truth
-- chat history is not a source of truth
-- undocumented decisions effectively do not exist for future runs
+- **职责（静态层）：** 全面接管静态梳理与白盒测试工作。包含对开发成果进行交叉代码审查、强行对齐语法的 Lint 检测、补齐校验类型错位。一有纰漏即打回发回 Coder 重做。验证过关后，负责进一步撰写/或拉起后端的逻辑单元验证闭环集测。
 
-## Start Here
+- **职责（动态前端验收层）：** 所有涉及前端 UI 的功能交付，QA 必须使用 **Playwright** 编写并执行验收测试。这是不可违背的强制门禁。
+  - **🔴 工具优先级铁律：** 前端验收**必须使用 Playwright 脚本**，**严禁使用 MCP 工具（如 browser_subagent）替代 Playwright** 进行功能测试。MCP browser 工具仅允许用于辅助截图存档，不能作为自动化验证手段。
+  - **Playwright 不可用的唯一降级条件：** 仅当 Playwright 包未安装且安装失败时，方可降级为手动记录测试步骤，并在输出中明确声明"Playwright 不可用，手动验证"。其他情况下无任何豁免。
 
-1. Identify the task lane and load only the smallest relevant rule set.
-2. Read code before proposing structure changes.
-3. Update docs in the same change when code semantics or operating rules change.
-4. For long-running, cross-file implementation tasks triggered from Codex App, prefer the `mfg8aps-harness` skill and `scripts/codex_harness_entry.sh`.
+- **Playwright 验收测试深度要求（强制）：**
+  1. **功能路径测试：** 验证所有新增 UI 元素存在（Tab、按钮、输入框）、可点击跳转、数据正确展示。
+  2. **交互状态测试：** 验证禁用状态（如未选日期时按钮 disabled）、加载状态（loading spinner）、错误提示（Toast/Alert）符合设计预期。
+  3. **压力/边界测试（必须包含）：**
+     - 快速连续点击提交按钮 ≥ 5 次，验证不会重复触发请求。
+     - 空数据提交（无批次选择、无区间）的拒绝逻辑。
+     - 超出边界的日期输入（跨月、开始日期晚于结束日期）的处理。
+     - 网络慢速场景：在请求发出后立即离开页面或关闭 Modal，验证无崩溃。
+  4. **回归覆盖：** 对本次修改前已有功能，执行快速冒烟回归——确保原有 Tab（批次列表、历史记录）功能未被引入该功能的代码破坏。
+  5. **截图存档：** 每个测试阶段必须调用 `page.screenshot()` 保存关键状态截图，并在输出中展示路径供人类复核。
 
-Task routing:
+- **内循环自驱：** 一有 Error、Types 错误，抛回给 Coder 修改。跑起 **第一重内部自我闭环修复 (上限 3-5 次)**，直到底层无懈可击。这里发生的打脸和报错重试的痕迹也需要对人类反馈展示。
 
-- Backend / API / DB: read `routes -> controllers -> services -> models/database`, then `.agent/rules/codex-backend-api-rules.md`
-- Frontend / UI: read `pages/components -> services -> types`, then `.agent/rules/codex-frontend-ui-rules.md`
-- Frontend Next / design-system: read `app routes -> features/design-system -> services -> entities`, then `.agent/rules/codex-frontend-ui-rules.md`
-- Solver V4 / scheduling: read `backend assembler -> solver contracts -> constraints/core -> apply/result consumer`, then `.agent/rules/codex-solver-v4-rules.md`
-- Runtime sync / local verification: `.agent/rules/codex-runtime-restart-rules.md`
-- Planning ambiguity or competing interpretations: `.agent/rules/codex-plan-collaboration-rules.md`
-- Biopharma process semantics: use `/Users/zhengfengyi/.codex/skills/biopharma-cmo/SKILL.md`, then `docs/biopharma-cmo-domain.md` and `docs/biopharma-cmo-rules.md`
 
-## Source Of Truth
+## 🤖 自动化测试工程师 (Test Engineer)
+终端体验的用户模拟器，产品的终极交互裁判。
+- **核心规约：此角色被定死仅能使用 Playwright 脚本（严禁使用 Puppeteer/Selenium/Cypress 等其它浏览器控制组件进行顶替测试，一旦触碰视作重大违规）**。
+- **职责：** 项目本地构建并运行挂起后，纯手写并运用 Playwright E2E 测试进程执行真实运行场景浏览器校验，挑剔产品阻断逻辑、UI 缺陷及 UX 差评体验。一发现痛点或 Crash，即拉走开启体验互修自循环纠错。
 
-Read these before inventing new rules:
+## 💡 挑战者 (Challenger)
+被彻底剥夺优先决策权但在后台散发生机的高维脑暴发射站。
+- **职责：** 必须在 Planner 输出最终计划前强制发声！提出一条极其刁钻或具备颠覆性的重构观点。
+- **约束：** 不被允许直接改代码，但其观点强制作为 Planner 写计划的“必考前置卷”。如果 Planner 未在计划中详细评估点子，流程将被阻断。未被采纳的点子由 Host 沉淀至 `innovations_log.md` 作为技术储备。
 
-- `.agent/rules/README.md`: rule index, load order, maintenance policy
-- `.agent/rules/codex-coding-rules.md`: base workflow and rules hygiene
-- `docs/ARCHITECTURE.md`: cross-layer entrypoints, read order, and contract hotspots
-- `docs/README.md`: documentation map for durable repo knowledge
-- `docs/codex-harness.md`: Codex harness entry flow, artifacts, and recovery model
-- `docs/frontend-visual-language.md`: frontend visual and interaction language source of truth
-- `docs/LLM_DB_GUIDELINES.md`: APS database source-of-truth rules
-- `docs/scheduling_principles.md`: scheduling and roster semantics already agreed in-repo
-- `.agent/workflows/add-constraint.md`: V4 constraint workflow
-- `.agent/workflows/codex-v4-verification.md`: V4 verification workflow
-- `.agent/workflows/maintain-rules.md`: rule quality and maintenance workflow
-- `docs/exec-plans/`: active plans, completed plans, and tech debt tracker
-- `scripts/lint_agent_docs.sh`: structural sanity check for this agent-doc layout
-
-If a decision only lives in Slack, chat, or someone’s memory, it is not reliably available to agents. Move it into the repo.
-
-## Repository Map
-
-- `backend/`: Express + TypeScript API, controllers/services/models/tests
-- `frontend/`: CRA + React + Ant Design UI, pages/components/services/types
-- `frontend-next/`: Next App Router + Tailwind + first-party Precision Lab design system
-- `solver_v4/`: Python solver, contracts, constraints, apply logic
-- `database/`: SQL, schema changes, migrations, seed/reference data
-- `docs/`: durable knowledge, schema references, scheduling semantics, execution plans
-- `harness/`: repo-local Codex harness manager, prompts, schemas, and tests
-- `.agent/rules/`: active Codex rule set
-- `.agent/workflows/`: task-specific workflows that are too detailed for `AGENTS.md`
-- `scripts/`: verification, doc generation, and repo utility scripts
-
-## Non-Negotiable Invariants
-
-- Use `shift_plan_id` as the source of truth for shift linkage. Do not drive core logic from `shift_code`.
-- Keep Batch, Shift, and Run status semantics separate. Do not mix `plan_status`, `plan_state`, `result_state`, or run `status`.
-- Serialize `BigInt` values safely in API responses.
-- For invalid scheduling or biopharma constraints, prefer explicit validation errors or `Infeasible` outcomes over silent auto-correction.
-- Cross-layer changes are not complete until backend, frontend, and solver contracts are aligned where applicable.
-- Restarts synchronize runtime state; they do not prove correctness. Build, test, and scripted checks do.
-
-## Verification Matrix
-
-Run the smallest sufficient deterministic checks for the touched area:
-
-- Backend changes: `cd backend && npm run build`
-- Backend logic changes: `cd backend && npm test`
-- Frontend changes: `cd frontend && npm run build`
-- Frontend interaction/state changes: `cd frontend && npm test -- --watchAll=false`
-- Frontend Next changes: `cd frontend-next && npm run build`
-- Frontend Next interaction/state changes: `cd frontend-next && npm run test:ci`
-- Solver / V4 changes: syntax or test-level validation as applicable
-- V4 persistence / apply / archive changes: `scripts/verify_v4_archive.sh`
-- Agent-doc structure changes: `scripts/lint_agent_docs.sh`
-
-If a check cannot run, say so explicitly and explain why.
-
-## Handoff Contract
-
-Final delivery should state:
-
-- what changed and why
-- which files are the key source files
-- which verification commands actually ran
-- which checks were not run
-- whether runtime restarts were required and whether they were performed
-- any residual risk or follow-up needed
-
-## Maintenance Rules
-
-- Keep `AGENTS.md` short. If a section becomes detailed, move it into `docs/`, `.agent/rules/`, or `.agent/workflows/`.
-- Prefer progressive disclosure: start from this file, then load only the relevant specialized rules.
-- When the same review feedback appears repeatedly, encode it in repo artifacts instead of repeating it manually.
-- When a rule can be checked mechanically, prefer a script, test, or lint rule over prose.
-- For work that spans sessions or needs decision logs, create an execution plan in `docs/exec-plans/active/` and move it to `docs/exec-plans/completed/` when finished.
+## 🧹 清洁工 (Cleaner) / 归档员
+项目安全落地的最后归档与排雷关卡。
+- **职责：** 在产品通过了所有的炼狱验证（Playwright、QA 等）之后出工。负责清扫所有的“战场遗留区”：刚才测试建立的一次性探路脚本页、冗杂日志、以及因为改动注视掉的废弃代码段。
+- **核心：** 清理出纯净仓后，全局跑一遍代码纠错格式化。执行 Git Add 和 Commit 版本打包上库记录。
