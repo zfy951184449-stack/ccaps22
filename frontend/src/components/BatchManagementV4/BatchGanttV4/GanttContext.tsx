@@ -14,10 +14,12 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     const [layoutModeInternal, setLayoutModeInternal] = useState<LayoutMode>('dense');
     const [zoomLevel, setZoomLevel] = useState(100); // Default 100px per day
 
-    // Wrapper to clear expandedStages when switching to compact mode
+    // Wrapper to clear expandedStages when switching layout mode
     const setLayoutMode = (mode: LayoutMode) => {
-        if (mode === 'compact') {
-            setExpandedStages(new Set()); // Compact 模式不需要 Stage 展开状态
+        if (mode === 'compact' || mode === 'dense') {
+            // compact 和 dense 模式切换时重置 Stage 展开状态
+            // dense 进入时从 batch→stage 两层视图开始，避免从 standard 模式带入脏状态
+            setExpandedStages(new Set());
         }
         setLayoutModeInternal(mode);
     };

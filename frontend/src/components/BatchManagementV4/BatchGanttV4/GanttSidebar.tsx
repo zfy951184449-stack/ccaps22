@@ -84,22 +84,30 @@ const GanttSidebar = forwardRef<HTMLDivElement, GanttSidebarProps>(({
 
         if (row.kind === 'stage') {
             const visibleOperationCount = getVisibleOperations(row.stage.operations).length;
+            // dense 模式下， Stage 可展开到 Lane；与 standard 模式同样需要展开箭头
+            const isExpandable = layoutMode !== 'compact';
+            const isExpanded = expandedStages.has(row.stageKey);
             return (
                 <div
                     key={row.key}
-                    style={baseStyle}
+                    style={{
+                        ...baseStyle,
+                        cursor: isExpandable ? 'pointer' : 'default'
+                    }}
                     className={rowClassName}
                     onClick={() => {
-                        if (layoutMode !== 'compact') {
+                        if (isExpandable) {
                             toggleStage(row.stageKey);
                         }
                     }}
                 >
                     <div style={{ width: 16 }}></div>
-                    {layoutMode === 'standard' && (
+                    {isExpandable ? (
                         <span className="gantt-icon-sm gantt-text-xxs">
-                            {expandedStages.has(row.stageKey) ? <DownOutlined /> : <RightOutlined />}
+                            {isExpanded ? <DownOutlined /> : <RightOutlined />}
                         </span>
+                    ) : (
+                        <div style={{ width: 14 }}></div>
                     )}
                     <span className="gantt-text-truncate gantt-text-sm" style={{ color: '#4B5563', flex: 1 }}>
                         {row.stage.name}
@@ -117,12 +125,27 @@ const GanttSidebar = forwardRef<HTMLDivElement, GanttSidebarProps>(({
                             {visibleOperationCount} 项
                         </span>
                     )}
+                    {layoutMode === 'dense' && visibleOperationCount > 0 && (
+                        <span style={{
+                            fontSize: 10,
+                            color: '#9CA3AF',
+                            backgroundColor: '#F3F4F6',
+                            padding: '2px 6px',
+                            borderRadius: 4,
+                            marginLeft: 8,
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {visibleOperationCount} 项
+                        </span>
+                    )}
                 </div>
             );
         }
 
         if (row.kind === 'lane') {
-            const summary = row.operations.length > 1 ? `${row.operations[0].name} +${row.operations.length - 1}` : row.operations[0]?.name || '空 Lane';
+            // Lane 信息简化：不显示截断的操作名，改用清晰的 "L1 · N项" 格式
+            const opCount = row.operations.length;
+            const singleOpName = opCount === 1 ? row.operations[0]?.name : null;
             return (
                 <div
                     key={row.key}
@@ -132,9 +155,9 @@ const GanttSidebar = forwardRef<HTMLDivElement, GanttSidebarProps>(({
                     <div style={{ width: 32 }}></div>
                     <span className="gantt-lane-label">L{row.laneIndex + 1}</span>
                     <span className="gantt-text-truncate gantt-text-xs" style={{ color: '#6B7280', flex: 1 }}>
-                        {summary}
+                        {singleOpName ?? ''}
                     </span>
-                    <span className="gantt-lane-badge">{row.operations.length} 项</span>
+                    <span className="gantt-lane-badge">{opCount} 项</span>
                 </div>
             );
         }
