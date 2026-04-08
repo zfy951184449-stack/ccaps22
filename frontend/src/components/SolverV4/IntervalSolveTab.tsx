@@ -54,6 +54,13 @@ const IntervalSolveTab: React.FC = () => {
     const [currentRunId, setCurrentRunId] = useState<number | null>(null);
     const [solving, setSolving] = useState(false);
 
+    // Precheck state
+    const [precheckLoading, setPrecheckLoading] = useState(false);
+    const [precheckResults, setPrecheckResults] = useState<{
+        status: 'PASS' | 'WARNING' | 'ERROR';
+        checks: { name: string; status: string; message: string }[];
+    } | null>(null);
+
     const fetchTeams = async () => {
         setLoadingTeams(true);
         try {
@@ -190,6 +197,39 @@ const IntervalSolveTab: React.FC = () => {
             message.error('启动区间求解出错');
         } finally {
             setSolving(false);
+        }
+    };
+
+    const handlePrecheck = async () => {
+        if (selectedRowKeys.length === 0 || !solveRange) return;
+        setPrecheckLoading(true);
+        try {
+            const monthStart = selectedMonth.startOf('month').format('YYYY-MM-DD');
+            const monthEnd = selectedMonth.endOf('month').format('YYYY-MM-DD');
+            const response = await fetch('/api/v4/scheduling/precheck', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    batch_ids: selectedRowKeys,
+                    start_date: monthStart,
+                    end_date: monthEnd,
+                    config: { ...solverConfig },
+                }),
+            });
+            const result = await response.json();
+            if (result.success) {
+                setPrecheckResults(result.data);
+                const status = result.data?.status;
+                if (status === 'PASS') message.success('预检通过！');
+                else if (status === 'WARNING') message.warning('预检有警告');
+                else message.error('预检发现错误');
+            } else {
+                message.error('预检失败');
+            }
+        } catch (error) {
+            message.error('预检请求失败');
+        } finally {
+            setPrecheckLoading(false);
         }
     };
 
@@ -355,21 +395,52 @@ const IntervalSolveTab: React.FC = () => {
                 <span style={{ color: '#86868B', fontSize: 13 }}>
                     已选 <strong style={{ color: '#1D1D1F' }}>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
                 </span>
-                <Button
-                    type="primary"
-                    icon={<ThunderboltOutlined />}
-                    onClick={handleIntervalSolve}
-                    loading={solving}
-                    disabled={!solveRange || selectedRowKeys.length === 0}
-                    style={{
-                        background: solveRange ? 'linear-gradient(135deg, var(--v4-accent-amber) 0%, var(--v4-color-warning) 100%)' : undefined,
-                        borderColor: solveRange ? 'var(--v4-accent-amber)' : undefined,
-                        borderRadius: 8,
-                    }}
-                >
-                    启动区间求解
-                </Button>
+                <Space>
+                    <Button
+                        onClick={handlePrecheck}
+                        loading={precheckLoading}
+                        disabled={!solveRange || selectedRowKeys.length === 0}
+                    >
+                        预检
+                    </Button>
+                    <Button
+                        type="primary"
+                        icon={<ThunderboltOutlined />}
+                        onClick={handleIntervalSolve}
+                        loading={solving}
+                        disabled={!solveRange || selectedRowKeys.length === 0}
+                        style={{
+                            background: solveRange ? 'linear-gradient(135deg, var(--v4-accent-amber) 0%, var(--v4-color-warning) 100%)' : undefined,
+                            borderColor: solveRange ? 'var(--v4-accent-amber)' : undefined,
+                            borderRadius: 8,
+                        }}
+                    >
+                        启动区间求解
+                    </Button>
+                </Space>
             </div>
+
+            {/* Precheck Results */}
+            {precheckResults && (
+                <Alert
+                    type={precheckResults.status === 'PASS' ? 'success' : precheckResults.status === 'WARNING' ? 'warning' : 'error'}
+                    message={`预检${precheckResults.status === 'PASS' ? '通过' : precheckResults.status === 'WARNING' ? '有警告' : '有错误'}`}
+                    description={
+                        <div style={{ maxHeight: 120, overflowY: 'auto' }}>
+                            {precheckResults.checks.filter(c => c.status !== 'PASS').map((c, i) => (
+                                <div key={i}>{c.status === 'ERROR' ? '🔴' : '⚠️'} {c.message}</div>
+                            ))}
+                            {precheckResults.checks.every(c => c.status === 'PASS') && (
+                                <div>✅ 所有 {precheckResults.checks.length} 项检查均通过</div>
+                            )}
+                        </div>
+                    }
+                    showIcon
+                    closable
+                    onClose={() => setPrecheckResults(null)}
+                    style={{ marginTop: 16 }}
+                />
+            )}
 
             {/* Modals */}
             <SolverConfigurationModal

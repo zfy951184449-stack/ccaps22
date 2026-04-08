@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { WarningOutlined } from '@ant-design/icons';
+import { WarningOutlined, EditOutlined } from '@ant-design/icons';
 import '../SolverV4.css';
 
 interface ShiftAssignment {
@@ -23,9 +23,10 @@ interface PersonnelViewProps {
     assignments: Assignment[];
     calendarDays?: { date: string; is_workday: boolean }[];
     standardHours?: number;
+    onEditShift?: (shiftAssignment: any) => void;
 }
 
-const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignments, calendarDays = [], standardHours = 0 }) => {
+const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignments, calendarDays = [], standardHours = 0, onEditShift }) => {
     const stats = useMemo(() => {
         const allDates = calendarDays.map(d => d.date);
 
@@ -201,8 +202,21 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
                                 borderBottom: '1px solid var(--v4-border-color)',
                                 alignItems: 'center'
                             }}>
-                                <div>
-                                    <div style={{ fontWeight: 500, fontSize: 'var(--v4-font-size-sm)' }}>{emp.name}</div>
+                                <div
+                                    style={{ cursor: onEditShift ? 'pointer' : undefined }}
+                                    onClick={() => {
+                                        if (!onEditShift) return;
+                                        // Find the first work shift for this employee
+                                        const firstShift = shiftAssignments.find(
+                                            s => s.employee_id === emp.id && (s.nominal_hours || 0) > 0
+                                        );
+                                        if (firstShift) onEditShift(firstShift);
+                                    }}
+                                >
+                                    <div style={{ fontWeight: 500, fontSize: 'var(--v4-font-size-sm)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                        {emp.name}
+                                        {onEditShift && <EditOutlined style={{ fontSize: 11, color: 'var(--v4-text-tertiary)', opacity: 0.5 }} />}
+                                    </div>
                                     <div style={{ fontSize: 'var(--v4-font-size-xs)', color: 'var(--v4-text-tertiary)' }}>{emp.code}</div>
                                 </div>
                                 <div style={{ paddingRight: 'var(--v4-space-lg)' }}>

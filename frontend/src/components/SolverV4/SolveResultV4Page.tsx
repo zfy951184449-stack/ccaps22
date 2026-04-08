@@ -20,6 +20,7 @@ import { exportV4ScheduleToPdf } from '../../utils/exportSchedulePdf';
 
 import SegmentedControl from './components/SegmentedControl';
 import MetricCard from './components/MetricCard';
+import ManualEditDrawer from './components/ManualEditDrawer';
 import OverviewView from './views/OverviewView';
 import TimelineView from './views/TimelineView';
 import PersonnelView from './views/PersonnelView';
@@ -80,6 +81,10 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
     const [activeView, setActiveView] = useState<ViewType>('overview');
     const [applying, setApplying] = useState(false);
     const [runStatus, setRunStatus] = useState<string>('INIT');
+
+    // Manual edit state
+    const [editTarget, setEditTarget] = useState<any | null>(null);
+    const [editCount, setEditCount] = useState(0);
 
     const fetchResult = useCallback(async () => {
         if (!runId) return;
@@ -219,6 +224,46 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
         };
     }, [data]);
 
+    // Compute available shift options from data
+    const shiftOptions = useMemo(() => {
+        if (!data?.shift_assignments) return [];
+        const map = new Map<number, { shift_id: number; shift_name: string; shift_code: string; nominal_hours: number }>();
+        data.shift_assignments.forEach((s: any) => {
+            if (!map.has(s.shift_id)) {
+                map.set(s.shift_id, {
+                    shift_id: s.shift_id,
+                    shift_name: s.shift_name || 'Unknown',
+                    shift_code: s.shift_code || '',
+                    nominal_hours: s.nominal_hours || 0,
+                });
+            }
+        });
+        return Array.from(map.values()).sort((a, b) => a.shift_id - b.shift_id);
+    }, [data]);
+
+    // Handle manual shift edit
+    const handleApplyEdit = useCallback((employeeId: number, date: string, newShiftId: number) => {
+        if (!data) return;
+        const newShift = shiftOptions.find(s => s.shift_id === newShiftId);
+        if (!newShift) return;
+
+        const updatedShifts = (data.shift_assignments || []).map((s: any) => {
+            if (s.employee_id === employeeId && s.date === date) {
+                return {
+                    ...s,
+                    shift_id: newShiftId,
+                    shift_name: newShift.shift_name,
+                    shift_code: newShift.shift_code,
+                    nominal_hours: newShift.nominal_hours,
+                };
+            }
+            return s;
+        });
+
+        setData(prev => prev ? { ...prev, shift_assignments: updatedShifts } : prev);
+        setEditCount(prev => prev + 1);
+    }, [data, shiftOptions]);
+
     const precheckBadge = useMemo(() => {
         if (!data?.precheck_results) return null;
         const { status } = data.precheck_results;
@@ -256,6 +301,7 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                         assignments={data.assignments}
                         calendarDays={data.calendar_days}
                         standardHours={data.standard_hours}
+                        onEditShift={(shiftAssignment: any) => setEditTarget(shiftAssignment)}
                     />
                 );
             case 'assignments':
@@ -471,6 +517,18 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                         disabled={applying}
                                     >
                                         <SaveOutlined /> {applying ? '应用中...' : '应用排班'}
+                                    {editCount > 0 && (
+                                        <span style={{
+                                            marginLeft: 6,
+                                            background: 'var(--v4-accent-amber)',
+                                            color: '#fff',
+                                            borderRadius: 10,
+                                            padding: '1px 6px',
+                                            fontSize: 11,
+                                        }}>
+                                            +{editCount} 改
+                                        </span>
+                                    )}
                                     </button>
                                 </Popconfirm>
                             )}
@@ -478,6 +536,16 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                     </>
                 ) : null}
             </div>
+
+            {/* Manual Edit Drawer */}
+            <ManualEditDrawer
+                visible={!!editTarget}
+                shiftAssignment={editTarget}
+                allShiftAssignments={data?.shift_assignments || []}
+                shiftOptions={shiftOptions}
+                onClose={() => setEditTarget(null)}
+                onApplyEdit={handleApplyEdit}
+            />
         </Drawer>
     );
 };
