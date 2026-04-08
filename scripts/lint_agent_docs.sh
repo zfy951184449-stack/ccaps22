@@ -5,6 +5,48 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# rg fallback: use grep if ripgrep is not installed
+if ! command -v rg &>/dev/null; then
+  echo "Note: ripgrep not found, falling back to grep" >&2
+  rg() {
+    local fixed=false quiet=false pattern="" max_count="" extra_flags=""
+    local -a paths=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -F) fixed=true ;;
+        -Fq|-qF) fixed=true; quiet=true ;;
+        -q) quiet=true ;;
+        -n) extra_flags="${extra_flags} -n" ;;
+        -m1) max_count="1" ;;
+        -m) shift; max_count="$1" ;;
+        -S) ;; # smart-case: ignore
+        --glob) shift ;; # skip glob arg value
+        -*) ;; # skip unknown flags
+        *)
+          if [[ -z "$pattern" ]]; then
+            pattern="$1"
+          else
+            paths+=("$1")
+          fi
+          ;;
+      esac
+      shift
+    done
+    [[ ${#paths[@]} -eq 0 ]] && paths=(".")
+    local cmd="grep"
+    # Use -r only for directories, -h to suppress filenames like rg does
+    if [[ -d "${paths[0]}" ]]; then
+      cmd="$cmd -r"
+    fi
+    cmd="$cmd -h"
+    $fixed && cmd="$cmd -F"
+    $quiet && cmd="$cmd -q"
+    [[ -n "$max_count" ]] && cmd="$cmd -m $max_count"
+    [[ -n "$extra_flags" ]] && cmd="$cmd $extra_flags"
+    eval "$cmd" '"$pattern"' '"${paths[@]}"' 2>/dev/null
+  }
+fi
+
 expected_rule_files=(
   "README.md"
   "codex-coding-rules.md"
@@ -28,6 +70,7 @@ required_paths=(
   "docs/ARCHITECTURE.md"
   "docs/agent-rule-coverage-matrix.md"
   "docs/frontend-visual-language.md"
+  "docs/frontend-next-visual-language.md"
   "docs/README.md"
   "docs/db-consistency-rules.md"
   "docs/biopharma-cmo-domain.md"
@@ -46,6 +89,16 @@ required_paths=(
   ".agent/workflows/add-constraint.md"
   ".agent/workflows/codex-v4-verification.md"
   ".agent/workflows/maintain-rules.md"
+  ".agent/workflows/multi-persona-task.md"
+  ".agent/personas/README.md"
+  ".agent/personas/host.md"
+  ".agent/personas/planner.md"
+  ".agent/personas/reviewer.md"
+  ".agent/personas/challenger.md"
+  ".agent/personas/coder.md"
+  ".agent/personas/qa.md"
+  ".agent/skills/biopharma-cmo/SKILL.md"
+  ".agent/skills/biopharma-roster/SKILL.md"
   "docs/LLM_DB_GUIDELINES.md"
   "docs/scheduling_principles.md"
 )
@@ -107,8 +160,8 @@ for rule in "${expected_rule_files[@]}"; do
 done
 
 agents_lines="$(wc -l < AGENTS.md | tr -d ' ')"
-if (( agents_lines > 140 )); then
-  echo "AGENTS.md should stay concise. Current line count: $agents_lines (limit: 140)." >&2
+if (( agents_lines > 150 )); then
+  echo "AGENTS.md should stay concise. Current line count: $agents_lines (limit: 150)." >&2
   exit 1
 fi
 
@@ -131,14 +184,17 @@ check_line_cap ".agent/rules/codex-frontend-ui-rules.md" 120
 check_line_cap ".agent/rules/codex-solver-v4-rules.md" 120
 check_line_cap ".agent/rules/codex-runtime-restart-rules.md" 220
 check_line_cap "docs/frontend-visual-language.md" 80
+check_line_cap "docs/frontend-next-visual-language.md" 120
 
 for ref in \
   ".agent/rules/README.md" \
   ".agent/workflows/" \
   "docs/ARCHITECTURE.md" \
   "docs/frontend-visual-language.md" \
+  "docs/frontend-next-visual-language.md" \
   "docs/README.md" \
   "docs/exec-plans/" \
+  ".agent/personas/" \
   "scripts/lint_agent_docs.sh"; do
   if ! rg -Fq "$ref" AGENTS.md; then
     echo "AGENTS.md is missing expected reference: $ref" >&2
@@ -174,9 +230,10 @@ check_required_patterns ".agent/rules/README.md" \
 
 check_required_patterns ".agent/rules/codex-coding-rules.md" \
   "# Codex Base Rules" \
-  "## 1. Working Model" \
-  "## 2. Use Repo Artifacts Deliberately" \
-  "## 3. Keep The Rules Healthy"
+  "## 1. Task Entry Gate" \
+  "## 2. Working Model" \
+  "## 3. Use Repo Artifacts Deliberately" \
+  "## 4. Keep The Rules Healthy"
 
 check_required_patterns ".agent/rules/codex-plan-collaboration-rules.md" \
   "# Codex Plan Collaboration Rules" \
@@ -253,7 +310,8 @@ fi
 
 for path in \
   ".agent/rules/codex-frontend-ui-rules.md" \
-  "docs/frontend-visual-language.md"; do
+  "docs/frontend-visual-language.md" \
+  "docs/frontend-next-visual-language.md"; do
   if rg -n "Ant Design \\+ CRA|Apple HIG|Apple-like|Fluent|Google|Microsoft" "$path" >/dev/null; then
     echo "$path contains forbidden external style-source wording." >&2
     exit 1

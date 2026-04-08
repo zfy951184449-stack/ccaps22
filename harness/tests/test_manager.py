@@ -10,6 +10,7 @@ from harness.manager import (
     compute_delta_files,
     determine_next_state,
     list_dirty_files,
+    parse_args,
 )
 
 
@@ -125,6 +126,32 @@ class DirtyWorktreeIsolationTests(unittest.TestCase):
         delta = compute_delta_files(repo_root, baseline)
 
         self.assertEqual(delta, ["tracked.txt"])
+
+
+class CLIArgParsingTests(unittest.TestCase):
+    def test_backend_flag_parsed(self) -> None:
+        args = parse_args(["--backend", "claude", "fix the bug"])
+        self.assertEqual(args.backend, "claude")
+        self.assertEqual(args.task_text, "fix the bug")
+
+    def test_dry_run_flag_parsed(self) -> None:
+        args = parse_args(["--dry-run", "test task"])
+        self.assertTrue(args.dry_run)
+        self.assertEqual(args.task_text, "test task")
+
+    def test_dry_run_and_backend_are_independent_flags(self) -> None:
+        # --dry-run without --backend is valid (manager treats dry_run as override)
+        args = parse_args(["--dry-run", "some task"])
+        self.assertTrue(args.dry_run)
+        self.assertIsNone(args.backend)
+
+    def test_resume_flag_parsed(self) -> None:
+        args = parse_args(["--resume", "20260101T120000Z-abcd1234"])
+        self.assertEqual(args.resume, "20260101T120000Z-abcd1234")
+
+    def test_allow_dirty_flag_parsed(self) -> None:
+        args = parse_args(["--allow-dirty", "task"])
+        self.assertTrue(args.allow_dirty)
 
 
 if __name__ == "__main__":

@@ -477,18 +477,30 @@ const applySpecialShiftCoverage = async (
 
 export const createSolveTaskV4 = async (req: Request, res: Response) => {
     try {
-        const { start_date, end_date, batch_ids, config } = req.body;
+        const { start_date, end_date, batch_ids, config, solve_start_date, solve_end_date } = req.body;
 
         if (!start_date || !end_date) {
             return res.status(400).json({ error: 'start_date and end_date are required' });
         }
 
+        // Validate solve range if provided
+        const solveRange = (solve_start_date && solve_end_date)
+            ? { start_date: solve_start_date, end_date: solve_end_date }
+            : undefined;
+
+        if (solveRange) {
+            if (solveRange.start_date < start_date || solveRange.end_date > end_date) {
+                return res.status(400).json({ error: 'solve range must be within the full window' });
+            }
+            console.log(`[SchedulingV4] Interval solve requested: ${solveRange.start_date} ~ ${solveRange.end_date} within ${start_date} ~ ${end_date}`);
+        }
+
         // 1. Create a Run Record (DB)
-        const runId = await createRunRecord(start_date, end_date, batch_ids);
+        const runId = await createRunRecord(start_date, end_date, batch_ids, solveRange?.start_date, solveRange?.end_date);
 
         // 2. Asynchronously Trigger Assembly & Solve
         // We do not await this, so the UI gets immediate feedback
-        triggerSolveAsync(runId, start_date, end_date, batch_ids, config).catch(err => {
+        triggerSolveAsync(runId, start_date, end_date, batch_ids, config, solveRange).catch(err => {
             console.error(`[SchedulingV4] Background Task Error (Run ${runId}):`, err);
             updateRunStatus(runId, 'FAILED', err.message);
         });
@@ -498,7 +510,7 @@ export const createSolveTaskV4 = async (req: Request, res: Response) => {
             data: {
                 runId,
                 status: 'QUEUED',
-                message: 'V4 Solve Task Initiated'
+                message: solveRange ? `V4 Interval Solve (${solveRange.start_date} ~ ${solveRange.end_date})` : 'V4 Full Solve Initiated'
             }
         });
 
@@ -511,15 +523,22 @@ export const createSolveTaskV4 = async (req: Request, res: Response) => {
 /**
  * Background Task: Assemble Data -> Call Python Solver
  */
-async function triggerSolveAsync(runId: number, startDate: string, endDate: string, batchIds: number[], config: any) {
+async function triggerSolveAsync(
+    runId: number,
+    startDate: string,
+    endDate: string,
+    batchIds: number[],
+    config: any,
+    solveRange?: { start_date: string; end_date: string }
+) {
     try {
         await updateRunStatus(runId, 'RUNNING', null, 'ASSEMBLING');
 
         // Extract team_ids from config if present
         const teamIds = config?.team_ids || [];
 
-        // A. Assemble Data
-        const solverRequest = await DataAssemblerV4.assemble(startDate, endDate, batchIds, teamIds);
+        // A. Assemble Data (with optional solve range for interval solving)
+        const solverRequest = await DataAssemblerV4.assemble(startDate, endDate, batchIds, teamIds, solveRange);
 
         // Inject runId into config/payload if needed for callback correlation,
         // though V4 usually uses the URL or a specific field. 
@@ -1238,12 +1257,12 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
 
 // --- Helpers ---
 
-async function createRunRecord(start: string, end: string, batchIds: number[]) {
+async function createRunRecord(start: string, end: string, batchIds: number[], solveStart?: string, solveEnd?: string) {
     const runCode = `V4-${Date.now()}`;
     const [res] = await pool.execute<any>(
-        `INSERT INTO scheduling_runs (run_code, run_key, status, stage, window_start, window_end, period_start, period_end, target_batch_ids, solver_progress, created_at)
-         VALUES (?, ?, 'QUEUED', 'INIT', ?, ?, ?, ?, ?, '{"logs": []}', NOW())`,
-        [runCode, runCode, start, end, start, end, JSON.stringify(batchIds)]
+        `INSERT INTO scheduling_runs (run_code, run_key, status, stage, window_start, window_end, period_start, period_end, solve_start, solve_end, target_batch_ids, solver_progress, created_at)
+         VALUES (?, ?, 'QUEUED', 'INIT', ?, ?, ?, ?, ?, ?, ?, '{"logs": []}', NOW())`,
+        [runCode, runCode, start, end, start, end, solveStart || null, solveEnd || null, JSON.stringify(batchIds)]
     );
     return res.insertId;
 }
@@ -1451,7 +1470,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         // 1. Fetch Run Record & Raw Result
         const [runRows] = await connection.execute<RowDataPacket[]>(
-            'SELECT result_summary, summary_json, window_start, window_end, status FROM scheduling_runs WHERE id = ?',
+            'SELECT result_summary, summary_json, window_start, window_end, solve_start, solve_end, status FROM scheduling_runs WHERE id = ?',
             [runId]
         );
 
@@ -1522,6 +1541,14 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         const windowStart = run.window_start;
         const windowEnd = run.window_end;
+        // For interval solving, use solve_start/solve_end for cleanup
+        // This ensures we only clear data within the solve range, preserving frozen data outside
+        const cleanupStart = run.solve_start || windowStart;
+        const cleanupEnd = run.solve_end || windowEnd;
+        const isIntervalSolve = !!(run.solve_start && run.solve_end);
+        if (isIntervalSolve) {
+            console.log(`[SchedulingV4] Interval solve mode: cleanup range ${cleanupStart} ~ ${cleanupEnd} (full window ${windowStart} ~ ${windowEnd})`);
+        }
         const assignmentsByShiftKey = new Map<string, FlattenedAssignment[]>();
         assignments.forEach(assignment => {
             if (!assignment.date) {
@@ -1539,8 +1566,8 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
         const lockedAssignmentKeys = new Map<string, number>();
         const lockedShiftByEmployeeDate = new Map<string, { id: number; shift_id: number | null; plan_category: string }>();
 
-        // 2. Cleanup: Clear non-locked data in the solve window, but preserve manual locks.
-        if (windowStart && windowEnd) {
+        // 2. Cleanup: Clear non-locked data in the solve range, but preserve manual locks.
+        if (cleanupStart && cleanupEnd) {
             const [lockedAssignmentRows] = await connection.execute<RowDataPacket[]>(
                 `SELECT
                     bpa.batch_operation_plan_id,
@@ -1550,7 +1577,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                  JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
                  WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
                    AND IFNULL(bpa.is_locked, 0) = 1`,
-                [windowStart, windowEnd]
+                [cleanupStart, cleanupEnd]
             );
             lockedAssignmentRows.forEach(row => {
                 lockedAssignmentKeys.set(
@@ -1564,7 +1591,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                  FROM employee_shift_plans
                  WHERE plan_date BETWEEN ? AND ?
                    AND IFNULL(is_locked, 0) = 1`,
-                [windowStart, windowEnd]
+                [cleanupStart, cleanupEnd]
             );
             lockedShiftRows.forEach(row => {
                 const planDate = row.plan_date instanceof Date
@@ -1585,7 +1612,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                  FROM employee_shift_plans
                  WHERE plan_date BETWEEN ? AND ?
                    AND IFNULL(is_locked, 0) = 0`,
-                [windowStart, windowEnd]
+                [cleanupStart, cleanupEnd]
             );
 
             if (shiftPlansToDelete.length > 0) {
@@ -1626,17 +1653,16 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                  JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
                  WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
                    AND IFNULL(bpa.is_locked, 0) = 0`,
-                [windowStart, windowEnd]
+                [cleanupStart, cleanupEnd]
             );
-            console.log(`[SchedulingV4] Cleaned up non-locked assignments in window ${windowStart} ~ ${windowEnd}`);
+            console.log(`[SchedulingV4] Cleaned up non-locked assignments in ${isIntervalSolve ? 'solve range' : 'window'} ${cleanupStart} ~ ${cleanupEnd}`);
 
-            // Cleanup: standalone task assignments could also be cleaned if they run in this window 
-            // but we might just overwrite them. A strict approach:
+            // Cleanup: standalone task assignments
             await connection.execute(
                 `DELETE sta FROM standalone_task_assignments sta
                  WHERE sta.scheduling_run_id IS NOT NULL 
                    AND sta.assigned_date >= ? AND sta.assigned_date <= ?`,
-                [windowStart, windowEnd]
+                [cleanupStart, cleanupEnd]
             );
         }
 
@@ -1899,7 +1925,7 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 export const listRunsV4 = async (req: Request, res: Response) => {
     try {
         const [rows] = await pool.execute<RowDataPacket[]>(
-            `SELECT id, run_code, status, stage, window_start, window_end, 
+            `SELECT id, run_code, status, stage, window_start, window_end, solve_start, solve_end,
                     result_summary, created_at, completed_at
              FROM scheduling_runs 
              WHERE run_code LIKE 'V4-%'
@@ -1932,12 +1958,15 @@ export const listRunsV4 = async (req: Request, res: Response) => {
                 run_code: row.run_code,
                 status: row.status,
                 stage: row.stage,
-                solver_status: solverStatus,  // OPTIMAL / FEASIBLE / INFEASIBLE
-                gap,                          // 与最优解的理论差距百分比
-                fill_rate: fillRate,           // 岗位填充率
+                solver_status: solverStatus,
+                gap,
+                fill_rate: fillRate,
                 solve_time: solveTime,
                 window_start: row.window_start,
                 window_end: row.window_end,
+                solve_start: row.solve_start || null,
+                solve_end: row.solve_end || null,
+                is_interval_solve: !!(row.solve_start && row.solve_end),
                 created_at: row.created_at,
                 completed_at: row.completed_at,
             };

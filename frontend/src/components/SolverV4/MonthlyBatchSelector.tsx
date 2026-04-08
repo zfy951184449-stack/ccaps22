@@ -7,8 +7,9 @@ import OperationReviewModal from './OperationReviewModal';
 import SolveProgressV4Modal from './SolveProgressV4Modal';
 import SolveResultV4Page from './SolveResultV4Page';
 import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from './SolverConfigurationModal';
-import { SettingOutlined, HistoryOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { SettingOutlined, HistoryOutlined, UnorderedListOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import RunHistoryTab from './RunHistoryTab';
+import IntervalSolveTab from './IntervalSolveTab';
 
 const { Title } = Typography;
 
@@ -325,6 +326,13 @@ const MonthlyBatchSelector: React.FC = () => {
                                 </div>
                             </>
                         ),
+                    },
+                    {
+                        key: 'interval',
+                        label: (
+                            <span><ThunderboltOutlined style={{ marginRight: 6 }} />区间求解</span>
+                        ),
+                        children: <IntervalSolveTab />,
                     },
                     {
                         key: 'history',

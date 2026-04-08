@@ -30,7 +30,22 @@ export interface V4SolverRequest {
     resource_calendars: V4ResourceCalendarEntry[];
     operation_resource_requirements: V4OperationResourceRequirement[];
     maintenance_windows: V4MaintenanceWindow[];
+    solve_range?: V4SchedulingWindow;
+    frozen_shifts?: V4FrozenShift[];
+    frozen_assignments?: V4FrozenAssignment[];
     config?: any;
+}
+
+interface V4FrozenShift {
+    employee_id: number;
+    date: string;
+    shift_id: number;
+}
+
+interface V4FrozenAssignment {
+    operation_plan_id: number;
+    position_number: number;
+    employee_id: number;
 }
 
 interface V4SchedulingWindow {
@@ -189,11 +204,21 @@ export class DataAssemblerV4 {
         startDate: string,
         endDate: string,
         batchIds: number[],
-        teamIds: number[] = [] // Optional Team Filtering
+        teamIds: number[] = [], // Optional Team Filtering
+        solveRange?: { start_date: string; end_date: string } // Optional sub-range for interval solving
     ): Promise<V4SolverRequest> {
         const requestId = `V4-${Date.now()}`;
 
         console.time('DataAssemblerV4');
+
+        // Determine effective solve dates for filtering special shifts
+        const effectiveSolveStart = solveRange?.start_date || startDate;
+        const effectiveSolveEnd = solveRange?.end_date || endDate;
+        const isIntervalSolve = !!(solveRange && (solveRange.start_date !== startDate || solveRange.end_date !== endDate));
+
+        if (isIntervalSolve) {
+            console.log(`[DataAssemblerV4] Interval solve mode: solve ${effectiveSolveStart} ~ ${effectiveSolveEnd} within window ${startDate} ~ ${endDate}`);
+        }
 
         // Parallel data fetching
         const [
@@ -215,11 +240,11 @@ export class DataAssemblerV4 {
             this.fetchLockedOperations(batchIds),
             this.fetchLockedShifts(startDate, endDate),
             this.fetchHistoricalShifts(startDate),
-            this.fetchSpecialShiftRequirements(startDate, endDate),
+            // For interval solve, only fetch special shift requirements within solve range
+            this.fetchSpecialShiftRequirements(effectiveSolveStart, effectiveSolveEnd),
         ]);
 
         // [OPTIMIZATION] Calculate Candidate Lists
-        // We perform this here to offload complexity from the Python solver
         const enrichedOperations = await this.enrichOperationsWithCandidates(operationsData, employees);
 
         // [NEW] Fetch and enrich Standalone Tasks
@@ -245,6 +270,18 @@ export class DataAssemblerV4 {
             this.fetchOperationResourceRequirements(enrichedOperations)
         ]);
 
+        // [INTERVAL SOLVE] Fetch frozen data from outside the solve range
+        let frozenShifts: V4FrozenShift[] = [];
+        let frozenAssignments: V4FrozenAssignment[] = [];
+
+        if (isIntervalSolve) {
+            [frozenShifts, frozenAssignments] = await Promise.all([
+                this.fetchFrozenShifts(startDate, endDate, effectiveSolveStart, effectiveSolveEnd),
+                this.fetchFrozenAssignments(batchIds, startDate, endDate, effectiveSolveStart, effectiveSolveEnd),
+            ]);
+            console.log(`[DataAssemblerV4] Frozen data: ${frozenShifts.length} shifts, ${frozenAssignments.length} assignments`);
+        }
+
         console.timeEnd('DataAssemblerV4');
 
         return {
@@ -263,6 +300,11 @@ export class DataAssemblerV4 {
             resource_calendars: resourceCalendars,
             operation_resource_requirements: operationResourceRequirements,
             maintenance_windows: maintenanceWindows,
+            ...(isIntervalSolve ? {
+                solve_range: { start_date: effectiveSolveStart, end_date: effectiveSolveEnd },
+                frozen_shifts: frozenShifts,
+                frozen_assignments: frozenAssignments,
+            } : {}),
             config: {} // TODO: Add config if needed
         };
     }
@@ -1156,5 +1198,73 @@ export class DataAssemblerV4 {
         });
 
         return result;
+    }
+
+    /**
+     * Fetch existing shift plans OUTSIDE the solve range but INSIDE the full window.
+     * These will be pinned as frozen constants in the solver to prevent changes.
+     */
+    private static async fetchFrozenShifts(
+        windowStart: string,
+        windowEnd: string,
+        solveStart: string,
+        solveEnd: string
+    ): Promise<V4FrozenShift[]> {
+        // Frozen dates = [windowStart, solveStart) ∪ (solveEnd, windowEnd]
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                employee_id,
+                plan_date,
+                shift_id
+             FROM employee_shift_plans
+             WHERE plan_date BETWEEN ? AND ?
+               AND (plan_date < ? OR plan_date > ?)
+               AND shift_id IS NOT NULL`,
+            [windowStart, windowEnd, solveStart, solveEnd]
+        );
+
+        return rows.map(row => ({
+            employee_id: Number(row.employee_id),
+            date: dayjs(row.plan_date).format('YYYY-MM-DD'),
+            shift_id: Number(row.shift_id)
+        }));
+    }
+
+    /**
+     * Fetch existing operation personnel assignments OUTSIDE the solve range
+     * but INSIDE the full window. These will be pinned as frozen constants.
+     */
+    private static async fetchFrozenAssignments(
+        batchIds: number[],
+        windowStart: string,
+        windowEnd: string,
+        solveStart: string,
+        solveEnd: string
+    ): Promise<V4FrozenAssignment[]> {
+        if (!batchIds.length) {
+            return [];
+        }
+
+        const placeholders = batchIds.map(() => '?').join(',');
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                bpa.batch_operation_plan_id AS operation_plan_id,
+                bpa.position_number,
+                bpa.employee_id
+             FROM batch_personnel_assignments bpa
+             JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+             JOIN production_batch_plans pbp ON pbp.id = bop.batch_plan_id
+             WHERE pbp.id IN (${placeholders})
+               AND DATE(bop.planned_start_datetime) BETWEEN ? AND ?
+               AND (DATE(bop.planned_start_datetime) < ? OR DATE(bop.planned_start_datetime) > ?)
+               AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')`,
+            [...batchIds, windowStart, windowEnd, solveStart, solveEnd]
+        );
+
+        return rows.map(row => ({
+            operation_plan_id: Number(row.operation_plan_id),
+            position_number: Number(row.position_number),
+            employee_id: Number(row.employee_id)
+        }));
     }
 }

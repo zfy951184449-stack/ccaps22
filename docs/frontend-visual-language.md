@@ -1,6 +1,8 @@
 # Frontend Visual Language
 
-This document is the source of truth for the APS frontend visual and interaction language.
+This document is the source of truth for the `frontend/` (legacy) visual and interaction language.
+
+> **Scope**: This document applies to `frontend/` only. For `frontend-next/`, see `docs/frontend-next-visual-language.md`.
 
 ## Default Direction
 

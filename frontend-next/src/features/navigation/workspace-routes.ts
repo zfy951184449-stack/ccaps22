@@ -181,7 +181,7 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     title: "工艺模版 V2",
     description:
       "Wave 5 route for the heaviest editor migration: resources, constraints, local persistence, and node-centric workspaces.",
-    status: "planned",
+    status: "active",
     wave: 5,
     checkpoints: [
       "Editor workspace preserves deep-link behavior.",

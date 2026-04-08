@@ -1,0 +1,3034 @@
+{
+  "template": {
+    "template_code": "WBP2486_DSP",
+    "template_name": "Full_Excel_Mapped_DSP工艺",
+    "description": "按天防重命名 + 班次并集共享防并发 + DSPALL资质设定",
+    "total_days": 13
+  },
+  "stages": [
+    {
+      "stage_code": "STG_AC",
+      "stage_name": "AC",
+      "stage_order": 1,
+      "start_day": 0
+    },
+    {
+      "stage_code": "STG_VIN",
+      "stage_name": "VIN",
+      "stage_order": 2,
+      "start_day": 1
+    },
+    {
+      "stage_code": "STG_CEX",
+      "stage_name": "CEX",
+      "stage_order": 3,
+      "start_day": 2
+    },
+    {
+      "stage_code": "STG_UFDF1",
+      "stage_name": "UFDF1",
+      "stage_order": 4,
+      "start_day": 3
+    },
+    {
+      "stage_code": "STG_AEX",
+      "stage_name": "AEX",
+      "stage_order": 5,
+      "start_day": 4
+    },
+    {
+      "stage_code": "STG_HA",
+      "stage_name": "HA",
+      "stage_order": 6,
+      "start_day": 6
+    },
+    {
+      "stage_code": "STG_VF",
+      "stage_name": "VF",
+      "stage_order": 7,
+      "start_day": 8
+    },
+    {
+      "stage_code": "STG_UFDF2",
+      "stage_name": "UFDF2",
+      "stage_order": 8,
+      "start_day": 9
+    },
+    {
+      "stage_code": "STG_UFDF3",
+      "stage_name": "UFDF3",
+      "stage_order": 9,
+      "start_day": 10
+    },
+    {
+      "stage_code": "STG_BULK",
+      "stage_name": "Bulk Fill",
+      "stage_order": 10,
+      "start_day": 10
+    },
+    {
+      "stage_code": "STG_CIP_WFI",
+      "stage_name": "CIP_WFI_Section",
+      "stage_order": 11,
+      "start_day": 0
+    }
+  ],
+  "share_groups": [
+    {
+      "group_code": "GRP_Day0_DAY",
+      "group_name": "Day0_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day0_DAY 所有任务,封顶消耗人数: 2",
+      "members": [
+        {
+          "operation_name": "D0_Room_Material_Prep",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D0_2_AKTA_1850_CIP",
+          "required_people": 2,
+          "stage_name": "AC"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day1_DAY",
+      "group_name": "Day1_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day1_DAY 所有任务,封顶消耗人数: 5",
+      "members": [
+        {
+          "operation_name": "D1_logbook_Checks",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_T1810_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_In_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_Out_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUA_BH1720_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUA_BH1731_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUB_BH1740_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUB_BH1741_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_B01_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_B23_AC_Prep",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_2_AKTA_1850_AC_EQ",
+          "required_people": 5,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_Col_1_2m_AC_EQ",
+          "required_people": 5,
+          "stage_name": "AC"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day1_NIGHT",
+      "group_name": "Day1_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day1_NIGHT 所有任务,封顶消耗人数: 2",
+      "members": [
+        {
+          "operation_name": "D1_T1810_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_In_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_Out_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUA_BH1720_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUA_BH1731_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUB_BH1740_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_U1850_POUB_BH1741_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_B01_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_B23_AC_C1",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_2_AKTA_1850_AC_C1_C2",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_Col_1_2m_AC_C1_C2",
+          "required_people": 2,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D1_T1812_VIN_C1",
+          "required_people": 2,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D1_B06_VIN_C1",
+          "required_people": 2,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D1_B07_VIN_C1",
+          "required_people": 2,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D1_TransferLine_T1810_VIN_C1",
+          "required_people": 2,
+          "stage_name": "VIN"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day2_DAY",
+      "group_name": "Day2_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day2_DAY 所有任务,封顶消耗人数: 3",
+      "members": [
+        {
+          "operation_name": "D2_T1810_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_In_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_Out_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUA_BH1720_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUA_BH1731_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUB_BH1740_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUB_BH1741_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_B01_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_B23_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_2_AKTA_1850_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_Col_1_2m_AC_C2_C3",
+          "required_people": 3,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_T1812_VIN_C2_C3",
+          "required_people": 3,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_B06_VIN_C2_C3",
+          "required_people": 3,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_B07_VIN_C2_C3",
+          "required_people": 3,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_TransferLine_T1810_VIN_C2_C3",
+          "required_people": 3,
+          "stage_name": "VIN"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day2_NIGHT",
+      "group_name": "Day2_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day2_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D2_T1810_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_In_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_Out_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUA_BH1720_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUA_BH1731_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUB_BH1740_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_U1850_POUB_BH1741_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_B01_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_B23_AC_C2_C3_part2",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_2_AKTA_1850_AC_C2_C3",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_Col_1_2m_AC_C2_C3",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D2_T1812_VIN_C2_C3",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_B06_VIN_C2_C3",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_B07_VIN_C2_C3",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_TransferLine_T1810_VIN_C2_C3",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D2_2_AKTA_1851_CIP",
+          "required_people": 1,
+          "stage_name": "CEX"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day3_DAY",
+      "group_name": "Day3_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day3_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D3_T1810_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_In_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_Out_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUA_BH1720_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUA_BH1731_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUB_BH1740_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUB_BH1741_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_B01_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_B23_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_2_AKTA_1850_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_Col_1_2m_AC_C4",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_T1812_VIN_C4",
+          "required_people": 4,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_B06_VIN_C4",
+          "required_people": 4,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_B07_VIN_C4",
+          "required_people": 4,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_TransferLine_T1810_VIN_C4",
+          "required_people": 4,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_T1813_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_T1814_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_T1815_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_U1851_In_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_U1851_Out_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_BH1726_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_BH1722_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_B09_CEX_Prep",
+          "required_people": 4,
+          "stage_name": "CEX"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day3_NIGHT",
+      "group_name": "Day3_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day3_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D3_T1810_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_In_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_Out_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUA_BH1720_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUA_BH1731_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUB_BH1740_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_U1850_POUB_BH1741_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_B01_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_B23_CIP_Discard",
+          "required_people": 1,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D3_T1812_Keep_CIP",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_B06_Keep_CIP",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_B07_Keep_CIP",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_TransferLine_T1810_Keep_CIP",
+          "required_people": 1,
+          "stage_name": "VIN"
+        },
+        {
+          "operation_name": "D3_T1813_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_T1814_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_T1815_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_U1851_In_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_U1851_Out_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_BH1726_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_BH1722_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D3_B09_CEX_EQ",
+          "required_people": 1,
+          "stage_name": "CEX"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day4_DAY",
+      "group_name": "Day4_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day4_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D4_2_AKTA_1850_CIP",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D4_Col_1_2m_CIP",
+          "required_people": 4,
+          "stage_name": "AC"
+        },
+        {
+          "operation_name": "D4_T1813_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_T1814_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_T1815_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_U1851_In_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_U1851_Out_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_BH1726_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_BH1722_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_B09_CEX_C1",
+          "required_people": 4,
+          "stage_name": "CEX"
+        },
+        {
+          "operation_name": "D4_U1853_UFDF1_EQ",
+          "required_people": 4,
+          "stage_name": "UFDF1"
+        },
+        {
+          "operation_name": "D4_BH1720_UFDF1_EQ",
+          "required_people": 4,
+          "stage_name": "UFDF1"
+        },
+        {
+          "operation_name": "D4_30m2_UFDF_UFDF1_EQ",
+          "required_people": 4,
+          "stage_name": "UFDF1"
+        },
+        {
+          "operation_name": "D4_CIP1890_CIP",
+          "required_people": 4,
+          "stage_name": "CIP_WFI_Section"
+        },
+        {
+          "operation_name": "D4_PT1810_CIP",
+          "required_people": 4,
+          "stage_name": "CIP_WFI_Section"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day4_NIGHT",
+      "group_name": "Day4_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day4_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D4_U1853_UFDF1_Proc",
+          "required_people": 1,
+          "stage_name": "UFDF1"
+        },
+        {
+          "operation_name": "D4_BH1720_UFDF1_Proc",
+          "required_people": 1,
+          "stage_name": "UFDF1"
+        },
+        {
+          "operation_name": "D4_30m2_UFDF_UFDF1_Proc",
+          "required_people": 1,
+          "stage_name": "UFDF1"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day5_DAY",
+      "group_name": "Day5_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day5_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D5_U1852_POUA_AEX_C1",
+          "required_people": 4,
+          "stage_name": "AEX"
+        },
+        {
+          "operation_name": "D5_B05_AEX_C1",
+          "required_people": 4,
+          "stage_name": "AEX"
+        },
+        {
+          "operation_name": "D5_1_5_AKTA_AEX_C1",
+          "required_people": 4,
+          "stage_name": "AEX"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day5_NIGHT",
+      "group_name": "Day5_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day5_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D5_U1852_POUA_AEX_C2",
+          "required_people": 1,
+          "stage_name": "AEX"
+        },
+        {
+          "operation_name": "D5_B05_AEX_C2",
+          "required_people": 1,
+          "stage_name": "AEX"
+        },
+        {
+          "operation_name": "D5_1_5_AKTA_AEX_C2",
+          "required_people": 1,
+          "stage_name": "AEX"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day6_DAY",
+      "group_name": "Day6_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day6_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D6_U1852_POUA_CIP",
+          "required_people": 4,
+          "stage_name": "AEX"
+        },
+        {
+          "operation_name": "D6_B05_CIP",
+          "required_people": 4,
+          "stage_name": "AEX"
+        },
+        {
+          "operation_name": "D6_1_5_AKTA_CIP",
+          "required_people": 4,
+          "stage_name": "AEX"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day7_DAY",
+      "group_name": "Day7_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day7_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D7_U1852_POUB_HA",
+          "required_people": 4,
+          "stage_name": "HA"
+        },
+        {
+          "operation_name": "D7_1_5_AKTA_HA",
+          "required_people": 4,
+          "stage_name": "HA"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day7_NIGHT",
+      "group_name": "Day7_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day7_NIGHT 所有任务,封顶消耗人数: 0",
+      "members": [
+        {
+          "operation_name": "D7_U1852_POUB_HA_Proc",
+          "required_people": 0,
+          "stage_name": "HA"
+        },
+        {
+          "operation_name": "D7_1_5_AKTA_HA_Proc",
+          "required_people": 0,
+          "stage_name": "HA"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day8_DAY",
+      "group_name": "Day8_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day8_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D8_U1852_POUB_HA_Proc2",
+          "required_people": 4,
+          "stage_name": "HA"
+        },
+        {
+          "operation_name": "D8_1_5_AKTA_HA_Proc2",
+          "required_people": 4,
+          "stage_name": "HA"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day8_NIGHT",
+      "group_name": "Day8_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day8_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D8_VF_Skid_Process",
+          "required_people": 1,
+          "stage_name": "VF"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day9_DAY",
+      "group_name": "Day9_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day9_DAY 所有任务,封顶消耗人数: 4",
+      "members": [
+        {
+          "operation_name": "D9_15m2_EQ",
+          "required_people": 4,
+          "stage_name": "UFDF2"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day9_NIGHT",
+      "group_name": "Day9_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day9_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D9_15m2_Process",
+          "required_people": 1,
+          "stage_name": "UFDF2"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day10_DAY",
+      "group_name": "Day10_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day10_DAY 所有任务,封顶消耗人数: 3",
+      "members": [
+        {
+          "operation_name": "D10_1m2_EQ",
+          "required_people": 3,
+          "stage_name": "UFDF3"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day11_DAY",
+      "group_name": "Day11_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day11_DAY 所有任务,封顶消耗人数: 5",
+      "members": [
+        {
+          "operation_name": "D11_Bulk_Fill_Main",
+          "required_people": 5,
+          "stage_name": "Bulk Fill"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day11_NIGHT",
+      "group_name": "Day11_NIGHT 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day11_NIGHT 所有任务,封顶消耗人数: 1",
+      "members": [
+        {
+          "operation_name": "D11_Bulk_Fill_Freeze",
+          "required_people": 1,
+          "stage_name": "Bulk Fill"
+        }
+      ]
+    },
+    {
+      "group_code": "GRP_Day12_DAY",
+      "group_name": "Day12_DAY 同班同源共享组_防并发锁定",
+      "share_mode": "SAME_TEAM",
+      "description": "接管 Day12_DAY 所有任务,封顶消耗人数: 3",
+      "members": [
+        {
+          "operation_name": "D12_CIP1890_SIP",
+          "required_people": 3,
+          "stage_name": "CIP_WFI_Section"
+        },
+        {
+          "operation_name": "D12_PT1810_SIP",
+          "required_people": 3,
+          "stage_name": "CIP_WFI_Section"
+        }
+      ]
+    }
+  ],
+  "operations": {
+    "STG_AC": [
+      {
+        "operation_code": "OP_1_0",
+        "operation_name": "D0_Room_Material_Prep",
+        "operation_day": 0,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 10,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_2_0",
+        "operation_name": "D0_2_AKTA_1850_CIP",
+        "operation_day": 0,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 20,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_3_1",
+        "operation_name": "D1_logbook_Checks",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 30,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_4_1",
+        "operation_name": "D1_T1810_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 40,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_5_1",
+        "operation_name": "D1_T1810_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 50,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_6_2",
+        "operation_name": "D2_T1810_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 60,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_7_2",
+        "operation_name": "D2_T1810_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 70,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_8_3",
+        "operation_name": "D3_T1810_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 80,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_9_3",
+        "operation_name": "D3_T1810_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 90,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_10_1",
+        "operation_name": "D1_U1850_In_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 100,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_11_1",
+        "operation_name": "D1_U1850_In_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 110,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_12_2",
+        "operation_name": "D2_U1850_In_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 120,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_13_2",
+        "operation_name": "D2_U1850_In_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 130,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_14_3",
+        "operation_name": "D3_U1850_In_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 140,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_15_3",
+        "operation_name": "D3_U1850_In_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 150,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_16_1",
+        "operation_name": "D1_U1850_Out_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 160,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_17_1",
+        "operation_name": "D1_U1850_Out_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 170,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_18_2",
+        "operation_name": "D2_U1850_Out_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 180,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_19_2",
+        "operation_name": "D2_U1850_Out_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 190,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_20_3",
+        "operation_name": "D3_U1850_Out_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 200,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_21_3",
+        "operation_name": "D3_U1850_Out_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 210,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_22_1",
+        "operation_name": "D1_U1850_POUA_BH1720_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 220,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_23_1",
+        "operation_name": "D1_U1850_POUA_BH1720_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 230,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_24_2",
+        "operation_name": "D2_U1850_POUA_BH1720_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 240,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_25_2",
+        "operation_name": "D2_U1850_POUA_BH1720_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 250,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_26_3",
+        "operation_name": "D3_U1850_POUA_BH1720_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 260,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_27_3",
+        "operation_name": "D3_U1850_POUA_BH1720_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 270,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_28_1",
+        "operation_name": "D1_U1850_POUA_BH1731_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 280,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_29_1",
+        "operation_name": "D1_U1850_POUA_BH1731_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 290,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_30_2",
+        "operation_name": "D2_U1850_POUA_BH1731_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 300,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_31_2",
+        "operation_name": "D2_U1850_POUA_BH1731_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 310,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_32_3",
+        "operation_name": "D3_U1850_POUA_BH1731_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 320,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_33_3",
+        "operation_name": "D3_U1850_POUA_BH1731_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 330,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_34_1",
+        "operation_name": "D1_U1850_POUB_BH1740_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 340,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_35_1",
+        "operation_name": "D1_U1850_POUB_BH1740_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 350,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_36_2",
+        "operation_name": "D2_U1850_POUB_BH1740_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 360,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_37_2",
+        "operation_name": "D2_U1850_POUB_BH1740_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 370,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_38_3",
+        "operation_name": "D3_U1850_POUB_BH1740_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 380,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_39_3",
+        "operation_name": "D3_U1850_POUB_BH1740_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 390,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_40_1",
+        "operation_name": "D1_U1850_POUB_BH1741_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 400,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_41_1",
+        "operation_name": "D1_U1850_POUB_BH1741_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 410,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_42_2",
+        "operation_name": "D2_U1850_POUB_BH1741_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 420,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_43_2",
+        "operation_name": "D2_U1850_POUB_BH1741_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 430,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_44_3",
+        "operation_name": "D3_U1850_POUB_BH1741_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 440,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_45_3",
+        "operation_name": "D3_U1850_POUB_BH1741_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 450,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_46_1",
+        "operation_name": "D1_B01_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 460,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_47_1",
+        "operation_name": "D1_B01_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 470,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_48_2",
+        "operation_name": "D2_B01_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 480,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_49_2",
+        "operation_name": "D2_B01_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 490,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_50_3",
+        "operation_name": "D3_B01_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 500,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_51_3",
+        "operation_name": "D3_B01_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 510,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_52_1",
+        "operation_name": "D1_B23_AC_Prep",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 520,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_53_1",
+        "operation_name": "D1_B23_AC_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 530,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_54_2",
+        "operation_name": "D2_B23_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 540,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_55_2",
+        "operation_name": "D2_B23_AC_C2_C3_part2",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 550,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_56_3",
+        "operation_name": "D3_B23_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 560,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_57_3",
+        "operation_name": "D3_B23_CIP_Discard",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 570,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_58_1",
+        "operation_name": "D1_2_AKTA_1850_AC_EQ",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 580,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_59_1",
+        "operation_name": "D1_2_AKTA_1850_AC_C1_C2",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 590,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_60_2",
+        "operation_name": "D2_2_AKTA_1850_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 600,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_61_2",
+        "operation_name": "D2_2_AKTA_1850_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 610,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_62_3",
+        "operation_name": "D3_2_AKTA_1850_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 620,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_63_4",
+        "operation_name": "D4_2_AKTA_1850_CIP",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 630,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_64_1",
+        "operation_name": "D1_Col_1_2m_AC_EQ",
+        "operation_day": 1,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 640,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_65_1",
+        "operation_name": "D1_Col_1_2m_AC_C1_C2",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 650,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_66_2",
+        "operation_name": "D2_Col_1_2m_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 660,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_67_2",
+        "operation_name": "D2_Col_1_2m_AC_C2_C3",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 670,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_68_3",
+        "operation_name": "D3_Col_1_2m_AC_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 680,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_69_4",
+        "operation_name": "D4_Col_1_2m_CIP",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 690,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_VIN": [
+      {
+        "operation_code": "OP_70_1",
+        "operation_name": "D1_T1812_VIN_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 700,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_71_2",
+        "operation_name": "D2_T1812_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 710,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_72_2",
+        "operation_name": "D2_T1812_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 720,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_73_3",
+        "operation_name": "D3_T1812_VIN_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 730,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_74_3",
+        "operation_name": "D3_T1812_Keep_CIP",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 740,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_75_1",
+        "operation_name": "D1_B06_VIN_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 750,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_76_2",
+        "operation_name": "D2_B06_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 760,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_77_2",
+        "operation_name": "D2_B06_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 770,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_78_3",
+        "operation_name": "D3_B06_VIN_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 780,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_79_3",
+        "operation_name": "D3_B06_Keep_CIP",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 790,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_80_1",
+        "operation_name": "D1_B07_VIN_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 800,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_81_2",
+        "operation_name": "D2_B07_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 810,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_82_2",
+        "operation_name": "D2_B07_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 820,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_83_3",
+        "operation_name": "D3_B07_VIN_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 830,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_84_3",
+        "operation_name": "D3_B07_Keep_CIP",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 840,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_85_1",
+        "operation_name": "D1_TransferLine_T1810_VIN_C1",
+        "operation_day": 1,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 850,
+        "required_people": 2,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_86_2",
+        "operation_name": "D2_TransferLine_T1810_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 860,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_87_2",
+        "operation_name": "D2_TransferLine_T1810_VIN_C2_C3",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 870,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_88_3",
+        "operation_name": "D3_TransferLine_T1810_VIN_C4",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 880,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_89_3",
+        "operation_name": "D3_TransferLine_T1810_Keep_CIP",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 890,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_CEX": [
+      {
+        "operation_code": "OP_90_2",
+        "operation_name": "D2_2_AKTA_1851_CIP",
+        "operation_day": 2,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 900,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_91_3",
+        "operation_name": "D3_T1813_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 910,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_92_3",
+        "operation_name": "D3_T1813_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 920,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_93_4",
+        "operation_name": "D4_T1813_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 930,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_94_3",
+        "operation_name": "D3_T1814_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 940,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_95_3",
+        "operation_name": "D3_T1814_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 950,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_96_4",
+        "operation_name": "D4_T1814_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 960,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_97_3",
+        "operation_name": "D3_T1815_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 970,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_98_3",
+        "operation_name": "D3_T1815_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 980,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_99_4",
+        "operation_name": "D4_T1815_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 990,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_100_3",
+        "operation_name": "D3_U1851_In_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1000,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_101_3",
+        "operation_name": "D3_U1851_In_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1010,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_102_4",
+        "operation_name": "D4_U1851_In_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1020,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_103_3",
+        "operation_name": "D3_U1851_Out_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1030,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_104_3",
+        "operation_name": "D3_U1851_Out_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1040,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_105_4",
+        "operation_name": "D4_U1851_Out_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1050,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_106_3",
+        "operation_name": "D3_BH1726_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1060,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_107_3",
+        "operation_name": "D3_BH1726_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1070,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_108_4",
+        "operation_name": "D4_BH1726_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1080,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_109_3",
+        "operation_name": "D3_BH1722_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1090,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_110_3",
+        "operation_name": "D3_BH1722_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1100,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_111_4",
+        "operation_name": "D4_BH1722_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1110,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_112_3",
+        "operation_name": "D3_B09_CEX_Prep",
+        "operation_day": 3,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1120,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_113_3",
+        "operation_name": "D3_B09_CEX_EQ",
+        "operation_day": 3,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1130,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_114_4",
+        "operation_name": "D4_B09_CEX_C1",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1140,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_UFDF1": [
+      {
+        "operation_code": "OP_115_4",
+        "operation_name": "D4_U1853_UFDF1_EQ",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1150,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_116_4",
+        "operation_name": "D4_U1853_UFDF1_Proc",
+        "operation_day": 4,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1160,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_117_4",
+        "operation_name": "D4_BH1720_UFDF1_EQ",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1170,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_118_4",
+        "operation_name": "D4_BH1720_UFDF1_Proc",
+        "operation_day": 4,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1180,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_119_4",
+        "operation_name": "D4_30m2_UFDF_UFDF1_EQ",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1190,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_120_4",
+        "operation_name": "D4_30m2_UFDF_UFDF1_Proc",
+        "operation_day": 4,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1200,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_AEX": [
+      {
+        "operation_code": "OP_121_5",
+        "operation_name": "D5_U1852_POUA_AEX_C1",
+        "operation_day": 5,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1210,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_122_5",
+        "operation_name": "D5_U1852_POUA_AEX_C2",
+        "operation_day": 5,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1220,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_123_6",
+        "operation_name": "D6_U1852_POUA_CIP",
+        "operation_day": 6,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1230,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_124_5",
+        "operation_name": "D5_B05_AEX_C1",
+        "operation_day": 5,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1240,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_125_5",
+        "operation_name": "D5_B05_AEX_C2",
+        "operation_day": 5,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1250,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_126_6",
+        "operation_name": "D6_B05_CIP",
+        "operation_day": 6,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1260,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_127_5",
+        "operation_name": "D5_1_5_AKTA_AEX_C1",
+        "operation_day": 5,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1270,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_128_5",
+        "operation_name": "D5_1_5_AKTA_AEX_C2",
+        "operation_day": 5,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1280,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_129_6",
+        "operation_name": "D6_1_5_AKTA_CIP",
+        "operation_day": 6,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1290,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_HA": [
+      {
+        "operation_code": "OP_130_7",
+        "operation_name": "D7_U1852_POUB_HA",
+        "operation_day": 7,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1300,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_131_7",
+        "operation_name": "D7_U1852_POUB_HA_Proc",
+        "operation_day": 7,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1310,
+        "required_people": 0,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_132_8",
+        "operation_name": "D8_U1852_POUB_HA_Proc2",
+        "operation_day": 8,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1320,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_133_7",
+        "operation_name": "D7_1_5_AKTA_HA",
+        "operation_day": 7,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1330,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_134_7",
+        "operation_name": "D7_1_5_AKTA_HA_Proc",
+        "operation_day": 7,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1340,
+        "required_people": 0,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_135_8",
+        "operation_name": "D8_1_5_AKTA_HA_Proc2",
+        "operation_day": 8,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1350,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_VF": [
+      {
+        "operation_code": "OP_136_8",
+        "operation_name": "D8_VF_Skid_Process",
+        "operation_day": 8,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1360,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_UFDF2": [
+      {
+        "operation_code": "OP_137_9",
+        "operation_name": "D9_15m2_EQ",
+        "operation_day": 9,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1370,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_138_9",
+        "operation_name": "D9_15m2_Process",
+        "operation_day": 9,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1380,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_UFDF3": [
+      {
+        "operation_code": "OP_139_10",
+        "operation_name": "D10_1m2_EQ",
+        "operation_day": 10,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1390,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_BULK": [
+      {
+        "operation_code": "OP_140_11",
+        "operation_name": "D11_Bulk_Fill_Main",
+        "operation_day": 11,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1400,
+        "required_people": 5,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_141_11",
+        "operation_name": "D11_Bulk_Fill_Freeze",
+        "operation_day": 11,
+        "standard_time": 11.0,
+        "recommended_time": 20.5,
+        "window_start_time": 20.5,
+        "window_end_time": 9.0,
+        "operation_order": 1410,
+        "required_people": 1,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ],
+    "STG_CIP_WFI": [
+      {
+        "operation_code": "OP_142_4",
+        "operation_name": "D4_CIP1890_CIP",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1420,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_143_12",
+        "operation_name": "D12_CIP1890_SIP",
+        "operation_day": 12,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1430,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_144_4",
+        "operation_name": "D4_PT1810_CIP",
+        "operation_day": 4,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1440,
+        "required_people": 4,
+        "qualifications": [
+          "DSPALL"
+        ]
+      },
+      {
+        "operation_code": "OP_145_12",
+        "operation_name": "D12_PT1810_SIP",
+        "operation_day": 12,
+        "standard_time": 12.0,
+        "recommended_time": 8.0,
+        "window_start_time": 8.0,
+        "window_end_time": 20.0,
+        "operation_order": 1450,
+        "required_people": 3,
+        "qualifications": [
+          "DSPALL"
+        ]
+      }
+    ]
+  },
+  "constraints": []
+}

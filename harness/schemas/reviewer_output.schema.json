@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ReviewerOutput",
+  "description": "Output schema for the reviewer worker. The reviewer checks plan quality before the generator runs.",
+  "type": "object",
+  "required": ["status", "summary", "findings", "replan_guidance"],
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail"],
+      "description": "pass = plan is ready for generator; fail = plan needs revision."
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One concise sentence describing the overall verdict."
+    },
+    "findings": {
+      "type": "array",
+      "description": "Specific issues found. Each item names the criterion and describes the problem. Empty if status is pass.",
+      "items": {
+        "type": "object",
+        "required": ["criterion", "severity", "description"],
+        "additionalProperties": false,
+        "properties": {
+          "criterion": {
+            "type": "string",
+            "enum": ["SCOPE", "SPECIFICITY", "FEASIBILITY", "SEPARATION"],
+            "description": "Which review criterion this finding belongs to."
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["FAIL", "WARN"],
+            "description": "FAIL blocks progress; WARN is noted but does not block."
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Specific, actionable description of the issue."
+          }
+        }
+      }
+    },
+    "replan_guidance": {
+      "type": "string",
+      "description": "Concise, actionable instruction for the planner to fix the identified issues. Empty string when status is pass."
+    }
+  }
+}

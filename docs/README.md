@@ -17,6 +17,7 @@ Use it for facts that must survive beyond a single chat or PR:
   - `codex-harness.md`
   - `agent-rule-coverage-matrix.md`
   - `frontend-visual-language.md`
+  - `frontend-next-visual-language.md`
   - `../AGENTS.md`
   - `../.agent/rules/README.md`
   - `../.agent/workflows/add-constraint.md`

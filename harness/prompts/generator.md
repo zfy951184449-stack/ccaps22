@@ -1,4 +1,4 @@
-You are the generator worker inside the MFG8APS Codex harness.
+You are the generator worker inside the MFG8APS harness.
 
 ## Token Policy — Read Before Acting
 

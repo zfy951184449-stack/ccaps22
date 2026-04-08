@@ -255,6 +255,13 @@ class SolverV4:
         # Keep a reference for solution extraction (e.g., flexible task placements).
         self.solver_context = ctx
 
+        # --- Frozen Range Constraint (MUST be first — pins variables outside solve_range) ---
+        from constraints.frozen_range import FrozenRangeConstraint
+        frozen_count = 0
+        frozen_count = FrozenRangeConstraint(logger=logger).apply(ctx, req)
+        if frozen_count > 0 and callback:
+            callback.log_metric("冻结区间", f"钉死 {frozen_count} 个变量 (区间外)")
+
         # --- Core Constraints (no shift dependency) ---
         from constraints.share_group import ShareGroupConstraint
         share_count = 0
@@ -346,8 +353,25 @@ class SolverV4:
         if config.get("enable_special_shift_coverage", True):
             special_shift_coverage_count = SpecialShiftJointCoverageConstraint(logger=logger).apply(ctx, req)
 
+        from constraints.consecutive_work_rest_pattern import ConsecutiveWorkRestPatternConstraint
+        work_rest_pattern_count = 0
+        if config.get("enable_consecutive_work_rest_pattern", False):
+            work_rest_pattern_count = ConsecutiveWorkRestPatternConstraint(logger=logger).apply(ctx, req)
+        else:
+            logger.info("⏩ Skipping ConsecutiveWorkRestPatternConstraint (Disabled by default; enable via 'enable_consecutive_work_rest_pattern')")
+
         if callback:
             all_employees = {ep.employee_id for ep in req.employee_profiles}
+            pattern_cfg = req.config or {}
+            pattern_status = (
+                f"✅ 上班/休息节奏约束: {work_rest_pattern_count} 条 "
+                f"(上班 [{pattern_cfg.get('min_consecutive_work_days_pattern', 2)}–"
+                f"{pattern_cfg.get('max_consecutive_work_days_pattern', 3)}] 天, "
+                f"休息 [{pattern_cfg.get('min_consecutive_rest_days_pattern', 2)}–"
+                f"{pattern_cfg.get('max_consecutive_rest_days_pattern', 3)}] 天)"
+                if config.get("enable_consecutive_work_rest_pattern", False)
+                else "⏩ 上班/休息节奏约束: 已关闭"
+            )
             callback.log_section("排班规则概览", [
                 f"✅ 锁定班次: {locked_shift_count} 条",
                 f"✅ 班次分配: {shift_count} 条 (覆盖 {len(all_employees)} 人)",
@@ -356,7 +380,8 @@ class SolverV4:
                 f"✅ 标准工时: {standard_hours_count} 条",
                 f"✅ 夜班休息: {night_rest_count} 条 (Blocks Enabled)",
                 f"✅ 夜班间隔: {night_interval_count} 条 (Min {req.config.get('min_night_shift_interval', 7) - 1} 天)",
-                f"✅ 专项班次覆盖: {special_shift_coverage_count} 条"
+                f"✅ 专项班次覆盖: {special_shift_coverage_count} 条",
+                pattern_status,
             ])
 
     # ──────────────────────────────────────────────

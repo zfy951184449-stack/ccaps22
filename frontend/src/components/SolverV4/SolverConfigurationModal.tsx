@@ -20,6 +20,13 @@ export interface SolverConfig {
     enable_balance_night_shifts: boolean;
     enable_prefer_standard_shift: boolean;
 
+    // 上班/休息节奏约束（高级配置）
+    enable_consecutive_work_rest_pattern: boolean;
+    min_consecutive_work_days_pattern: number;
+    max_consecutive_work_days_pattern: number;
+    min_consecutive_rest_days_pattern: number;
+    max_consecutive_rest_days_pattern: number;
+
     // Parameters
     max_consecutive_rest_days: number; // NEW
     min_night_shift_interval: number; // NEW
@@ -54,6 +61,13 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     enable_night_shift_interval: true,
     enable_balance_night_shifts: true,
     enable_prefer_standard_shift: false,
+
+    // 上班/休息节奏约束默认值（默认关闭）
+    enable_consecutive_work_rest_pattern: false,
+    min_consecutive_work_days_pattern: 2,
+    max_consecutive_work_days_pattern: 3,
+    min_consecutive_rest_days_pattern: 2,
+    max_consecutive_rest_days_pattern: 3,
 
     // Parameter Defaults
     max_consecutive_rest_days: 4,
@@ -158,6 +172,11 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_night_rest', title: '夜班后休息', description: '夜班后强制安排休息日' },
         { key: 'enable_night_shift_interval', title: '夜班间隔', description: '两次夜班之间的最小间隔天数' },
         { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
+        {
+            key: 'enable_consecutive_work_rest_pattern',
+            title: '上班/休息节奏约束',
+            description: '有操作安排时：连续上班 [最少–最多] 天，连续休息 [最少–最多] 天',
+        },
     ];
 
     return (
@@ -250,6 +269,65 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                         <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
                             当前设置：两次夜班之间至少间隔 {(config.min_night_shift_interval || 7) - 1} 天
                         </Text>
+                    </div>
+                )}
+
+                {/* Consecutive Work/Rest Pattern Parameters */}
+                {config.enable_consecutive_work_rest_pattern && (
+                    <div style={{ padding: '12px 16px', background: '#f6f8fa', borderRadius: 8, marginTop: 8 }}>
+                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
+                            ⚠️ 启用后若存在锁定班次，请确认不与该约束冲突
+                        </Text>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>最少连续上班</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={1}
+                                    max={config.max_consecutive_work_days_pattern}
+                                    value={config.min_consecutive_work_days_pattern}
+                                    onChange={(val) => handleWeightChange('min_consecutive_work_days_pattern', val)}
+                                    style={{ width: 70 }}
+                                    addonAfter="天"
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>最多连续上班</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={config.min_consecutive_work_days_pattern}
+                                    max={7}
+                                    value={config.max_consecutive_work_days_pattern}
+                                    onChange={(val) => handleWeightChange('max_consecutive_work_days_pattern', val)}
+                                    style={{ width: 70 }}
+                                    addonAfter="天"
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>最少连续休息</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={1}
+                                    max={config.max_consecutive_rest_days_pattern}
+                                    value={config.min_consecutive_rest_days_pattern}
+                                    onChange={(val) => handleWeightChange('min_consecutive_rest_days_pattern', val)}
+                                    style={{ width: 70 }}
+                                    addonAfter="天"
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>最多连续休息</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={config.min_consecutive_rest_days_pattern}
+                                    max={7}
+                                    value={config.max_consecutive_rest_days_pattern}
+                                    onChange={(val) => handleWeightChange('max_consecutive_rest_days_pattern', val)}
+                                    style={{ width: 70 }}
+                                    addonAfter="天"
+                                />
+                            </div>
+                        </div>
                     </div>
                 )}
 

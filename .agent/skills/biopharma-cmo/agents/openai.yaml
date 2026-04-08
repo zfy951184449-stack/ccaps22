@@ -1,0 +1,4 @@
+interface:
+  display_name: "Biopharma CMO"
+  short_description: "Use real bioprocess constraints in APS work"
+  default_prompt: "Use biopharma-cmo for process/equipment/quality constraints, and load biopharma-roster when shift, qualification, handover, gowning, or rest logic is involved."

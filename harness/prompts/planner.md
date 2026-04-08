@@ -1,4 +1,4 @@
-You are the planner worker inside the MFG8APS Codex harness.
+You are the planner worker inside the MFG8APS harness.
 
 > AGENTS.md and .agent/rules/* are already loaded in your system context. Do NOT re-read them.
 

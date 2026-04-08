@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Repo-local Codex harness manager for MFG8APS."""
+"""Repo-local harness manager for MFG8APS.
+
+State machine: planning → reviewing → implementing → evaluating → done/blocked
+
+Supports multiple LLM backends (codex, claude, dryrun) via harness/backends/.
+"""
 
 from __future__ import annotations
 
@@ -82,13 +87,6 @@ def ensure_tool_available(tool: str) -> None:
     completed = run_command(["/bin/zsh", "-lc", f"command -v {tool}"], REPO_ROOT)
     if completed.returncode != 0:
         raise HarnessError(f"Required tool `{tool}` is not available in PATH.")
-
-
-def ensure_codex_logged_in() -> None:
-    completed = run_command(["codex", "login", "status"], REPO_ROOT)
-    login_output = f"{completed.stdout}\n{completed.stderr}"
-    if completed.returncode != 0 or "Logged in" not in login_output:
-        raise HarnessError("Codex is not logged in. Run `codex login` first.")
 
 
 def git_status_is_clean(repo_root: Path) -> bool:
@@ -315,7 +313,7 @@ def create_run_id() -> str:
     return f"{timestamp}-{uuid4().hex[:8]}"
 
 
-def initial_state(run_id: str, task: str, max_repair_rounds: int) -> Dict[str, Any]:
+def initial_state(run_id: str, task: str, max_repair_rounds: int, max_replan_rounds: int) -> Dict[str, Any]:
     return {
         "run_id": run_id,
         "task": task,
@@ -324,6 +322,8 @@ def initial_state(run_id: str, task: str, max_repair_rounds: int) -> Dict[str, A
         "attempt": 0,
         "max_repair_rounds": max_repair_rounds,
         "max_attempts": max_repair_rounds + 1,
+        "replan_count": 0,
+        "max_replan_rounds": max_replan_rounds,
         "started_at": utc_now(),
         "updated_at": utc_now(),
         "lane": None,
@@ -399,7 +399,7 @@ def append_implementation_log(
     report_markdown: str,
 ) -> None:
     log_path = run_dir / "implementation_log.md"
-    header = f"# Implementation Log\n\n" if not log_path.exists() else ""
+    header = "# Implementation Log\n\n" if not log_path.exists() else ""
     section = "\n".join(
         [
             header.rstrip(),
@@ -473,6 +473,7 @@ def write_final_summary(run_dir: Path, state: Dict[str, Any]) -> None:
         f"- Status: `{state['status']}`",
         f"- Phase: `{state['phase']}`",
         f"- Attempt: `{state['attempt']}` / `{state['max_attempts']}`",
+        f"- Replan count: `{state.get('replan_count', 0)}` / `{state.get('max_replan_rounds', 0)}`",
         "",
         "## User Task",
         state["task"],
@@ -519,8 +520,10 @@ def write_final_summary(run_dir: Path, state: Dict[str, Any]) -> None:
             render_list(
                 [
                     "plan.json",
+                    "review.json",
                     "spec.md",
                     "planner_input.json",
+                    "reviewer_input.json",
                     "generator_input_round_N.json",
                     "evaluator_input_round_N.json",
                     "implementation_log.md",
@@ -534,181 +537,168 @@ def write_final_summary(run_dir: Path, state: Dict[str, Any]) -> None:
     write_text(run_dir / "final_summary.md", "\n".join(summary_lines))
 
 
-def run_codex_worker(
-    role: str,
-    prompt: str,
+# ---------------------------------------------------------------------------
+# Phase functions
+# ---------------------------------------------------------------------------
+
+def run_planning(
     run_dir: Path,
     state: Dict[str, Any],
     settings: Dict[str, Any],
-    output_name: str,
-    schema_path: Optional[Path] = None,
-) -> str:
-    codex_settings = settings["codex"]
-    worker_settings = codex_settings["workers"][role]
-    final_path = run_dir / output_name
-    output_stem = Path(output_name).stem
-    events_path = run_dir / f"{output_stem}.events.jsonl"
-    stderr_path = run_dir / f"{output_stem}.stderr.log"
+    backend: Any,
+    replan_guidance: Optional[str] = None,
+) -> Dict[str, Any]:
+    replan_count = state.get("replan_count", 0)
+    label = f"replan={replan_count}" if replan_count > 0 else "planning"
+    print_stage(f"run={state['run_id']} phase={label}")
 
-    command = [
-        "codex",
-        "exec",
-        "--cd",
-        str(REPO_ROOT),
-        "--ephemeral",
-        "--json",
-        "-m",
-        codex_settings["model"],
-        "-c",
-        f"approval_policy=\"{codex_settings['approval_policy']}\"",
-        "-c",
-        f"model_reasoning_effort=\"{worker_settings.get('reasoning_effort', 'medium')}\"",
-        "-s",
-        worker_settings["sandbox"],
-        "-o",
-        str(final_path),
-    ]
-    if schema_path is not None:
-        command.extend(["--output-schema", str(schema_path)])
-
-    env = os.environ.copy()
-    env["MFG8APS_HARNESS_ACTIVE"] = "1"
-    env["MFG8APS_HARNESS_RUN_ID"] = state["run_id"]
-    env["MFG8APS_HARNESS_ROLE"] = role
-
-    log_event(
-        run_dir,
-        "worker.started",
-        {
-            "role": role,
-            "output": output_name,
-            "sandbox": worker_settings["sandbox"],
+    bundle_payload: Dict[str, Any] = {
+        "run_id": state["run_id"],
+        "task": state["task"],
+        "lane_options": [
+            "backend",
+            "frontend",
+            "frontend-next",
+            "solver-v4",
+            "cross-layer",
+            "docs",
+        ],
+        "source_of_truth": [
+            "AGENTS.md",
+            ".agent/rules/README.md",
+            ".agent/rules/codex-coding-rules.md",
+            "docs/ARCHITECTURE.md",
+            "docs/README.md",
+        ],
+        "policy": {
+            "minimal_reads": True,
+            "when_simple_task_avoid_repo_wide_reads": True,
         },
-    )
+    }
+    if replan_guidance:
+        bundle_payload["replan_guidance"] = replan_guidance
+        bundle_payload["replan_count"] = replan_count
 
-    with events_path.open("w", encoding="utf-8") as stdout_handle, stderr_path.open(
-        "w",
-        encoding="utf-8",
-    ) as stderr_handle:
-        completed = subprocess.run(
-            command,
-            cwd=str(REPO_ROOT),
-            env=env,
-            input=prompt,
-            text=True,
-            stdout=stdout_handle,
-            stderr=stderr_handle,
-            check=False,
-        )
+    planner_bundle = write_context_bundle(run_dir, "planner_input.json", bundle_payload)
+    prompt = render_prompt("planner.md", {"context_bundle_path": str(planner_bundle)})
 
-    if completed.returncode != 0:
-        stderr_preview = stderr_path.read_text(encoding="utf-8").strip()
-        raise HarnessError(
-            f"Codex worker `{role}` failed with exit code {completed.returncode}. "
-            f"See `{stderr_path}`. {stderr_preview[:400]}"
-        )
-
-    log_event(
-        run_dir,
-        "worker.completed",
-        {
-            "role": role,
-            "output": output_name,
-        },
-    )
-    return final_path.read_text(encoding="utf-8").strip()
-
-
-def new_run(task: str, settings: Dict[str, Any], allow_dirty: bool) -> Tuple[Path, Dict[str, Any]]:
-    run_id = create_run_id()
-    run_dir = RUNS_ROOT / run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
-    state = initial_state(run_id, task, settings["max_repair_rounds"])
-    baseline_dirty_files = list_dirty_files(REPO_ROOT) if allow_dirty else []
-    state["baseline_file_hashes"] = capture_file_hashes(REPO_ROOT, baseline_dirty_files)
-    write_text(run_dir / "user_prompt.md", task)
-    write_json(run_dir / "run_state.json", state)
-    log_event(
-        run_dir,
-        "run.created",
-        {
-            "task": task,
-            "allow_dirty": allow_dirty,
-            "baseline_dirty_files": baseline_dirty_files,
-        },
-    )
-    return run_dir, state
-
-
-def load_run(run_id: str) -> Tuple[Path, Dict[str, Any]]:
-    run_dir = RUNS_ROOT / run_id
-    state_path = run_dir / "run_state.json"
-    if not state_path.exists():
-        raise HarnessError(f"Run `{run_id}` does not exist.")
-    return run_dir, load_json(state_path)
-
-
-def run_planning(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
-    print_stage(f"run={state['run_id']} phase=planning")
-    planner_bundle = write_context_bundle(
-        run_dir,
-        "planner_input.json",
-        {
-            "run_id": state["run_id"],
-            "task": state["task"],
-            "lane_options": [
-                "backend",
-                "frontend",
-                "frontend-next",
-                "solver-v4",
-                "cross-layer",
-                "docs",
-            ],
-            "source_of_truth": [
-                "AGENTS.md",
-                ".agent/rules/README.md",
-                ".agent/rules/codex-coding-rules.md",
-                "docs/ARCHITECTURE.md",
-                "docs/README.md",
-            ],
-            "policy": {
-                "minimal_reads": True,
-                "when_simple_task_avoid_repo_wide_reads": True,
-            },
-        },
-    )
-    prompt = render_prompt(
-        "planner.md",
-        {
-            "context_bundle_path": str(planner_bundle),
-        },
-    )
-    plan_text = run_codex_worker(
+    result = backend.run_worker(
         role="planner",
         prompt=prompt,
         run_dir=run_dir,
         state=state,
-        settings=settings,
         output_name="plan.json",
         schema_path=HARNESS_ROOT / "schemas" / "planner_output.schema.json",
     )
-    plan = json.loads(plan_text)
+    plan = json.loads(result.output_text)
     write_json(run_dir / "plan.json", plan)
     write_text(run_dir / "spec.md", format_spec_markdown(state["run_id"], state["task"], plan))
     update_state(
         run_dir,
         state,
-        phase="implementing",
+        phase="reviewing",
         status="running",
         lane=plan["lane"],
         plan_summary=plan["summary"],
         last_completed_phase="planning",
     )
-    log_event(run_dir, "phase.completed", {"phase": "planning"})
+    log_event(run_dir, "phase.completed", {"phase": "planning", "replan_count": replan_count})
     return plan
 
 
-def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> List[str]:
+def run_reviewer(
+    run_dir: Path,
+    state: Dict[str, Any],
+    settings: Dict[str, Any],
+    backend: Any,
+) -> Dict[str, Any]:
+    print_stage(f"run={state['run_id']} phase=reviewing")
+    plan_path = run_dir / "plan.json"
+    spec_path = run_dir / "spec.md"
+    plan = load_json(plan_path)
+
+    reviewer_bundle = write_context_bundle(
+        run_dir,
+        "reviewer_input.json",
+        {
+            "run_id": state["run_id"],
+            "task": state["task"],
+            "plan_path": str(plan_path),
+            "spec_path": str(spec_path),
+            "replan_count": state.get("replan_count", 0),
+            "max_replan_rounds": state.get("max_replan_rounds", 3),
+            "review_criteria": ["SCOPE", "SPECIFICITY", "FEASIBILITY", "SEPARATION"],
+            "policy": {
+                "read_from_requirements": True,
+                "reviewer_stance": "restrained_professional",
+                "focus": "will this plan cause the generator to walk in the wrong direction?",
+            },
+        },
+    )
+    prompt = render_prompt("reviewer.md", {"context_bundle_path": str(reviewer_bundle)})
+
+    result = backend.run_worker(
+        role="reviewer",
+        prompt=prompt,
+        run_dir=run_dir,
+        state=state,
+        output_name="review.json",
+        schema_path=HARNESS_ROOT / "schemas" / "reviewer_output.schema.json",
+    )
+    review = json.loads(result.output_text)
+    write_json(run_dir / "review.json", review)
+
+    if review["status"] == "pass":
+        update_state(
+            run_dir,
+            state,
+            phase="implementing",
+            status="running",
+            last_completed_phase="reviewing",
+        )
+        log_event(run_dir, "phase.completed", {"phase": "reviewing", "status": "pass"})
+    else:
+        replan_count = state.get("replan_count", 0) + 1
+        max_replan = state.get("max_replan_rounds", 3)
+        if replan_count > max_replan:
+            update_state(run_dir, state, phase="blocked", status="blocked", last_completed_phase="reviewing")
+            print_stage(
+                f"run={state['run_id']} status=blocked "
+                f"reason=max_replan_rounds_exceeded replan_count={replan_count}"
+            )
+        else:
+            update_state(
+                run_dir,
+                state,
+                phase="planning",
+                status="running",
+                replan_count=replan_count,
+                last_completed_phase="reviewing",
+            )
+            print_stage(
+                f"run={state['run_id']} status=needs_replan "
+                f"replan_count={replan_count}/{max_replan} "
+                f"summary={review.get('summary', '')}"
+            )
+        log_event(
+            run_dir,
+            "phase.completed",
+            {
+                "phase": "reviewing",
+                "status": review["status"],
+                "replan_count": replan_count,
+            },
+        )
+
+    return review
+
+
+def run_generator(
+    run_dir: Path,
+    state: Dict[str, Any],
+    settings: Dict[str, Any],
+    backend: Any,
+) -> List[str]:
     attempt = int(state["attempt"]) + 1
     update_state(run_dir, state, attempt=attempt, status="running")
     print_stage(f"run={state['run_id']} phase=implementing attempt={attempt}/{state['max_attempts']}")
@@ -717,8 +707,7 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
     plan = load_json(plan_path)
     prior_feedback_path = run_dir / f"qa_report_round_{attempt - 1}.md"
 
-    # Pre-fetch targeted file excerpts so the generator worker does not need
-    # to read entire files. This is the primary token-reduction mechanism.
+    # Pre-fetch targeted file excerpts — primary token-reduction mechanism.
     print_stage(f"run={state['run_id']} fetching file excerpts for attempt={attempt}")
     file_excerpts = fetch_file_excerpts(plan, REPO_ROOT)
     if file_excerpts:
@@ -740,14 +729,8 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
             "file_excerpts": file_excerpts,
             "reading_policy": {
                 "do_not_re_read": _DO_NOT_RE_READ,
-                "reason": (
-                    "These files are already loaded in your system context via AGENTS.md. "
-                    "Re-reading them with shell commands wastes tokens and degrades performance."
-                ),
-                "for_additional_reads": (
-                    "If file_excerpts are insufficient, use targeted grep/rg commands. "
-                    "Never use sed or cat on large source files."
-                ),
+                "reason": "Already in system context; re-reading wastes tokens.",
+                "for_additional_reads": "Use targeted grep/rg. Never cat large files.",
             },
             "policy": {
                 "read_only_what_is_needed": True,
@@ -755,20 +738,16 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
             },
         },
     )
-    prompt = render_prompt(
-        "generator.md",
-        {
-            "context_bundle_path": str(generator_bundle),
-        },
-    )
-    report_markdown = run_codex_worker(
+    prompt = render_prompt("generator.md", {"context_bundle_path": str(generator_bundle)})
+
+    result = backend.run_worker(
         role="generator",
         prompt=prompt,
         run_dir=run_dir,
         state=state,
-        settings=settings,
         output_name=f"generator_round_{attempt}.md",
     )
+    report_markdown = result.output_text
     changed_files = compute_delta_files(REPO_ROOT, state.get("baseline_file_hashes", {}))
     verification_commands = build_verification_commands(changed_files, settings, REPO_ROOT)
     append_implementation_log(run_dir, attempt, changed_files, report_markdown)
@@ -784,16 +763,17 @@ def run_generator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
     log_event(
         run_dir,
         "phase.completed",
-        {
-            "phase": "implementing",
-            "attempt": attempt,
-            "changed_files": changed_files,
-        },
+        {"phase": "implementing", "attempt": attempt, "changed_files": changed_files},
     )
     return changed_files
 
 
-def run_evaluator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> Dict[str, Any]:
+def run_evaluator(
+    run_dir: Path,
+    state: Dict[str, Any],
+    settings: Dict[str, Any],
+    backend: Any,
+) -> Dict[str, Any]:
     attempt = int(state["attempt"])
     print_stage(f"run={state['run_id']} phase=evaluating attempt={attempt}/{state['max_attempts']}")
     plan_path = run_dir / "plan.json"
@@ -802,6 +782,7 @@ def run_evaluator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
     plan = load_json(plan_path)
     changed_files = state.get("changed_files", [])
     verification_commands = state.get("verification_commands", [])
+
     evaluator_bundle = write_context_bundle(
         run_dir,
         f"evaluator_input_round_{attempt}.json",
@@ -829,22 +810,17 @@ def run_evaluator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
             },
         },
     )
-    prompt = render_prompt(
-        "evaluator.md",
-        {
-            "context_bundle_path": str(evaluator_bundle),
-        },
-    )
-    evaluation_text = run_codex_worker(
+    prompt = render_prompt("evaluator.md", {"context_bundle_path": str(evaluator_bundle)})
+
+    result = backend.run_worker(
         role="evaluator",
         prompt=prompt,
         run_dir=run_dir,
         state=state,
-        settings=settings,
         output_name="evaluation.json",
         schema_path=HARNESS_ROOT / "schemas" / "evaluator_output.schema.json",
     )
-    evaluation = json.loads(evaluation_text)
+    evaluation = json.loads(result.output_text)
     write_json(run_dir / "evaluation.json", evaluation)
     write_text(
         run_dir / f"qa_report_round_{attempt}.md",
@@ -866,25 +842,34 @@ def run_evaluator(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]
     log_event(
         run_dir,
         "phase.completed",
-        {
-            "phase": "evaluating",
-            "attempt": attempt,
-            "status": evaluation["status"],
-        },
+        {"phase": "evaluating", "attempt": attempt, "status": evaluation["status"]},
     )
     return evaluation
 
 
-def run_loop(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> int:
+def run_loop(
+    run_dir: Path,
+    state: Dict[str, Any],
+    settings: Dict[str, Any],
+    backend: Any,
+) -> int:
+    replan_guidance: Optional[str] = None
+
     while state["phase"] not in ("done", "blocked"):
         if state["phase"] == "planning":
-            run_planning(run_dir, state, settings)
+            run_planning(run_dir, state, settings, backend, replan_guidance=replan_guidance)
+            replan_guidance = None
+            continue
+        if state["phase"] == "reviewing":
+            review = run_reviewer(run_dir, state, settings, backend)
+            if state["phase"] == "planning":
+                replan_guidance = review.get("replan_guidance", "")
             continue
         if state["phase"] == "implementing":
-            run_generator(run_dir, state, settings)
+            run_generator(run_dir, state, settings, backend)
             continue
         if state["phase"] == "evaluating":
-            evaluation = run_evaluator(run_dir, state, settings)
+            evaluation = run_evaluator(run_dir, state, settings, backend)
             if state["phase"] == "implementing":
                 print_stage(
                     f"run={state['run_id']} status=needs_fix "
@@ -900,8 +885,52 @@ def run_loop(run_dir: Path, state: Dict[str, Any], settings: Dict[str, Any]) -> 
     return 0 if state["status"] == "done" else 1
 
 
+# ---------------------------------------------------------------------------
+# Run lifecycle
+# ---------------------------------------------------------------------------
+
+def new_run(task: str, settings: Dict[str, Any], allow_dirty: bool) -> Tuple[Path, Dict[str, Any]]:
+    run_id = create_run_id()
+    run_dir = RUNS_ROOT / run_id
+    run_dir.mkdir(parents=True, exist_ok=False)
+    state = initial_state(
+        run_id,
+        task,
+        settings["max_repair_rounds"],
+        settings.get("max_replan_rounds", 3),
+    )
+    baseline_dirty_files = list_dirty_files(REPO_ROOT) if allow_dirty else []
+    state["baseline_file_hashes"] = capture_file_hashes(REPO_ROOT, baseline_dirty_files)
+    write_text(run_dir / "user_prompt.md", task)
+    write_json(run_dir / "run_state.json", state)
+    log_event(
+        run_dir,
+        "run.created",
+        {
+            "task": task,
+            "allow_dirty": allow_dirty,
+            "baseline_dirty_files": baseline_dirty_files,
+        },
+    )
+    return run_dir, state
+
+
+def load_run(run_id: str) -> Tuple[Path, Dict[str, Any]]:
+    run_dir = RUNS_ROOT / run_id
+    state_path = run_dir / "run_state.json"
+    if not state_path.exists():
+        raise HarnessError(f"Run `{run_id}` does not exist.")
+    return run_dir, load_json(state_path)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the MFG8APS Codex harness.")
+    parser = argparse.ArgumentParser(
+        description="Run the MFG8APS harness. Supports codex, claude, and dryrun backends."
+    )
     parser.add_argument("task_text", nargs="?", help="Optional task text for a new run.")
     parser.add_argument("--task", dest="task_flag", help="Task text for a new run.")
     parser.add_argument("--resume", help="Resume an existing run by run id.")
@@ -909,6 +938,20 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         "--allow-dirty",
         action="store_true",
         help="Allow starting a new run with a dirty worktree.",
+    )
+    parser.add_argument(
+        "--backend",
+        choices=["codex", "claude", "dryrun"],
+        help="Override the LLM backend (default: from settings.json).",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Run the full state machine without calling any LLM. "
+            "Tests bundle generation, verification routing, and artifact writing. "
+            "Equivalent to --backend dryrun."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -923,19 +966,25 @@ def resolve_task(args: argparse.Namespace) -> str:
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     settings = load_json(HARNESS_ROOT / "config" / "settings.json")
-    ensure_tool_available("codex")
+
+    # --dry-run is sugar for --backend dryrun
+    cli_backend = "dryrun" if args.dry_run else args.backend
+
+    from harness.backends import create_backend
+    backend = create_backend(settings, cli_override=cli_backend)
+    backend.check_available()
+
     ensure_tool_available("python3")
-    ensure_codex_logged_in()
 
     if args.resume:
         run_dir, state = load_run(args.resume)
     else:
-        ensure_clean_worktree(REPO_ROOT, allow_dirty=args.allow_dirty)
+        ensure_clean_worktree(REPO_ROOT, allow_dirty=args.allow_dirty or args.dry_run)
         task = resolve_task(args)
-        run_dir, state = new_run(task, settings, allow_dirty=args.allow_dirty)
+        run_dir, state = new_run(task, settings, allow_dirty=args.allow_dirty or args.dry_run)
 
     log_event(run_dir, "run.started", {"phase": state["phase"], "status": state["status"]})
-    return run_loop(run_dir, state, settings)
+    return run_loop(run_dir, state, settings, backend)
 
 
 if __name__ == "__main__":

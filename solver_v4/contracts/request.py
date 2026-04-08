@@ -99,6 +99,20 @@ class LockedShift:
     shift_id: Optional[int] = None
 
 @dataclass
+class FrozenShift:
+    """区间外已有班次快照，用于冻结区间固化"""
+    employee_id: int
+    date: str
+    shift_id: int
+
+@dataclass
+class FrozenAssignment:
+    """区间外已有操作人员分配快照，用于冻结区间固化"""
+    operation_plan_id: int
+    position_number: int
+    employee_id: int
+
+@dataclass
 class HistoricalShift:
     """历史班次记录，用于边界约束检查"""
     employee_id: int
@@ -170,6 +184,9 @@ class SolverRequest:
     resource_calendars: List[ResourceCalendarEntry] = field(default_factory=list)
     operation_resource_requirements: List[OperationResourceRequirement] = field(default_factory=list)
     maintenance_windows: List[MaintenanceWindow] = field(default_factory=list)
+    solve_range: Optional[Dict[str, str]] = None  # {start_date, end_date} — 求解子区间
+    frozen_shifts: List[FrozenShift] = field(default_factory=list)
+    frozen_assignments: List[FrozenAssignment] = field(default_factory=list)
     config: Optional[Dict[str, Any]] = None
 
     @classmethod
@@ -230,6 +247,8 @@ class SolverRequest:
             for requirement in data.get("operation_resource_requirements", [])
         ]
         maintenance_windows = [MaintenanceWindow(**window) for window in data.get("maintenance_windows", [])]
+        frozen_shifts = [FrozenShift(**fs) for fs in data.get("frozen_shifts", [])]
+        frozen_assignments = [FrozenAssignment(**fa) for fa in data.get("frozen_assignments", [])]
 
         return cls(
             request_id=data.get("request_id"),
@@ -247,5 +266,8 @@ class SolverRequest:
             resource_calendars=resource_calendars,
             operation_resource_requirements=operation_resource_requirements,
             maintenance_windows=maintenance_windows,
+            solve_range=data.get("solve_range"),
+            frozen_shifts=frozen_shifts,
+            frozen_assignments=frozen_assignments,
             config=data.get("config")
         )
