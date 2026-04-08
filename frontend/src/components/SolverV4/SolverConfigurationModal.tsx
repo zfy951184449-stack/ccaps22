@@ -42,6 +42,8 @@ export interface SolverConfig {
     objective_weight_night_balance: number; // NEW
     enable_balance_weekend_work: boolean;
     objective_weight_weekend_balance: number;
+    enable_minimize_triple_salary: boolean;
+    objective_weight_triple_salary: number;
 
     // Vacancy
     allow_position_vacancy: boolean;
@@ -86,6 +88,8 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     objective_weight_night_balance: 5,
     enable_balance_weekend_work: true,
     objective_weight_weekend_balance: 5,
+    enable_minimize_triple_salary: true,
+    objective_weight_triple_salary: 10,
 
     // Vacancy Defaults
     allow_position_vacancy: false,
@@ -363,6 +367,12 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                             weightKey: 'objective_weight_weekend_balance',
                             title: '周末工作均衡',
                             description: '惩罚周末/节假日工作分配不均匀',
+                        },
+                        {
+                            key: 'enable_minimize_triple_salary',
+                            weightKey: 'objective_weight_triple_salary',
+                            title: '三倍薪日成本优化',
+                            description: '尽量避免在法定节假日（三倍薪资）安排排班',
                         },
                         {
                             key: 'allow_position_vacancy',

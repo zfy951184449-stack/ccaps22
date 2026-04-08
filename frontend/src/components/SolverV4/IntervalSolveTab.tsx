@@ -362,8 +362,8 @@ const IntervalSolveTab: React.FC = () => {
                     loading={solving}
                     disabled={!solveRange || selectedRowKeys.length === 0}
                     style={{
-                        background: solveRange ? 'linear-gradient(135deg, #ff6b35 0%, #f7931e 100%)' : undefined,
-                        borderColor: solveRange ? '#ff6b35' : undefined,
+                        background: solveRange ? 'linear-gradient(135deg, var(--v4-accent-amber) 0%, var(--v4-color-warning) 100%)' : undefined,
+                        borderColor: solveRange ? 'var(--v4-accent-amber)' : undefined,
                         borderRadius: 8,
                     }}
                 >

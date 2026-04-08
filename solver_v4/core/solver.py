@@ -32,9 +32,9 @@ class SolverV4:
         self.solver = cp_model.CpSolver()
         self.solver_context = None
         
-        # Performance Parameters (Optimized for Multi-core)
-        self.solver.parameters.log_search_progress = True
-        self.solver.parameters.num_workers = 8
+        # Performance Parameters (Environment-aware)
+        self.solver.parameters.log_search_progress = os.environ.get("SOLVER_DEBUG", "0") == "1"
+        self.solver.parameters.num_workers = int(os.environ.get("SOLVER_WORKERS", min(8, os.cpu_count() or 4)))
         self.solver.parameters.linearization_level = 2
         self.solver.parameters.symmetry_level = 2
 
@@ -52,6 +52,22 @@ class SolverV4:
 
         # Phase 1: Callback
         callback, run_id = self._init_callback(config)
+
+        # Phase 1.5: Input Pre-check (fast sanity checks)
+        from core.precheck import run_precheck
+        precheck_issues = run_precheck(req)
+        if precheck_issues:
+            errors = [i for i in precheck_issues if i.severity == "ERROR"]
+            warnings = [i for i in precheck_issues if i.severity == "WARNING"]
+            if callback:
+                for issue in errors:
+                    callback.log_metric("预检-错误", f"🔴 {issue.message}")
+                for issue in warnings[:5]:  # Limit to 5 warnings in callback
+                    callback.log_metric("预检-警告", f"⚠️ {issue.message}")
+            for issue in errors:
+                logger.error(f"[PRECHECK] {issue.message}")
+            for issue in warnings:
+                logger.warning(f"[PRECHECK] {issue.message}")
         
         # Phase 2: Variables
         result_or_vars = self._build_variables(req, config, callback)
@@ -238,7 +254,7 @@ class SolverV4:
 
     def _apply_constraints(self, req, config, callback, assignments, vacancy_vars,
                            shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index):
-        """Load and apply all constraint modules based on config toggles."""
+        """Load and apply all constraint modules via the constraint registry."""
 
         # Build unified context
         ctx = SolverContext(
@@ -255,134 +271,44 @@ class SolverV4:
         # Keep a reference for solution extraction (e.g., flexible task placements).
         self.solver_context = ctx
 
-        # --- Frozen Range Constraint (MUST be first — pins variables outside solve_range) ---
-        from constraints.frozen_range import FrozenRangeConstraint
-        frozen_count = 0
-        frozen_count = FrozenRangeConstraint(logger=logger).apply(ctx, req)
-        if frozen_count > 0 and callback:
-            callback.log_metric("冻结区间", f"钉死 {frozen_count} 个变量 (区间外)")
+        from constraints.registry import CORE_CONSTRAINTS, SHIFT_CONSTRAINTS
 
-        # --- Core Constraints (no shift dependency) ---
-        from constraints.share_group import ShareGroupConstraint
-        share_count = 0
-        if config.get("enable_share_group", True):
-            share_count = ShareGroupConstraint(logger=logger).apply(ctx, req)
-        else:
-            logger.info("⏩ Skipping ShareGroupConstraint (Disabled)")
+        constraint_results = {}  # name -> count
 
-        from constraints.unique_employee import UniqueEmployeeConstraint
-        unique_count = 0
-        if config.get("enable_unique_employee", True):
-            unique_count = UniqueEmployeeConstraint(logger=logger).apply(ctx, req)
-        else:
-            logger.info("⏩ Skipping UniqueEmployeeConstraint (Disabled)")
-
-        from constraints.locked_operations import LockedOperationsConstraint
-        locked_ops_count = 0
-        if config.get("enable_locked_operations", True):
-            locked_ops_count = LockedOperationsConstraint(logger=logger).apply(ctx, req)
-        else:
-            logger.info("⏩ Skipping LockedOperationsConstraint (Disabled)")
+        # --- Phase 1: Core Constraints (no shift dependency) ---
+        for cls in CORE_CONSTRAINTS:
+            enabled = config.get(cls.config_key, cls.default_enabled) if cls.config_key else True
+            if enabled:
+                count = cls(logger=logger).apply(ctx, req)
+                constraint_results[cls.name] = count
+            else:
+                logger.info(f"⏩ Skipping {cls.name} (Disabled)")
+                constraint_results[cls.name] = "OFF"
 
         if callback:
-            callback.log_section("应用硬约束 (从文件加载)", [
-                f"共享组: {share_count} (Config: {config.get('enable_share_group', 'ON')})",
-                f"一人一岗: {len(req.operation_demands)} Ops (Implicit)",
-                f"人员唯一: {unique_count} (Config: {config.get('enable_unique_employee', 'ON')})",
-                f"锁定操作: {locked_ops_count} (Config: {config.get('enable_locked_operations', 'ON')})"
-            ])
+            core_lines = [f"{'✅' if v != 'OFF' else '⏩'} {name}: {v} 条" if v != 'OFF' else f"⏩ {name}: 已关闭"
+                          for name, v in constraint_results.items()]
+            callback.log_section("应用硬约束 (核心)", core_lines)
 
-        from constraints.one_position import OnePositionConstraint
-        one_pos_count = 0
-        if config.get("enable_one_position", True):
-            one_pos_count = OnePositionConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.employee_availability import EmployeeAvailabilityConstraint
-        availability_count = 0
-        if config.get("enable_employee_availability", True):
-            availability_count = EmployeeAvailabilityConstraint(logger=logger).apply(ctx, req)
-
-        # --- Shift-Dependent Constraints ---
+        # --- Phase 2: Shift-Dependent Constraints ---
         if not shift_assignments:
             return
 
-        from constraints.locked_shifts import LockedShiftsConstraint
-        locked_shift_count = 0
-        if config.get("enable_locked_shifts", True):
-            locked_shift_count = LockedShiftsConstraint(logger=logger).apply(ctx, req)
-        else:
-            logger.info("⏩ Skipping LockedShiftsConstraint (Disabled)")
+        shift_results = {}
 
-        from constraints.shift_assignment import ShiftAssignmentConstraint
-        shift_count = 0
-        if config.get("enable_shift_assignment", True):
-            shift_count = ShiftAssignmentConstraint(logger=logger).apply(ctx, req)
-            
-        from constraints.flexible_scheduling import FlexibleSchedulingConstraint
-        flex_count = 0
-        if config.get("enable_flexible_scheduling", True):
-            flex_count = FlexibleSchedulingConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.work_days_limit import MaxConsecutiveWorkDaysConstraint
-        work_limit_count = 0
-        if config.get("enable_max_consecutive_work_days", True):
-            work_limit_count = MaxConsecutiveWorkDaysConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.consecutive_rest_limit import MaxConsecutiveRestDaysConstraint
-        rest_limit_count = 0
-        if config.get("enable_max_consecutive_rest_days", True):
-            rest_limit_count = MaxConsecutiveRestDaysConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.standard_hours import StandardHoursConstraint
-        standard_hours_count = 0
-        if config.get("enable_standard_hours", True):
-            standard_hours_count = StandardHoursConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.night_rest import NightRestConstraint
-        night_rest_count = 0
-        if config.get("enable_night_rest", True):
-            night_rest_count = NightRestConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.night_shift_interval import NightShiftIntervalConstraint
-        night_interval_count = 0
-        if config.get("enable_night_shift_interval", True):
-            night_interval_count = NightShiftIntervalConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.special_shift_joint_coverage import SpecialShiftJointCoverageConstraint
-        special_shift_coverage_count = 0
-        if config.get("enable_special_shift_coverage", True):
-            special_shift_coverage_count = SpecialShiftJointCoverageConstraint(logger=logger).apply(ctx, req)
-
-        from constraints.consecutive_work_rest_pattern import ConsecutiveWorkRestPatternConstraint
-        work_rest_pattern_count = 0
-        if config.get("enable_consecutive_work_rest_pattern", False):
-            work_rest_pattern_count = ConsecutiveWorkRestPatternConstraint(logger=logger).apply(ctx, req)
-        else:
-            logger.info("⏩ Skipping ConsecutiveWorkRestPatternConstraint (Disabled by default; enable via 'enable_consecutive_work_rest_pattern')")
+        for cls in SHIFT_CONSTRAINTS:
+            enabled = config.get(cls.config_key, cls.default_enabled) if cls.config_key else True
+            if enabled:
+                count = cls(logger=logger).apply(ctx, req)
+                shift_results[cls.name] = count
+            else:
+                logger.info(f"⏩ Skipping {cls.name} (Disabled)")
+                shift_results[cls.name] = "OFF"
 
         if callback:
-            all_employees = {ep.employee_id for ep in req.employee_profiles}
-            pattern_cfg = req.config or {}
-            pattern_status = (
-                f"✅ 上班/休息节奏约束: {work_rest_pattern_count} 条 "
-                f"(上班 [{pattern_cfg.get('min_consecutive_work_days_pattern', 2)}–"
-                f"{pattern_cfg.get('max_consecutive_work_days_pattern', 3)}] 天, "
-                f"休息 [{pattern_cfg.get('min_consecutive_rest_days_pattern', 2)}–"
-                f"{pattern_cfg.get('max_consecutive_rest_days_pattern', 3)}] 天)"
-                if config.get("enable_consecutive_work_rest_pattern", False)
-                else "⏩ 上班/休息节奏约束: 已关闭"
-            )
-            callback.log_section("排班规则概览", [
-                f"✅ 锁定班次: {locked_shift_count} 条",
-                f"✅ 班次分配: {shift_count} 条 (覆盖 {len(all_employees)} 人)",
-                f"✅ 连续工作限制: {work_limit_count} 条 (Max {req.config.get('max_consecutive_work_days', 6)} 天)",
-                f"✅ 连续休息限制: {rest_limit_count} 条 (Max {req.config.get('max_consecutive_rest_days', 4)} 天)",
-                f"✅ 标准工时: {standard_hours_count} 条",
-                f"✅ 夜班休息: {night_rest_count} 条 (Blocks Enabled)",
-                f"✅ 夜班间隔: {night_interval_count} 条 (Min {req.config.get('min_night_shift_interval', 7) - 1} 天)",
-                f"✅ 专项班次覆盖: {special_shift_coverage_count} 条",
-                pattern_status,
-            ])
+            shift_lines = [f"{'✅' if v != 'OFF' else '⏩'} {name}: {v} 条" if v != 'OFF' else f"⏩ {name}: 已关闭"
+                           for name, v in shift_results.items()]
+            callback.log_section("排班规则概览", shift_lines)
 
     # ──────────────────────────────────────────────
     # Phase 4: Objective Construction
@@ -436,6 +362,8 @@ class SolverV4:
         w1 = int(config.get("objective_weight_deviation", 1))
         w2 = int(config.get("objective_weight_special_shifts", 100))
         w3 = int(config.get("objective_weight_night_balance", 5))
+        w4 = int(config.get("objective_weight_weekend_balance", 5))
+        w5 = int(config.get("objective_weight_triple_salary", 10))
 
         # O2: Special Coverage Impact
         if special_cover_vars and req.special_shift_requirements:
@@ -476,6 +404,24 @@ class SolverV4:
             if expr3 is not None and not isinstance(expr3, int):
                 objective_terms.append(w3 * expr3)
                 objective_desc.append(f"夜班均衡(×{w3})")
+
+        # O6: Balance Weekend Work
+        if config.get("enable_balance_weekend_work", True) and shift_assignments:
+            from objectives.balance_weekend_work import BalanceWeekendWorkObjective
+            expr4 = BalanceWeekendWorkObjective(logger=logger).build_expression(
+                self.model, shift_assignments, req)
+            if expr4 is not None and not isinstance(expr4, int):
+                objective_terms.append(w4 * expr4)
+                objective_desc.append(f"周末均衡(×{w4})")
+
+        # O7: Minimize Triple Salary Cost
+        if config.get("enable_minimize_triple_salary", True) and shift_assignments:
+            from objectives.minimize_triple_salary import MinimizeTripleSalaryCostObjective
+            expr5 = MinimizeTripleSalaryCostObjective(logger=logger).build_expression(
+                self.model, shift_assignments, req)
+            if expr5 is not None and not isinstance(expr5, int):
+                objective_terms.append(w5 * expr5)
+                objective_desc.append(f"三倍薪日(×{w5})")
 
         # Apply combined objective
         if objective_terms:
