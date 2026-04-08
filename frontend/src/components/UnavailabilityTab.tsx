@@ -38,7 +38,7 @@ const UnavailabilityTab: React.FC<UnavailabilityTabProps> = ({ unitId, employees
                 params.unitId = unitId;
             }
             // If we want to filter by date range later, add here
-            const res = await axios.get('http://localhost:3001/api/unavailability', { params });
+            const res = await axios.get('/api/unavailability', { params });
             setData(res.data);
         } catch (err) {
             console.error(err);
@@ -60,7 +60,7 @@ const UnavailabilityTab: React.FC<UnavailabilityTabProps> = ({ unitId, employees
             okButtonProps: { danger: true },
             onOk: async () => {
                 try {
-                    await axios.delete(`http://localhost:3001/api/unavailability/${id}`);
+                    await axios.delete(`/api/unavailability/${id}`);
                     message.success('Record deleted');
                     fetchData();
                 } catch (err) {

@@ -52,7 +52,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                 unitId: values.unitId
             };
 
-            await axios.put(`http://localhost:3001/api/employees/${employee.id}`, payload);
+            await axios.put(`/api/employees/${employee.id}`, payload);
 
             message.success('Employee updated successfully');
             onSuccess();

@@ -66,7 +66,7 @@ const ProcessTemplate: React.FC = () => {
   const [exportingWorkbook, setExportingWorkbook] = useState(false);
   const [form] = Form.useForm();
 
-  const API_BASE_URL = 'http://localhost:3001/api';
+  const API_BASE_URL = '/api';
 
   const fetchTeams = useCallback(async () => {
     try {

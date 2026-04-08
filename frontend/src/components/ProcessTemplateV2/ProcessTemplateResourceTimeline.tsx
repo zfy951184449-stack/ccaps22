@@ -17,7 +17,7 @@ interface ProcessTemplateResourceTimelineProps {
     onBack: () => void;
 }
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 const SUITE_HEADER_HEIGHT = 40;
 const EQUIPMENT_HEADER_HEIGHT = 40;
 const STICKY_HEADER_OFFSET = SUITE_HEADER_HEIGHT + EQUIPMENT_HEADER_HEIGHT;

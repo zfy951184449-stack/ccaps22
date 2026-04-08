@@ -30,7 +30,7 @@ const OrgUnitSelectorModal: React.FC<OrgUnitSelectorModalProps> = ({
     const fetchHierarchy = async () => {
         setLoading(true);
         try {
-            const res = await axios.get<OrganizationHierarchyResult>('http://localhost:3001/api/org-structure/tree');
+            const res = await axios.get<OrganizationHierarchyResult>('/api/org-structure/tree');
             setHierarchy(res.data);
             // Default expand all
             setExpandedKeys(getAllKeys(res.data.units));

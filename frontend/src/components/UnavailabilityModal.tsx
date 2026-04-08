@@ -53,8 +53,8 @@ const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({
             };
 
             const url = editingRecord
-                ? `http://localhost:3001/api/unavailability/${editingRecord.id}`
-                : 'http://localhost:3001/api/unavailability';
+                ? `/api/unavailability/${editingRecord.id}`
+                : '/api/unavailability';
 
             const method = editingRecord ? 'PUT' : 'POST';
 

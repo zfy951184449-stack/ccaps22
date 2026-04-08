@@ -107,7 +107,7 @@ const ProcessTemplateGantt: React.FC<ProcessTemplateGanttProps> = ({
     // 快捷创建共享组模式状态
     const [isShareGroupMode, setIsShareGroupMode] = useState(false);
     const [selectedOperationIds, setSelectedOperationIds] = useState<string[]>([]);
-    const API_BASE_URL = 'http://localhost:3001/api';
+    const API_BASE_URL = '/api';
 
     // 操作勾选处理
     const handleOperationCheck = useCallback((operationId: string, checked: boolean) => {

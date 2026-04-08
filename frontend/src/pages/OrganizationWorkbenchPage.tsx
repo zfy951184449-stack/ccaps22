@@ -60,8 +60,8 @@ const OrganizationWorkbenchPage: React.FC = () => {
     setLoadingEmployees(true);
     try {
       const [hierRes, empRes] = await Promise.all([
-        axios.get<OrganizationHierarchyResult>('http://localhost:3001/api/org-structure/tree'),
-        axios.get<Employee[]>('http://localhost:3001/api/employees')
+        axios.get<OrganizationHierarchyResult>('/api/org-structure/tree'),
+        axios.get<Employee[]>('/api/employees')
       ]);
       setHierarchy(hierRes.data);
       setEmployees(empRes.data);
@@ -86,7 +86,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
   const reloadEmployees = async () => {
     setLoadingEmployees(true);
     try {
-      const res = await axios.get<Employee[]>('http://localhost:3001/api/employees');
+      const res = await axios.get<Employee[]>('/api/employees');
       setEmployees(res.data);
     } catch (err) {
       message.error('Failed to refresh employee list');
@@ -193,7 +193,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
 
   const handleDelete = async (id: number) => {
     try {
-      await axios.delete(`http://localhost:3001/api/employees/${id}`);
+      await axios.delete(`/api/employees/${id}`);
       message.success('Employee deleted');
       reloadEmployees();
       fetchData(); // Refresh counts
@@ -210,7 +210,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await axios.delete(`http://localhost:3001/api/org-structure/units/${unitId}`);
+          await axios.delete(`/api/org-structure/units/${unitId}`);
           message.success('Unit deleted');
           if (selectedUnitId === unitId) setSelectedUnitId(null);
           fetchData();

@@ -26,4 +26,4 @@ export const CONTENT_GAP = 16; // 标题区与主视图间距
 export const LEFT_PANEL_WIDTH = 360; // 左侧树列宽度
 export const ROW_HEIGHT = 32; // 树与甘特行高度统一 (36 -> 32)
 
-export const API_BASE_URL = 'http://localhost:3001/api';
+export const API_BASE_URL = '/api';

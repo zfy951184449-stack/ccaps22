@@ -50,7 +50,7 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
     useEffect(() => {
         const fetchRoles = async () => {
             try {
-                const res = await axios.get('http://localhost:3001/api/employees/roles');
+                const res = await axios.get('/api/employees/roles');
                 setAvailableRoles(res.data);
             } catch (err) {
                 console.error('Failed to fetch roles', err);
@@ -65,7 +65,7 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
     const fetchAssignments = async () => {
         if (!employee) return;
         try {
-            const res = await axios.get(`http://localhost:3001/api/employees/${employee.id}/assignments`);
+            const res = await axios.get(`/api/employees/${employee.id}/assignments`);
             setAssignments(res.data);
         } catch (err) {
             console.error('Failed to fetch assignments', err);
@@ -111,7 +111,7 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
                 unitId: currentUnitId // Use local state which reflects recent changes
             };
 
-            await axios.put(`http://localhost:3001/api/employees/${employee.id}`, payload);
+            await axios.put(`/api/employees/${employee.id}`, payload);
 
             message.success('Employee updated successfully');
             onSuccess();
@@ -129,7 +129,7 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
         try {
             // Direct update to employee unit_id as per single-unit architecture
             // We use the same update endpoint as the main form save
-            await axios.put(`http://localhost:3001/api/employees/${employee.id}`, {
+            await axios.put(`/api/employees/${employee.id}`, {
                 unitId: unitId
             });
             // Update local state so future saves respect this change
@@ -160,7 +160,7 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
     const handleRemoveAssignment = async (assignmentId: number) => {
         if (!employee) return;
         try {
-            await axios.delete(`http://localhost:3001/api/employees/${employee.id}/assignments/${assignmentId}`);
+            await axios.delete(`/api/employees/${employee.id}/assignments/${assignmentId}`);
             message.success('Assignment removed');
             fetchAssignments();
         } catch (err) {

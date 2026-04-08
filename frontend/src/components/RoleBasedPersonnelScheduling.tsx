@@ -9,7 +9,7 @@ import { ShiftPlan, SHIFT_PRIORITY, ROLE_PRIORITY, selectPrimaryPlan } from './P
 
 const { Option } = Select;
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 
 

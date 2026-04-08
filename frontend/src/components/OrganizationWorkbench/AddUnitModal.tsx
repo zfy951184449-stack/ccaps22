@@ -38,7 +38,7 @@ const AddUnitModal: React.FC<AddUnitModalProps> = ({
     const handleFinish = async (values: any) => {
         setSubmitting(true);
         try {
-            await axios.post('http://localhost:3001/api/org-structure/units', values);
+            await axios.post('/api/org-structure/units', values);
             message.success('Organization unit created successfully');
             onSuccess();
         } catch (err) {
