@@ -7,8 +7,8 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DatePicker, Spin, Empty, Tooltip, Radio } from 'antd';
-import { ClockCircleOutlined, InfoCircleOutlined, FireOutlined, UserOutlined, CheckSquareOutlined, BorderOutlined } from '@ant-design/icons';
+import { DatePicker, Spin, Empty, Tooltip } from 'antd';
+import { ClockCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { Line, DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
 import { dashboardService } from '../../services/dashboardService';
@@ -79,7 +79,13 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
         };
 
         loadData();
-    }, [granularity, date, monthRange, orgPath]); // date 作为依赖，触发日视图刷新
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [granularity, date, monthRange, orgPath]);
+
+    // Assessor 追加补丁： date 月份变化时强制重置 selectedBatches
+    useEffect(() => {
+        setSelectedBatches([]);
+    }, [date]);
 
     // ============== 日视图数据处理 ==============
 
@@ -172,20 +178,23 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
         },
     }), [lineData, batchColorMap]);
 
-    const batchList = useMemo(() => dayViewData?.batches || [], [dayViewData?.batches]);
+    const batchOptions = useMemo(() => {
+        return dayViewData?.batches ?? [];
+    }, [dayViewData?.batches]);
 
-    // 全选 / 清空
-    const allBatchesSelected = batchList.length > 0 && selectedBatches.length === batchList.length;
-    const toggleAll = useCallback(() => {
+    // 日视图 batch 全选 / 清空
+    const allBatchesSelected = batchOptions.length > 0
+        && selectedBatches.length === batchOptions.length;
+
+    const toggleAllBatches = useCallback(() => {
         if (allBatchesSelected) {
             setSelectedBatches([]);
         } else {
-            setSelectedBatches(batchList.map(b => b.batch_id));
+            setSelectedBatches((dayViewData?.batches ?? []).map(b => b.batch_id));
         }
-    }, [allBatchesSelected, batchList]);
+    }, [allBatchesSelected, dayViewData?.batches]);
 
-    // 单个 Chip 切换
-    const toggleBatch = useCallback((batchId: number) => {
+    const toggleSingleBatch = useCallback((batchId: number) => {
         setSelectedBatches(prev =>
             prev.includes(batchId)
                 ? prev.filter(id => id !== batchId)
@@ -286,6 +295,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
 
     return (
         <div className="dashboard-glass-card">
+            {/* 卡片头部：标题 + 挪度 Pill Toggle + 月视图 RangePicker */}
             <div className="dashboard-card-header">
                 <div className="dashboard-card-title">
                     <div className="dashboard-card-icon teal">
@@ -300,8 +310,8 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                     </Tooltip>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    {/* 月视图: 范围选择（保持原有） */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {/* 月视图：时间范围选择（优化样式） */}
                     {granularity === 'month' && (
                         <RangePicker
                             picker="month"
@@ -313,73 +323,25 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                             }}
                             allowClear={false}
                             size="small"
-                            style={{ width: 200 }}
+                            style={{ width: 195 }}
                             bordered={false}
-                            className="glass-input-range"
+                            className="workhours-range-picker"
                         />
                     )}
-                    {/* 粒度切换 */}
-                    <Radio.Group
-                        value={granularity}
-                        onChange={e => {
-                            setGranularity(e.target.value);
-                            setData(null);
-                            setSelectedBatches([]);
-                        }}
-                        size="small"
-                        buttonStyle="solid"
-                        className="granularity-switcher"
-                    >
-                        <Radio.Button value="day">日</Radio.Button>
-                        <Radio.Button value="month">月</Radio.Button>
-                    </Radio.Group>
+
+                    {/* 粒度切换：自定义 Pill Toggle（替代 Antd Radio.Group） */}
+                    <div className="granularity-pill-toggle">
+                        <button
+                            className={`granularity-pill-btn ${granularity === 'day' ? 'active' : ''}`}
+                            onClick={() => { setGranularity('day'); setData(null); }}
+                        >日视图</button>
+                        <button
+                            className={`granularity-pill-btn ${granularity === 'month' ? 'active' : ''}`}
+                            onClick={() => { setGranularity('month'); setData(null); }}
+                        >月视图</button>
+                    </div>
                 </div>
             </div>
-
-            {/* 日视图批次 Chip 筛选行（仅在日视图且有批次时显示） */}
-            {granularity === 'day' && batchList.length > 0 && (
-                <div className="batch-filter-bar" style={{ marginBottom: 16 }}>
-                    <Tooltip title={allBatchesSelected ? '清空选择' : '全部选中'} placement="top">
-                        <button className="batch-filter-toggle-btn" onClick={toggleAll}>
-                            {allBatchesSelected
-                                ? <><CheckSquareOutlined style={{ marginRight: 4 }} />全选</>
-                                : <><BorderOutlined style={{ marginRight: 4 }} />全选</>
-                            }
-                        </button>
-                    </Tooltip>
-
-                    <div className="batch-filter-divider" />
-
-                    {batchList.map(batch => {
-                        const color = batchColorMap[batch.batch_code];
-                        const isSelected = selectedBatches.includes(batch.batch_id);
-                        return (
-                            <Tooltip
-                                key={batch.batch_id}
-                                title={isSelected ? '点击取消筛选' : '点击筛选该批次'}
-                                placement="top"
-                            >
-                                <div
-                                    className={`batch-chip ${isSelected ? 'selected' : 'unselected'}`}
-                                    style={isSelected ? {
-                                        background: color,
-                                        borderColor: color,
-                                    } : {
-                                        borderColor: `${color}30`,
-                                    }}
-                                    onClick={() => toggleBatch(batch.batch_id)}
-                                >
-                                    <span
-                                        className="batch-chip-dot"
-                                        style={{ background: isSelected ? 'rgba(255,255,255,0.8)' : color }}
-                                    />
-                                    {batch.batch_code}
-                                </div>
-                            </Tooltip>
-                        );
-                    })}
-                </div>
-            )}
 
             <Spin spinning={loading}>
                 {/* 日视图 */}
@@ -417,6 +379,67 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                                 </div>
                             </div>
                         </div>
+
+                        {/* 图例联动 Chip 行（日视图专属，替代头部的 Select） */}
+                        {batchOptions.length > 0 && (
+                            <div className="workhours-legend-bar">
+                                <span className="workhours-legend-label">LEGEND</span>
+
+                                {/* 总需求固定图例（不可关闭） */}
+                                <Tooltip title="总工时需求，始终显示">
+                                    <div className="workhours-total-legend">
+                                        <span className="workhours-total-legend-line" />
+                                        总需求
+                                    </div>
+                                </Tooltip>
+
+                                <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.07)', flexShrink: 0 }} />
+
+                                {/* 全选/清空 */}
+                                <Tooltip title={allBatchesSelected ? '清空批次线' : '显示所有批次线'}>
+                                    <button className="workhours-toggle-btn" onClick={toggleAllBatches}>
+                                        {allBatchesSelected ? '清空' : '全选'}
+                                    </button>
+                                </Tooltip>
+
+                                {/* 批次图例 Chip */}
+                                {batchOptions.map(batch => {
+                                    const color = batchColorMap[batch.batch_code];
+                                    const isSelected = selectedBatches.includes(batch.batch_id);
+                                    return (
+                                        <Tooltip
+                                            key={batch.batch_id}
+                                            title={isSelected
+                                                ? `点击隐藏 [${batch.batch_code}] 的工时曲线`
+                                                : `点击显示 [${batch.batch_code}] 的工时曲线`
+                                            }
+                                            placement="top"
+                                        >
+                                            <div
+                                                className={`workhours-batch-chip ${isSelected ? 'selected' : 'unselected'}`}
+                                                style={isSelected ? {
+                                                    background: color,
+                                                    borderColor: color,
+                                                } : {
+                                                    borderColor: `${color}30`
+                                                }}
+                                                onClick={() => toggleSingleBatch(batch.batch_id)}
+                                            >
+                                                <span
+                                                    className="workhours-chip-line"
+                                                    style={isSelected
+                                                        ? { backgroundColor: 'rgba(255,255,255,0.85)', backgroundImage: 'none' }
+                                                        : { color }
+                                                    }
+                                                />
+                                                {batch.batch_code}
+                                            </div>
+                                        </Tooltip>
+                                    );
+                                })}
+                            </div>
+                        )}
+
                         <div className="dashboard-chart-container">
                             <Line {...dayChartConfig} />
                         </div>

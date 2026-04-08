@@ -1,138 +1,208 @@
 /**
- * WorkHoursCurveCard 样式
+ * WorkHoursCurveCard Premium Styles
+ * 工时需求曲线 — 专属精致样式（禁止深色/流光）
  */
 
-.work-hours-curve-card {
-    width: 100%;
-}
-
-.work-hours-curve-card .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-}
-
-.work-hours-curve-card .card-title {
-    font-size: 16px;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.work-hours-curve-card .card-title .anticon {
-    color: #595959;
-}
-
-.work-hours-curve-card .card-filters {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.work-hours-curve-card .month-navigator {
-    display: flex;
-    align-items: center;
+/* ---------- Pill Toggle 粒度切换器 ---------- */
+.granularity-pill-toggle {
+    display: inline-flex;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    padding: 3px;
     gap: 2px;
+    flex-shrink: 0;
 }
 
-.work-hours-curve-card .month-nav-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: 1px solid #d9d9d9;
-    background: #fff;
-    border-radius: 4px;
+.granularity-pill-btn {
+    padding: 4px 14px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    font-weight: 500;
+    color: #8c8c8c;
     cursor: pointer;
+    transition:
+        background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+        color 0.2s ease,
+        box-shadow 0.2s ease;
+    white-space: nowrap;
+    line-height: 1.5;
+    letter-spacing: 0.02em;
+}
+
+.granularity-pill-btn:hover:not(.active) {
+    background: rgba(0, 0, 0, 0.06);
     color: #595959;
-    transition: all 0.2s;
 }
 
-.work-hours-curve-card .month-nav-btn:hover {
-    border-color: #1677ff;
-    color: #1677ff;
-}
-
-.work-hours-curve-card .month-nav-btn:active {
-    background: #f5f5f5;
-}
-
-.work-hours-curve-card .chart-container {
-    height: 280px;
-    margin-bottom: 16px;
-}
-
-.work-hours-curve-card .summary-row {
-    padding-top: 16px;
-    border-top: 1px solid #f5f5f5;
-}
-
-.work-hours-curve-card .summary-row .ant-statistic-title {
-    color: #8c8c8c;
-    font-size: 12px;
-}
-
-.work-hours-curve-card .summary-row .ant-statistic-content {
-    font-size: 20px;
-}
-
-.work-hours-curve-card .summary-row .ant-statistic-content-suffix {
-    font-size: 12px;
-    color: #8c8c8c;
-}
-
-/* 粒度切换按钮样式 */
-.work-hours-curve-card .granularity-switcher {
-    margin-right: 8px;
-}
-
-.work-hours-curve-card .granularity-switcher .ant-radio-button-wrapper {
-    padding: 0 10px;
-    font-size: 12px;
-}
-
-/* 月人均工时网格样式 */
-.work-hours-curve-card .monthly-per-capita {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed #e8e8e8;
-}
-
-.work-hours-curve-card .per-capita-title {
-    font-size: 12px;
-    color: #8c8c8c;
-    margin-bottom: 8px;
-    text-align: center;
-}
-
-.work-hours-curve-card .per-capita-grid {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-}
-
-.work-hours-curve-card .per-capita-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 6px 12px;
-    background: #f5f5f5;
-    border-radius: 6px;
-    min-width: 60px;
-}
-
-.work-hours-curve-card .per-capita-item .month-label {
-    font-size: 11px;
-    color: #8c8c8c;
-}
-
-.work-hours-curve-card .per-capita-item .hours-value {
-    font-size: 14px;
+.granularity-pill-btn.active {
+    background: #fff;
+    color: #0078D4;
     font-weight: 600;
-    color: #1890ff;
+    box-shadow:
+        0 1px 4px rgba(0, 0, 0, 0.10),
+        0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+/* ---------- 月视图 RangePicker 精致化 ---------- */
+.workhours-range-picker.ant-picker {
+    background: rgba(255, 255, 255, 0.7) !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    font-size: 12px;
+    transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.workhours-range-picker.ant-picker:hover {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(0, 120, 212, 0.35) !important;
+}
+
+/* ---------- 批次图例 Chip 区域（日视图专属） ---------- */
+.workhours-legend-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 10px 0 6px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    margin-top: 12px;
+}
+
+.workhours-legend-label {
+    font-size: 11px;
+    color: #aaa;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+/* 总需求固定图例（不可交互）*/
+.workhours-total-legend {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 8px;
+    background: rgba(255, 77, 79, 0.08);
+    border: 1.5px solid rgba(255, 77, 79, 0.25);
+    font-size: 11px;
+    font-weight: 600;
+    color: #ff4d4f;
+    flex-shrink: 0;
+    cursor: default;
+}
+
+.workhours-total-legend-line {
+    display: inline-block;
+    width: 18px;
+    height: 2.5px;
+    background: #ff4d4f;
+    border-radius: 2px;
+}
+
+/* 各批次 Chip（可交互=图例联动）*/
+.workhours-batch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 8px;
+    border: 1.5px solid transparent;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.18s ease;
+    user-select: none;
+}
+
+.workhours-batch-chip:hover {
+    transform: scale(1.05);
+}
+
+/* 选中态：彩色左虚线边框 + 浅色背景（模拟图中虚线风格） */
+.workhours-batch-chip.selected {
+    color: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* 未选中态：浅灰、不透明度降低（暗示图中线已隐藏）*/
+.workhours-batch-chip.unselected {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.07);
+    color: #aaa;
+    opacity: 0.65;
+}
+
+.workhours-batch-chip.unselected:hover {
+    opacity: 0.9;
+    color: #595959;
+}
+
+/* Chip 左侧彩色虚线图例线 */
+.workhours-chip-line {
+    display: inline-block;
+    width: 14px;
+    height: 2px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    /* 虚线效果用 repeating-linear-gradient 模拟 */
+    background-image: repeating-linear-gradient(
+        to right,
+        currentColor 0,
+        currentColor 4px,
+        transparent 4px,
+        transparent 8px
+    );
+    background-size: 100% 100%;
+    /* 选中时改为实线 */
+}
+
+.workhours-batch-chip.selected .workhours-chip-line {
+    background-image: none;
+    background-color: rgba(255,255,255,0.85);
+}
+
+/* 全选/清空按钮（与 DailyPanel 独立样式，更小更克制）*/
+.workhours-toggle-btn {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 7px;
+    border: 1px solid rgba(0, 0, 0, 0.09);
+    background: rgba(0, 0, 0, 0.03);
+    color: #8c8c8c;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.18s, color 0.18s, border-color 0.18s;
+    flex-shrink: 0;
+    line-height: 1.5;
+}
+
+.workhours-toggle-btn:hover {
+    background: rgba(0, 120, 212, 0.07);
+    border-color: rgba(0, 120, 212, 0.25);
+    color: #0078D4;
+}
+
+/* 月视图信息条（替代旧的 summary-row） */
+.workhours-month-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0 6px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    margin-top: 12px;
+    font-size: 12px;
+    color: #8c8c8c;
 }
