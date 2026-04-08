@@ -92,25 +92,28 @@ const TimelineView: React.FC<TimelineViewProps> = ({ shifts, operations, employe
                 justifyContent: 'space-between'
             }}>
                 <div style={{ display: 'flex', gap: 'var(--v4-space-sm)', flexWrap: 'wrap' }}>
-                    {dates.map(d => (
-                        <button
-                            key={d}
-                            onClick={() => setSelectedDate(d)}
-                            style={{
-                                padding: 'var(--v4-space-sm) var(--v4-space-lg)',
-                                borderRadius: 'var(--v4-radius-full)',
-                                border: 'none',
-                                background: selectedDate === d ? 'var(--v4-accent-blue)' : 'var(--v4-bg-section)',
-                                color: selectedDate === d ? '#fff' : 'var(--v4-text-primary)',
-                                fontWeight: 500,
-                                fontSize: 'var(--v4-font-size-sm)',
-                                cursor: 'pointer',
-                                transition: 'all var(--v4-transition-fast)'
-                            }}
-                        >
-                            {dayjs(d).format('MM/DD')}
-                        </button>
-                    ))}
+                    {dates.map(d => {
+                        const isWeekend = dayjs(d).day() === 0 || dayjs(d).day() === 6;
+                        return (
+                            <button
+                                key={d}
+                                onClick={() => setSelectedDate(d)}
+                                style={{
+                                    padding: 'var(--v4-space-sm) var(--v4-space-lg)',
+                                    borderRadius: 'var(--v4-radius-full)',
+                                    border: 'none',
+                                    background: selectedDate === d ? 'var(--v4-accent-blue)' : isWeekend ? 'var(--v4-accent-blue-light)' : 'var(--v4-bg-section)',
+                                    color: selectedDate === d ? '#fff' : isWeekend ? 'var(--v4-accent-blue)' : 'var(--v4-text-primary)',
+                                    fontWeight: isWeekend ? 600 : 500,
+                                    fontSize: 'var(--v4-font-size-sm)',
+                                    cursor: 'pointer',
+                                    transition: 'all var(--v4-transition-fast)'
+                                }}
+                            >
+                                {dayjs(d).format('MM/DD')}{isWeekend ? ` ${dayjs(d).format('ddd')}` : ''}
+                            </button>
+                        );
+                    })}
                 </div>
                 <div style={{ display: 'flex', gap: 'var(--v4-space-lg)', fontSize: 'var(--v4-font-size-xs)', color: 'var(--v4-text-secondary)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--v4-space-xs)' }}>

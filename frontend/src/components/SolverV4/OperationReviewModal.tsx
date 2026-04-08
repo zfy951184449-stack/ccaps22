@@ -51,9 +51,17 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
         requirements: any[];
     } | null>(null);
 
+    // Precheck state
+    const [precheckLoading, setPrecheckLoading] = useState(false);
+    const [precheckResults, setPrecheckResults] = useState<{
+        status: 'PASS' | 'WARNING' | 'ERROR';
+        checks: { name: string; status: string; message: string; details?: any[] }[];
+    } | null>(null);
+
     useEffect(() => {
         if (visible && batchIds.length > 0) {
             fetchOperations();
+            setPrecheckResults(null); // Reset precheck on reopen
         } else {
             setData([]);
         }
@@ -137,6 +145,41 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
         }
     };
 
+    const handlePrecheck = async () => {
+        setPrecheckLoading(true);
+        try {
+            const startDate = month.startOf('month').format('YYYY-MM-DD');
+            const endDate = month.endOf('month').format('YYYY-MM-DD');
+
+            const response = await fetch('/api/v4/scheduling/precheck', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    batch_ids: batchIds,
+                    start_date: startDate,
+                    end_date: endDate,
+                    config: { ...solverConfig },
+                }),
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                setPrecheckResults(result.data);
+                const status = result.data?.status;
+                if (status === 'PASS') message.success('预检通过！');
+                else if (status === 'WARNING') message.warning('预检有警告，可继续排班');
+                else message.error('预检发现错误，建议修正后再排班');
+            } else {
+                message.error('预检失败：' + (result.error || '未知错误'));
+            }
+        } catch (error) {
+            console.error('Precheck error:', error);
+            message.error('预检请求失败');
+        } finally {
+            setPrecheckLoading(false);
+        }
+    };
+
     const columns: ColumnsType<OperationOperation> = [
         {
             title: '批次编号',
@@ -173,13 +216,13 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                 return (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                         {record.positions.map(pos => {
-                            // Scarcity Logic: Qualified / Total Team Count
-                            const total = pos.total_count || 1; // Prevent div by zero
-                            const ratio = pos.available_count / total;
+                            // Scarcity Logic based on candidate count
+                            const available = pos.available_count;
 
-                            let color = 'success'; // Default Green (>= 50%)
-                            if (ratio < 0.2) color = 'error'; // < 20% Red
-                            else if (ratio < 0.5) color = 'warning'; // < 50% Orange
+                            let color = 'success'; // >= 4 candidates
+                            if (available === 0) color = 'error';
+                            else if (available === 1) color = 'warning';
+                            else if (available <= 3) color = 'gold';
 
                             return (
                                 <Tag
@@ -251,12 +294,45 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                     <Button key="cancel" onClick={onCancel}>
                         取消
                     </Button>,
+                    <Button
+                        key="precheck"
+                        onClick={handlePrecheck}
+                        loading={precheckLoading}
+                        disabled={data.length === 0}
+                    >
+                        预检
+                    </Button>,
                     <Button key="confirm" type="primary" onClick={handleConfirm} loading={loading}>
                         确认并排班
                     </Button>,
                 ]}
                 styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
             >
+                {/* Precheck Results Panel */}
+                {precheckResults && (
+                    <Alert
+                        type={precheckResults.status === 'PASS' ? 'success' : precheckResults.status === 'WARNING' ? 'warning' : 'error'}
+                        message={`预检${precheckResults.status === 'PASS' ? '通过' : precheckResults.status === 'WARNING' ? '有警告' : '有错误'}`}
+                        description={
+                            <div style={{ maxHeight: 150, overflowY: 'auto' }}>
+                                {precheckResults.checks
+                                    .filter(c => c.status !== 'PASS')
+                                    .map((c, i) => (
+                                        <div key={i} style={{ marginBottom: 4 }}>
+                                            {c.status === 'ERROR' ? '🔴' : '⚠️'} {c.message}
+                                        </div>
+                                    ))}
+                                {precheckResults.checks.every(c => c.status === 'PASS') && (
+                                    <div>✅ 所有 {precheckResults.checks.length} 项检查均通过</div>
+                                )}
+                            </div>
+                        }
+                        showIcon
+                        closable
+                        onClose={() => setPrecheckResults(null)}
+                        style={{ marginBottom: 16 }}
+                    />
+                )}
                 <div style={{ marginBottom: 16 }}>
                     已选批次：<strong>{batchIds.length}</strong> |
                     总操作数：<strong>{data.length}</strong> |
