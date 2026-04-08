@@ -6,9 +6,9 @@
  * 月视图: 多月堆叠柱状图 + 峰值折线
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { DatePicker, Select, Spin, Empty, Tooltip, Radio } from 'antd';
-import { ClockCircleOutlined, InfoCircleOutlined, FireOutlined, UserOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { DatePicker, Spin, Empty, Tooltip, Radio } from 'antd';
+import { ClockCircleOutlined, InfoCircleOutlined, FireOutlined, UserOutlined, CheckSquareOutlined, BorderOutlined } from '@ant-design/icons';
 import { Line, DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
 import { dashboardService } from '../../services/dashboardService';
@@ -172,12 +172,26 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
         },
     }), [lineData, batchColorMap]);
 
-    const batchOptions = useMemo(() => {
-        return dayViewData?.batches.map(b => ({
-            value: b.batch_id,
-            label: b.batch_code,
-        })) || [];
-    }, [dayViewData?.batches]);
+    const batchList = useMemo(() => dayViewData?.batches || [], [dayViewData?.batches]);
+
+    // 全选 / 清空
+    const allBatchesSelected = batchList.length > 0 && selectedBatches.length === batchList.length;
+    const toggleAll = useCallback(() => {
+        if (allBatchesSelected) {
+            setSelectedBatches([]);
+        } else {
+            setSelectedBatches(batchList.map(b => b.batch_id));
+        }
+    }, [allBatchesSelected, batchList]);
+
+    // 单个 Chip 切换
+    const toggleBatch = useCallback((batchId: number) => {
+        setSelectedBatches(prev =>
+            prev.includes(batchId)
+                ? prev.filter(id => id !== batchId)
+                : [...prev, batchId]
+        );
+    }, []);
 
     // ============== 月视图数据处理 ==============
 
@@ -287,23 +301,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    {/* 日视图: 批次筛选 */}
-                    {granularity === 'day' && batchOptions.length > 0 && (
-                        <Select
-                            mode="multiple"
-                            value={selectedBatches}
-                            onChange={setSelectedBatches}
-                            placeholder="筛选批次"
-                            maxTagCount={1}
-                            size="small"
-                            style={{ width: 150 }}
-                            options={batchOptions}
-                            allowClear
-                            bordered={false}
-                            className="glass-input"
-                        />
-                    )}
-                    {/* 月视图: 范围选择 */}
+                    {/* 月视图: 范围选择（保持原有） */}
                     {granularity === 'month' && (
                         <RangePicker
                             picker="month"
@@ -326,6 +324,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                         onChange={e => {
                             setGranularity(e.target.value);
                             setData(null);
+                            setSelectedBatches([]);
                         }}
                         size="small"
                         buttonStyle="solid"
@@ -336,6 +335,51 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                     </Radio.Group>
                 </div>
             </div>
+
+            {/* 日视图批次 Chip 筛选行（仅在日视图且有批次时显示） */}
+            {granularity === 'day' && batchList.length > 0 && (
+                <div className="batch-filter-bar" style={{ marginBottom: 16 }}>
+                    <Tooltip title={allBatchesSelected ? '清空选择' : '全部选中'} placement="top">
+                        <button className="batch-filter-toggle-btn" onClick={toggleAll}>
+                            {allBatchesSelected
+                                ? <><CheckSquareOutlined style={{ marginRight: 4 }} />全选</>
+                                : <><BorderOutlined style={{ marginRight: 4 }} />全选</>
+                            }
+                        </button>
+                    </Tooltip>
+
+                    <div className="batch-filter-divider" />
+
+                    {batchList.map(batch => {
+                        const color = batchColorMap[batch.batch_code];
+                        const isSelected = selectedBatches.includes(batch.batch_id);
+                        return (
+                            <Tooltip
+                                key={batch.batch_id}
+                                title={isSelected ? '点击取消筛选' : '点击筛选该批次'}
+                                placement="top"
+                            >
+                                <div
+                                    className={`batch-chip ${isSelected ? 'selected' : 'unselected'}`}
+                                    style={isSelected ? {
+                                        background: color,
+                                        borderColor: color,
+                                    } : {
+                                        borderColor: `${color}30`,
+                                    }}
+                                    onClick={() => toggleBatch(batch.batch_id)}
+                                >
+                                    <span
+                                        className="batch-chip-dot"
+                                        style={{ background: isSelected ? 'rgba(255,255,255,0.8)' : color }}
+                                    />
+                                    {batch.batch_code}
+                                </div>
+                            </Tooltip>
+                        );
+                    })}
+                </div>
+            )}
 
             <Spin spinning={loading}>
                 {/* 日视图 */}
