@@ -218,31 +218,39 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
 
     const renderCompactOperationBar = (operation: GanttOperation, batchId: number, color: { solid?: string; border: string }) => {
         const operationWidth = getWidth(operation.startDate, operation.endDate);
+        const bar = (
+            <div
+                className="gantt-bar-op"
+                style={{
+                    left: getLeftPosition(operation.startDate),
+                    width: operationWidth,
+                    minWidth: 8,
+                    top: 7,
+                    height: 18,
+                    zIndex: 20,
+                    backgroundColor: color.solid || color.border,
+                    cursor: 'pointer'
+                }}
+                onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    onOperationDoubleClick?.({
+                        ...operation,
+                        batch_id: batchId
+                    });
+                }}
+            >
+                {renderGanttBarLabel(operation.name, operationWidth)}
+            </div>
+        );
+
+        // ⚡ 性能优化：滚动/拖拽时跳过 Tooltip 挂载，减少大量 React 组件开销
+        if (isScrolling || isGrabbing) {
+            return <React.Fragment key={operation.id}>{bar}</React.Fragment>;
+        }
 
         return (
             <Tooltip key={operation.id} title={`${operation.name} (${operation.status})`}>
-                <div
-                    className="gantt-bar-op"
-                    style={{
-                        left: getLeftPosition(operation.startDate),
-                        width: operationWidth,
-                        minWidth: 8,
-                        top: 7,
-                        height: 18,
-                        zIndex: 20,
-                        backgroundColor: color.solid || color.border,
-                        cursor: 'pointer'
-                    }}
-                    onDoubleClick={(event) => {
-                        event.stopPropagation();
-                        onOperationDoubleClick?.({
-                            ...operation,
-                            batch_id: batchId
-                        });
-                    }}
-                >
-                    {renderGanttBarLabel(operation.name, operationWidth)}
-                </div>
+                {bar}
             </Tooltip>
         );
     };
@@ -255,11 +263,39 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
     ) => {
         const operationWidth = getWidth(operation.startDate, operation.endDate);
         const hasWindow = operation.windowStartDate && operation.windowEndDate;
+        // ⚡ 性能优化：滚动/拖拽时跳过 Tooltip
+        const skipTooltip = isScrolling || isGrabbing;
+
+        const mainBar = (
+            <div
+                className="gantt-bar-op"
+                style={{
+                    left: getLeftPosition(operation.startDate),
+                    width: operationWidth,
+                    top: 4,
+                    height: 24,
+                    padding: '0 4px',
+                    justifyContent: 'center',
+                    zIndex: 20,
+                    backgroundColor: color.solid || color.border,
+                    cursor: 'pointer'
+                }}
+                onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    onOperationDoubleClick?.({
+                        ...operation,
+                        batch_id: batchId
+                    });
+                }}
+            >
+                {!hasWindow && operationWidth > 30 ? operation.name : ''}
+            </div>
+        );
 
         return (
             <React.Fragment key={key}>
                 {hasWindow && (
-                    <Tooltip title={`窗口: ${dayjs(operation.windowStartDate).format('MM-DD HH:mm')} - ${dayjs(operation.windowEndDate).format('MM-DD HH:mm')}`}>
+                    skipTooltip ? (
                         <div
                             className="gantt-bar-window"
                             style={{
@@ -269,33 +305,25 @@ const GanttTimelineComponent: React.FC<GanttTimelineProps> = ({
                                 height: 24
                             }}
                         />
+                    ) : (
+                        <Tooltip title={`窗口: ${dayjs(operation.windowStartDate).format('MM-DD HH:mm')} - ${dayjs(operation.windowEndDate).format('MM-DD HH:mm')}`}>
+                            <div
+                                className="gantt-bar-window"
+                                style={{
+                                    left: getLeftPosition(operation.windowStartDate!),
+                                    width: getWidth(operation.windowStartDate!, operation.windowEndDate!),
+                                    top: 4,
+                                    height: 24
+                                }}
+                            />
+                        </Tooltip>
+                    )
+                )}
+                {skipTooltip ? mainBar : (
+                    <Tooltip title={`${operation.name}: ${operation.assignedPeople}/${operation.requiredPeople} people`}>
+                        {mainBar}
                     </Tooltip>
                 )}
-                <Tooltip title={`${operation.name}: ${operation.assignedPeople}/${operation.requiredPeople} people`}>
-                    <div
-                        className="gantt-bar-op"
-                        style={{
-                            left: getLeftPosition(operation.startDate),
-                            width: operationWidth,
-                            top: 4,
-                            height: 24,
-                            padding: '0 4px',
-                            justifyContent: 'center',
-                            zIndex: 20,
-                            backgroundColor: color.solid || color.border,
-                            cursor: 'pointer'
-                        }}
-                        onDoubleClick={(event) => {
-                            event.stopPropagation();
-                            onOperationDoubleClick?.({
-                                ...operation,
-                                batch_id: batchId
-                            });
-                        }}
-                    >
-                        {!hasWindow && operationWidth > 30 ? operation.name : ''}
-                    </div>
-                </Tooltip>
                 {hasWindow && (
                     <div
                         className="gantt-text-overlay"

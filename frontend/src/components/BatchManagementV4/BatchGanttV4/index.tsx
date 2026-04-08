@@ -331,10 +331,6 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                 setBatches(displayBatches);
                 setOffScreenOps(fetchedOffScreen);
 
-                if (viewMode === 'day') {
-                    expandAll(displayBatches);
-                }
-
                 if (displayBatches.length === 0) {
                     setShareGroups([]);
                     setDependencies([]);
@@ -376,6 +372,8 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                 }
             } finally {
                 if (!cancelled) {
+                    // ⚡ 关键修复：先关闭 loading，再展开行（避免 expandAll 的 setState 阻塞 loading 消失）
+                    // expandAll 使用了 startTransition，属于低优先级更新，不会卡住 loading 状态
                     setLoading(false);
                 }
             }
@@ -389,15 +387,22 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
     }, [
         clearGanttData,
         endDate,
-        expandAll,
         fetchHierarchy,
         filteredBatchIdSet,
         hasAutoFit,
         hasExplicitBatchFilter,
         reloadVersion,
         startDate,
-        viewMode
     ]);
+
+    // ⚡ 单日模式展开逻辑（与加载解耦）
+    // 监听 batches + viewMode：当单日模式下数据带入后，自动展开所有行
+    // 这里lLoading 已经关闭，展开使用 startTransition 不会卡住 UI
+    useEffect(() => {
+        if (viewMode === 'day' && batches.length > 0) {
+            expandAll(batches);
+        }
+    }, [viewMode, batches, expandAll]);
 
     const handleConfirmShareGroup = useCallback(async () => {
         if (selectedOperationIds.length < 2) {

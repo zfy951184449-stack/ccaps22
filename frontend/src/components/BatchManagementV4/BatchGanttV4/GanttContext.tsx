@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, startTransition } from 'react';
 import dayjs from 'dayjs';
 import { GanttBatch, GanttContextType, LayoutMode, ViewMode } from './types';
 
@@ -38,6 +38,9 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         viewMode: ViewMode;
     } | null>(null);
 
+    // 单日模式导航防抖 ref：防止快速连续切换日期导致 N+1 次 API 请求
+    const navigateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const toggleBatch = (batchId: number) => {
         setExpandedBatches(prev => {
             const next = new Set(prev);
@@ -62,21 +65,27 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         setExpandedStages(new Set());
     };
 
-    const expandAll = (batches: GanttBatch[]) => {
+    const expandAll = useCallback((batches: GanttBatch[]) => {
         if (batches && batches.length > 0) {
             const batchIds = new Set(batches.map(b => b.id));
-            setExpandedBatches(batchIds);
             const stageKeys = new Set<string>();
             batches.forEach(batch => {
                 batch.stages.forEach(stage => {
                     stageKeys.add(`batch-${batch.id}-stage-${stage.id}`);
                 });
             });
-            setExpandedStages(stageKeys);
+            // 使用 startTransition 包裹批量展开，避免阻塞高优先级的 loading 状态更新
+            startTransition(() => {
+                setExpandedBatches(batchIds);
+                setExpandedStages(stageKeys);
+            });
         } else {
-            clearExpansionState();
+            startTransition(() => {
+                setExpandedBatches(new Set());
+                setExpandedStages(new Set());
+            });
         }
-    };
+    }, []);
 
     const enterSingleDayMode = (date: dayjs.Dayjs, batches?: GanttBatch[]) => {
         // Save current state before switching
@@ -87,10 +96,10 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             viewMode
         });
 
-        // 单日模式下自动展开所有批次和阶段到操作层
+        // 单日模式下自动展开所有批次和阶段到操作层（低优先级）
         expandAll(batches || []);
 
-        // Switch to single day mode
+        // Switch to single day mode（高优先级，立即更新）
         setStartDate(date.startOf('day'));
         setEndDate(date.endOf('day'));
         setZoomLevel(1440); // 60px per hour * 24 = 1440px
@@ -98,6 +107,12 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
 
     const exitSingleDayMode = () => {
+        // 清除防抖计时器
+        if (navigateDebounceRef.current) {
+            clearTimeout(navigateDebounceRef.current);
+            navigateDebounceRef.current = null;
+        }
+
         if (savedViewState) {
             setStartDate(savedViewState.startDate);
             setEndDate(savedViewState.endDate);
@@ -113,18 +128,24 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         }
     };
 
-    // 单日模式内导航 - 切换日期并重新展开所有层级
-    const navigateSingleDay = (direction: 'prev' | 'next', batches?: GanttBatch[]) => {
+    // 单日模式内导航 - 使用防抖避免快速切换触发多次 API
+    const navigateSingleDay = useCallback((direction: 'prev' | 'next', batches?: GanttBatch[]) => {
         const offset = direction === 'prev' ? -1 : 1;
-        const newDate = startDate.add(offset, 'day');
 
-        // 更新日期
-        setStartDate(newDate.startOf('day'));
-        setEndDate(newDate.endOf('day'));
+        // 清除上一个防抖计时器
+        if (navigateDebounceRef.current) {
+            clearTimeout(navigateDebounceRef.current);
+        }
 
-        // 重新展开所有批次和阶段到操作层
-        expandAll(batches || []);
-    };
+        navigateDebounceRef.current = setTimeout(() => {
+            setStartDate(prev => {
+                const newDate = prev.add(offset, 'day').startOf('day');
+                setEndDate(newDate.endOf('day'));
+                return newDate;
+            });
+            navigateDebounceRef.current = null;
+        }, 80); // 80ms 防抖：足够短以保持响应性，又能防止快速点击 N+1 次请求
+    }, []);
 
     return (
         <GanttContext.Provider value={{
