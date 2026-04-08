@@ -405,8 +405,107 @@
     background: rgba(0, 0, 0, 0.22);
 }
 
-/* 旧版兼容 */
-.glass-card .ant-card-head,
-.glass-card .ant-card-body {
-    background: transparent;
+/* ---------- 批次筛选 Chip 行 ---------- */
+.batch-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 2px 0 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.batch-filter-bar::-webkit-scrollbar {
+    display: none;
+}
+
+/* 全选/清空快捷按钮 */
+.batch-filter-toggle-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(0, 0, 0, 0.04);
+    color: #595959;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    line-height: 1.4;
+}
+
+.batch-filter-toggle-btn:hover {
+    background: rgba(0, 120, 212, 0.08);
+    border-color: rgba(0, 120, 212, 0.3);
+    color: #0078D4;
+}
+
+/* 分隔线 */
+.batch-filter-divider {
+    width: 1px;
+    height: 16px;
+    background: rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+/* 单个批次 Chip */
+.batch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px 4px 8px;
+    border-radius: 10px;
+    border: 1.5px solid transparent;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+        box-shadow 0.18s ease;
+    user-select: none;
+    line-height: 1.4;
+}
+
+.batch-chip:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 选中态 — 彩色背景 白字 */
+.batch-chip.selected {
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* 未选中态 — 浅灰背景 */
+.batch-chip.unselected {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.07);
+    color: #8c8c8c;
+}
+
+.batch-chip.unselected:hover {
+    background: rgba(0, 0, 0, 0.07);
+    color: #595959;
+}
+
+/* Chip 左侧颜色圆点 */
+.batch-chip-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: opacity 0.18s;
+}
+
+.batch-chip.unselected .batch-chip-dot {
+    opacity: 0.5;
 }

@@ -4,14 +4,15 @@
  * 每日操作人员分配面板 - 展示所有批次的操作及人员分配
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Select, Spin, Empty, Button, Tooltip, DatePicker } from 'antd';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Spin, Empty, Button, Tooltip, DatePicker } from 'antd';
 import {
     LeftOutlined,
     RightOutlined,
-    FilterOutlined,
     TeamOutlined,
     ClockCircleOutlined,
+    CheckSquareOutlined,
+    BorderOutlined,
 } from '@ant-design/icons';
 import { Dayjs } from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -119,11 +120,6 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
         loadData();
     }, [selectedDate]);
 
-    // 批次筛选选项
-    const batchOptions = safeBatches.map(b => ({
-        value: b.batch_id,
-        label: b.batch_code,
-    }));
 
     // 过滤后的批次数据
     const filteredBatches = safeBatches.filter(b =>
@@ -131,22 +127,37 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
     );
 
     // 左右滚动卡片区域
-    const scrollLeft = () => {
-        if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: -340, behavior: 'smooth' });
-        }
-    };
+    const scrollLeft = useCallback(() => {
+        scrollContainerRef.current?.scrollBy({ left: -340, behavior: 'smooth' });
+    }, []);
 
-    const scrollRight = () => {
-        if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollBy({ left: 340, behavior: 'smooth' });
+    const scrollRight = useCallback(() => {
+        scrollContainerRef.current?.scrollBy({ left: 340, behavior: 'smooth' });
+    }, []);
+
+    // 全选 / 清空
+    const allSelected = safeBatches.length > 0 && selectedBatches.length === safeBatches.length;
+    const toggleAll = useCallback(() => {
+        if (allSelected) {
+            setSelectedBatches([]);
+        } else {
+            setSelectedBatches(safeBatches.map(b => b.batch_id));
         }
-    };
+    }, [allSelected, safeBatches]);
+
+    // 单个 Chip 点击
+    const toggleBatch = useCallback((batchId: number) => {
+        setSelectedBatches(prev =>
+            prev.includes(batchId)
+                ? prev.filter(id => id !== batchId)
+                : [...prev, batchId]
+        );
+    }, []);
 
     return (
         <div className="dashboard-glass-card daily-assignments-panel">
-            {/* Panel Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            {/* 上行：标题 + 日期选择 + 左右滚动按鈕 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <div className="dashboard-card-title">
                     <div className="dashboard-card-icon green">
                         <TeamOutlined />
@@ -154,55 +165,77 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                     每日操作人员分配
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    {/* Date Picker (Day) */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {/* Date Picker */}
                     <DatePicker
                         value={selectedDate}
                         onChange={(d) => { if (d) setSelectedDate(d); }}
                         allowClear={false}
                         className="glass-input"
-                        style={{ width: 130 }}
+                        style={{ width: 120 }}
                         format="MM-DD"
                         showToday={false}
                         disabledDate={(current) => !current.isSame(date, 'month')}
                     />
-
-                    {/* Batch Filter */}
-                    <Select
-                        mode="multiple"
-                        placeholder="筛选批次"
-                        value={selectedBatches}
-                        onChange={setSelectedBatches}
-                        options={batchOptions}
-                        style={{ minWidth: 160 }}
-                        maxTagCount={1}
-                        suffixIcon={<FilterOutlined />}
-                        allowClear
-                        bordered={false}
-                        className="glass-input"
-                    />
-
-                    {/* Scroll Controls */}
-                    <div style={{ display: 'flex', gap: 4 }}>
-                        <Button
-                            icon={<LeftOutlined />}
-                            size="small"
-                            onClick={scrollLeft}
-                            disabled={!canScrollLeft}
-                            shape="circle"
-                            type="text"
-                        />
-                        <Button
-                            icon={<RightOutlined />}
-                            size="small"
-                            onClick={scrollRight}
-                            disabled={!canScrollRight}
-                            shape="circle"
-                            type="text"
-                        />
+                    {/* 左右滚动按鈕 */}
+                    <div style={{ display: 'flex', gap: 2 }}>
+                        <Button icon={<LeftOutlined />} size="small" onClick={scrollLeft}
+                            disabled={!canScrollLeft} shape="circle" type="text" />
+                        <Button icon={<RightOutlined />} size="small" onClick={scrollRight}
+                            disabled={!canScrollRight} shape="circle" type="text" />
                     </div>
                 </div>
             </div>
+
+            {/* 下行： Chip 批次筛选行 */}
+            {safeBatches.length > 0 && (
+                <div className="batch-filter-bar" style={{ marginBottom: 16 }}>
+                    {/* 全选 / 清空按鈕 */}
+                    <Tooltip title={allSelected ? '清空选择' : '全部选中'} placement="top">
+                        <button
+                            className="batch-filter-toggle-btn"
+                            onClick={toggleAll}
+                        >
+                            {allSelected
+                                ? <><CheckSquareOutlined style={{ marginRight: 4 }} />全选</>
+                                : <><BorderOutlined style={{ marginRight: 4 }} />全选</>
+                            }
+                        </button>
+                    </Tooltip>
+
+                    <div className="batch-filter-divider" />
+
+                    {/* 批次 Chip 列表 */}
+                    {safeBatches.map(batch => {
+                        const color = batchColorMap[batch.batch_id];
+                        const isSelected = selectedBatches.includes(batch.batch_id);
+                        return (
+                            <Tooltip
+                                key={batch.batch_id}
+                                title={isSelected ? '点击取消筛选' : '点击筛选该批次'}
+                                placement="top"
+                            >
+                                <div
+                                    className={`batch-chip ${isSelected ? 'selected' : 'unselected'}`}
+                                    style={isSelected ? {
+                                        background: color,
+                                        borderColor: color,
+                                    } : {
+                                        borderColor: `${color}30`,
+                                    }}
+                                    onClick={() => toggleBatch(batch.batch_id)}
+                                >
+                                    <span
+                                        className="batch-chip-dot"
+                                        style={{ background: isSelected ? 'rgba(255,255,255,0.8)' : color }}
+                                    />
+                                    {batch.batch_code}
+                                </div>
+                            </Tooltip>
+                        );
+                    })}
+                </div>
+            )}
 
             <Spin spinning={loading}>
                 {filteredBatches.length > 0 ? (
