@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Select, Spin, Empty, Button, Tooltip, Tag, DatePicker } from 'antd';
+import { Select, Spin, Empty, Button, Tooltip, DatePicker } from 'antd';
 import {
     LeftOutlined,
     RightOutlined,
@@ -15,7 +15,6 @@ import {
 } from '@ant-design/icons';
 import { Dayjs } from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
-import GlassCard from '../common/GlassCard';
 import { dashboardService } from '../../services/dashboardService';
 import { DailyAssignmentsData, BatchData } from '../../types/dashboard';
 import './DailyAssignmentsPanel.css';
@@ -145,40 +144,28 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
     };
 
     return (
-        <GlassCard className="daily-assignments-panel">
-            <div className="panel-header" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="panel-title" style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-                    <div className="icon-wrapper" style={{
-                        background: 'rgba(56, 158, 13, 0.1)', // customized green
-                        padding: 8,
-                        borderRadius: 12,
-                        marginRight: 12,
-                        color: '#52c41a'
-                    }}>
+        <div className="dashboard-glass-card daily-assignments-panel">
+            {/* Panel Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <div className="dashboard-card-title">
+                    <div className="dashboard-card-icon green">
                         <TeamOutlined />
                     </div>
                     每日操作人员分配
-                </span>
+                </div>
 
-                <div className="panel-controls" style={{ display: 'flex', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {/* Date Picker (Day) */}
-                    <div className="filter-item">
-                        <DatePicker
-                            value={selectedDate}
-                            onChange={(d) => {
-                                if (d) setSelectedDate(d);
-                            }}
-                            allowClear={false}
-                            className="glass-input"
-                            style={{ width: 130 }}
-                            format="MM-DD"
-                            showToday={false}
-                            disabledDate={(current) => {
-                                // Disable dates outside the selected month
-                                return !current.isSame(date, 'month');
-                            }}
-                        />
-                    </div>
+                    <DatePicker
+                        value={selectedDate}
+                        onChange={(d) => { if (d) setSelectedDate(d); }}
+                        allowClear={false}
+                        className="glass-input"
+                        style={{ width: 130 }}
+                        format="MM-DD"
+                        showToday={false}
+                        disabledDate={(current) => !current.isSame(date, 'month')}
+                    />
 
                     {/* Batch Filter */}
                     <Select
@@ -195,8 +182,8 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                         className="glass-input"
                     />
 
-                    {/* Scroll Controls (Only show if needed) */}
-                    <div className="scroll-controls" style={{ display: 'flex', gap: 4 }}>
+                    {/* Scroll Controls */}
+                    <div style={{ display: 'flex', gap: 4 }}>
                         <Button
                             icon={<LeftOutlined />}
                             size="small"
@@ -219,120 +206,90 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
 
             <Spin spinning={loading}>
                 {filteredBatches.length > 0 ? (
-                    <div className="batch-cards-wrapper" style={{ position: 'relative' }}>
-                        <div
-                            className="batch-cards-container"
-                            ref={scrollContainerRef}
-                            style={{
-                                display: 'flex',
-                                gap: 24,
-                                overflowX: 'auto',
-                                paddingBottom: 16,
-                                paddingLeft: 4,
-                                paddingRight: 4,
-                                scrollBehavior: 'smooth',
-                                scrollSnapType: 'x mandatory',
-                                // Hide scrollbar but keep functionality
-                                scrollbarWidth: 'none',
-                                msOverflowStyle: 'none'
-                            }}
-                        >
-                            <AnimatePresence>
-                                {filteredBatches.map(batch => {
-                                    const totalOps = batch.stages.reduce((sum, s) => sum + s.operations.length, 0);
-                                    return (
-                                        <motion.div
-                                            key={batch.batch_id}
-                                            initial={{ opacity: 0, scale: 0.95 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            exit={{ opacity: 0, scale: 0.95 }}
-                                            layout
-                                            className="batch-card"
-                                            style={{
-                                                flex: '0 0 320px',
-                                                background: '#fff',
-                                                borderRadius: 16,
-                                                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                                                border: '1px solid rgba(0,0,0,0.04)',
-                                                borderTop: `4px solid ${batchColorMap[batch.batch_id]}`,
-                                                scrollSnapAlign: 'start',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                overflow: 'hidden'
-                                            }}
-                                        >
-                                            <div className="batch-card-header" style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <Tag color={batchColorMap[batch.batch_id]} style={{ margin: 0, fontSize: 14, padding: '4px 10px', borderRadius: 6 }}>
-                                                    {batch.batch_code}
-                                                </Tag>
-                                                <span className="operation-count" style={{ color: '#8c8c8c', fontSize: 12 }}>
-                                                    {totalOps} 项操作
-                                                </span>
-                                            </div>
+                    <div
+                        className="batch-scroll-container"
+                        ref={scrollContainerRef}
+                    >
+                        <AnimatePresence>
+                            {filteredBatches.map(batch => {
+                                const batchColor = batchColorMap[batch.batch_id];
+                                const totalOps = batch.stages.reduce((sum, s) => sum + s.operations.length, 0);
+                                return (
+                                    <motion.div
+                                        key={batch.batch_id}
+                                        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.96 }}
+                                        transition={{ type: 'spring', stiffness: 200, damping: 22 }}
+                                        layout
+                                        className="batch-card-premium"
+                                        style={{ borderTop: `3px solid ${batchColor}` }}
+                                    >
+                                        {/* 批次标题 */}
+                                        <div className="batch-card-header-premium">
+                                            <span
+                                                className="batch-tag-premium"
+                                                style={{
+                                                    color: batchColor,
+                                                    background: `${batchColor}14`,
+                                                    border: `1px solid ${batchColor}30`
+                                                }}
+                                            >
+                                                {batch.batch_code}
+                                            </span>
+                                            <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                                                {totalOps} 项操作
+                                            </span>
+                                        </div>
 
-                                            <div className="stages-list" style={{ padding: '12px 0', overflowY: 'auto', maxHeight: 400 }}>
-                                                {batch.stages.map(stage => (
-                                                    <div key={stage.stage_id} className="stage-section" style={{ marginBottom: 16 }}>
-                                                        <div className="stage-header" style={{ padding: '0 20px 8px', display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                                                            <span className="stage-name" style={{ fontWeight: 600, color: '#262626' }}>{stage.stage_name}</span>
-                                                            <span className="stage-op-count" style={{ color: '#8c8c8c' }}>{stage.operations.length}项</span>
-                                                        </div>
-                                                        <div className="operations-list">
-                                                            {stage.operations.map(op => (
-                                                                <div key={op.operation_plan_id} className="operation-item" style={{
-                                                                    padding: '8px 20px',
-                                                                    borderLeft: '2px solid transparent',
-                                                                    transition: 'all 0.3s'
-                                                                }}>
-                                                                    <div className="operation-header" style={{ marginBottom: 6 }}>
-                                                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                                            <span className="operation-time" style={{ color: '#1890ff', fontSize: 12 }}>
-                                                                                <ClockCircleOutlined /> {op.start_time}
-                                                                            </span>
-                                                                            <span className="operation-people" style={{ color: '#8c8c8c', fontSize: 12 }}>{op.required_people}人</span>
-                                                                        </div>
-                                                                        <div className="operation-name" style={{ color: '#595959', fontSize: 13 }}>{op.operation_name}</div>
-                                                                    </div>
-                                                                    <div className="assignments-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                                                        {op.assignments.map(a => (
-                                                                            <Tooltip
-                                                                                key={a.position}
-                                                                                title={a.employee_name ? `位置${a.position}: ${a.employee_name}` : `位置${a.position}: 待分配`}
-                                                                            >
-                                                                                <div
-                                                                                    style={{
-                                                                                        fontSize: 12,
-                                                                                        padding: '2px 8px',
-                                                                                        borderRadius: 4,
-                                                                                        background: a.employee_name ? '#f6ffed' : '#f5f5f5',
-                                                                                        border: `1px solid ${a.employee_name ? '#b7eb8f' : '#d9d9d9'}`,
-                                                                                        color: a.employee_name ? '#389e0d' : '#8c8c8c',
-                                                                                        cursor: 'default'
-                                                                                    }}
-                                                                                >
-                                                                                    {a.position}. {a.employee_name || '--'}
-                                                                                </div>
-                                                                            </Tooltip>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                        {/* 阶段列表 */}
+                                        <div style={{ overflowY: 'auto', maxHeight: 420 }}>
+                                            {batch.stages.map(stage => (
+                                                <div key={stage.stage_id} className="stage-section-premium">
+                                                    <div className="stage-header-premium">
+                                                        <span className="stage-name-premium">{stage.stage_name}</span>
+                                                        <span className="stage-count-badge">{stage.operations.length}项</span>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </AnimatePresence>
-                        </div>
+
+                                                    {stage.operations.map(op => (
+                                                        <div key={op.operation_plan_id} className="operation-item-premium">
+                                                            <div className="operation-meta">
+                                                                <span className="operation-time-premium">
+                                                                    <ClockCircleOutlined />
+                                                                    {op.start_time}
+                                                                </span>
+                                                                <span className="operation-headcount">{op.required_people}人</span>
+                                                            </div>
+                                                            <div className="operation-name-premium">{op.operation_name}</div>
+                                                            <div className="assignments-flex">
+                                                                {op.assignments.map(a => (
+                                                                    <Tooltip
+                                                                        key={a.position}
+                                                                        title={a.employee_name ? `位置${a.position}: ${a.employee_name}` : `位置${a.position}: 待分配`}
+                                                                    >
+                                                                        <span className={`assignment-chip ${a.employee_name ? 'assigned' : 'unassigned'}`}>
+                                                                            {a.position}. {a.employee_name || '--'}
+                                                                        </span>
+                                                                    </Tooltip>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </AnimatePresence>
                     </div>
                 ) : (
                     !loading && <Empty description="暂无数据" />
                 )}
             </Spin>
-        </GlassCard>
+        </div>
     );
 };
 
 export default DailyAssignmentsPanel;
+

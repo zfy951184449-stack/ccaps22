@@ -7,11 +7,10 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { DatePicker, Select, Spin, Empty, Statistic, Row, Col, Tooltip, Radio } from 'antd';
+import { DatePicker, Select, Spin, Empty, Tooltip, Radio } from 'antd';
 import { ClockCircleOutlined, InfoCircleOutlined, FireOutlined, UserOutlined } from '@ant-design/icons';
 import { Line, DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
-import GlassCard from '../common/GlassCard';
 import { dashboardService } from '../../services/dashboardService';
 import { WorkHoursData, DayViewData, MonthViewData, BatchInfo } from '../../types/dashboard';
 import './WorkHoursCurveCard.css';
@@ -272,29 +271,23 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
     // ============== 渲染 ==============
 
     return (
-        <GlassCard>
-            <div className="card-header" style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span className="card-title" style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-                    <div className="icon-wrapper" style={{
-                        background: 'rgba(255, 144, 255, 0.1)', // customized purple/pink ish
-                        padding: 8,
-                        borderRadius: 12,
-                        marginRight: 12,
-                        color: '#722ed1'
-                    }}>
+        <div className="dashboard-glass-card">
+            <div className="dashboard-card-header">
+                <div className="dashboard-card-title">
+                    <div className="dashboard-card-icon teal">
                         <ClockCircleOutlined />
                     </div>
                     工时需求曲线
                     <Tooltip title={granularity === 'day'
                         ? "红色粗线为每日总工时需求，虚线为各批次工时需求"
-                        : "柱状图为按批次堆叠的月总工时，红色折线为每月峰值日工时"
+                        : "柱状图为按批次堆叠的月总工时，红色折线为每月峰値日工时"
                     }>
-                        <InfoCircleOutlined style={{ marginLeft: 8, color: '#bfbfbf', fontSize: 14 }} />
+                        <InfoCircleOutlined style={{ color: '#c0c0c0', fontSize: 13, marginLeft: 2 }} />
                     </Tooltip>
-                </span>
+                </div>
 
-                <div className="card-filters" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    {/* 日视图: 批次筛选 (仅在日视图且有数据时显示) */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {/* 日视图: 批次筛选 */}
                     {granularity === 'day' && batchOptions.length > 0 && (
                         <Select
                             mode="multiple"
@@ -310,7 +303,6 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                             className="glass-input"
                         />
                     )}
-
                     {/* 月视图: 范围选择 */}
                     {granularity === 'month' && (
                         <RangePicker
@@ -328,7 +320,6 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                             className="glass-input-range"
                         />
                     )}
-
                     {/* 粒度切换 */}
                     <Radio.Group
                         value={granularity}
@@ -350,44 +341,39 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                 {/* 日视图 */}
                 {granularity === 'day' && dayViewData && lineData.length > 0 && (
                     <>
-                        <div className="summary-row" style={{ marginBottom: 24 }}>
-                            <Row gutter={24}>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>月度总工时</span>}
-                                        value={dayViewData.summary.total_hours}
-                                        suffix="h"
-                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
-                                    />
-                                </Col>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>日均工时</span>}
-                                        value={dayViewData.summary.avg_daily_hours}
-                                        suffix="h/天"
-                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
-                                    />
-                                </Col>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>峰值工时</span>}
-                                        value={dayViewData.summary.peak_hours}
-                                        suffix={dayViewData.summary.peak_date ? `h (${dayjs(dayViewData.summary.peak_date).format('M/D')})` : 'h'}
-                                        valueStyle={{ color: '#ff4d4f', fontSize: 24, fontWeight: 600 }}
-                                        prefix={<FireOutlined />}
-                                    />
-                                </Col>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>活跃批次</span>}
-                                        value={dayViewData.summary.batch_count}
-                                        suffix="个"
-                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
-                                    />
-                                </Col>
-                            </Row>
+                        <div className="dashboard-stats-grid">
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">月度总工时</div>
+                                <div className="dashboard-stat-value">
+                                    {dayViewData.summary.total_hours}
+                                    <span className="dashboard-stat-suffix">h</span>
+                                </div>
+                            </div>
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">日均工时</div>
+                                <div className="dashboard-stat-value">
+                                    {dayViewData.summary.avg_daily_hours}
+                                    <span className="dashboard-stat-suffix">h/天</span>
+                                </div>
+                            </div>
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">峰値工时</div>
+                                <div className="dashboard-stat-value danger">
+                                    {dayViewData.summary.peak_hours}
+                                    <span className="dashboard-stat-suffix">
+                                        {dayViewData.summary.peak_date ? `h (${dayjs(dayViewData.summary.peak_date).format('M/D')})` : 'h'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">活跃批次</div>
+                                <div className="dashboard-stat-value info">
+                                    {dayViewData.summary.batch_count}
+                                    <span className="dashboard-stat-suffix">个</span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="chart-container" style={{ height: 320 }}>
+                        <div className="dashboard-chart-container">
                             <Line {...dayChartConfig} />
                         </div>
                     </>
@@ -396,20 +382,16 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                 {/* 月视图 */}
                 {granularity === 'month' && monthViewData && monthColumnData.length > 0 && (
                     <>
-                        <div className="summary-row" style={{ marginBottom: 24 }}>
-                            <Row gutter={24} justify="center">
-                                <Col span={8}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>月人均操作工时 (均值)</span>}
-                                        value={monthViewData.summary.avg_hours_per_person}
-                                        suffix={`h (共${monthViewData.summary.total_employees}人)`}
-                                        prefix={<UserOutlined />}
-                                        valueStyle={{ color: '#1890ff', fontSize: 24, fontWeight: 600 }}
-                                    />
-                                </Col>
-                            </Row>
+                        <div className="dashboard-stats-grid" style={{ gridTemplateColumns: '1fr' }}>
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">月人均操作工时 (均値)</div>
+                                <div className="dashboard-stat-value info">
+                                    {monthViewData.summary.avg_hours_per_person}
+                                    <span className="dashboard-stat-suffix">h (共{monthViewData.summary.total_employees}人)</span>
+                                </div>
+                            </div>
                         </div>
-                        <div className="chart-container" style={{ height: 320 }}>
+                        <div className="dashboard-chart-container">
                             <DualAxes {...monthChartConfig} />
                         </div>
                     </>
@@ -423,7 +405,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                         <Empty description="暂无数据" />
                     )}
             </Spin>
-        </GlassCard>
+        </div>
     );
 };
 

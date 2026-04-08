@@ -1,45 +1,411 @@
-/* Cleaned up as per new design using inline styles and GlassCard */
+/* =====================================================
+ * Dashboard Premium Design System
+ * 调度中心高级视觉系统 — 白色玻璃态 + 精致微交互
+ * ===================================================== */
+
+/* ---------- 页面容器 ---------- */
 .dashboard-page {
-    /* Ensure padding for the main content area */
-    padding-bottom: 32px;
+    padding-bottom: 40px;
+    position: relative;
 }
 
-/* Custom scrollbar for GlassCards if needed */
-.glass-card ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+/* 背景环境光斑（浅色，不深色） */
+.dashboard-page::before {
+    content: '';
+    position: fixed;
+    top: -20%;
+    right: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0, 120, 212, 0.05) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
 }
 
-.glass-card ::-webkit-scrollbar-track {
-    background: transparent;
+.dashboard-page::after {
+    content: '';
+    position: fixed;
+    bottom: -10%;
+    left: 5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(19, 194, 194, 0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
 }
 
-.glass-card ::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 3px;
+/* ---------- Dashboard 两栏网格 ---------- */
+.dashboard-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
 }
 
-.glass-card ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2);
+@media (max-width: 1200px) {
+    .dashboard-charts-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
-/* Overwrite Antd Input/Select for Glass Effect */
+/* ---------- 高级玻璃态卡片基础 ---------- */
+.dashboard-glass-card {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    border-radius: 20px;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.9) inset,
+        0 4px 24px rgba(0, 0, 0, 0.06),
+        0 1px 4px rgba(0, 0, 0, 0.04);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dashboard-glass-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.9) 50%,
+        transparent 100%);
+    pointer-events: none;
+}
+
+.dashboard-glass-card:hover {
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.9) inset,
+        0 8px 40px rgba(0, 0, 0, 0.09),
+        0 2px 8px rgba(0, 0, 0, 0.05);
+    transform: translateY(-2px);
+}
+
+/* ---------- 卡片标题区 ---------- */
+.dashboard-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.dashboard-card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #1a1a2e;
+    letter-spacing: -0.01em;
+}
+
+.dashboard-card-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.dashboard-card-icon.blue {
+    background: linear-gradient(135deg, rgba(0, 120, 212, 0.12), rgba(0, 120, 212, 0.06));
+    color: #0078D4;
+}
+
+.dashboard-card-icon.teal {
+    background: linear-gradient(135deg, rgba(19, 194, 194, 0.12), rgba(19, 194, 194, 0.06));
+    color: #13c2c2;
+}
+
+.dashboard-card-icon.green {
+    background: linear-gradient(135deg, rgba(16, 124, 16, 0.12), rgba(16, 124, 16, 0.06));
+    color: #107C10;
+}
+
+.dashboard-card-icon.purple {
+    background: linear-gradient(135deg, rgba(114, 46, 209, 0.12), rgba(114, 46, 209, 0.06));
+    color: #722ed1;
+}
+
+/* ---------- KPI 统计网格 ---------- */
+.dashboard-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.dashboard-stat-item {
+    background: rgba(250, 250, 252, 0.7);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    border-radius: 12px;
+    padding: 14px 16px;
+    transition: background 0.2s ease;
+}
+
+.dashboard-stat-item:hover {
+    background: rgba(245, 247, 255, 0.9);
+}
+
+.dashboard-stat-label {
+    font-size: 11px;
+    color: #8c8c8c;
+    font-weight: 500;
+    margin-bottom: 6px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.dashboard-stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a1a2e;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.dashboard-stat-value.success { color: #107C10; }
+.dashboard-stat-value.warning { color: #FFAA44; }
+.dashboard-stat-value.danger  { color: #D13438; }
+.dashboard-stat-value.info    { color: #0078D4; }
+
+.dashboard-stat-suffix {
+    font-size: 13px;
+    font-weight: 400;
+    color: #8c8c8c;
+    margin-left: 4px;
+}
+
+/* ---------- 图表容器 ---------- */
+.dashboard-chart-container {
+    height: 300px;
+    position: relative;
+}
+
+/* ---------- Filter Bar ---------- */
+.dashboard-filter-bar {
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(20px) saturate(180%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.8) !important;
+    border-radius: 16px !important;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.95) inset,
+        0 2px 16px rgba(0, 0, 0, 0.05) !important;
+    margin-bottom: 20px;
+}
+
+.dashboard-filter-divider {
+    width: 1px;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+/* ---------- 批次卡片（DailyAssignments） ---------- */
+.batch-card-premium {
+    flex: 0 0 300px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+    scroll-snap-align: start;
+    transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.batch-card-premium:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.09);
+    transform: translateY(-2px);
+}
+
+.batch-card-header-premium {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.batch-tag-premium {
+    font-size: 13px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 8px;
+    letter-spacing: -0.01em;
+}
+
+.stage-section-premium {
+    margin-bottom: 12px;
+}
+
+.stage-header-premium {
+    padding: 8px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(248, 249, 255, 0.8);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.stage-name-premium {
+    font-size: 12px;
+    font-weight: 600;
+    color: #1a1a2e;
+    letter-spacing: 0.01em;
+}
+
+.stage-count-badge {
+    font-size: 11px;
+    color: #8c8c8c;
+    background: rgba(0, 0, 0, 0.05);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.operation-item-premium {
+    padding: 10px 18px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    transition: background 0.2s ease;
+}
+
+.operation-item-premium:last-child {
+    border-bottom: none;
+}
+
+.operation-item-premium:hover {
+    background: rgba(0, 120, 212, 0.02);
+}
+
+.operation-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.operation-time-premium {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0078D4;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.operation-headcount {
+    font-size: 11px;
+    color: #8c8c8c;
+    background: rgba(0, 0, 0, 0.04);
+    padding: 2px 8px;
+    border-radius: 8px;
+}
+
+.operation-name-premium {
+    font-size: 12px;
+    color: #3d3d3d;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.assignments-flex {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.assignment-chip {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: transform 0.15s ease;
+    cursor: default;
+}
+
+.assignment-chip:hover {
+    transform: scale(1.04);
+}
+
+.assignment-chip.assigned {
+    background: rgba(16, 124, 16, 0.08);
+    border: 1px solid rgba(16, 124, 16, 0.2);
+    color: #107C10;
+}
+
+.assignment-chip.unassigned {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: #8c8c8c;
+}
+
+/* ---------- 批次滚动容器 ---------- */
+.batch-scroll-container {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 4px 4px 16px 4px;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.batch-scroll-container::-webkit-scrollbar {
+    display: none;
+}
+
+/* ---------- 全局 Glass Input Override ---------- */
 .glass-input .ant-select-selector,
 .glass-input.ant-picker,
 .glass-input-range.ant-picker {
-    background: rgba(255, 255, 255, 0.5) !important;
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
-    border-radius: 8px !important;
+    background: rgba(255, 255, 255, 0.6) !important;
+    border: 1px solid rgba(0, 0, 0, 0.07) !important;
+    border-radius: 10px !important;
     box-shadow: none !important;
+    transition: background 0.2s ease !important;
 }
 
 .glass-input .ant-select-selector:hover,
 .glass-input.ant-picker:hover,
 .glass-input-range.ant-picker:hover {
-    background: rgba(255, 255, 255, 0.8) !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(0, 120, 212, 0.3) !important;
 }
 
-/* Hide Ant Design Card default styles if any leaked */
+/* ---------- 滚动条样式 ---------- */
+.glass-card ::-webkit-scrollbar,
+.dashboard-glass-card ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.glass-card ::-webkit-scrollbar-track,
+.dashboard-glass-card ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.glass-card ::-webkit-scrollbar-thumb,
+.dashboard-glass-card ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 4px;
+}
+
+.glass-card ::-webkit-scrollbar-thumb:hover,
+.dashboard-glass-card ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.22);
+}
+
+/* 旧版兼容 */
 .glass-card .ant-card-head,
 .glass-card .ant-card-body {
     background: transparent;

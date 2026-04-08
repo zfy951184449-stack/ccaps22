@@ -6,11 +6,10 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Spin, Empty, Statistic, Row, Col, Tooltip } from 'antd';
-import { TeamOutlined, WarningOutlined, CheckCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { Spin, Empty, Tooltip } from 'antd';
+import { TeamOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
-import GlassCard from '../common/GlassCard';
 import { dashboardService } from '../../services/dashboardService';
 import { ManpowerCurveData } from '../../types/dashboard';
 import './ManpowerCurveCard.css';
@@ -331,80 +330,62 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
     }), [stackedBarData, demandLineData, categoryColors, data, dailyData, holidayAnnotations]);
 
     return (
-        <GlassCard>
-            <div className="card-header" style={{ marginBottom: 20 }}>
-                <span className="card-title" style={{ fontSize: 16, fontWeight: 600, display: 'flex', alignItems: 'center' }}>
-                    <div className="icon-wrapper" style={{
-                        background: 'rgba(24, 144, 255, 0.1)',
-                        padding: 8,
-                        borderRadius: 12,
-                        marginRight: 12,
-                        color: '#1890ff'
-                    }}>
+        <div className="dashboard-glass-card">
+            {/* 卡片标题 */}
+            <div className="dashboard-card-header">
+                <div className="dashboard-card-title">
+                    <div className="dashboard-card-icon blue">
                         <TeamOutlined />
                     </div>
                     人力供需曲线
                     <Tooltip title="堆叠柱状图显示各班次可用人数（深色=有操作任务，浅色=待命），红色折线为需求人数">
-                        <InfoCircleOutlined style={{ marginLeft: 8, color: '#bfbfbf', fontSize: 14 }} />
+                        <InfoCircleOutlined style={{ color: '#c0c0c0', fontSize: 13, marginLeft: 2 }} />
                     </Tooltip>
-                </span>
+                </div>
             </div>
 
             <Spin spinning={loading}>
                 {data && dailyData.length > 0 ? (
                     <>
-                        <div className="summary-row" style={{ marginBottom: 24 }}>
-                            <Row gutter={24}>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>团队总人数</span>}
-                                        value={data.total_headcount ?? 0}
-                                        suffix="人"
-                                        valueStyle={{ fontSize: 24, fontWeight: 600 }}
-                                    />
-                                </Col>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>人力充足率</span>}
-                                        value={summary.sufficiency_rate}
-                                        suffix="%"
-                                        valueStyle={{
-                                            color: summary.sufficiency_rate >= 80 ? '#52c41a' : '#faad14',
-                                            fontSize: 24, fontWeight: 600
-                                        }}
-                                        prefix={
-                                            summary.sufficiency_rate >= 80
-                                                ? <CheckCircleOutlined />
-                                                : <WarningOutlined />
-                                        }
-                                    />
-                                </Col>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>平均缺口</span>}
-                                        value={summary.avg_gap}
-                                        suffix="人/天"
-                                        valueStyle={{
-                                            color: Number(summary.avg_gap) > 0 ? '#ff4d4f' : '#52c41a',
-                                            fontSize: 24, fontWeight: 600
-                                        }}
-                                    />
-                                </Col>
-                                <Col span={6}>
-                                    <Statistic
-                                        title={<span style={{ fontSize: 12, color: '#8c8c8c' }}>峰值缺口</span>}
-                                        value={summary.max_gap}
-                                        suffix={summary.max_gap_date ? `人 (${dayjs(summary.max_gap_date).format('M/D')})` : '人'}
-                                        valueStyle={{
-                                            color: summary.max_gap > 0 ? '#ff4d4f' : '#52c41a',
-                                            fontSize: 24, fontWeight: 600
-                                        }}
-                                    />
-                                </Col>
-                            </Row>
+                        {/* KPI 统计块 — 原生 CSS Grid，替代 Antd Row/Col */}
+                        <div className="dashboard-stats-grid">
+                            {/* 团队总人数 */}
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">团队总人数</div>
+                                <div className="dashboard-stat-value">
+                                    {data.total_headcount ?? 0}
+                                    <span className="dashboard-stat-suffix">人</span>
+                                </div>
+                            </div>
+                            {/* 人力充足率 */}
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">人力充足率</div>
+                                <div className={`dashboard-stat-value ${summary.sufficiency_rate >= 80 ? 'success' : 'warning'}`}>
+                                    {summary.sufficiency_rate}
+                                    <span className="dashboard-stat-suffix">%</span>
+                                </div>
+                            </div>
+                            {/* 平均缺口 */}
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">平均缺口</div>
+                                <div className={`dashboard-stat-value ${Number(summary.avg_gap) > 0 ? 'danger' : 'success'}`}>
+                                    {summary.avg_gap}
+                                    <span className="dashboard-stat-suffix">人/天</span>
+                                </div>
+                            </div>
+                            {/* 峰值缺口 */}
+                            <div className="dashboard-stat-item">
+                                <div className="dashboard-stat-label">峰值缺口</div>
+                                <div className={`dashboard-stat-value ${summary.max_gap > 0 ? 'danger' : 'success'}`}>
+                                    {summary.max_gap}
+                                    <span className="dashboard-stat-suffix">
+                                        {summary.max_gap_date ? `人 (${dayjs(summary.max_gap_date).format('M/D')})` : '人'}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="chart-container" style={{ height: 320 }}>
+                        <div className="dashboard-chart-container">
                             <DualAxes {...chartConfig} />
                         </div>
                     </>
@@ -412,7 +393,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                     <Empty description="暂无数据" />
                 )}
             </Spin>
-        </GlassCard>
+        </div>
     );
 };
 

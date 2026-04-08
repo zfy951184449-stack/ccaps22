@@ -1,18 +1,18 @@
 /**
  * Dashboard
- * 
- * 调度中心主控台 - 优化版
- * 
+ *
+ * 调度中心主控台 — Premium Edition
+ *
  * Features:
- * - Apple HIG 风格设计 (Glassmorphism, Fluid Motion)
+ * - 纯白玻璃态 Glassmorphism（禁止深色/流光）
+ * - 原生 CSS Grid 自适应布局
  * - 全局筛选联动 (Global Filter Linkage)
- * - 响应式 Grid 布局
+ * - Framer-motion 精致微交互
  */
 
 import React, { useState } from 'react';
 import { motion, Variants } from 'framer-motion';
 import dayjs, { Dayjs } from 'dayjs';
-import { Row, Col } from 'antd';
 import DashboardFilterBar from './Dashboard/DashboardFilterBar';
 import ManpowerCurveCard from './Dashboard/ManpowerCurveCard';
 import WorkHoursCurveCard from './Dashboard/WorkHoursCurveCard';
@@ -20,33 +20,26 @@ import DailyAssignmentsPanel from './Dashboard/DailyAssignmentsPanel';
 import './Dashboard.css';
 
 const Dashboard: React.FC = () => {
-    // Globe Filter State
+    // ---- 全局筛选状态（Assessor防腐铁规：保留所有状态与联动）----
     const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs());
     const [orgPath, setOrgPath] = useState<number[]>([]);
     const [selectedShift, setSelectedShift] = useState<number | undefined>(undefined);
 
-    // Animation variants
+    // ---- 动画配置 ----
     const containerVariants: Variants = {
         hidden: { opacity: 0 },
         visible: {
             opacity: 1,
-            transition: {
-                staggerChildren: 0.1,
-                delayChildren: 0.1
-            }
+            transition: { staggerChildren: 0.08, delayChildren: 0.05 }
         }
     };
 
     const itemVariants: Variants = {
-        hidden: { opacity: 0, y: 20 },
+        hidden: { opacity: 0, y: 16 },
         visible: {
             opacity: 1,
             y: 0,
-            transition: {
-                type: 'spring',
-                stiffness: 100,
-                damping: 15
-            }
+            transition: { type: 'spring', stiffness: 120, damping: 18 }
         }
     };
 
@@ -57,8 +50,8 @@ const Dashboard: React.FC = () => {
             animate="visible"
             variants={containerVariants}
         >
-            {/* 1. Global Filter Bar */}
-            <motion.div variants={itemVariants} style={{ marginBottom: 24 }}>
+            {/* 1. 全局筛选条 */}
+            <motion.div variants={itemVariants}>
                 <DashboardFilterBar
                     selectedDate={selectedMonth}
                     onDateChange={setSelectedMonth}
@@ -69,40 +62,31 @@ const Dashboard: React.FC = () => {
                 />
             </motion.div>
 
-            {/* 2. Main Charts Grid */}
-            <Row gutter={[24, 24]}>
-                {/* Manpower Curve (Top Left) */}
-                <Col xs={24} lg={12}>
-                    <motion.div variants={itemVariants} style={{ height: '100%' }}>
-                        <ManpowerCurveCard
-                            date={selectedMonth}
-                            orgPath={orgPath}
-                            shiftId={selectedShift}
-                        />
-                    </motion.div>
-                </Col>
+            {/* 2. 图表双栏 — 原生 CSS Grid，替代 Antd Row/Col */}
+            <div className="dashboard-charts-grid">
+                <motion.div variants={itemVariants}>
+                    <ManpowerCurveCard
+                        date={selectedMonth}
+                        orgPath={orgPath}
+                        shiftId={selectedShift}
+                    />
+                </motion.div>
 
-                {/* Work Hours Curve (Top Right) */}
-                <Col xs={24} lg={12}>
-                    <motion.div variants={itemVariants} style={{ height: '100%' }}>
-                        <WorkHoursCurveCard
-                            date={selectedMonth}
-                            orgPath={orgPath}
-                        />
-                    </motion.div>
-                </Col>
+                <motion.div variants={itemVariants}>
+                    <WorkHoursCurveCard
+                        date={selectedMonth}
+                        orgPath={orgPath}
+                    />
+                </motion.div>
+            </div>
 
-                {/* 3. Daily Assignments (Bottom Full Width) */}
-                <Col span={24}>
-                    <motion.div variants={itemVariants}>
-                        <DailyAssignmentsPanel
-                            date={selectedMonth}
-                        />
-                    </motion.div>
-                </Col>
-            </Row>
+            {/* 3. 每日人员分配（全宽） */}
+            <motion.div variants={itemVariants}>
+                <DailyAssignmentsPanel date={selectedMonth} />
+            </motion.div>
         </motion.div>
     );
 };
 
 export default Dashboard;
+
