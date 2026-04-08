@@ -1,5 +1,8 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -73,6 +76,25 @@ app.use(
   }),
 );
 
+// --- P0-3: Security Middleware ---
+app.use(helmet({
+  // Allow inline scripts for dev; tighten in production
+  contentSecurityPolicy: false,
+}));
+
+// Request logging (dev format: concise colored output)
+app.use(morgan('dev'));
+
+// Rate limiting: max 200 requests per minute per IP
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests, please try again later', code: 'RATE_LIMITED' },
+});
+app.use('/api', apiLimiter);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -136,12 +158,35 @@ if (fs.existsSync(frontendBuildPath)) {
   app.use('*', (req, res) => {
     console.log(`404 Not Found: ${req.method} ${req.originalUrl}`);
     res.status(404).json({
+      success: false,
       error: 'Route not found',
-      method: req.method,
-      url: req.originalUrl,
+      code: 'NOT_FOUND',
     });
   });
 }
+
+// --- P0-2: Global Error Handler ---
+// This MUST be registered AFTER all routes.
+// Express identifies error handlers by the 4-parameter signature (err, req, res, next).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+  const timestamp = new Date().toISOString();
+  console.error(`[GlobalError] ${timestamp} ${req.method} ${req.originalUrl}:`, err);
+
+  // Avoid sending headers twice if response already started
+  if (res.headersSent) {
+    return;
+  }
+
+  const statusCode = (err as any).statusCode || 500;
+  res.status(statusCode).json({
+    success: false,
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message || 'Unknown error',
+    code: 'INTERNAL_ERROR',
+  });
+});
 
 // Create HTTP server and attach WebSocket
 const server = http.createServer(app);
