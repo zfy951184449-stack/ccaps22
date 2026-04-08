@@ -41,7 +41,6 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
     const [metrics, setMetrics] = useState({
         assigned: 0,
         total: 0,
-        satisfaction: 100, // Default 100% (Clean Slate)
         elapsed: '00:00'
     });
     const [logs, setLogs] = useState<LogLine[]>([]);
@@ -253,22 +252,14 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
             {/* Metrics Cards */}
             <div style={{ background: '#f5f7fa', padding: '16px 24px', margin: '16px 0', borderTop: '1px solid #eee', borderBottom: '1px solid #eee' }}>
                 <Row gutter={16}>
-                    <Col span={8}>
+                    <Col span={12}>
                         <Statistic
                             title="已分配班次"
                             value={metrics.assigned}
                             prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
                         />
                     </Col>
-                    <Col span={8}>
-                        <Statistic
-                            title="满意度"
-                            value={metrics.satisfaction}
-                            suffix="%"
-                            precision={0}
-                        />
-                    </Col>
-                    <Col span={8}>
+                    <Col span={12}>
                         <Statistic
                             title="已用时"
                             value={metrics.elapsed}

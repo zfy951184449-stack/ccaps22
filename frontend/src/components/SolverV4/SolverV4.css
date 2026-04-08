@@ -403,3 +403,23 @@
     margin-top: var(--v4-space-xl);
     border-top: 1px solid var(--v4-border-color);
 }
+
+/* ==========================================================================
+   Result Drawer Overrides
+   ========================================================================== */
+
+.v4-result-drawer .ant-drawer-body {
+    padding: 0 !important;
+    overflow-y: auto;
+}
+
+.v4-result-drawer .ant-drawer-header {
+    border-bottom: 1px solid var(--v4-border-color);
+    padding: var(--v4-space-md) var(--v4-space-xl);
+}
+
+.v4-result-drawer .v4-result-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--v4-space-xl) var(--v4-space-2xl);
+}

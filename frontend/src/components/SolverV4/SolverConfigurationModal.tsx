@@ -40,6 +40,8 @@ export interface SolverConfig {
     objective_weight_deviation: number;
     objective_weight_special_shifts: number;
     objective_weight_night_balance: number; // NEW
+    enable_balance_weekend_work: boolean;
+    objective_weight_weekend_balance: number;
 
     // Vacancy
     allow_position_vacancy: boolean;
@@ -82,6 +84,8 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     objective_weight_deviation: 1,
     objective_weight_special_shifts: 100,
     objective_weight_night_balance: 5,
+    enable_balance_weekend_work: true,
+    objective_weight_weekend_balance: 5,
 
     // Vacancy Defaults
     allow_position_vacancy: false,
@@ -172,6 +176,7 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_night_rest', title: '夜班后休息', description: '夜班后强制安排休息日' },
         { key: 'enable_night_shift_interval', title: '夜班间隔', description: '两次夜班之间的最小间隔天数' },
         { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
+        { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '无操作需求时优先安排标准班（白班）' },
         {
             key: 'enable_consecutive_work_rest_pattern',
             title: '上班/休息节奏约束',
@@ -352,6 +357,12 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                             weightKey: 'objective_weight_night_balance',
                             title: '夜班均衡分配',
                             description: '惩罚夜班分配不均匀（方差 × 权重）',
+                        },
+                        {
+                            key: 'enable_balance_weekend_work',
+                            weightKey: 'objective_weight_weekend_balance',
+                            title: '周末工作均衡',
+                            description: '惩罚周末/节假日工作分配不均匀',
                         },
                         {
                             key: 'allow_position_vacancy',

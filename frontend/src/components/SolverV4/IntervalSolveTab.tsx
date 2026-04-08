@@ -41,7 +41,7 @@ const IntervalSolveTab: React.FC = () => {
 
     // Department Filter
     const [teams, setTeams] = useState<Team[]>([]);
-    const [selectedDepartment, setSelectedDepartment] = useState<'all' | string>('all');
+    const [selectedDepartment, setSelectedDepartment] = useState<'all' | number>('all');
     const [loadingTeams, setLoadingTeams] = useState(false);
 
     // Solver Config
@@ -107,8 +107,7 @@ const IntervalSolveTab: React.FC = () => {
 
     useEffect(() => {
         fetchData(selectedMonth);
-        setSelectedRowKeys([]);
-        // Reset solve range when month changes — default to full month
+        // Note: selectedRowKeys reset is handled inside fetchData
         setSolveRange(null);
     }, [selectedMonth]);
 
@@ -118,18 +117,17 @@ const IntervalSolveTab: React.FC = () => {
         }
     };
 
-    const handleDepartmentChange = (value: 'all' | string) => {
+    const handleDepartmentChange = (value: 'all' | number) => {
         setSelectedDepartment(value);
         if (value === 'all') {
             setSolverConfig((prev) => ({ ...prev, team_ids: [] }));
         } else {
-            const matchedTeam = teams.find(t => t.teamName === value);
             setSolverConfig((prev) => ({
                 ...prev,
-                team_ids: matchedTeam ? [matchedTeam.id] : [],
+                team_ids: [value],
             }));
         }
-        const filtered = data.filter(item => value === 'all' || item.team_name === value);
+        const filtered = data.filter(item => value === 'all' || item.team_id === value);
         const activatedIds = filtered
             .filter(batch => batch.plan_status === 'ACTIVATED')
             .map(batch => batch.id);
@@ -137,7 +135,7 @@ const IntervalSolveTab: React.FC = () => {
     };
 
     const filteredData = Array.isArray(data)
-        ? data.filter(item => selectedDepartment === 'all' || item.team_name === selectedDepartment)
+        ? data.filter(item => selectedDepartment === 'all' || item.team_id === selectedDepartment)
         : [];
 
     const handleIntervalSolve = async () => {
@@ -274,7 +272,7 @@ const IntervalSolveTab: React.FC = () => {
                         options={[
                             { value: 'all', label: '所有部门' },
                             ...teams.map(team => ({
-                                value: team.teamName,
+                                value: team.id,
                                 label: team.teamName,
                             })),
                         ]}

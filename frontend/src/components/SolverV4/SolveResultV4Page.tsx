@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Modal, Spin, Alert, message, Dropdown } from 'antd';
+import { Drawer, Spin, Alert, message, Dropdown, Popconfirm } from 'antd';
 import type { MenuProps } from 'antd';
 import {
     CheckCircleOutlined,
@@ -10,7 +10,8 @@ import {
     SaveOutlined,
     FileExcelOutlined,
     FilePdfOutlined,
-    DownOutlined
+    DownOutlined,
+    ArrowLeftOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -23,6 +24,7 @@ import OverviewView from './views/OverviewView';
 import TimelineView from './views/TimelineView';
 import PersonnelView from './views/PersonnelView';
 import AssignmentsView from './views/AssignmentsView';
+import PrecheckView from './views/PrecheckView';
 
 import './SolverV4.css';
 
@@ -50,15 +52,25 @@ interface ResultData {
     operations?: any[];
     calendar_days?: { date: string; is_workday: boolean }[];
     standard_hours?: number;
+    precheck_results?: {
+        status: 'PASS' | 'WARNING' | 'ERROR';
+        checks: {
+            name: string;
+            status: 'PASS' | 'WARNING' | 'ERROR';
+            message: string;
+            details?: any[];
+        }[];
+    };
 }
 
-type ViewType = 'overview' | 'timeline' | 'personnel' | 'assignments';
+type ViewType = 'overview' | 'timeline' | 'personnel' | 'assignments' | 'precheck';
 
 const VIEW_OPTIONS = [
     { key: 'overview', label: '概览' },
     { key: 'timeline', label: '时间轴' },
     { key: 'personnel', label: '人员统计' },
-    { key: 'assignments', label: '分配明细' }
+    { key: 'assignments', label: '分配明细' },
+    { key: 'precheck', label: '预检报告' }
 ];
 
 const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, onClose }) => {
@@ -165,6 +177,56 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
         }));
     }, [data]);
 
+    // Compute weekend/night balance from shift assignments
+    const weekendNightMetrics = useMemo(() => {
+        if (!data?.shift_assignments?.length || !data?.calendar_days?.length) {
+            return { weekendBalance: null, nightBalance: null };
+        }
+
+        const nonWorkDays = new Set(
+            data.calendar_days.filter(d => !d.is_workday).map(d => d.date)
+        );
+
+        // Weekend work per employee
+        const weekendByEmp = new Map<number, number>();
+        const nightByEmp = new Map<number, number>();
+
+        data.shift_assignments.forEach((s: any) => {
+            // Weekend
+            if (nonWorkDays.has(s.date)) {
+                weekendByEmp.set(s.employee_id, (weekendByEmp.get(s.employee_id) || 0) + 1);
+            }
+            // Night shift heuristic: start_time >= 20:00 or end_time <= 06:00
+            const startH = dayjs(s.start_time).hour();
+            if (startH >= 20 || startH <= 2) {
+                nightByEmp.set(s.employee_id, (nightByEmp.get(s.employee_id) || 0) + 1);
+            }
+        });
+
+        const computeBalance = (map: Map<number, number>): number | null => {
+            if (map.size === 0) return null;
+            const values = Array.from(map.values());
+            const mean = values.reduce((a, b) => a + b, 0) / values.length;
+            if (mean === 0) return 100;
+            const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+            const cv = Math.sqrt(variance) / mean; // coefficient of variation
+            return Math.max(0, Math.round((1 - cv) * 100));
+        };
+
+        return {
+            weekendBalance: computeBalance(weekendByEmp),
+            nightBalance: computeBalance(nightByEmp)
+        };
+    }, [data]);
+
+    const precheckBadge = useMemo(() => {
+        if (!data?.precheck_results) return null;
+        const { status } = data.precheck_results;
+        if (status === 'ERROR') return { count: data.precheck_results.checks.filter(c => c.status === 'ERROR').length, color: 'var(--v4-color-error)' };
+        if (status === 'WARNING') return { count: data.precheck_results.checks.filter(c => c.status === 'WARNING').length, color: 'var(--v4-color-warning)' };
+        return null;
+    }, [data]);
+
     const renderContent = () => {
         if (!data) return null;
 
@@ -198,6 +260,8 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                 );
             case 'assignments':
                 return <AssignmentsView operations={data.operations || []} />;
+            case 'precheck':
+                return <PrecheckView results={data.precheck_results} />;
             default:
                 return null;
         }
@@ -237,17 +301,34 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
         }
     };
 
+    const drawerTitle = (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+                onClick={onClose}
+                style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: 16, color: 'var(--v4-text-secondary)',
+                    display: 'flex', alignItems: 'center', padding: 4
+                }}
+            >
+                <ArrowLeftOutlined />
+            </button>
+            <span style={{ fontWeight: 600, fontSize: 18 }}>排班结果</span>
+            {runId && <span style={{ color: 'var(--v4-text-tertiary)', fontSize: 13 }}>#{runId}</span>}
+        </div>
+    );
+
     return (
-        <Modal
-            title={null}
+        <Drawer
+            title={drawerTitle}
             open={visible}
-            onCancel={onClose}
-            width={1200}
-            footer={null}
-            style={{ top: 30 }}
+            onClose={onClose}
+            width="100vw"
+            placement="right"
             maskClosable={false}
-            bodyStyle={{ padding: 0, background: 'var(--v4-bg-primary)' }}
-            className="v4-result-modal"
+            closable={false}
+            styles={{ body: { padding: 0, background: 'var(--v4-bg-primary)' } }}
+            className="v4-result-drawer"
         >
             <div className="v4-result-container">
                 {loading ? (
@@ -260,15 +341,21 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                     <>
                         {/* Header */}
                         <div className="v4-result-header">
-                            <h1 className="v4-result-title">排班结果</h1>
-                            <span className="v4-solve-time-badge">
-                                <ClockCircleOutlined />
-                                求解耗时 {data.metrics.solve_time}s
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--v4-space-lg)' }}>
+                                <span className="v4-solve-time-badge">
+                                    <ClockCircleOutlined />
+                                    求解耗时 {data.metrics.solve_time}s
+                                </span>
+                                {dateRange && (
+                                    <span style={{ fontSize: 'var(--v4-font-size-sm)', color: 'var(--v4-text-secondary)' }}>
+                                        {dateRange.start} - {dateRange.end}
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
-                        {/* Metrics Row */}
-                        <div className="v4-metrics-row">
+                        {/* Metrics Row — replaced satisfaction with balance metrics */}
+                        <div className="v4-metrics-row" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
                             <MetricCard
                                 label="分配完成率"
                                 value={data.metrics.completion_rate}
@@ -284,27 +371,41 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                 color="info"
                             />
                             <MetricCard
-                                label="平均满意度"
-                                value={data.metrics.satisfaction}
-                                suffix="%"
+                                label="参与人数"
+                                value={uniqueEmployeeCount}
+                                suffix="人"
                                 icon={<TeamOutlined />}
                                 color="default"
                             />
                             <MetricCard
-                                label="求解耗时"
-                                value={data.metrics.solve_time}
-                                suffix="s"
+                                label="夜班均衡"
+                                value={weekendNightMetrics.nightBalance ?? '-'}
+                                suffix={weekendNightMetrics.nightBalance !== null ? '%' : ''}
                                 icon={<ClockCircleOutlined />}
-                                color="default"
+                                color={weekendNightMetrics.nightBalance !== null && weekendNightMetrics.nightBalance < 70 ? 'warning' : 'default'}
+                            />
+                            <MetricCard
+                                label="周末均衡"
+                                value={weekendNightMetrics.weekendBalance ?? '-'}
+                                suffix={weekendNightMetrics.weekendBalance !== null ? '%' : ''}
+                                icon={<ClockCircleOutlined />}
+                                color={weekendNightMetrics.weekendBalance !== null && weekendNightMetrics.weekendBalance < 70 ? 'warning' : 'default'}
                             />
                         </div>
 
-                        {/* Segmented Control */}
-                        <SegmentedControl
-                            options={VIEW_OPTIONS}
-                            value={activeView}
-                            onChange={(key) => setActiveView(key as ViewType)}
-                        />
+                        {/* Segmented Control with precheck badge */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--v4-space-md)' }}>
+                            <SegmentedControl
+                                options={VIEW_OPTIONS.map(opt => ({
+                                    ...opt,
+                                    label: opt.key === 'precheck' && precheckBadge
+                                        ? `${opt.label} (${precheckBadge.count})`
+                                        : opt.label
+                                }))}
+                                value={activeView}
+                                onChange={(key) => setActiveView(key as ViewType)}
+                            />
+                        </div>
 
                         {/* Content Area */}
                         <div style={{ minHeight: 400 }}>
@@ -357,19 +458,27 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                     <CheckCircleOutlined /> 已应用
                                 </button>
                             ) : (
-                                <button
-                                    className="v4-btn v4-btn-primary"
-                                    onClick={handleApplyResult}
-                                    disabled={applying}
+                                <Popconfirm
+                                    title="确认应用排班结果"
+                                    description="将写入新的排班数据，但会保留已锁定的操作分配和班次。是否继续？"
+                                    onConfirm={handleApplyResult}
+                                    okText="确认应用"
+                                    cancelText="取消"
+                                    okButtonProps={{ loading: applying }}
                                 >
-                                    <SaveOutlined /> {applying ? '应用中...' : '应用排班'}
-                                </button>
+                                    <button
+                                        className="v4-btn v4-btn-primary"
+                                        disabled={applying}
+                                    >
+                                        <SaveOutlined /> {applying ? '应用中...' : '应用排班'}
+                                    </button>
+                                </Popconfirm>
                             )}
                         </div>
                     </>
                 ) : null}
             </div>
-        </Modal>
+        </Drawer>
     );
 };
 

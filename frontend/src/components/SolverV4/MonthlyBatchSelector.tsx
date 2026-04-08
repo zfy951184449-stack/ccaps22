@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Card, DatePicker, Table, Tag, Typography, Space, Button, message, Select, Tabs } from 'antd';
-import { MoreOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import OperationReviewModal from './OperationReviewModal';
@@ -44,7 +43,7 @@ const MonthlyBatchSelector: React.FC = () => {
 
     // Department Filter State
     const [teams, setTeams] = useState<Team[]>([]);
-    const [selectedDepartment, setSelectedDepartment] = useState<'all' | string>('all');
+    const [selectedDepartment, setSelectedDepartment] = useState<'all' | number>('all');
     const [loadingTeams, setLoadingTeams] = useState(false);
 
     // Progress Modal State
@@ -111,7 +110,7 @@ const MonthlyBatchSelector: React.FC = () => {
 
     useEffect(() => {
         fetchData(selectedMonth);
-        setSelectedRowKeys([]); // Reset selection when month changes
+        // Note: selectedRowKeys reset is handled inside fetchData via auto-selecting ACTIVATED
     }, [selectedMonth]);
 
     const handleMonthChange = (date: Dayjs | null) => {
@@ -120,20 +119,19 @@ const MonthlyBatchSelector: React.FC = () => {
         }
     };
 
-    const handleDepartmentChange = (value: 'all' | string) => {
+    const handleDepartmentChange = (value: 'all' | number) => {
         setSelectedDepartment(value);
         // 自动同步到高级配置
         if (value === 'all') {
             setSolverConfig((prev) => ({ ...prev, team_ids: [] }));
         } else {
-            const matchedTeam = teams.find(t => t.teamName === value);
             setSolverConfig((prev) => ({
                 ...prev,
-                team_ids: matchedTeam ? [matchedTeam.id] : [],
+                team_ids: [value],
             }));
         }
         // 自动勾选过滤后的 ACTIVATED 批次
-        const filtered = data.filter(item => value === 'all' || item.team_name === value);
+        const filtered = data.filter(item => value === 'all' || item.team_id === value);
         const activatedIds = filtered
             .filter(batch => batch.plan_status === 'ACTIVATED')
             .map(batch => batch.id);
@@ -145,10 +143,7 @@ const MonthlyBatchSelector: React.FC = () => {
         setConfigVisible(false);
         const ids = solverConfig.team_ids || [];
         if (ids.length === 1) {
-            const matchedTeam = teams.find(t => t.id === ids[0]);
-            if (matchedTeam) {
-                setSelectedDepartment(matchedTeam.teamName);
-            }
+            setSelectedDepartment(ids[0]);
         } else {
             setSelectedDepartment('all');
         }
@@ -156,7 +151,7 @@ const MonthlyBatchSelector: React.FC = () => {
 
     // 计算过滤后的数据
     const filteredData = Array.isArray(data)
-        ? data.filter(item => selectedDepartment === 'all' || item.team_name === selectedDepartment)
+        ? data.filter(item => selectedDepartment === 'all' || item.team_id === selectedDepartment)
         : [];
 
     const handleScheduleSelected = () => {
@@ -235,12 +230,6 @@ const MonthlyBatchSelector: React.FC = () => {
             key: 'planned_end_date',
             sorter: (a, b) => dayjs(a.planned_end_date).unix() - dayjs(b.planned_end_date).unix(),
         },
-        {
-            title: '',
-            key: 'action',
-            render: () => <Button type="text" icon={<MoreOutlined />} />,
-            width: 50,
-        },
     ];
 
     return (
@@ -285,7 +274,7 @@ const MonthlyBatchSelector: React.FC = () => {
                                             options={[
                                                 { value: 'all', label: '所有部门' },
                                                 ...teams.map(team => ({
-                                                    value: team.teamName,
+                                                    value: team.id,
                                                     label: team.teamName,
                                                 })),
                                             ]}

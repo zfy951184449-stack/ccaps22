@@ -37,8 +37,12 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
             shiftHours: number; // Total Shift Nominal Hours
             operationHours: number; // Total Operation Duration Hours
             maxConsecutiveWork: number;
+            weekendWorkDays: number; // Work shifts on non-working days (weekends/holidays)
             dates: Map<string, boolean>;
         }
+
+        // Build non-working day set from calendar
+        const nonWorkdaySet = new Set(calendarDays.filter(d => !d.is_workday).map(d => d.date));
 
         const empMap = new Map<number, EmpStats>();
 
@@ -56,12 +60,18 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
                     shiftHours: 0,
                     operationHours: 0,
                     maxConsecutiveWork: 0,
+                    weekendWorkDays: 0,
                     dates: new Map()
                 });
             }
             const emp = empMap.get(s.employee_id)!;
             emp.dates.set(s.date, isWorkShift);
-            if (isWorkShift) emp.shiftCount++;
+            if (isWorkShift) {
+                emp.shiftCount++;
+                if (nonWorkdaySet.has(s.date)) {
+                    emp.weekendWorkDays++;
+                }
+            }
             emp.shiftHours += hours;
         });
 
@@ -117,6 +127,10 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
         return (op / shift) * 100; // Allow > 100% just in case, or cap? Usually utilization shouldn't > 100 unless OT.
     };
 
+    const weekendAvg = stats.length > 0
+        ? stats.reduce((sum, s) => sum + s.weekendWorkDays, 0) / stats.length
+        : 0;
+
     return (
         <div style={{ display: 'flex', gap: 'var(--v4-space-xl)' }}>
             {/* Left: Ring Chart */}
@@ -157,7 +171,7 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
                 {/* Header */}
                 <div style={{
                     display: 'grid',
-                    gridTemplateColumns: '160px 1fr 80px 80px 100px',
+                    gridTemplateColumns: '160px 1fr 80px 80px 80px 100px',
                     padding: 'var(--v4-space-md) var(--v4-space-lg)',
                     background: 'var(--v4-bg-section)',
                     fontSize: 'var(--v4-font-size-xs)',
@@ -168,6 +182,7 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
                     <div>利用率 (操作/排班)</div>
                     <div style={{ textAlign: 'center' }}>排班工时</div>
                     <div style={{ textAlign: 'center' }}>排班天数</div>
+                    <div style={{ textAlign: 'center' }}>周末工作</div>
                     <div style={{ textAlign: 'center' }}>最大连续工作</div>
                 </div>
 
@@ -176,11 +191,12 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
                     {stats.map(emp => {
                         const utilPercent = getUtilizationPercent(emp.operationHours, emp.shiftHours);
                         const ratio = emp.shiftHours > 0 ? emp.operationHours / emp.shiftHours : 0;
+                        const isWeekendOverloaded = weekendAvg > 0 && emp.weekendWorkDays > weekendAvg * 1.5;
 
                         return (
                             <div key={emp.id} style={{
                                 display: 'grid',
-                                gridTemplateColumns: '160px 1fr 80px 80px 100px',
+                                gridTemplateColumns: '160px 1fr 80px 80px 80px 100px',
                                 padding: 'var(--v4-space-md) var(--v4-space-lg)',
                                 borderBottom: '1px solid var(--v4-border-color)',
                                 alignItems: 'center'
@@ -207,6 +223,7 @@ const PersonnelView: React.FC<PersonnelViewProps> = ({ shiftAssignments, assignm
                                 </div>
                                 <div style={{ textAlign: 'center', fontSize: 'var(--v4-font-size-sm)' }}>{emp.shiftHours}h</div>
                                 <div style={{ textAlign: 'center', fontSize: 'var(--v4-font-size-sm)' }}>{emp.shiftCount}天</div>
+                                <div style={{ textAlign: 'center', fontSize: 'var(--v4-font-size-sm)', color: isWeekendOverloaded ? 'var(--v4-color-error)' : undefined, fontWeight: isWeekendOverloaded ? 600 : undefined }}>{emp.weekendWorkDays}天{isWeekendOverloaded ? ' ⚠' : ''}</div>
                                 <div style={{ textAlign: 'center' }}>
                                     {emp.maxConsecutiveWork > 6 ? (
                                         <span style={{ color: 'var(--v4-color-error)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--v4-space-xs)' }}>
