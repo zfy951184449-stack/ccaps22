@@ -64,3 +64,12 @@ solver_v4/docs/defects_report.html
 docs/exec-plans/active/harness-runs/*
 !docs/exec-plans/active/harness-runs/.gitignore
 !docs/exec-plans/active/harness-runs/README.md
+
+# AI tool directories (do not commit)
+.claude/
+.cursor/
+
+# E2E test artifacts at project root (Playwright screenshots, one-off scripts)
+test_e2e_*.png
+test_frontend_e2e_*.ts
+playwright-artifacts/
