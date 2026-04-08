@@ -43,6 +43,7 @@ database/backups/*.sql
 *.bak
 *.bak.*
 *.legacy.*
+*.deprecated
 *.pid
 backend/over_allocation_report.txt
 archive/**/v4-result.json
