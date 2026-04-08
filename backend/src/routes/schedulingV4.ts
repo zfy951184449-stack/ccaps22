@@ -1,5 +1,5 @@
 import express from 'express';
-import * as schedulingV4Controller from '../controllers/schedulingV4Controller';
+import * as schedulingV4Controller from '../controllers/schedulingV4';
 
 const router = express.Router();
 
