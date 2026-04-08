@@ -1,15 +1,80 @@
-import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, startTransition } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useRef, useCallback, startTransition, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { GanttBatch, GanttContextType, LayoutMode, ViewMode } from './types';
+import { GanttBatch, GanttContextType, LayoutMode, ViewMode, DatePreset } from './types';
 
 const GanttContext = createContext<GanttContextType | undefined>(undefined);
 
-export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // Dates
-    const [startDate, setStartDate] = useState(dayjs().subtract(7, 'day').startOf('day'));
-    const [endDate, setEndDate] = useState(dayjs().add(3, 'month').endOf('week'));
+// ─── URL 参数工具函数 ───────────────────────────────────────────────
+const GANTT_FROM_PARAM = 'gantt_from';
+const GANTT_TO_PARAM = 'gantt_to';
 
-    // View Settings
+function readDateFromUrl(param: string): dayjs.Dayjs | null {
+    if (typeof window === 'undefined') return null;
+    const value = new URLSearchParams(window.location.search).get(param);
+    if (!value) return null;
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed : null;
+}
+
+function writeDatesToUrl(from: dayjs.Dayjs, to: dayjs.Dayjs) {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set(GANTT_FROM_PARAM, from.format('YYYY-MM-DD'));
+    url.searchParams.set(GANTT_TO_PARAM, to.format('YYYY-MM-DD'));
+    window.history.replaceState(null, '', url.toString());
+}
+
+// ─── 智能初始日期策略 ──────────────────────────────────────────────
+// 1. URL 参数优先（分享链接 / 刷新保持）
+// 2. 否则使用"包含今天"的合理默认值
+function getInitialDates(): { start: dayjs.Dayjs; end: dayjs.Dayjs; fromUrl: boolean } {
+    const urlFrom = readDateFromUrl(GANTT_FROM_PARAM);
+    const urlTo = readDateFromUrl(GANTT_TO_PARAM);
+
+    if (urlFrom && urlTo && urlTo.isAfter(urlFrom)) {
+        return { start: urlFrom, end: urlTo, fromUrl: true };
+    }
+
+    // 默认：本周一 ~ +4周末（确保包含今天）
+    return {
+        start: dayjs().startOf('week'),
+        end: dayjs().add(4, 'week').endOf('week'),
+        fromUrl: false,
+    };
+}
+
+// ─── 日期预设计算 ──────────────────────────────────────────────────
+function computeDatePreset(preset: Exclude<DatePreset, 'autoFit'>): { start: dayjs.Dayjs; end: dayjs.Dayjs } {
+    const today = dayjs();
+    switch (preset) {
+        case 'thisWeek':
+            return { start: today.startOf('week'), end: today.endOf('week') };
+        case 'next2Weeks':
+            return { start: today.startOf('week'), end: today.add(2, 'week').endOf('week') };
+        case 'thisMonth':
+            return { start: today.startOf('month'), end: today.endOf('month') };
+        case 'next3Months':
+            return { start: today.startOf('week'), end: today.add(3, 'month').endOf('week') };
+    }
+}
+
+export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    // ─── 初始日期（URL > 默认值）───────────────────────────────────
+    const initialDates = getInitialDates();
+    const [startDate, setStartDate] = useState(initialDates.start);
+    const [endDate, setEndDate] = useState(initialDates.end);
+
+    // ─── 竞态防御：用户手动操作日期后，auto-fit 不再覆盖 ──────────
+    // URL 来源视为用户主动意图，同样阻止 auto-fit 覆盖
+    const userInteractedRef = useRef(initialDates.fromUrl);
+    const [hasUserInteracted, setHasUserInteracted] = useState(initialDates.fromUrl);
+
+    const markUserInteracted = useCallback(() => {
+        userInteractedRef.current = true;
+        setHasUserInteracted(true);
+    }, []);
+
+    // ─── View Settings ────────────────────────────────────────────
     const [viewMode, setViewMode] = useState<ViewMode>('week');
     const [layoutModeInternal, setLayoutModeInternal] = useState<LayoutMode>('dense');
     const [zoomLevel, setZoomLevel] = useState(100); // Default 100px per day
@@ -25,7 +90,7 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     };
     const layoutMode = layoutModeInternal;
 
-    // Expansion State
+    // ─── Expansion State ──────────────────────────────────────────
     const [expandedBatches, setExpandedBatches] = useState<Set<number>>(new Set());
     const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
 
@@ -42,6 +107,37 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
     // 单日模式导航防抖 ref：防止快速连续切换日期导致 N+1 次 API 请求
     const navigateDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ─── URL 同步：日期变化时回写 URL ─────────────────────────────
+    useEffect(() => {
+        writeDatesToUrl(startDate, endDate);
+    }, [startDate, endDate]);
+
+    // ─── Wrapped setters（标记用户交互）──────────────────────────
+    const setStartDateWithInteraction = useCallback((date: dayjs.Dayjs) => {
+        markUserInteracted();
+        setStartDate(date);
+    }, [markUserInteracted]);
+
+    const setEndDateWithInteraction = useCallback((date: dayjs.Dayjs) => {
+        markUserInteracted();
+        setEndDate(date);
+    }, [markUserInteracted]);
+
+    // ─── 日期预设快捷方法 ─────────────────────────────────────────
+    const applyDatePreset = useCallback((preset: DatePreset) => {
+        if (preset === 'autoFit') {
+            // autoFit 重置用户交互标记，让 auto-fit 逻辑重新运行
+            userInteractedRef.current = false;
+            setHasUserInteracted(false);
+            return;
+        }
+
+        const { start, end } = computeDatePreset(preset);
+        markUserInteracted();
+        setStartDate(start);
+        setEndDate(end);
+    }, [markUserInteracted]);
 
     const toggleBatch = (batchId: number) => {
         setExpandedBatches(prev => {
@@ -122,10 +218,9 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             setViewMode(savedViewState.viewMode);
             setSavedViewState(null);
         } else {
-            // Fallback default
-            const today = dayjs();
-            setStartDate(today.subtract(1, 'week').startOf('week'));
-            setEndDate(today.add(3, 'week').endOf('week'));
+            // Fallback：与初始默认值保持一致（包含今天的本周~+4周）
+            setStartDate(dayjs().startOf('week'));
+            setEndDate(dayjs().add(4, 'week').endOf('week'));
             setViewMode('week');
         }
     };
@@ -156,8 +251,8 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             viewMode,
             layoutMode,
             zoomLevel,
-            setStartDate,
-            setEndDate,
+            setStartDate: setStartDateWithInteraction,
+            setEndDate: setEndDateWithInteraction,
             setViewMode,
             setLayoutMode,
             setZoomLevel,
@@ -171,7 +266,10 @@ export const GanttProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             exitSingleDayMode,
             navigateSingleDay,
             expandAll,
-            clearExpansionState
+            clearExpansionState,
+            applyDatePreset,
+            markUserInteracted,
+            hasUserInteracted,
         }}>
             {children}
         </GanttContext.Provider>

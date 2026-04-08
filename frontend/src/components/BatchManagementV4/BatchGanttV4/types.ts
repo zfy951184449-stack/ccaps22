@@ -66,6 +66,9 @@ export interface OffScreenOperation {
     linkedToOpId: number; // ID of the visible operation this connects to
 }
 
+/** 日期快捷预设类型 */
+export type DatePreset = 'thisWeek' | 'next2Weeks' | 'thisMonth' | 'next3Months' | 'autoFit';
+
 export interface GanttContextType {
     startDate: dayjs.Dayjs;
     endDate: dayjs.Dayjs;
@@ -88,5 +91,8 @@ export interface GanttContextType {
     navigateSingleDay: (direction: 'prev' | 'next', batches?: GanttBatch[]) => void; // 单日模式翻页
     expandAll: (batches: GanttBatch[]) => void; // 展开所有批次和阶段
     clearExpansionState: () => void; // 清理展开状态
+    applyDatePreset: (preset: DatePreset) => void; // 快捷日期预设
+    markUserInteracted: () => void; // 标记用户已手动操作日期（阻止 auto-fit 覆盖）
+    hasUserInteracted: boolean; // 是否已手动操作过日期
     onOperationDoubleClick?: (operation: GanttOperation) => void;
 }

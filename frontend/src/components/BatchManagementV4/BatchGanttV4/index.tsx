@@ -4,15 +4,27 @@ import GanttSidebar from './GanttSidebar';
 import GanttTimeline from './GanttTimeline';
 import GanttMinimap from './GanttMinimap';
 import EditOperationModal from './EditOperationModal';
-import { GanttBatch, GanttDependency, GanttShareGroup, OffScreenOperation, GanttOperation, LayoutMode } from './types';
+import { GanttBatch, GanttDependency, GanttShareGroup, OffScreenOperation, GanttOperation, LayoutMode, DatePreset } from './types';
 import { calculateRowLayout } from './rowUtils';
 import axios from 'axios';
 import dayjs from 'dayjs';
-import { DatePicker, Tooltip, Slider, message, Tag } from 'antd';
+import { DatePicker, Tooltip, Slider, message, Tag, Segmented } from 'antd';
 import { ShareAltOutlined, ZoomInOutlined, ZoomOutOutlined, ArrowLeftOutlined, LeftOutlined, RightOutlined, PlusCircleOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import './BatchGanttV4.css';
 
 const { RangePicker } = DatePicker;
+
+/** Auto-fit 探测半径常量（月）——覆盖未来和过去各 12 个月内的批次 */
+const AUTOFIT_PROBE_MONTHS = 12;
+
+/** 日期预设选项 */
+const DATE_PRESET_OPTIONS: Array<{ label: string; value: DatePreset }> = [
+    { label: '本周', value: 'thisWeek' },
+    { label: '2周', value: 'next2Weeks' },
+    { label: '本月', value: 'thisMonth' },
+    { label: '3月', value: 'next3Months' },
+    { label: '适应数据', value: 'autoFit' },
+];
 
 interface BatchGanttV4ContentProps {
     filteredBatchIds?: number[];
@@ -37,6 +49,9 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         expandAll,
         expandedBatches,
         expandedStages,
+        applyDatePreset,
+        markUserInteracted,
+        hasUserInteracted,
     } = useGantt();
     const [batches, setBatches] = useState<GanttBatch[]>([]);
     const [dependencies, setDependencies] = useState<GanttDependency[]>([]);
@@ -240,6 +255,12 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
             return;
         }
 
+        // 用户已通过 URL 参数或手动操作指定了日期范围，跳过 auto-fit
+        if (hasUserInteracted) {
+            setHasAutoFit(true);
+            return;
+        }
+
         if (hasExplicitBatchFilter && filteredBatchIdSet.size === 0) {
             clearGanttData();
             setLoading(false);
@@ -251,9 +272,9 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         const autoFit = async () => {
             setLoading(true);
             try {
-                const probeStart = dayjs().subtract(6, 'month');
-                const probeEnd = dayjs().add(6, 'month');
-                const { batches: fetchedData } = await fetchHierarchy(probeStart, probeEnd);
+                const probeStart = dayjs().subtract(AUTOFIT_PROBE_MONTHS, 'month');
+                const probeEnd = dayjs().add(AUTOFIT_PROBE_MONTHS, 'month');
+                const { batches: fetchedData, offScreenOperations: fetchedOffScreen } = await fetchHierarchy(probeStart, probeEnd);
 
                 if (cancelled) {
                     return;
@@ -281,9 +302,41 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                     }
                 });
 
+                // 直接复用探测数据渲染，避免二次 API 请求
+                const displayBatches = hasExplicitBatchFilter
+                    ? fetchedData.filter(batch => filteredBatchIdSet.has(batch.id))
+                    : fetchedData;
+
+                setBatches(displayBatches);
+                setOffScreenOps(fetchedOffScreen);
+
+                // 设置日期范围（绕过 markUserInteracted 以保持 auto-fit 可重入）
                 setHasAutoFit(true);
                 setStartDate(minDate.startOf('day'));
                 setEndDate(maxDate.add(1, 'week').endOf('week'));
+
+                // 加载共享组和依赖关系
+                if (displayBatches.length > 0) {
+                    const batchIdsParam = displayBatches.map(batch => batch.id).join(',');
+                    const rangeParams = {
+                        start_date: minDate.format('YYYY-MM-DD HH:mm:ss'),
+                        end_date: maxDate.add(1, 'week').endOf('week').format('YYYY-MM-DD HH:mm:ss'),
+                    };
+
+                    const [sgRes, depRes] = await Promise.all([
+                        axios.get('/api/share-groups/batches/gantt', {
+                            params: { batch_ids: batchIdsParam, ...rangeParams }
+                        }),
+                        axios.get('/api/v5/gantt/dependencies', {
+                            params: { batch_ids: batchIdsParam, ...rangeParams }
+                        })
+                    ]);
+
+                    if (!cancelled) {
+                        setShareGroups(sgRes.data);
+                        setDependencies(depRes.data);
+                    }
+                }
             } catch (error) {
                 if (!cancelled) {
                     console.error('Failed to auto-fit gantt data', error);
@@ -300,7 +353,7 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         return () => {
             cancelled = true;
         };
-    }, [clearGanttData, fetchHierarchy, filteredBatchIdSet, hasAutoFit, hasExplicitBatchFilter, setEndDate, setStartDate]);
+    }, [clearGanttData, fetchHierarchy, filteredBatchIdSet, hasAutoFit, hasExplicitBatchFilter, hasUserInteracted, setEndDate, setStartDate]);
 
     useEffect(() => {
         if (!hasAutoFit) {
@@ -640,11 +693,26 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
                     >
                         新建批次
                     </button>
+                    {/* 日期快捷预设按钮 */}
+                    {viewMode !== 'day' && (
+                        <Segmented
+                            options={DATE_PRESET_OPTIONS}
+                            onChange={(value) => applyDatePreset(value as DatePreset)}
+                            size="small"
+                            style={{
+                                backgroundColor: '#F3F4F6',
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 500,
+                            }}
+                        />
+                    )}
                     <div style={{ marginRight: 12 }}>
                         <RangePicker
                             value={[startDate, endDate]}
                             onChange={(dates) => {
                                 if (dates && dates[0] && dates[1]) {
+                                    markUserInteracted();
                                     setStartDate(dates[0]);
                                     setEndDate(dates[1]);
                                 }
