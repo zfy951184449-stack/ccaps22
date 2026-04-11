@@ -14,7 +14,7 @@ import {
 import {
     PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined,
     CalendarOutlined, TeamOutlined, ClockCircleOutlined,
-    ExclamationCircleOutlined, ToolOutlined,
+    ExclamationCircleOutlined, ToolOutlined, ApartmentOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs, { Dayjs } from 'dayjs';
@@ -82,6 +82,12 @@ interface ShiftDef {
     is_night_shift: boolean;
 }
 
+interface SolverTeam {
+    id: number;
+    teamCode: string;
+    teamName: string;
+}
+
 // ─── Template left-bar color ─────────────────────────────────
 
 function getAccentColor(task: StandaloneTask, shifts: ShiftDef[]): string {
@@ -137,6 +143,8 @@ const StandingDutyTab: React.FC = () => {
     const [selectedMonth, setSelectedMonth] = useState<Dayjs>(dayjs());
     const [form] = Form.useForm();
     const [taskType, setTaskType] = useState<string>('RECURRING');
+    const [teams, setTeams] = useState<SolverTeam[]>([]);
+    const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
 
     // ── Data Fetching ──
 
@@ -180,7 +188,16 @@ const StandingDutyTab: React.FC = () => {
         }
     }, []);
 
-    useEffect(() => { fetchTemplates(); fetchShifts(); }, [fetchTemplates, fetchShifts]);
+    const fetchTeams = useCallback(async () => {
+        try {
+            const res = await axios.get('/api/organization/solver-teams');
+            setTeams(Array.isArray(res.data) ? res.data : []);
+        } catch {
+            // silent
+        }
+    }, []);
+
+    useEffect(() => { fetchTemplates(); fetchShifts(); fetchTeams(); }, [fetchTemplates, fetchShifts, fetchTeams]);
     useEffect(() => { fetchInstances(); }, [fetchInstances]);
 
     // ── Actions ──
@@ -297,10 +314,18 @@ const StandingDutyTab: React.FC = () => {
 
     // ── Computed ──
 
+    const filteredTemplates = selectedTeamId
+        ? templates.filter(t => t.team_id === selectedTeamId)
+        : templates;
+
+    const filteredInstances = selectedTeamId
+        ? instances.filter(t => t.team_id === selectedTeamId)
+        : instances;
+
     const instanceStats = {
-        total: instances.length,
-        pending: instances.filter(i => i.status === 'PENDING').length,
-        scheduled: instances.filter(i => i.status === 'SCHEDULED').length,
+        total: filteredInstances.length,
+        pending: filteredInstances.filter(i => i.status === 'PENDING').length,
+        scheduled: filteredInstances.filter(i => i.status === 'SCHEDULED').length,
     };
 
     // ═══════════════════════════════════════════════════════════════
@@ -336,6 +361,12 @@ const StandingDutyTab: React.FC = () => {
                                 <TeamOutlined /> {t.required_people}人
                                 <Divider type="vertical" />
                                 <ClockCircleOutlined /> {t.duration_minutes}分钟 ({(t.duration_minutes / 60).toFixed(1)}小时)
+                                {t.team_name && (
+                                    <>
+                                        <Divider type="vertical" />
+                                        <ApartmentOutlined /> {t.team_name}
+                                    </>
+                                )}
                                 {shiftNames && (
                                     <>
                                         <Divider type="vertical" />
@@ -522,6 +553,19 @@ const StandingDutyTab: React.FC = () => {
                         ))}
                     </Select>
                 </Form.Item>
+
+                <Form.Item name="team_id" label="所属部门">
+                    <Select
+                        placeholder="选择部门"
+                        allowClear
+                    >
+                        {teams.map(t => (
+                            <Select.Option key={t.id} value={t.id}>
+                                {t.teamName}
+                            </Select.Option>
+                        ))}
+                    </Select>
+                </Form.Item>
             </Form>
         </Modal>
     );
@@ -537,21 +581,36 @@ const StandingDutyTab: React.FC = () => {
                 title="值班模板"
                 size="small"
                 extra={
-                    <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-                        新建模板
-                    </Button>
+                    <Space size={12}>
+                        <Select
+                            placeholder="全部部门"
+                            allowClear
+                            style={{ width: 140 }}
+                            value={selectedTeamId}
+                            onChange={v => setSelectedTeamId(v ?? null)}
+                        >
+                            {teams.map(t => (
+                                <Select.Option key={t.id} value={t.id}>
+                                    {t.teamName}
+                                </Select.Option>
+                            ))}
+                        </Select>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+                            新建模板
+                        </Button>
+                    </Space>
                 }
                 bodyStyle={{ padding: 16 }}
             >
                 <Spin spinning={loading}>
-                    {templates.length === 0 ? (
+                    {filteredTemplates.length === 0 ? (
                         <Empty
-                            description="暂无值班模板，请先创建"
+                            description={selectedTeamId ? '该部门暂无值班模板' : '暂无值班模板，请先创建'}
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
                         />
                     ) : (
                         <Row gutter={[12, 12]}>
-                            {templates.map(renderTemplateCard)}
+                            {filteredTemplates.map(renderTemplateCard)}
                         </Row>
                     )}
                 </Spin>
@@ -582,14 +641,14 @@ const StandingDutyTab: React.FC = () => {
                 }
                 bodyStyle={{ padding: 0 }}
             >
-                {instances.length === 0 && !instanceLoading ? (
+            {filteredInstances.length === 0 && !instanceLoading ? (
                     <div style={{
                         textAlign: 'center', padding: '40px 0',
                         background: '#fffbe6', borderBottom: '1px solid #ffe58f',
                     }}>
                         <ExclamationCircleOutlined style={{ fontSize: 24, color: '#faad14', marginBottom: 8 }} />
                         <div style={{ color: '#ad6800', fontWeight: 500 }}>
-                            {selectedMonth.format('YYYY年M月')} 尚未生成值班实例
+                            {selectedMonth.format('YYYY年M月')} {selectedTeamId ? '该部门' : ''}尚未生成值班实例
                         </div>
                         <div style={{ color: '#ad6800', fontSize: 12, marginTop: 4 }}>
                             请点击右上方"生成本月实例"按钮，系统将根据周期模板自动展开
@@ -598,7 +657,7 @@ const StandingDutyTab: React.FC = () => {
                 ) : (
                     <>
                         <Table
-                            dataSource={instances}
+                            dataSource={filteredInstances}
                             columns={instanceColumns}
                             rowKey="id"
                             size="small"
