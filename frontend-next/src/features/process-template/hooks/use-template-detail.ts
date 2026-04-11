@@ -6,8 +6,15 @@
 
 "use client";
 
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/services/process-template-api";
+
+// Stable empty references to avoid re-render loops
+const EMPTY_STAGES: never[] = [];
+const EMPTY_OPS: Record<string, never[]> = {};
+const EMPTY_CONSTRAINTS: never[] = [];
+const EMPTY_SHARE_GROUPS: never[] = [];
 
 export function useTemplateDetail(templateId: number) {
   const queryClient = useQueryClient();
@@ -46,7 +53,7 @@ export function useTemplateDetail(templateId: number) {
     }) =>
       api.createStage(templateId, {
         stageName: payload.stageName,
-        stageOrder: payload.stageOrder ?? (stages.length + 1),
+        stageOrder: payload.stageOrder ?? ((data?.stages?.length ?? 0) + 1),
         startDay: payload.startDay ?? computeNextStartDay(),
       }),
     onSuccess: () => {
@@ -81,16 +88,23 @@ export function useTemplateDetail(templateId: number) {
     },
   });
 
-  // ── Derived data ──────────────────────────────────────────────────
+  // ── Derived data (stable references) ──────────────────────────────
   const template = data?.template ?? null;
-  const stages = data?.stages ?? [];
-  const operationsByStage = data?.operations ?? {};
-  const constraints = data?.constraints ?? [];
-  const shareGroups = data?.shareGroups ?? [];
+  const stages = data?.stages ?? EMPTY_STAGES;
+  const operationsByStage = data?.operations ?? EMPTY_OPS;
+  const constraints = data?.constraints ?? EMPTY_CONSTRAINTS;
+  const shareGroups = data?.shareGroups ?? EMPTY_SHARE_GROUPS;
 
-  // Flat list of all operations across stages
-  const allOperations = stages.flatMap(
-    (s) => (operationsByStage[String(s.id)] ?? []).map((op) => ({ ...op, stage: s })),
+  // Memoized flat list of all operations across stages
+  const allOperations = useMemo(
+    () =>
+      stages.flatMap((s) =>
+        (operationsByStage[String(s.id)] ?? []).map((op) => ({
+          ...op,
+          stage: s,
+        })),
+      ),
+    [stages, operationsByStage],
   );
 
   /** Compute suggested start_day for a new stage based on last stage's end. */

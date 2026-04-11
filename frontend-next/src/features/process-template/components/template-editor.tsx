@@ -6,7 +6,7 @@
 
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { StageOperation } from "@/features/process-template-gantt/types";
 import { Button } from "@/design-system/primitives/button";
@@ -66,6 +66,29 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
     deleteGroup,
     isCreating,
   } = useShareGroups(templateId);
+
+  // ── Stable callbacks (must be before any early return) ────────────
+  const handleAddOperation = useCallback(
+    (payload: { stageId: number; operationId: number; operationDay: number; recommendedTime: number }) =>
+      addOperation.mutate(payload),
+    [addOperation],
+  );
+  const handleDeleteOperation = useCallback(
+    (id: number) => deleteOperation.mutate(id),
+    [deleteOperation],
+  );
+  const handleCreateStage = useCallback(
+    (payload: { stageName: string }) => createStage.mutate(payload),
+    [createStage],
+  );
+  const handleDeleteGroup = useCallback(
+    (id: number) => deleteGroup.mutate(id),
+    [deleteGroup],
+  );
+  const handleCloseShareGroups = useCallback(
+    () => setShowShareGroups(false),
+    [],
+  );
 
   // ── Loading / Error ───────────────────────────────────────────────
   if (isLoading) {
@@ -204,9 +227,9 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
               isSelectMode={isSelectMode}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
-              onAddOperation={(payload) => addOperation.mutate(payload)}
-              onDeleteOperation={(id) => deleteOperation.mutate(id)}
-              onCreateStage={(payload) => createStage.mutate(payload)}
+              onAddOperation={handleAddOperation}
+              onDeleteOperation={handleDeleteOperation}
+              onCreateStage={handleCreateStage}
             />
             <div className="px-6 pb-6">
               <StaffingPeakChart
@@ -237,10 +260,10 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
       {/* ── Share Group SideSheet ───────────────────────────────────── */}
       <ShareGroupManager
         open={showShareGroups}
-        onClose={() => setShowShareGroups(false)}
+        onClose={handleCloseShareGroups}
         shareGroups={shareGroups}
         onEnterSelectMode={enterSelectMode}
-        onDeleteGroup={(id) => deleteGroup.mutate(id)}
+        onDeleteGroup={handleDeleteGroup}
         isDeletingGroup={deleteGroup.isPending}
       />
     </div>

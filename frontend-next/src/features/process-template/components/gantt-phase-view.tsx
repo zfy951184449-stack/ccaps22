@@ -2,14 +2,29 @@
  *
  * Tab 2: SVAR React Gantt with stage-level summary folding.
  * Each stage collapses to a single summary bar.
+ *
+ * SVAR relies on browser DOM APIs, so we use dynamic import + ssr: false.
  */
 
 "use client";
 
 import React, { useMemo } from "react";
-import { Gantt } from "@svar-ui/react-gantt";
+import dynamic from "next/dynamic";
 import type { ProcessStage, StageOperation } from "@/features/process-template-gantt/types";
 import { buildPhaseGanttData } from "../adapters";
+
+// Dynamic import SVAR Gantt — it uses browser APIs (DOM, Canvas)
+const SvarGantt = dynamic(
+  () => import("@svar-ui/react-gantt").then((mod) => ({ default: mod.Gantt })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full items-center justify-center text-sm text-[var(--pl-text-tertiary)]">
+        加载甘特图组件…
+      </div>
+    ),
+  },
+);
 
 interface GanttPhaseViewProps {
   stages: ProcessStage[];
@@ -40,12 +55,13 @@ export function GanttPhaseView({
       };
       // Only summary/parent tasks need the open flag
       if (t.type === "summary") {
-        return { ...base, open: false };
+        return { ...base, open: true };
       }
       return base;
     });
   }, [tasks]);
 
+  // Stable empty array for links
   const svarLinks = useMemo<never[]>(() => [], []);
 
   // SVAR columns config
@@ -56,7 +72,7 @@ export function GanttPhaseView({
     [],
   );
 
-  // SVAR scales — use proper date format function
+  // SVAR scales — use proper date format functions
   const scales = useMemo(
     () => [
       {
@@ -88,7 +104,7 @@ export function GanttPhaseView({
         className="overflow-hidden rounded-[var(--pl-radius-md)] border border-[var(--pl-border)]"
         style={{ height: "calc(100vh - 300px)", minHeight: 400 }}
       >
-        <Gantt
+        <SvarGantt
           tasks={svarTasks}
           links={svarLinks}
           columns={columns}
