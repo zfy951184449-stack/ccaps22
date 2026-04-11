@@ -13,6 +13,9 @@ import { STAGE_COLORS } from "../constants";
 import { OperationCard } from "./operation-card";
 import { QuickAddOperation } from "./quick-add-operation";
 
+// Stable empty set to avoid re-render loops from default prop
+const EMPTY_SET = new Set<number>();
+
 interface PhaseTimelineProps {
   stages: ProcessStage[];
   operationsByStage: Record<string, StageOperation[]>;
@@ -35,7 +38,7 @@ export function PhaseTimeline({
   operationsByStage,
   shareGroups,
   isSelectMode = false,
-  selectedIds = new Set(),
+  selectedIds = EMPTY_SET,
   onToggleSelect,
   onAddOperation,
   onDeleteOperation,
@@ -71,11 +74,16 @@ export function PhaseTimeline({
             style={{ borderLeftColor: color.border, borderLeftWidth: 3 }}
           >
             {/* Stage header */}
-            <button
-              className="flex w-full items-center justify-between px-4 py-3 text-left"
-              onClick={() => toggleExpand(stage.id)}
-            >
-              <div className="flex items-center gap-2">
+            <div className="flex w-full items-center justify-between px-4 py-3">
+              <div
+                className="flex flex-1 cursor-pointer items-center gap-2"
+                role="button"
+                tabIndex={0}
+                onClick={() => toggleExpand(stage.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") toggleExpand(stage.id);
+                }}
+              >
                 <svg
                   className={`size-3.5 text-[var(--pl-text-tertiary)] transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
                   fill="none"
@@ -99,15 +107,12 @@ export function PhaseTimeline({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAddingToStage(stage.id);
-                  }}
+                  onClick={() => setAddingToStage(stage.id)}
                 >
                   + 添加工序
                 </Button>
               )}
-            </button>
+            </div>
 
             {/* Operations */}
             {isExpanded && (

@@ -44,6 +44,13 @@ function dayHourToDate(day: number, hour: number): Date {
 
 // ── Stage → Summary Task ────────────────────────────────────────────
 
+/** Offset for summary task IDs to avoid collision with operation IDs */
+const SUMMARY_ID_OFFSET = 100_000;
+
+export function summaryId(stageId: number): number {
+  return SUMMARY_ID_OFFSET + stageId;
+}
+
 export function stageToSummaryTask(
   stage: ProcessStage,
   operations: StageOperation[],
@@ -66,7 +73,7 @@ export function stageToSummaryTask(
   }
 
   return {
-    id: -stage.id, // negative to avoid ID collision with operations
+    id: summaryId(stage.id),
     text: `${stage.stageName} (Day ${stage.startDay})`,
     start: minStart,
     end: maxEnd,
@@ -98,7 +105,7 @@ export function operationToTask(
     end,
     duration: durationHours,
     progress: 0,
-    parent: -stage.id, // reference to summary task
+    parent: summaryId(stage.id), // reference to summary task
     type: "task",
     _stageIndex: stageIndex,
     _requiredPeople: op.requiredPeople ?? 1,

@@ -25,22 +25,28 @@ export function GanttPhaseView({
     [stages, operationsByStage],
   );
 
-  // SVAR Gantt data format
+  // Transform to SVAR format — only summary tasks get `open` property
   const svarTasks = useMemo(() => {
-    return tasks.map((t) => ({
-      id: t.id,
-      text: t.text,
-      start: t.start,
-      end: t.end,
-      duration: t.duration,
-      progress: t.progress,
-      parent: t.parent ?? 0,
-      type: t.type ?? "task",
-      open: false, // Start collapsed for compact view
-    }));
+    return tasks.map((t) => {
+      const base = {
+        id: t.id,
+        text: t.text,
+        start: t.start,
+        end: t.end,
+        duration: t.duration,
+        progress: t.progress,
+        parent: t.parent ?? 0,
+        type: t.type ?? "task",
+      };
+      // Only summary/parent tasks need the open flag
+      if (t.type === "summary") {
+        return { ...base, open: false };
+      }
+      return base;
+    });
   }, [tasks]);
 
-  const svarLinks = useMemo(() => [], []);
+  const svarLinks = useMemo<never[]>(() => [], []);
 
   // SVAR columns config
   const columns = useMemo(
@@ -50,9 +56,20 @@ export function GanttPhaseView({
     [],
   );
 
+  // SVAR scales — use proper date format function
   const scales = useMemo(
     () => [
-      { unit: "day", step: 1, format: "D{d}" },
+      {
+        unit: "month" as const,
+        step: 1,
+        format: (date: Date) =>
+          `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+      },
+      {
+        unit: "day" as const,
+        step: 1,
+        format: (date: Date) => String(date.getDate()),
+      },
     ],
     [],
   );
