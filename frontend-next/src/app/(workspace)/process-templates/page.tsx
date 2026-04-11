@@ -1,8 +1,8 @@
 import { buildWorkspaceMetadata } from "@/features/navigation/metadata";
-import { RoutePlaceholderPage } from "@/features/workspace/route-placeholder-page";
+import { ProcessTemplateListPage } from "@/features/process-template";
 
 export const metadata = buildWorkspaceMetadata("process-templates");
 
 export default function ProcessTemplatesPage() {
-  return <RoutePlaceholderPage routeKey="process-templates" />;
+  return <ProcessTemplateListPage />;
 }

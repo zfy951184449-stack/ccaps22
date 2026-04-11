@@ -68,13 +68,13 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     railCode: "ORG",
     title: "组织与人员",
     description:
-      "Wave 2 target. This route will validate tree management, employee detail editing, and dense workbench side panels in the new design system.",
-    status: "planned",
+      "Wave 2 organization workbench with master-detail layout: recursive org tree sidebar, employee table, unavailability management, and side-sheet editors — all using Precision Lab primitives.",
+    status: "active",
     wave: 2,
     checkpoints: [
-      "Organization tree and employee tables move behind shared table patterns.",
-      "Drawer and confirmation flows use first-party primitives.",
-      "Desktop 2K density remains readable without Ant Design.",
+      "Organization tree renders recursively with expand/collapse and type indicators using native elements.",
+      "Employee tables and unavailability tables use shared DataTablePattern with inline search.",
+      "Side-sheet editors replace Ant Design modals for employee editing, unit creation, and unavailability CRUD.",
     ],
   },
   {
@@ -164,13 +164,14 @@ const routeDefinitions: WorkspaceRouteDefinition[] = [
     railCode: "PV1",
     title: "工艺模版",
     description:
-      "Legacy-hold route. V1 remains in the CRA app until there is an explicit business need to migrate it.",
-    status: "legacy-hold",
-    wave: null,
+      "Primary process template management with stage orchestration, SVAR Gantt timeline, equipment resource view, and share group management.",
+    status: "active",
+    wave: 6,
     checkpoints: [
-      "No migration work starts without explicit business confirmation.",
-      "frontend-next reserves the route so future decisions do not affect shell structure.",
-      "Legacy frontend remains the source of truth for V1 behavior.",
+      "Three-tab editor: Stage Card Flow, Gantt by Phase, Gantt by Equipment.",
+      "Dynamic staffing peak chart with team/shift-based threshold.",
+      "Share group creation and visualization integrated into editor.",
+      "SVAR React Gantt with summary folding for compact layout.",
     ],
   },
   {
