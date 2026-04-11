@@ -319,6 +319,19 @@ export const generateRecurringTasks = async (req: Request, res: Response) => {
         const daysInMonth = startOfMonth.daysInMonth();
 
         for (const rTask of recurringTasks) {
+            // [IDEMPOTENCY] Check if instances already exist for this template + month
+            const [existingRows] = await connection.execute(
+                `SELECT COUNT(*) as cnt FROM standalone_tasks 
+                 WHERE task_type = 'FLEXIBLE' 
+                   AND task_name LIKE CONCAT(?, ' (', ?, '%)')
+                   AND status != 'CANCELLED'`,
+                [rTask.task_name, target_month]
+            ) as any;
+            if (existingRows[0]?.cnt > 0) {
+                console.log(`[StandaloneTask] Skipping template "${rTask.task_name}" — ${existingRows[0].cnt} instances already exist for ${target_month}`);
+                continue;
+            }
+
             if (!rTask.recurrence_rule) continue;
             let rule;
             try {
@@ -357,8 +370,8 @@ export const generateRecurringTasks = async (req: Request, res: Response) => {
                 } else if (freq === 'MONTHLY') {
                     if (targetDays.has(day)) hit = true;
                 } else if (freq === 'DAILY') {
-                    // naive check interval
-                    if (day % interval === 0) hit = true;
+                    // [FIX] Start from day 1: (day-1) ensures day=1 always hits for any interval
+                    if ((day - 1) % interval === 0) hit = true;
                 }
 
                 if (hit) {
