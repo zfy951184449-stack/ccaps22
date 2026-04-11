@@ -10,7 +10,6 @@ import React, { useMemo } from "react";
 import { Gantt } from "@svar-ui/react-gantt";
 import type { ProcessStage, StageOperation } from "@/features/process-template-gantt/types";
 import { buildPhaseGanttData } from "../adapters";
-import { STAGE_COLORS } from "../constants";
 
 interface GanttPhaseViewProps {
   stages: ProcessStage[];
@@ -28,20 +27,17 @@ export function GanttPhaseView({
 
   // SVAR Gantt data format
   const svarTasks = useMemo(() => {
-    return tasks.map((t) => {
-      const color = STAGE_COLORS[(t._stageIndex ?? 0) % STAGE_COLORS.length];
-      return {
-        id: t.id,
-        text: t.text,
-        start: t.start,
-        end: t.end,
-        duration: t.duration,
-        progress: t.progress,
-        parent: t.parent ?? 0,
-        type: t.type ?? "task",
-        open: false, // Start collapsed for compact view
-      };
-    });
+    return tasks.map((t) => ({
+      id: t.id,
+      text: t.text,
+      start: t.start,
+      end: t.end,
+      duration: t.duration,
+      progress: t.progress,
+      parent: t.parent ?? 0,
+      type: t.type ?? "task",
+      open: false, // Start collapsed for compact view
+    }));
   }, [tasks]);
 
   const svarLinks = useMemo(() => [], []);

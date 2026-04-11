@@ -5,7 +5,7 @@
 
 "use client";
 
-import type { ProcessTemplate, ProcessStage, StageOperation } from "@/features/process-template-gantt/types";
+import type { ProcessTemplate, ProcessStage } from "@/features/process-template-gantt/types";
 
 interface TemplateSummaryStripProps {
   template: ProcessTemplate;

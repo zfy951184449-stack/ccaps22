@@ -115,7 +115,7 @@ export function useStaffingPeaks(
       });
     }
     return result;
-  }, [stages, operationsByStage, totalDays, threshold.dailyCapacity]);
+  }, [stages, operationsByStage, totalDays, threshold]);
 
   const maxPeople = Math.max(0, ...peaks.map((p) => p.people));
 
