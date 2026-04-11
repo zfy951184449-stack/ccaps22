@@ -7,7 +7,9 @@ import {
     deleteTask,
     completeTask,
     generateRecurringTasks,
-    getAssignments
+    getAssignments,
+    batchDeleteTasks,
+    deleteTemplateInstances,
 } from '../controllers/standaloneTaskController';
 
 const router = Router();
@@ -16,10 +18,12 @@ const router = Router();
 router.get('/', getAllTasks);
 router.get('/assignments', getAssignments); // Must be before /:id
 router.post('/generate-recurring', generateRecurringTasks); // Must be before /:id
+router.post('/batch-delete', batchDeleteTasks); // Must be before /:id
 router.get('/:id', getTaskById);
 router.post('/', createTask);
 router.put('/:id', updateTask);
 router.delete('/:id', deleteTask);
 router.post('/:id/complete', completeTask);
+router.post('/:id/delete-instances', deleteTemplateInstances);
 
 export default router;

@@ -259,7 +259,69 @@ export const deleteTask = async (req: Request, res: Response) => {
     }
 };
 
-// 6. Complete Task
+// 6.1 Batch Delete Tasks
+export const batchDeleteTasks = async (req: Request, res: Response) => {
+    try {
+        const { ids } = req.body; // number[]
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'ids array is required' });
+        }
+
+        const placeholders = ids.map(() => '?').join(',');
+        const [result] = await pool.execute(
+            `DELETE FROM standalone_tasks WHERE id IN (${placeholders})`,
+            ids
+        ) as any;
+
+        res.json({ message: `Deleted ${result.affectedRows} tasks`, deleted_count: result.affectedRows });
+    } catch (error) {
+        console.error('Error batch deleting tasks:', error);
+        res.status(500).json({ error: 'Failed to batch delete tasks' });
+    }
+};
+
+// 6.2 Delete all generated instances of a RECURRING template
+export const deleteTemplateInstances = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { target_month } = req.body; // optional YYYY-MM
+
+        // First get the template name
+        const [rows] = await pool.execute(
+            `SELECT task_name FROM standalone_tasks WHERE id = ? AND task_type = 'RECURRING'`,
+            [id]
+        ) as any;
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'RECURRING template not found' });
+        }
+
+        const templateName = rows[0].task_name;
+        let query = `DELETE FROM standalone_tasks WHERE task_type = 'FLEXIBLE' AND task_name LIKE CONCAT(?, ' (%)')`;
+        const params: any[] = [templateName];
+
+        if (target_month && /^\d{4}-\d{2}$/.test(target_month)) {
+            query += ` AND task_name LIKE CONCAT(?, ' (', ?, '%)')`;
+            params.push(templateName, target_month);
+            // Overwrite query to use more precise match
+            query = `DELETE FROM standalone_tasks WHERE task_type = 'FLEXIBLE' AND task_name LIKE CONCAT(?, ' (', ?, '%)')`;
+            params.length = 0;
+            params.push(templateName, target_month);
+        }
+
+        const [result] = await pool.execute(query, params) as any;
+
+        res.json({
+            message: `Deleted ${result.affectedRows} instances of "${templateName}"`,
+            deleted_count: result.affectedRows,
+        });
+    } catch (error) {
+        console.error('Error deleting template instances:', error);
+        res.status(500).json({ error: 'Failed to delete template instances' });
+    }
+};
+
+
 export const completeTask = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;

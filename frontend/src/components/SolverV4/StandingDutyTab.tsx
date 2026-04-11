@@ -145,6 +145,7 @@ const StandingDutyTab: React.FC = () => {
     const [taskType, setTaskType] = useState<string>('RECURRING');
     const [teams, setTeams] = useState<SolverTeam[]>([]);
     const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
+    const [selectedInstanceIds, setSelectedInstanceIds] = useState<number[]>([]);
 
     // ── Data Fetching ──
 
@@ -230,6 +231,72 @@ const StandingDutyTab: React.FC = () => {
         } catch {
             message.error('删除失败');
         }
+    };
+
+    const handleDeleteTemplate = (template: StandaloneTask) => {
+        Modal.confirm({
+            title: `删除模板「${template.task_name}」`,
+            content: '是否同时删除该模板已生成的所有实例？',
+            okText: '删除模板 + 所有实例',
+            okType: 'danger',
+            cancelText: '仅删除模板',
+            onOk: async () => {
+                try {
+                    await axios.post(`/api/standalone-tasks/${template.id}/delete-instances`);
+                    await axios.delete(`/api/standalone-tasks/${template.id}`);
+                    message.success('模板及其所有实例已删除');
+                    fetchTemplates();
+                    fetchInstances();
+                } catch { message.error('删除失败'); }
+            },
+            onCancel: async () => {
+                try {
+                    await axios.delete(`/api/standalone-tasks/${template.id}`);
+                    message.success('模板已删除（实例保留）');
+                    fetchTemplates();
+                } catch { message.error('删除失败'); }
+            },
+        });
+    };
+
+    const handleBatchDelete = async () => {
+        if (selectedInstanceIds.length === 0) return;
+        Modal.confirm({
+            title: `批量删除 ${selectedInstanceIds.length} 个实例`,
+            content: '删除后无法恢复，确认继续？',
+            okType: 'danger',
+            okText: '确认删除',
+            cancelText: '取消',
+            onOk: async () => {
+                try {
+                    const res = await axios.post('/api/standalone-tasks/batch-delete', { ids: selectedInstanceIds });
+                    message.success(`已删除 ${res.data?.deleted_count ?? selectedInstanceIds.length} 个实例`);
+                    setSelectedInstanceIds([]);
+                    fetchInstances();
+                } catch { message.error('批量删除失败'); }
+            },
+        });
+    };
+
+    const handleRegenerate = async (template: StandaloneTask) => {
+        const month = selectedMonth.format('YYYY-MM');
+        Modal.confirm({
+            title: `重新生成「${template.task_name}」${selectedMonth.format('YYYY年M月')}实例`,
+            content: '将先删除该模板本月已有实例，然后按最新模板配置重新生成。',
+            okText: '确认重新生成',
+            cancelText: '取消',
+            onOk: async () => {
+                try {
+                    // Step 1: Delete existing instances for this template + month
+                    await axios.post(`/api/standalone-tasks/${template.id}/delete-instances`, { target_month: month });
+                    // Step 2: Regenerate
+                    const res = await axios.post('/api/standalone-tasks/generate-recurring', { target_month: month });
+                    const count = res.data?.generated_count ?? 0;
+                    message.success(`已重新生成 ${count} 个实例`);
+                    fetchInstances();
+                } catch { message.error('重新生成失败'); }
+            },
+        });
     };
 
     const openCreateModal = () => {
@@ -376,15 +443,18 @@ const StandingDutyTab: React.FC = () => {
                             </div>
                         </div>
                         <Space size={4}>
+                            <Tooltip title="重新生成本月">
+                                <Button type="text" size="small" icon={<ReloadOutlined />}
+                                    onClick={() => handleRegenerate(t)} />
+                            </Tooltip>
                             <Tooltip title="编辑">
                                 <Button type="text" size="small" icon={<EditOutlined />}
                                     onClick={() => openEditModal(t)} />
                             </Tooltip>
-                            <Popconfirm title="确认删除此模板？" onConfirm={() => handleDelete(t.id)}>
-                                <Tooltip title="删除">
-                                    <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                                </Tooltip>
-                            </Popconfirm>
+                            <Tooltip title="删除">
+                                <Button type="text" size="small" danger icon={<DeleteOutlined />}
+                                    onClick={() => handleDeleteTemplate(t)} />
+                            </Tooltip>
                         </Space>
                     </div>
                 </Card>
@@ -656,6 +726,26 @@ const StandingDutyTab: React.FC = () => {
                     </div>
                 ) : (
                     <>
+                        {selectedInstanceIds.length > 0 && (
+                            <div style={{
+                                padding: '8px 16px',
+                                background: '#fff1f0',
+                                borderBottom: '1px solid #ffccc7',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 12,
+                            }}>
+                                <Text type="secondary">
+                                    已选 {selectedInstanceIds.length} 项
+                                </Text>
+                                <Button size="small" danger onClick={handleBatchDelete}>
+                                    批量删除
+                                </Button>
+                                <Button size="small" onClick={() => setSelectedInstanceIds([])}>
+                                    取消选择
+                                </Button>
+                            </div>
+                        )}
                         <Table
                             dataSource={filteredInstances}
                             columns={instanceColumns}
@@ -664,6 +754,10 @@ const StandingDutyTab: React.FC = () => {
                             loading={instanceLoading}
                             pagination={false}
                             scroll={{ y: 360 }}
+                            rowSelection={{
+                                selectedRowKeys: selectedInstanceIds,
+                                onChange: (keys) => setSelectedInstanceIds(keys as number[]),
+                            }}
                         />
                         <div style={{
                             padding: '8px 16px',
