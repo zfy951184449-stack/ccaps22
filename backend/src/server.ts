@@ -45,7 +45,6 @@ import maintenanceWindowRoutes from './routes/maintenanceWindows';
 import templateStageOperationResourceRoutes from './routes/templateStageOperationResources';
 import batchOperationResourceRoutes from './routes/batchOperationResources';
 import v3BioprocessRoutes from './routes/v3Bioprocess';
-import independentOperationRoutes from './routes/independentOperations';
 
 dotenv.config();
 
@@ -135,7 +134,6 @@ app.use('/api/maintenance-windows', maintenanceWindowRoutes);
 app.use('/api/template-stage-operations', templateStageOperationResourceRoutes);
 app.use('/api/batch-operations', batchOperationResourceRoutes);
 app.use('/api/v3/bioprocess', v3BioprocessRoutes);
-app.use('/api/independent-operations', independentOperationRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

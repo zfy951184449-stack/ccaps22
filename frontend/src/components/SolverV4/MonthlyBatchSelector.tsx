@@ -6,11 +6,9 @@ import OperationReviewModal from './OperationReviewModal';
 import SolveProgressV4Modal from './SolveProgressV4Modal';
 import SolveResultV4Page from './SolveResultV4Page';
 import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from './SolverConfigurationModal';
-import { SettingOutlined, HistoryOutlined, UnorderedListOutlined, ThunderboltOutlined, TeamOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { SettingOutlined, HistoryOutlined, UnorderedListOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import RunHistoryTab from './RunHistoryTab';
 import IntervalSolveTab from './IntervalSolveTab';
-import TalentDashboard from './components/TalentDashboard';
-import IndependentOperationsTab from './IndependentOperationsTab';
 
 const { Title } = Typography;
 
@@ -331,20 +329,6 @@ const MonthlyBatchSelector: React.FC = () => {
                             <span><HistoryOutlined style={{ marginRight: 6 }} />历史记录</span>
                         ),
                         children: <RunHistoryTab />,
-                    },
-                    {
-                        key: 'talent',
-                        label: (
-                            <span><TeamOutlined style={{ marginRight: 6 }} />人才供需</span>
-                        ),
-                        children: <TalentDashboard />,
-                    },
-                    {
-                        key: 'independent-ops',
-                        label: (
-                            <span><AppstoreOutlined style={{ marginRight: 6 }} />独立操作</span>
-                        ),
-                        children: <IndependentOperationsTab />,
                     },
                 ]}
             />
