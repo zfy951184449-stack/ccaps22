@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MFG8APS 架构图 · 问题审查</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'SF Pro Display', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; padding: 32px 24px; }
+
+  h1 { text-align: center; font-size: 22px; font-weight: 700; color: #f8fafc; letter-spacing: .5px; margin-bottom: 4px; }
+  .subtitle { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 32px; }
+
+  /* Legend */
+  .legend { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .dot-critical { background: #ef4444; }
+  .dot-warning  { background: #f59e0b; }
+  .dot-info     { background: #3b82f6; }
+  .dot-ok       { background: #10b981; }
+
+  /* Main diagram canvas */
+  .canvas { display: flex; flex-direction: column; gap: 0; max-width: 1200px; margin: 0 auto; }
+
+  /* Rows */
+  .row { display: flex; gap: 12px; align-items: stretch; margin-bottom: 10px; }
+  .row-label { writing-mode: vertical-rl; text-orientation: mixed; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: #475569; flex-shrink: 0; display: flex; align-items: center; padding: 0 4px; width: 22px; }
+
+  /* Cards */
+  .card {
+    border-radius: 10px;
+    padding: 12px 14px;
+    flex: 1;
+    position: relative;
+    border: 1.5px solid transparent;
+    transition: box-shadow .2s;
+  }
+  .card:hover { box-shadow: 0 0 0 2px #334155; }
+  .card-title { font-size: 12px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .card-sub  { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .card-tag  { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: #1e293b; color: #64748b; font-weight: 500; }
+
+  /* Color themes */
+  .theme-blue   { background: #0f1f3a; border-color: #1e40af; }
+  .theme-blue .card-title { color: #60a5fa; }
+  .theme-teal   { background: #0d2626; border-color: #0f766e; }
+  .theme-teal .card-title { color: #2dd4bf; }
+  .theme-purple { background: #1a1033; border-color: #6d28d9; }
+  .theme-purple .card-title { color: #a78bfa; }
+  .theme-green  { background: #0a2016; border-color: #15803d; }
+  .theme-green .card-title { color: #4ade80; }
+  .theme-slate  { background: #141b2e; border-color: #334155; }
+  .theme-slate .card-title { color: #94a3b8; }
+  .theme-orange { background: #1f1408; border-color: #c2410c; }
+  .theme-orange .card-title { color: #fb923c; }
+
+  /* Connector arrows between rows */
+  .connector { text-align: center; color: #334155; font-size: 18px; line-height: 1; margin: -2px 0; }
+
+  /* Issue badges */
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 20px; font-weight: 600;
+    display: flex; align-items: center; gap: 3px; cursor: default;
+    position: relative;
+  }
+  .badge:hover .tooltip { display: block; }
+  .badge-critical { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+  .badge-warning  { background: #451a03; color: #fcd34d; border: 1px solid #78350f; }
+  .badge-info     { background: #0c1a3a; color: #93c5fd; border: 1px solid #1e3a5f; }
+
+  /* Tooltip */
+  .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: #cbd5e1;
+    width: 260px;
+    z-index: 100;
+    white-space: normal;
+    font-weight: 400;
+    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  .tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%; left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: #334155;
+  }
+  .tooltip-title { font-weight: 700; color: #f1f5f9; margin-bottom: 4px; }
+  .tooltip-impact { color: #f87171; font-size: 10px; margin-top: 4px; }
+
+  /* Issues panel */
+  .issues-panel { max-width: 1200px; margin: 32px auto 0; }
+  .issues-panel h2 { font-size: 16px; font-weight: 700; color: #f8fafc; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #1e293b; }
+  .issues-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .issue-card {
+    background: #141b2e; border-radius: 10px; padding: 14px 16px;
+    border-left: 3px solid;
+  }
+  .issue-card.critical { border-color: #ef4444; }
+  .issue-card.warning  { border-color: #f59e0b; }
+  .issue-card.info     { border-color: #3b82f6; }
+  .issue-id { font-size: 10px; font-weight: 700; opacity: .6; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .issue-title { font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 6px; }
+  .issue-body { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+  .impact-tag { display: inline-block; margin-top: 8px; font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 600; }
+  .impact-high   { background: #450a0a; color: #fca5a5; }
+  .impact-medium { background: #451a03; color: #fcd34d; }
+  .impact-low    { background: #0c1a3a; color: #93c5fd; }
+
+  /* Data flow arrows */
+  .flow-row { display: flex; align-items: center; gap: 0; max-width: 1200px; margin: 0 auto 10px; }
+  .arrow-label { font-size: 10px; color: #475569; text-align: center; flex: 1; }
+  .arrow-line { height: 2px; flex: 3; background: linear-gradient(90deg, #1e3a5f 0%, #1e40af 50%, #1e3a5f 100%); }
+
+</style>
+</head>
+<body>
+
+<h1>MFG8APS / CCAPS22 · 系统架构图 · 问题标注</h1>
+<p class="subtitle">生物制药高级计划排产系统 &nbsp;|&nbsp; 架构评审 2026-04-08 &nbsp;|&nbsp; 悬停 Badge 查看问题详情</p>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot dot-critical"></div>严重问题（高风险）</div>
+  <div class="legend-item"><div class="legend-dot dot-warning"></div>警告（中等风险）</div>
+  <div class="legend-item"><div class="legend-dot dot-info"></div>设计建议</div>
+  <div class="legend-item"><div class="legend-dot dot-ok"></div>正常</div>
+</div>
+
+<div class="canvas">
+
+  <!-- ── Row 1: Client Layer ─────────────────────────────────── -->
+  <div class="row">
+    <div class="row-label">客户层</div>
+
+    <div class="card theme-blue" style="flex:1.2">
+      <div class="card-title">🌐 frontend/ <span class="card-tag">React 18 · CRA · :3000</span></div>
+      <div class="card-sub">主前端，Ant Design，覆盖全部业务页面：调度、排班、甘特、工艺模板 V1/V2</div>
+      <div class="badges">
+        <div class="badge badge-critical">⚠ C1 双前端并存
+          <div class="tooltip">
+            <div class="tooltip-title">C1 · 双前端并存，无明确迁移计划</div>
+            frontend/ 与 frontend-next/ 同时维护，功能定义分散，API 调用逻辑重复，测试需要双倍投入。CRA 已停止维护，长期仍需迁移。
+            <div class="tooltip-impact">影响：维护成本倍增，新功能归属不明，QA 覆盖困难</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W2 ESLint warnings
+          <div class="tooltip">
+            <div class="tooltip-title">W2 · 构建有大量 ESLint warnings</div>
+            npm run build 通过但有"较多 ESLint warnings"，历史积累的代码质量问题未清理。
+            <div class="tooltip-impact">影响：掩盖真实错误，降低代码可读性</div>
+          </div>
+        </div>
+        <div class="badge badge-critical">⚠ C2 V1/V2模板入口残留
+          <div class="tooltip">
+            <div class="tooltip-title">C2 · 工艺模板 V1/V2 入口仍暴露</div>
+            主求解链路已收敛到 V4，但前端仍保留 V1 和 V2 两套工艺模板编辑入口，数据模型不统一，易造成数据污染。
+            <div class="tooltip-impact">影响：用户困惑、数据状态不一致、测试漏洞</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card theme-purple" style="flex:1">
+      <div class="card-title">✨ frontend-next/ <span class="card-tag">Next.js AppRouter · :3002</span></div>
+      <div class="card-sub">迁移中的新前端，Tailwind + Precision Lab 设计系统，仅覆盖部分功能（workspace, v3-bioprocess, qualifications…）</div>
+      <div class="badges">
+        <div class="badge badge-warning">⚠ W3 功能碎片化
+          <div class="tooltip">
+            <div class="tooltip-title">W3 · 新前端仅覆盖少数页面</div>
+            frontend-next 仅覆盖 dashboard/workspace/v3-bioprocess/qualifications 等，大部分功能仍在旧前端，用户需在两个端口间切换。
+            <div class="tooltip-impact">影响：用户体验割裂，无统一入口</div>
+          </div>
+        </div>
+        <div class="badge badge-info">ℹ I1 独立设计系统
+          <div class="tooltip">
+            <div class="tooltip-title">I1 · Precision Lab 与 Ant Design 混用</div>
+            两套设计系统并行，组件风格不统一。迁移完成前双轨共存带来额外 UI 一致性风险。
+            <div class="tooltip-impact">影响：视觉一致性、开发体验</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row 1 -->
+
+  <div class="connector">↕ &nbsp; HTTP / Proxy → /api → :3001 &nbsp; ↕</div>
+
+  <!-- ── Row 2: Backend ──────────────────────────────────────── -->
+  <div class="row">
+    <div class="row-label">后端层</div>
+
+    <div class="card theme-teal" style="flex:2">
+      <div class="card-title">⚙️ backend/ <span class="card-tag">Express · TypeScript · :3001</span></div>
+      <div class="card-sub">
+        30+ 路由模块，覆盖人员、资质、工艺、批次、排班、甘特、资源、组织等；直连 MySQL + 调用 Solver V4 HTTP
+      </div>
+      <div class="badges">
+        <div class="badge badge-critical">⚠ C3 无认证/RBAC
+          <div class="tooltip">
+            <div class="tooltip-title">C3 · 无认证层、无 RBAC</div>
+            README 明确："没有完整的认证、授权、RBAC 中间件"。所有 API 端点均可无鉴权访问。
+            <div class="tooltip-impact">影响：生产环境严重安全漏洞，数据完全暴露</div>
+          </div>
+        </div>
+        <div class="badge badge-critical">⚠ C4 CORS全开
+          <div class="tooltip">
+            <div class="tooltip-title">C4 · CORS 默认全域名允许</div>
+            CORS_ALLOWED_ORIGINS 未设置时允许所有来源（callback(null, true)），任意域名可发起跨域请求。
+            <div class="tooltip-impact">影响：CSRF 攻击面大，与无认证层叠加风险极高</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W4 API版本混乱
+          <div class="tooltip">
+            <div class="tooltip-title">W4 · 多套 API 版本并存</div>
+            同时存在 /api/scheduling、/api/v4/scheduling、/api/v4/gantt、/api/v5/gantt 等路由，版本命名不一致（路径 v4 vs v5），职责边界模糊。
+            <div class="tooltip-impact">影响：前端对接混乱，废弃路由难以下线</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W5 环境变量命名不一致
+          <div class="tooltip">
+            <div class="tooltip-title">W5 · DB_* 与 MYSQL_* 混用</div>
+            运行时使用 DB_HOST/DB_USER，旧迁移脚本读取 MYSQL_USER/MYSQL_DATABASE，两套命名不统一，容易在 CI/CD 或部署时漏配。
+            <div class="tooltip-impact">影响：部署出错率高，新成员上手困难</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W6 功能开关via环境变量
+          <div class="tooltip">
+            <div class="tooltip-title">W6 · Feature Flag 硬编码到环境变量</div>
+            ENABLE_TEMPLATE_RESOURCE_RULES / ENABLE_BATCH_RESOURCE_SNAPSHOTS 等通过环境变量控制，无统一 Feature Flag 管理，难以追踪开关状态和做灰度。
+            <div class="tooltip-impact">影响：配置散乱，难以管理和审计</div>
+          </div>
+        </div>
+        <div class="badge badge-info">ℹ I2 调度服务历史积累
+          <div class="tooltip">
+            <div class="tooltip-title">I2 · schedulingV2/V3/V4 服务层并存</div>
+            services/ 下存在 schedulingV2、schedulingV3、schedulingV4 多个目录，只有 V4 在运行面使用，旧版本未清理增加认知负担。
+            <div class="tooltip-impact">影响：代码库膨胀，新开发者误用旧逻辑</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row 2 -->
+
+  <!-- Arrows to next row -->
+  <div class="connector">↙ &nbsp; HTTP POST /api/v4/solve · SSE 进度 &nbsp; ↘</div>
+
+  <!-- ── Row 3: Solver + DB ────────────────────────────────── -->
+  <div class="row">
+    <div class="row-label">计算层</div>
+
+    <div class="card theme-orange" style="flex:1.2">
+      <div class="card-title">🧮 solver_v4/ <span class="card-tag">Flask · OR-Tools CP-SAT · :5005</span></div>
+      <div class="card-sub">
+        单进程 Flask，接收整批数据 → CP-SAT 求解 → 返回结果；支持 abort；约束模块化（18 个约束文件）
+      </div>
+      <div class="badges">
+        <div class="badge badge-critical">⚠ C5 同步阻塞单进程
+          <div class="tooltip">
+            <div class="tooltip-title">C5 · 求解器同步阻塞，无任务队列</div>
+            Flask 默认单线程，/api/v4/solve 是同步 HTTP 请求，长时间求解会阻塞整个服务，并发请求会排队或超时。无 Celery/RQ 等任务队列。
+            <div class="tooltip-impact">影响：多批次并发排产时服务不可用，超时难控制</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W7 数据全量传输
+          <div class="tooltip">
+            <div class="tooltip-title">W7 · 每次求解全量传输数据</div>
+            后端将全量员工、班次、操作数据打包为 JSON POST 给 solver，request body limit 50MB。随着数据规模增长，传输延迟和内存压力显著。
+            <div class="tooltip-impact">影响：大规模数据下响应慢，内存消耗高</div>
+          </div>
+        </div>
+        <div class="badge badge-info">ℹ I3 版本仍是 alpha
+          <div class="tooltip">
+            <div class="tooltip-title">I3 · Solver 版本号 4.0.0-alpha</div>
+            代码中硬编码 VERSION = "4.0.0-alpha"，表明求解器未达到稳定发布状态，但已作为生产求解主链路使用。
+            <div class="tooltip-impact">影响：稳定性预期不明确</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card theme-green" style="flex:1.3">
+      <div class="card-title">🗄️ MySQL · aps_system <span class="card-tag">:3306</span></div>
+      <div class="card-sub">
+        主业务数据库；40+ 张业务表；同时存在独立的 aps_system_v3 数据库（v3 bioprocess schema）
+      </div>
+      <div class="badges">
+        <div class="badge badge-critical">⚠ C6 无迁移执行器
+          <div class="tooltip">
+            <div class="tooltip-title">C6 · 数据库迁移无自动执行机制</div>
+            migrations/ 目录有 30+ SQL 文件，但"没有统一迁移执行器"，需手工按序执行。无版本跟踪（无 Flyway/Liquibase/knex migrate 等）。
+            <div class="tooltip-impact">影响：部署易漏迁移，环境间 schema 不一致，CI 无法自动建库</div>
+          </div>
+        </div>
+        <div class="badge badge-critical">⚠ C7 双数据库上下文
+          <div class="tooltip">
+            <div class="tooltip-title">C7 · aps_system 与 aps_system_v3 并存</div>
+            v3 bioprocess 迁移在独立数据库 aps_system_v3 下建表，与主库不在同一 schema，跨库查询复杂，事务一致性无法保证。
+            <div class="tooltip-impact">影响：数据一致性风险，运维复杂度倍增</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W8 SQLite残留
+          <div class="tooltip">
+            <div class="tooltip-title">W8 · 仓库根目录存在 database.sqlite</div>
+            项目以 MySQL 为主数据库，但根目录和 backend/ 下都存在 database.sqlite，可能是开发/测试遗留，职责不清晰。
+            <div class="tooltip-impact">影响：混淆开发环境配置，潜在数据泄漏</div>
+          </div>
+        </div>
+        <div class="badge badge-info">ℹ I4 无连接池配置
+          <div class="tooltip">
+            <div class="tooltip-title">I4 · 后端无显式连接池配置</div>
+            backend 使用 mysql2，但未见显式连接池 pooling 配置，高并发下可能连接耗尽。
+            <div class="tooltip-impact">影响：并发性能瓶颈</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row 3 -->
+
+  <!-- ── Row 4: Infra / Ops ─────────────────────────────────── -->
+  <div class="connector">↕ &nbsp; 外部服务 &nbsp; ↕</div>
+  <div class="row">
+    <div class="row-label">基础设施</div>
+
+    <div class="card theme-slate" style="flex:1">
+      <div class="card-title">🐦 天气/节假日 API <span class="card-tag">TIANAPI_KEY</span></div>
+      <div class="card-sub">外部节假日数据服务，holidayScheduler 周期拉取</div>
+      <div class="badges">
+        <div class="badge badge-warning">⚠ W9 单点外部依赖
+          <div class="tooltip">
+            <div class="tooltip-title">W9 · 节假日数据无降级方案</div>
+            holidayService 直接依赖第三方 API，无本地缓存 fallback，API 不可用时节假日功能失效。
+            <div class="tooltip-impact">影响：节假日计算失效影响排班计算</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card theme-slate" style="flex:1">
+      <div class="card-title">📦 部署 / 运维</div>
+      <div class="card-sub">无 Docker / Docker Compose；无 K8s 配置；无 .env.sample；依赖 macOS Homebrew MySQL</div>
+      <div class="badges">
+        <div class="badge badge-critical">⚠ C8 无容器化/标准部署
+          <div class="tooltip">
+            <div class="tooltip-title">C8 · 无 Docker，无标准化部署编排</div>
+            README 明确："没有 Docker 或标准化部署编排文件"。启动脚本依赖 macOS Homebrew，无法直接在 Linux 服务器或 CI 环境复现。
+            <div class="tooltip-impact">影响：无法标准化部署，环境漂移严重，团队协作困难</div>
+          </div>
+        </div>
+        <div class="badge badge-warning">⚠ W10 无 .env.sample
+          <div class="tooltip">
+            <div class="tooltip-title">W10 · 缺少环境变量模板文件</div>
+            仓库没有 .env.sample，新成员需要阅读 README 才能手工拼出所有变量，且 README 中的变量列表与代码实际读取可能不同步。
+            <div class="tooltip-impact">影响：新成员上手慢，配置遗漏概率高</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card theme-slate" style="flex:1">
+      <div class="card-title">🗂️ 代码仓库结构</div>
+      <div class="card-sub">Monorepo：frontend/ + frontend-next/ + backend/ + solver_v4/ + archive/ + harness/</div>
+      <div class="badges">
+        <div class="badge badge-warning">⚠ W11 archive 未清理
+          <div class="tooltip">
+            <div class="tooltip-title">W11 · archive/ 历史代码仍在主仓库</div>
+            archive/ 目录包含历史实现，npm install 等命令可能误入，且对新开发者造成混淆。
+            <div class="tooltip-impact">影响：认知负担，潜在依赖引入</div>
+          </div>
+        </div>
+        <div class="badge badge-info">ℹ I5 Harness 与 CI 耦合
+          <div class="tooltip">
+            <div class="tooltip-title">I5 · harness/ 作为任务执行入口</div>
+            harness/ 作为 Codex 任务执行管理器，承担 CI 职责，但与标准 CI（GitHub Actions 等）无集成，难以复现在云端。
+            <div class="tooltip-impact">影响：CI/CD 流水线缺失，质量门禁不完整</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /row 4 -->
+
+</div><!-- /canvas -->
+
+<!-- ─── Issues Summary Panel ─────────────────────────────────── -->
+<div class="issues-panel">
+  <h2>📋 架构问题汇总</h2>
+  <div class="issues-grid">
+
+    <div class="issue-card critical">
+      <div class="issue-id">C1 · 严重</div>
+      <div class="issue-title">双前端并存，无退出时间表</div>
+      <div class="issue-body">frontend/(CRA) 和 frontend-next/(Next.js) 同时维护，功能定义分散，API 调用逻辑重复，QA 需要双倍覆盖。CRA 已官方停止维护。</div>
+      <span class="impact-tag impact-high">影响：维护成本 × 2，新功能归属不明</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C2 · 严重</div>
+      <div class="issue-title">工艺模板 V1/V2 入口仍暴露</div>
+      <div class="issue-body">主求解链路收敛 V4，但 V1/V2 工艺模板编辑入口仍在主前端可访问，数据模型不统一，存在数据污染风险。</div>
+      <span class="impact-tag impact-high">影响：数据一致性、用户混淆</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C3 · 严重</div>
+      <div class="issue-title">后端无认证层 / 无 RBAC</div>
+      <div class="issue-body">30+ API 端点完全无身份验证，任何网络可达的请求均可读写业务数据（排班、人员、批次计划）。</div>
+      <span class="impact-tag impact-high">影响：生产环境数据安全零保障</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C4 · 严重</div>
+      <div class="issue-title">CORS 默认全域名允许</div>
+      <div class="issue-body">CORS_ALLOWED_ORIGINS 未配置时对所有 Origin 返回允许，与无认证层叠加构成极大安全漏洞。</div>
+      <span class="impact-tag impact-high">影响：跨站请求伪造，数据泄露</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C5 · 严重</div>
+      <div class="issue-title">求解器同步阻塞，无任务队列</div>
+      <div class="issue-body">Flask 单进程同步处理求解请求，多批次并发场景下第二个请求会被阻塞直至第一个完成，无任务队列（Celery/RQ）。</div>
+      <span class="impact-tag impact-high">影响：并发排产时服务不可用</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C6 · 严重</div>
+      <div class="issue-title">数据库迁移无自动执行机制</div>
+      <div class="issue-body">30+ SQL 迁移文件需手工按序执行，无版本跟踪工具（Flyway / Liquibase / knex migrate），CI 无法自动建库验证。</div>
+      <span class="impact-tag impact-high">影响：环境间 schema 不一致，部署出错率高</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C7 · 严重</div>
+      <div class="issue-title">双数据库上下文（aps_system + aps_system_v3）</div>
+      <div class="issue-body">v3 bioprocess 在独立数据库 aps_system_v3 建表，跨库查询复杂，事务一致性无法通过单个 MySQL 事务保证。</div>
+      <span class="impact-tag impact-high">影响：数据一致性风险，运维复杂度倍增</span>
+    </div>
+
+    <div class="issue-card critical">
+      <div class="issue-id">C8 · 严重</div>
+      <div class="issue-title">无容器化 / 无标准部署编排</div>
+      <div class="issue-body">无 Dockerfile / Docker Compose / K8s 配置，启动脚本依赖 macOS Homebrew，无法在 Linux 服务器或 CI 云端环境直接复现。</div>
+      <span class="impact-tag impact-high">影响：无法标准化部署，环境漂移严重</span>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-id">W4 · 警告</div>
+      <div class="issue-title">API 版本命名混乱</div>
+      <div class="issue-body">/api/scheduling、/api/v4/scheduling、/api/v4/gantt、/api/v5/gantt 并存，版本号不一致，废弃端点难以识别和下线。</div>
+      <span class="impact-tag impact-medium">影响：前端对接混乱，技术债累积</span>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-id">W5 · 警告</div>
+      <div class="issue-title">环境变量命名不一致（DB_* vs MYSQL_*）</div>
+      <div class="issue-body">运行时使用 DB_HOST/DB_USER，旧迁移脚本读取 MYSQL_USER/MYSQL_DATABASE，同一数据库两套命名共存。</div>
+      <span class="impact-tag impact-medium">影响：CI/CD 配置易错，新成员困惑</span>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-id">W7 · 警告</div>
+      <div class="issue-title">求解器全量数据传输（50MB limit）</div>
+      <div class="issue-body">后端将全量员工/班次/操作数据打包 JSON POST 给 solver，request body limit 50MB。随数据规模增长内存和延迟压力显著。</div>
+      <span class="impact-tag impact-medium">影响：大规模数据下性能瓶颈</span>
+    </div>
+
+    <div class="issue-card warning">
+      <div class="issue-id">W8 · 警告</div>
+      <div class="issue-title">SQLite 文件残留在仓库中</div>
+      <div class="issue-body">根目录与 backend/ 下均存在 database.sqlite，项目以 MySQL 为主库，SQLite 文件职责不清，可能包含敏感数据。</div>
+      <span class="impact-tag impact-medium">影响：数据泄露风险，环境混淆</span>
+    </div>
+
+    <div class="issue-card info">
+      <div class="issue-id">I2 · 建议</div>
+      <div class="issue-title">schedulingV2/V3/V4 服务层均存在</div>
+      <div class="issue-body">services/ 下历史版本服务未清理，只有 V4 在主链路使用，增加认知负担，有误用旧逻辑的风险。</div>
+      <span class="impact-tag impact-low">建议：归档或删除 V2/V3 服务代码</span>
+    </div>
+
+    <div class="issue-card info">
+      <div class="issue-id">I5 · 建议</div>
+      <div class="issue-title">缺乏标准 CI/CD 流水线</div>
+      <div class="issue-body">harness/ 承担 Codex 任务执行，但无 GitHub Actions / GitLab CI 等标准流水线，质量门禁（build + test + lint）未自动化。</div>
+      <span class="impact-tag impact-low">建议：接入标准 CI，自动运行 npm run build + test</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ─── Tech Stack Review ──────────────────────────────────── -->
+<div class="issues-panel" style="margin-top:40px;">
+  <h2>🔬 技术选型问题分析</h2>
+
+  <!-- Stack overview table -->
+  <div style="overflow-x:auto;margin-bottom:24px;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:#0f1f3a;color:#60a5fa;">
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f;width:15%">层</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f;width:20%">当前选型</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f;width:12%">版本</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f;width:13%">风险等级</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f">问题 / 建议</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">主前端框架</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">CRA (react-scripts)</td>
+          <td style="padding:9px 14px;color:#94a3b8;">5.0.1</td>
+          <td style="padding:9px 14px;"><span style="background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">严重</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">CRA 已于 2023 年官方停止维护，无安全更新，webpack 构建慢，无法使用现代 bundler 优化（Vite/Turbopack）</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">新前端框架</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">Next.js App Router</td>
+          <td style="padding:9px 14px;color:#94a3b8;">16.2.1</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">Next.js 16 处于前沿版本，稳定性待验证；所有 API 路由仅在开发态通过 rewrite 代理，生产部署缺少反向代理配置</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">React 版本</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">18.2 ↔ 19.2 分裂</td>
+          <td style="padding:9px 14px;color:#f87171;">不一致</td>
+          <td style="padding:9px 14px;"><span style="background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">严重</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">frontend/ 用 React 18，frontend-next/ 用 React 19——两个主版本之间有破坏性变更（并发渲染、use() hook、Server Components），共享组件无法复用，心智负担极重</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">TypeScript 版本</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">4.9 ↔ 5.x 分裂</td>
+          <td style="padding:9px 14px;color:#f87171;">不一致</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">frontend/ 用 TS 4.9，backend 和 frontend-next 用 TS 5.x，跨两个主版本，decorators、satisfies 等新语法无法在旧前端使用</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">Tailwind 版本</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">v3 ↔ v4 分裂</td>
+          <td style="padding:9px 14px;color:#f87171;">不一致</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">frontend/ 用 Tailwind 3，frontend-next/ 用 Tailwind 4（破坏性变更：配置方式、插件 API 均不兼容），class 语法在两端无法共用</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">后端 ORM</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">无 ORM，裸 SQL</td>
+          <td style="padding:9px 14px;color:#94a3b8;">mysql2</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">30+ 路由全部手写 SQL，无 ORM（Prisma/Drizzle/TypeORM），schema 变更不能自动类型推导，运行时 SQL 拼接错误只能靠测试发现</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">求解器框架</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">Flask (WSGI, 同步)</td>
+          <td style="padding:9px 14px;color:#94a3b8;">>=3.0.0</td>
+          <td style="padding:9px 14px;"><span style="background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">严重</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">WSGI 同步模型无法并发处理多个求解请求；CP-SAT 求解是 CPU 密集型，应配合 Celery/RQ 任务队列 + worker 池，或改用 FastAPI + BackgroundTasks</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">xlsx 解析库</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">SheetJS CE</td>
+          <td style="padding:9px 14px;color:#f87171;">0.18.5</td>
+          <td style="padding:9px 14px;"><span style="background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">严重</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">SheetJS CE（npm 上的 xlsx 包）从 0.19+ 开始已停止在 npm 公开发布，0.18.5 含已知原型链污染漏洞（CVE 级别），且前端+后端均引用，攻击面双倍</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">测试框架版本</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">Vitest v1 ↔ v4 分裂</td>
+          <td style="padding:9px 14px;color:#f87171;">不一致</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">backend 用 Vitest ^1.6.0，frontend-next 用 Vitest ^4.1.1，测试 API（workspace、browser mode）跨主版本不兼容，共享测试工具类时有风险</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">前端状态管理</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">无全局状态库</td>
+          <td style="padding:9px 14px;color:#94a3b8;">—</td>
+          <td style="padding:9px 14px;"><span style="background:#0c1a3a;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">建议</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">frontend/ 纯 useState/Context，缺乏全局状态管理（Zustand/Jotai）；复杂业务场景（排班甘特、求解进度）依赖 prop drilling，维护性下降</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">framer-motion</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">framer-motion</td>
+          <td style="padding:9px 14px;color:#f87171;">^12.34.0</td>
+          <td style="padding:9px 14px;"><span style="background:#0c1a3a;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">建议</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">在即将被废弃的 CRA 旧前端中引入最新版 framer-motion（重量级动画库），属于在淘汰路径上的无效投资，建议停止新增依赖</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#94a3b8;">后端实时推送</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">SSE + WebSocket 混用</td>
+          <td style="padding:9px 14px;color:#94a3b8;">ws + eventsource</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">后端同时引入 ws（WebSocket）和 eventsource（SSE），两套实时推送协议并存，职责边界不清，增加维护复杂度</td>
+        </tr>
+        <tr style="background:#0d1424;">
+          <td style="padding:9px 14px;color:#94a3b8;">HTTP 客户端</td>
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">axios（前端 + 后端）</td>
+          <td style="padding:9px 14px;color:#94a3b8;">^1.x</td>
+          <td style="padding:9px 14px;"><span style="background:#0c1a3a;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">建议</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">frontend-next 已引入 TanStack Query，但旧前端仍直接用 axios 裸调用，无缓存、无 loading 状态统一管理；建议在迁移中统一到 TanStack Query</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Risk heatmap summary -->
+  <div style="background:#0d1424;border-radius:12px;padding:20px 24px;border:1px solid #1e293b;margin-bottom:24px;">
+    <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:14px;">⚡ 技术债风险热力</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+      <div style="background:#450a0a;border-radius:8px;padding:14px;border:1px solid #7f1d1d;">
+        <div style="font-size:11px;font-weight:700;color:#fca5a5;margin-bottom:6px;">🔴 高风险（立即处理）</div>
+        <ul style="font-size:11px;color:#fecaca;line-height:2;list-style:none;padding:0;">
+          <li>• CRA 停止维护，构建无安全更新</li>
+          <li>• SheetJS 0.18.5 已知漏洞</li>
+          <li>• React 18 vs 19 主版本撕裂</li>
+          <li>• Flask 同步阻塞求解器</li>
+        </ul>
+      </div>
+      <div style="background:#451a03;border-radius:8px;padding:14px;border:1px solid #78350f;">
+        <div style="font-size:11px;font-weight:700;color:#fcd34d;margin-bottom:6px;">🟡 中风险（计划处理）</div>
+        <ul style="font-size:11px;color:#fde68a;line-height:2;list-style:none;padding:0;">
+          <li>• Tailwind 3 vs 4 配置不兼容</li>
+          <li>• TypeScript 4.9 vs 5.x</li>
+          <li>• 裸 SQL，无 ORM 类型安全</li>
+          <li>• SSE + WebSocket 双协议混用</li>
+          <li>• Vitest v1 vs v4</li>
+        </ul>
+      </div>
+      <div style="background:#0c1a3a;border-radius:8px;padding:14px;border:1px solid #1e3a5f;">
+        <div style="font-size:11px;font-weight:700;color:#93c5fd;margin-bottom:6px;">🔵 低风险（迁移时处理）</div>
+        <ul style="font-size:11px;color:#bfdbfe;line-height:2;list-style:none;padding:0;">
+          <li>• 引入全局状态管理（Zustand）</li>
+          <li>• 停止旧前端新增重依赖</li>
+          <li>• 统一 HTTP 客户端到 TanStack Query</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recommended Stack -->
+  <div style="background:#0a2016;border-radius:12px;padding:20px 24px;border:1px solid #15803d;">
+    <div style="font-size:13px;font-weight:700;color:#4ade80;margin-bottom:12px;">✅ 建议目标技术栈（迁移完成后）</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;font-size:12px;color:#86efac;">
+      <div>
+        <div style="font-weight:700;color:#4ade80;margin-bottom:6px;">前端</div>
+        Next.js 16 (App Router) + React 19 + TypeScript 5 + Tailwind 4 + TanStack Query + Zustand + Vitest 4
+      </div>
+      <div>
+        <div style="font-weight:700;color:#4ade80;margin-bottom:6px;">后端</div>
+        Express 5 / Fastify + TypeScript 5 + Prisma / Drizzle ORM + mysql2 + Vitest 4<br>统一 DB_* 环境变量命名
+      </div>
+      <div>
+        <div style="font-weight:700;color:#4ade80;margin-bottom:6px;">求解器</div>
+        FastAPI (ASGI, 异步) + Celery + Redis（任务队列）+ OR-Tools CP-SAT（保留）
+      </div>
+      <div>
+        <div style="font-weight:700;color:#4ade80;margin-bottom:6px;">基础设施</div>
+        Docker Compose（开发）+ 标准 CI（GitHub Actions）+ Flyway/Knex 迁移执行器 + 统一认证中间件（JWT/Session）
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Solver Deep Dive ──────────────────────────────────── -->
+<div class="issues-panel" style="margin-top:40px;">
+  <h2>🧮 求解器深度评估：OR-Tools CP-SAT 是否合适？</h2>
+
+  <!-- Verdict banner -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+    <div style="background:#0a2016;border:1.5px solid #15803d;border-radius:12px;padding:18px 20px;">
+      <div style="font-size:13px;font-weight:800;color:#4ade80;margin-bottom:10px;">✅ 算法选型：CP-SAT 正确，不需要换</div>
+      <div style="font-size:12px;color:#86efac;line-height:1.8;">
+        人员排班（Employee Scheduling / NSP）是经典 NP-hard 问题。CP-SAT 正是为此类问题设计的：<br>
+        · <strong style="color:#4ade80">硬约束 + 软目标</strong>同时建模，天然支持可行性与最优性权衡<br>
+        · 18 个约束模块解耦良好，每个模块独立可测<br>
+        · 8 路并行 Worker 利用多核（Google 内部也用 CP-SAT 做排班）<br>
+        · DataAssemblerV4 的候选人预过滤显著压缩搜索空间<br>
+        · 相比 Gurobi/CPLEX：免费、无 License 风险，对此问题规模性能接近
+      </div>
+    </div>
+    <div style="background:#450a0a;border:1.5px solid #7f1d1d;border-radius:12px;padding:18px 20px;">
+      <div style="font-size:13px;font-weight:800;color:#fca5a5;margin-bottom:10px;">🔴 部署方式：Flask WSGI 严重不适合</div>
+      <div style="font-size:12px;color:#fecaca;line-height:1.8;">
+        问题不在 CP-SAT，在 <strong style="color:#fca5a5">Flask 同步阻塞 + 单进程</strong>：<br>
+        · /api/v4/solve 是 CPU 密集型，默认超时 300s（5分钟），期间整个服务无法响应<br>
+        · 第二个求解请求进来时直接阻塞，无任务队列<br>
+        · ACTIVE_CALLBACKS 是全局 dict，多进程部署时状态不共享，abort 失效<br>
+        · 每次 solve 将完整请求 JSON dump 到 logs/ 磁盘，无清理策略
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem type analysis -->
+  <div style="background:#141b2e;border-radius:12px;padding:20px 24px;border:1px solid #1e293b;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:14px;">📐 问题类型与规模评估</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;font-size:12px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#60a5fa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">问题本质</div>
+        <div style="color:#94a3b8;line-height:1.7;">
+          多资质约束的人员-操作分配问题（扩展 NSP），典型变量规模：<br>
+          <code style="background:#0f1f3a;padding:1px 5px;border-radius:3px;color:#7dd3fc;">O(操作数 × 岗位数 × 候选员工数)</code><br>
+          预过滤后每操作约 5~30 个候选人，布尔变量总量可控（估计 5k~50k），CP-SAT 处理此规模绰绰有余
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#a78bfa;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">硬约束复杂度</div>
+        <div style="color:#94a3b8;line-height:1.7;">
+          · 唯一分配（one_position）<br>
+          · 班次覆盖（shift_assignment）<br>
+          · 连续工作日上限（work_days_limit）<br>
+          · 夜班后休息（night_rest）<br>
+          · 共享组（share_group）<br>
+          · 冻结区间（frozen_range）<br>
+          ← 这些用 CP-SAT 表达最自然
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#2dd4bf;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px;">规划时域</div>
+        <div style="color:#94a3b8;line-height:1.7;">
+          支持子区间（solve_range）重算<br>
+          但每次仍全量重建模型<br>
+          无暖启动（solution hint）<br>
+          → 小改动触发全量 5 分钟求解<br>
+          → 是最大的用户体验痛点
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Critical gap: Resource constraints not implemented -->
+  <div style="background:#1a0a2e;border:1.5px solid #6d28d9;border-radius:12px;padding:18px 20px;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:800;color:#c4b5fd;margin-bottom:10px;">⚠️ 最大功能缺口：资源约束接收但未实现</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;font-size:12px;">
+      <div>
+        <div style="color:#a78bfa;font-weight:700;margin-bottom:6px;">SolverRequest 已接收（Python Contract）</div>
+        <div style="color:#c4b5fd;line-height:1.8;">
+          ✓ resources（设备/房间列表）<br>
+          ✓ resource_calendars（设备可用时间）<br>
+          ✓ operation_resource_requirements（操作需要哪些设备）<br>
+          ✓ maintenance_windows（设备维护窗口）
+        </div>
+      </div>
+      <div>
+        <div style="color:#f87171;font-weight:700;margin-bottom:6px;">constraints/ 目录中 <span style="text-decoration:underline">无任何资源约束模块</span></div>
+        <div style="color:#fca5a5;line-height:1.8;">
+          ✗ 设备冲突（同一设备同时只能一个操作使用）未建模<br>
+          ✗ CIP/SIP 清洗窗口（DHT/CHT）未强制<br>
+          ✗ Suite 互斥（pre-viral/post-viral 隔离）未建模<br>
+          ✗ WFI/PW 公用系统容量未约束<br>
+          → 资源约束在 <strong>数据链路上存在，但在 CP-SAT 模型里是空洞</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Known issues table -->
+  <div style="overflow-x:auto;margin-bottom:24px;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:#0f1f3a;color:#60a5fa;">
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f;width:18%">问题</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f;width:10%">严重性</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f">当前状态</th>
+          <th style="padding:10px 14px;text-align:left;border-bottom:1px solid #1e3a5f">建议改法</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">Flask 同步阻塞</td>
+          <td style="padding:9px 14px;"><span style="background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">严重</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">WSGI 单线程，/solve 期间服务完全阻塞</td>
+          <td style="padding:9px 14px;color:#86efac;">FastAPI + Celery + Redis：solve 提交任务队列返回 task_id，前端轮询或 SSE 拉进度</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">资源约束缺失</td>
+          <td style="padding:9px 14px;"><span style="background:#450a0a;color:#fca5a5;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">严重</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">数据接收但 CP-SAT 模型未建模设备/房间约束</td>
+          <td style="padding:9px 14px;color:#86efac;">新增 resource_conflict.py、equipment_availability.py 等约束模块，用 IntervalVar + NoOverlap</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">num_workers 硬编码 = 8</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">容器 2 vCPU 环境下 8 workers 导致过度上下文切换</td>
+          <td style="padding:9px 14px;color:#86efac;"><code style="background:#0f1f3a;padding:1px 5px;border-radius:3px;">min(8, os.cpu_count() or 4)</code> 或通过环境变量配置</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">无暖启动 (Warm Start)</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">每次小改动（锁定1个操作）仍触发全量 5 分钟重算</td>
+          <td style="padding:9px 14px;color:#86efac;">缓存上次解，用 <code style="background:#0f1f3a;padding:1px 5px;border-radius:3px;">model.AddHint(var, val)</code> 注入为初始解提示，大幅加速收敛</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">ACTIVE_CALLBACKS 全局状态</td>
+          <td style="padding:9px 14px;"><span style="background:#451a03;color:#fcd34d;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">警告</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">多进程部署时 abort 请求可能打到不同进程导致失效</td>
+          <td style="padding:9px 14px;color:#86efac;">迁移到 Redis 存储 callback 状态，abort 通过 Redis pub/sub 广播</td>
+        </tr>
+        <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">无问题分解策略</td>
+          <td style="padding:9px 14px;"><span style="background:#0c1a3a;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">建议</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">批次数/员工数增长时单一模型变量爆炸</td>
+          <td style="padding:9px 14px;color:#86efac;">按部门/Phase（USP→DSP）分解求解，或滚动时域（Rolling Horizon）</td>
+        </tr>
+        <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">请求 JSON 全量落盘</td>
+          <td style="padding:9px 14px;"><span style="background:#0c1a3a;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">建议</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">每次 solve 都把完整请求 JSON 写到 logs/，无清理</td>
+          <td style="padding:9px 14px;color:#86efac;">仅在 DEBUG 模式落盘，或保留最近 N 条，避免磁盘堆满</td>
+        </tr>
+        <tr style="background:#111827;">
+          <td style="padding:9px 14px;color:#e2e8f0;font-weight:600;">版本号 4.0.0-alpha</td>
+          <td style="padding:9px 14px;"><span style="background:#0c1a3a;color:#93c5fd;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;">建议</span></td>
+          <td style="padding:9px 14px;color:#94a3b8;">alpha 版作为主求解链路，稳定性预期不明确</td>
+          <td style="padding:9px 14px;color:#86efac;">明确定义 alpha→beta→stable 质量门禁，通过后升版本号</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Alternative comparison -->
+  <div style="background:#141b2e;border-radius:12px;padding:20px 24px;border:1px solid #1e293b;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:700;color:#f1f5f9;margin-bottom:14px;">🔄 主流求解方案横向对比（针对本项目规模）</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+        <thead>
+          <tr style="color:#64748b;border-bottom:1px solid #1e293b;">
+            <th style="padding:8px 12px;text-align:left;width:18%">方案</th>
+            <th style="padding:8px 12px;text-align:center;width:12%">可行性保证</th>
+            <th style="padding:8px 12px;text-align:center;width:12%">复杂约束</th>
+            <th style="padding:8px 12px;text-align:center;width:12%">求解速度</th>
+            <th style="padding:8px 12px;text-align:center;width:12%">成本</th>
+            <th style="padding:8px 12px;text-align:left;">适用评价</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#0a2016;border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 12px;color:#4ade80;font-weight:700;">OR-Tools CP-SAT ← 当前</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">✅ 完整</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">✅ 最强</td>
+            <td style="padding:8px 12px;text-align:center;color:#fcd34d;">⚡ 中等</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">免费</td>
+            <td style="padding:8px 12px;color:#86efac;"><strong>✅ 推荐继续使用</strong>，修复基础设施问题即可</td>
+          </tr>
+          <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 12px;color:#e2e8f0;font-weight:600;">Gurobi / CPLEX（MIP）</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">✅ 完整</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">✅ 强</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">⚡ 更快（连续松弛）</td>
+            <td style="padding:8px 12px;text-align:center;color:#f87171;">¥数万/年</td>
+            <td style="padding:8px 12px;color:#94a3b8;">License 费用高，对此规模优势不显著，不建议引入</td>
+          </tr>
+          <tr style="background:#0d1424;border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 12px;color:#e2e8f0;font-weight:600;">模拟退火 / 遗传算法</td>
+            <td style="padding:8px 12px;text-align:center;color:#fcd34d;">⚠ 不保证</td>
+            <td style="padding:8px 12px;text-align:center;color:#f87171;">❌ 硬约束难表达</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">⚡ 快（找到解快）</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">免费</td>
+            <td style="padding:8px 12px;color:#94a3b8;">不适合：本项目有大量强硬约束（合规/劳动法），启发式无法保证满足</td>
+          </tr>
+          <tr style="background:#111827;border-bottom:1px solid #1e293b;">
+            <td style="padding:8px 12px;color:#e2e8f0;font-weight:600;">CP-SAT + LNS 增强</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">✅ 完整</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">✅ 最强</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">⚡ 快（暖启动）</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">免费</td>
+            <td style="padding:8px 12px;color:#86efac;"><strong>✅ 推荐作为中期升级目标</strong>：在当前基础上添加 AddHint() 暖启动</td>
+          </tr>
+          <tr style="background:#0d1424;">
+            <td style="padding:8px 12px;color:#e2e8f0;font-weight:600;">两阶段（班次规划→人员分配）</td>
+            <td style="padding:8px 12px;text-align:center;color:#fcd34d;">⚠ 次优</td>
+            <td style="padding:8px 12px;text-align:center;color:#fcd34d;">⚠ 中等</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">⚡ 快</td>
+            <td style="padding:8px 12px;text-align:center;color:#4ade80;">免费</td>
+            <td style="padding:8px 12px;color:#94a3b8;">解耦后可能丧失联合最优，共享组约束跨阶段难处理，不建议拆分</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Recommended upgrade path -->
+  <div style="background:#0f1f3a;border-radius:12px;padding:20px 24px;border:1px solid #1e40af;">
+    <div style="font-size:13px;font-weight:700;color:#60a5fa;margin-bottom:14px;">🛣️ 求解器升级路径（保留 CP-SAT 算法）</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;font-size:12px;">
+      <div style="background:#0a1628;border-radius:8px;padding:14px;border:1px solid #1e3a5f;">
+        <div style="font-weight:700;color:#60a5fa;margin-bottom:8px;">近期（0~3个月）</div>
+        <ul style="color:#93c5fd;line-height:2;list-style:none;padding:0;">
+          <li>→ Flask → <strong>FastAPI</strong></li>
+          <li>→ 接入 <strong>Celery + Redis</strong> 任务队列</li>
+          <li>→ abort 改用 Redis pub/sub</li>
+          <li>→ num_workers 改为环境变量</li>
+          <li>→ 请求日志仅 DEBUG 模式落盘</li>
+        </ul>
+      </div>
+      <div style="background:#0a1628;border-radius:8px;padding:14px;border:1px solid #1e3a5f;">
+        <div style="font-weight:700;color:#60a5fa;margin-bottom:8px;">中期（3~6个月）</div>
+        <ul style="color:#93c5fd;line-height:2;list-style:none;padding:0;">
+          <li>→ 实现 <strong>resource_conflict 约束模块</strong></li>
+          <li>→ 实现 equipment_availability 模块</li>
+          <li>→ 添加 <strong>AddHint() 暖启动</strong></li>
+          <li>→ 按 USP/DSP 分阶段求解</li>
+          <li>→ 升版本号到 4.0.0-beta</li>
+        </ul>
+      </div>
+      <div style="background:#0a1628;border-radius:8px;padding:14px;border:1px solid #1e3a5f;">
+        <div style="font-weight:700;color:#60a5fa;margin-bottom:8px;">长期（6个月+）</div>
+        <ul style="color:#93c5fd;line-height:2;list-style:none;padding:0;">
+          <li>→ Rolling Horizon 滚动时域</li>
+          <li>→ 求解结果缓存（相同输入跳过）</li>
+          <li>→ Suite 互斥、gowning 时间约束</li>
+          <li>→ 多 Solver worker 池水平扩展</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="max-width:1200px;margin:32px auto 0;padding-bottom:40px;border-top:1px solid #1e293b;padding-top:20px;display:flex;justify-content:space-between;align-items:center;">
+  <div style="font-size:11px;color:#475569">
+    <strong style="color:#64748b">架构问题</strong>：严重 8 项 · 警告 8 项 · 建议 5 项 &nbsp;|&nbsp;
+    <strong style="color:#64748b">技术选型</strong>：严重 4 项 · 警告 5 项 · 建议 4 项 &nbsp;|&nbsp;
+    <strong style="color:#64748b">求解器</strong>：算法✅ · 部署🔴 · 资源约束缺口🔴
+  </div>
+  <div style="font-size:11px;color:#334155">MFG8APS Architecture Review · 2026-04-08</div>
+</div>
+
+</body>
+</html>

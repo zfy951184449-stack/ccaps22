@@ -65,5 +65,13 @@ router.get('/runs/:runId/status', schedulingV4Controller.getSolveStatusV4);
  */
 router.post('/runs/:runId/apply', schedulingV4Controller.applySolveResultV4);
 
+// 8. Precheck (OPT-15 API)
+/**
+ * @route POST /api/v4/scheduling/precheck
+ * @desc Run pre-solve sanity checks without starting solver
+ * @access Private
+ */
+router.post('/precheck', schedulingV4Controller.runPrecheckV4);
+
 export default router;
 

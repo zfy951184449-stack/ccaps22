@@ -11,6 +11,8 @@ from core.context import SolverContext
 
 class LockedShiftsConstraint(BaseConstraint):
     name = "LockedShifts"
+    config_key = "enable_locked_shifts"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

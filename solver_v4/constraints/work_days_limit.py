@@ -16,6 +16,8 @@ import logging
 
 class MaxConsecutiveWorkDaysConstraint(BaseConstraint):
     name = "MaxConsecutiveWorkDays"
+    config_key = "enable_max_consecutive_work_days"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

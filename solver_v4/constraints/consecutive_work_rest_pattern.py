@@ -50,6 +50,8 @@ class ConsecutiveWorkRestPatternConstraint(BaseConstraint):
     """
 
     name = "ConsecutiveWorkRestPattern"
+    config_key = "enable_consecutive_work_rest_pattern"
+    default_enabled = False  # Disabled by default
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

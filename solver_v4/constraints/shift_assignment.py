@@ -27,6 +27,8 @@ class ShiftAssignmentConstraint(BaseConstraint):
     """
     
     name = "ShiftAssignment"
+    config_key = "enable_shift_assignment"
+    default_enabled = True
     is_hard = True
     
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

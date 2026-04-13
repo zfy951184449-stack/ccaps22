@@ -127,20 +127,33 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                         />
                     </Tooltip>
 
-                    <Popconfirm
-                        title="删除批次"
-                        description="确定要删除该批次吗？"
-                        onConfirm={() => onDelete(record)}
-                        okText="删除"
-                        cancelText="取消"
-                        okButtonProps={{ danger: true }}
-                    >
-                        <Button
-                            type="text"
-                            shape="circle"
-                            icon={<DeleteOutlined style={{ color: '#FF3B30' }} />}
-                        />
-                    </Popconfirm>
+                    {record.plan_status === 'DRAFT' ? (
+                        <Popconfirm
+                            title="删除批次"
+                            description={`确定要删除草稿批次 ${record.batch_code} 吗？`}
+                            onConfirm={() => onDelete(record)}
+                            okText="删除"
+                            cancelText="取消"
+                            okButtonProps={{ danger: true }}
+                        >
+                            <Tooltip title="删除">
+                                <Button
+                                    type="text"
+                                    shape="circle"
+                                    icon={<DeleteOutlined style={{ color: '#FF3B30' }} />}
+                                />
+                            </Tooltip>
+                        </Popconfirm>
+                    ) : (
+                        <Tooltip title="删除（将清理排班数据）">
+                            <Button
+                                type="text"
+                                shape="circle"
+                                icon={<DeleteOutlined style={{ color: '#FF3B30' }} />}
+                                onClick={() => onDelete(record)}
+                            />
+                        </Tooltip>
+                    )}
                 </Space>
             ),
         },

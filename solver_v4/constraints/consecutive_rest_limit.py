@@ -16,6 +16,8 @@ from core.context import SolverContext
 
 class MaxConsecutiveRestDaysConstraint(BaseConstraint):
     name = "MaxConsecutiveRestDays"
+    config_key = "enable_max_consecutive_rest_days"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

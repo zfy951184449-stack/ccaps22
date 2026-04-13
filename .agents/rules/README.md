@@ -35,9 +35,3 @@ description: Persona index and multi-persona task governance for the APS monorep
 - 单文件修复、格式化、注释
 - 纯读取 / 解释 / 问答
 - 已有批准计划的小幅跟进
-
-## 相关文件
-
-- 执行流程：`../.agent/workflows/multi-persona-task.md`
-- 规则入口：`../AGENTS.md`
-- Harness（外部编排器版本）：`../harness/prompts/`

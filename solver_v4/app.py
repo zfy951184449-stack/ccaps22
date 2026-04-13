@@ -35,6 +35,50 @@ def health_check():
         "service": "Solver V4"
     })
 
+@app.route("/api/v4/precheck", methods=["POST"])
+def precheck_endpoint():
+    """
+    Pre-check endpoint: run input validation without starting solver.
+    Returns structured issues (errors + warnings).
+    """
+    try:
+        from core.precheck import run_precheck
+
+        payload = request.get_json()
+        if not payload:
+            return jsonify({"error": "Empty payload"}), 400
+
+        req = SolverRequest.from_dict(payload)
+        issues = run_precheck(req)
+
+        # Convert PrecheckIssue dataclasses to dicts
+        checks = []
+        for issue in issues:
+            checks.append({
+                "status": issue.severity,
+                "check_name": issue.check_name,
+                "message": issue.message,
+                "details": issue.details,
+            })
+
+        # Determine overall status
+        has_errors = any(c["status"] == "ERROR" for c in checks)
+        has_warnings = any(c["status"] == "WARNING" for c in checks)
+        overall_status = "ERROR" if has_errors else ("WARNING" if has_warnings else "PASS")
+
+        return jsonify({
+            "status": overall_status,
+            "checks": checks,
+            "total_checks": len(checks),
+        })
+
+    except ValueError as e:
+        logger.error(f"Precheck Validation Error: {e}")
+        return jsonify({"error": str(e), "type": "VALIDATION_ERROR"}), 400
+    except Exception as e:
+        logger.exception(f"Precheck Internal Error: {e}")
+        return jsonify({"error": str(e), "type": "INTERNAL_ERROR"}), 500
+
 # Global registry for active callbacks
 ACTIVE_CALLBACKS = {}
 

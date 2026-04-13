@@ -23,6 +23,8 @@ class PreferStandardShiftConstraint(BaseConstraint):
     """Block SPECIAL shifts when STANDARD shifts can cover all tasks."""
 
     name = "PreferStandardShift"
+    config_key = "enable_prefer_standard_shift"
+    default_enabled = True
     is_hard = True
 
     SPECIAL_CATEGORY = "SPECIAL"

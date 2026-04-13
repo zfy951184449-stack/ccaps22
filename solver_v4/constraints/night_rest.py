@@ -28,6 +28,8 @@ class NightRestConstraint(BaseConstraint):
     """
     
     name = "NightRest"
+    config_key = "enable_night_rest"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

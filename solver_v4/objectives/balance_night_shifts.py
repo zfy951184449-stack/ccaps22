@@ -58,17 +58,20 @@ class BalanceNightShiftsObjective(ObjectiveBase):
         if not night_shift_ids:
             return 0
             
-        # 2. Count Night Shifts Per Employee
+        # 2. Pre-group night shift vars by employee (avoid O(E×N) nested loop)
+        from collections import defaultdict
+        emp_night_map = defaultdict(list)  # emp_id -> [var, ...]
+        for (e, d, s), var in shift_assignments.items():
+            if s in night_shift_ids:
+                emp_night_map[e].append(var)
+        
         emp_night_counts = {}
         
         # Initialize for all employees (even those with 0 nights) to ensure balance considers them
         all_employees = {ep.employee_id for ep in data.employee_profiles}
         
         for emp_id in all_employees:
-            night_vars = []
-            for (e, d, s), var in shift_assignments.items():
-                if e == emp_id and s in night_shift_ids:
-                    night_vars.append(var)
+            night_vars = emp_night_map.get(emp_id, [])
             
             if not night_vars:
                 emp_night_counts[emp_id] = 0 # Integer 0

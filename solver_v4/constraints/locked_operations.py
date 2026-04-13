@@ -16,6 +16,8 @@ from core.context import SolverContext
 
 class LockedOperationsConstraint(BaseConstraint):
     name = "LockedOperations"
+    config_key = "enable_locked_operations"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

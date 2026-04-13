@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useMemo } from 'react';
-import { Typography, Empty, Button, Segmented } from 'antd';
-import { PlusOutlined, AppstoreOutlined, FileTextOutlined, RocketOutlined, CopyOutlined, BarsOutlined, BarChartOutlined } from '@ant-design/icons';
+import { Typography, Empty, Button, Segmented, Modal } from 'antd';
+import { PlusOutlined, AppstoreOutlined, FileTextOutlined, RocketOutlined, CopyOutlined, BarsOutlined, BarChartOutlined, ExclamationCircleFilled } from '@ant-design/icons';
 import { message } from 'antd';
 import StatsCardV4 from './StatsCardV4';
 import BatchListV4 from './BatchListV4';
@@ -143,15 +143,57 @@ const BatchManagementV4: React.FC = () => {
         loadData();
     }, [loadData]);
 
-    const handleDelete = useCallback(async (batch: BatchPlan) => {
+    const executeDelete = useCallback(async (batch: BatchPlan) => {
         try {
-            await batchPlanApi.remove(batch.id);
-            message.success('批次已删除');
+            await batchPlanApi.remove(batch.id, { force: true });
+            message.success(`批次 ${batch.batch_code} 已删除`);
             loadData();
-        } catch (error) {
-            message.error('删除批次失败');
+        } catch (error: any) {
+            const serverMsg = error?.response?.data?.error;
+            if (error?.response?.status === 404) {
+                message.warning('批次不存在或已被删除');
+                loadData();
+            } else {
+                message.error(serverMsg || '删除批次失败');
+            }
         }
     }, [loadData]);
+
+    const handleDelete = useCallback((batch: BatchPlan) => {
+        if (batch.plan_status === 'ACTIVATED') {
+            Modal.confirm({
+                title: '删除已激活批次',
+                icon: <ExclamationCircleFilled style={{ color: '#FF3B30' }} />,
+                content: (
+                    <div style={{ marginTop: 8 }}>
+                        <p style={{ margin: '0 0 8px', fontWeight: 500 }}>
+                            批次 <strong>{batch.batch_code}</strong> 当前处于激活状态。
+                        </p>
+                        <p style={{ margin: '0 0 4px', color: '#666' }}>
+                            删除将同时执行以下操作：
+                        </p>
+                        <ul style={{ margin: '4px 0 0', paddingLeft: 20, color: '#666', fontSize: 13 }}>
+                            <li>撤销批次激活状态</li>
+                            <li>清除人员排班分配数据</li>
+                            <li>清除关联的班次计划</li>
+                            <li>删除所有操作计划和约束</li>
+                        </ul>
+                        <p style={{ margin: '12px 0 0', color: '#FF3B30', fontSize: 13, fontWeight: 500 }}>
+                            此操作不可撤销。
+                        </p>
+                    </div>
+                ),
+                okText: '确认删除',
+                okButtonProps: { danger: true },
+                cancelText: '取消',
+                onOk: () => executeDelete(batch),
+                width: 440,
+            });
+        } else {
+            // DRAFT 批次由 BatchListV4 的 Popconfirm 处理确认，到这里直接执行
+            executeDelete(batch);
+        }
+    }, [executeDelete]);
 
     const handleActivate = useCallback(async (batch: BatchPlan) => {
         try {

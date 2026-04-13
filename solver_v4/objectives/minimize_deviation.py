@@ -83,23 +83,24 @@ class MinimizeHoursDeviationObjective(ObjectiveBase):
         # 3. 获取所有员工
         all_employees = {ep.employee_id for ep in data.employee_profiles}
         
-        # 4. 为每个员工构建工时表达式和偏差变量
+        # 4. 预分组：按员工 ID 收集班次变量（避免 O(E×N) 嵌套循环）
+        from collections import defaultdict
+        emp_shift_map = defaultdict(list)  # emp_id -> [(hours_scaled, var), ...]
+        for (e_id, date, shift_id), var in shift_assignments.items():
+            hours = shift_hours_scaled.get(shift_id, 0)
+            if hours > 0:
+                emp_shift_map[e_id].append((hours, var))
+        
         deviation_vars = []
         
         for emp_id in all_employees:
-            # 收集该员工的所有班次变量
-            emp_terms = []
-            for (e_id, date, shift_id), var in shift_assignments.items():
-                if e_id == emp_id:
-                    hours = shift_hours_scaled.get(shift_id, 0)
-                    if hours > 0:
-                        emp_terms.append(hours * var)
+            emp_terms = emp_shift_map.get(emp_id, [])
             
             if not emp_terms:
                 continue
             
             # 实际工时表达式
-            actual_hours_expr = sum(emp_terms)
+            actual_hours_expr = sum(hours * var for hours, var in emp_terms)
             
             # 创建偏差辅助变量
             # deviation >= actual - standard

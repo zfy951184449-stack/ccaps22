@@ -569,17 +569,23 @@ function buildRiskScore(
       ? metrics.demandHoursPerQualifiedEmployee / maxima.maxLoadPressure
       : 0;
 
+  // When there is no actual gap (supply >= peak demand), demand volume and
+  // load pressure are far less critical.  Apply a decay factor so that
+  // high-volume but fully-supplied "basic" qualifications do not outrank
+  // genuinely scarce ones.
+  const noGapDecay = metrics.peakGapPeople > 0 ? 1.0 : 0.3;
+
   const scoreBreakdown: QualificationShortageScoreBreakdown = {
     coverage_fragility: roundMetric(metrics.coverageFragility),
-    coverage_fragility_score: roundMetric(metrics.coverageFragility * 10),
+    coverage_fragility_score: roundMetric(metrics.coverageFragility * 10 * noGapDecay),
     demand_scale_factor: roundMetric(demandScaleFactor),
-    demand_scale_score: roundMetric(demandScaleFactor * 20),
+    demand_scale_score: roundMetric(demandScaleFactor * 20 * noGapDecay),
     gap_rate: roundMetric(metrics.gapRate),
     gap_rate_score: roundMetric(metrics.gapRate * 35),
     gap_volume_factor: roundMetric(gapVolumeFactor),
     gap_volume_score: roundMetric(gapVolumeFactor * 20),
     load_pressure_factor: roundMetric(loadPressureFactor),
-    load_pressure_score: roundMetric(loadPressureFactor * 15),
+    load_pressure_score: roundMetric(loadPressureFactor * 15 * noGapDecay),
   };
 
   const riskScore = Math.round(
@@ -924,8 +930,8 @@ export async function getQualificationShortageMonitoring(options: {
     }),
   ]);
 
-  const ranking = snapshot.risk_items.slice(0, 10);
-  const topQualifications = snapshot.qualification_items.slice(0, 8);
+  const ranking = snapshot.risk_items.slice(0, 20);
+  const topQualifications = snapshot.qualification_items.slice(0, 12);
   const heatmap: QualificationShortageHeatmapCell[] = topQualifications.flatMap(
     (item, index) =>
       Array.from({ length: 5 }, (_, levelIndex) => {

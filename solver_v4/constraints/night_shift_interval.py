@@ -26,6 +26,8 @@ class NightShiftIntervalConstraint(BaseConstraint):
     """夜班间隔约束：两次夜班之间至少间隔 N-1 天 (窗口大小 N)"""
     
     name = "NightShiftInterval"
+    config_key = "enable_night_shift_interval"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

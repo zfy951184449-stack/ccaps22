@@ -326,8 +326,21 @@ export class BatchLifecycleService {
 
     const opPlaceholders = operationIds.map(() => '?').join(',');
 
+    // 1. batch_personnel_assignments FIRST (has fk_bpa_shift_plan → employee_shift_plans)
+    await connection.execute(
+      `DELETE FROM batch_personnel_assignments WHERE batch_operation_plan_id IN (${opPlaceholders})`,
+      operationIds,
+    );
+
     if (diagnostics?.shiftPlanIds?.length) {
       const shiftPlaceholders = diagnostics.shiftPlanIds.map(() => '?').join(',');
+
+      // Cascade delete ANY batch_personnel_assignments referencing these shift plans 
+      // (resolves cross-batch FK locks during share-group deletions)
+      await connection.execute(
+        `DELETE FROM batch_personnel_assignments WHERE shift_plan_id IN (${shiftPlaceholders})`,
+        diagnostics.shiftPlanIds,
+      );
 
       try {
         await connection.execute(
@@ -366,6 +379,7 @@ export class BatchLifecycleService {
         }
       }
 
+      // Now safe to delete employee_shift_plans (batch_personnel_assignments already removed)
       try {
         await connection.execute(
           `DELETE FROM employee_shift_plans WHERE id IN (${shiftPlaceholders})`,
@@ -377,11 +391,6 @@ export class BatchLifecycleService {
         }
       }
     }
-
-    await connection.execute(
-      `DELETE FROM batch_personnel_assignments WHERE batch_operation_plan_id IN (${opPlaceholders})`,
-      operationIds,
-    );
 
     try {
       await connection.execute(
@@ -427,11 +436,13 @@ export class BatchLifecycleService {
     if (operationIds.length) {
       const placeholders = operationIds.map(() => '?').join(',');
 
+      // 1. batch_operation_constraints (FK → batch_operation_plans via both columns, and FK → production_batch_plans)
       await connection.execute(
-        `DELETE FROM batch_operation_constraints WHERE batch_operation_plan_id IN (${placeholders})`,
-        operationIds,
+        `DELETE FROM batch_operation_constraints WHERE batch_plan_id = ? OR batch_operation_plan_id IN (${placeholders}) OR predecessor_batch_operation_plan_id IN (${placeholders})`,
+        [batchId, ...operationIds, ...operationIds],
       );
 
+      // 2. operation_run_logs (FK → batch_operation_plans, 可选表)
       try {
         await connection.execute(
           `DELETE FROM operation_run_logs WHERE batch_operation_plan_id IN (${placeholders})`,
@@ -441,6 +452,60 @@ export class BatchLifecycleService {
         if (error?.code !== 'ER_NO_SUCH_TABLE') {
           throw error;
         }
+      }
+
+      // 3. batch_share_group_members (FK → batch_operation_plans)
+      try {
+        await connection.execute(
+          `DELETE FROM batch_share_group_members WHERE batch_operation_plan_id IN (${placeholders})`,
+          operationIds,
+        );
+      } catch (error: any) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          throw error;
+        }
+      }
+
+      // 4. batch_operation_resource_requirements (FK → batch_operation_plans)
+      try {
+        await connection.execute(
+          `DELETE FROM batch_operation_resource_requirements WHERE batch_operation_plan_id IN (${placeholders})`,
+          operationIds,
+        );
+      } catch (error: any) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          throw error;
+        }
+      }
+
+      // 5. resource_assignments (FK → batch_operation_plans)
+      try {
+        await connection.execute(
+          `DELETE FROM resource_assignments WHERE batch_operation_plan_id IN (${placeholders})`,
+          operationIds,
+        );
+      } catch (error: any) {
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    // 6. batch_share_groups (FK → production_batch_plans)
+    try {
+      await connection.execute('DELETE FROM batch_share_groups WHERE batch_plan_id = ?', [batchId]);
+    } catch (error: any) {
+      if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+        throw error;
+      }
+    }
+
+    // 7. project_batch_relations (FK → production_batch_plans)
+    try {
+      await connection.execute('DELETE FROM project_batch_relations WHERE batch_plan_id = ?', [batchId]);
+    } catch (error: any) {
+      if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+        throw error;
       }
     }
 

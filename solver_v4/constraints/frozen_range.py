@@ -19,6 +19,8 @@ from core.context import SolverContext
 
 class FrozenRangeConstraint(BaseConstraint):
     name = "FrozenRange"
+    config_key = ""  # Always applied (no config toggle)
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

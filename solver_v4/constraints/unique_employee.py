@@ -27,6 +27,8 @@ class UniqueEmployeeConstraint(BaseConstraint):
     """
     
     name = "UniqueEmployee"
+    config_key = "enable_unique_employee"
+    default_enabled = True
     is_hard = True
     
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

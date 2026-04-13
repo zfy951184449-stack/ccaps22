@@ -21,6 +21,8 @@ from utils.time_utils import get_date_range
 
 class FlexibleSchedulingConstraint(BaseConstraint):
     name = "FlexibleScheduling"
+    config_key = "enable_flexible_scheduling"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

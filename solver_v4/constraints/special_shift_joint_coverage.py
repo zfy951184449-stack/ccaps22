@@ -15,6 +15,8 @@ from core.context import SolverContext
 
 class SpecialShiftJointCoverageConstraint(BaseConstraint):
     name = "SpecialShiftJointCoverage"
+    config_key = "enable_special_shift_coverage"
+    default_enabled = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:
         if not data.special_shift_requirements:

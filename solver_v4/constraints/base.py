@@ -16,6 +16,8 @@ class BaseConstraint(ABC):
     """Abstract base class for all V4 constraint modules."""
 
     name: str = "BaseConstraint"
+    config_key: str = ""           # Config toggle key, e.g. "enable_share_group"
+    default_enabled: bool = True   # Whether enabled when config_key is absent
 
     def __init__(self, logger: logging.Logger = None):
         self.logger = logger or logging.getLogger(f"Constraint.{self.name}")

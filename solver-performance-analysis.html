@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Solver V4 性能分析报告</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'SF Pro Display','PingFang SC','Helvetica Neue',Arial,sans-serif; background:#0f1117; color:#e2e8f0; min-height:100vh; padding:32px 24px; }
+h1 { text-align:center; font-size:22px; font-weight:700; color:#f8fafc; margin-bottom:4px; }
+.subtitle { text-align:center; font-size:13px; color:#64748b; margin-bottom:32px; }
+.canvas { max-width:1200px; margin:0 auto; }
+
+/* Section headers */
+.section-title { font-size:16px; font-weight:700; color:#f1f5f9; margin:32px 0 14px; padding-bottom:8px; border-bottom:1px solid #1e293b; display:flex; align-items:center; gap:8px; }
+
+/* Metric cards row */
+.metrics-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px; }
+.metric-card { background:#141b2e; border-radius:10px; padding:16px; border:1px solid #1e293b; text-align:center; }
+.metric-val { font-size:28px; font-weight:800; margin-bottom:4px; }
+.metric-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.5px; }
+.metric-sub { font-size:11px; color:#475569; margin-top:4px; }
+.val-red { color:#f87171; }
+.val-yellow { color:#fbbf24; }
+.val-green { color:#4ade80; }
+.val-blue { color:#60a5fa; }
+
+/* Issue cards */
+.issues-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; margin-bottom:24px; }
+.issue-card { border-radius:10px; padding:16px; border-left:3px solid; background:#141b2e; }
+.issue-card.p0 { border-color:#ef4444; }
+.issue-card.p1 { border-color:#f59e0b; }
+.issue-card.p2 { border-color:#3b82f6; }
+.issue-num { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; opacity:.6; margin-bottom:4px; }
+.issue-title { font-size:13px; font-weight:700; color:#f1f5f9; margin-bottom:6px; }
+.issue-body { font-size:12px; color:#94a3b8; line-height:1.7; }
+.code { font-family:'SF Mono',Menlo,monospace; background:#0f1f3a; padding:1px 6px; border-radius:4px; font-size:11px; color:#7dd3fc; }
+.impact-tag { display:inline-block; margin-top:8px; font-size:10px; padding:2px 8px; border-radius:4px; font-weight:600; }
+.tag-critical { background:#450a0a; color:#fca5a5; }
+.tag-high { background:#451a03; color:#fcd34d; }
+.tag-medium { background:#0c1a3a; color:#93c5fd; }
+
+/* Flamegraph-like timeline */
+.flamegraph { background:#0d1424; border-radius:10px; padding:20px; border:1px solid #1e293b; margin-bottom:24px; }
+.flame-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
+.flame-label { font-size:11px; color:#64748b; width:220px; flex-shrink:0; text-align:right; }
+.flame-bar-wrap { flex:1; background:#1e293b; border-radius:4px; height:22px; overflow:hidden; position:relative; }
+.flame-bar { height:100%; border-radius:4px; display:flex; align-items:center; padding-left:8px; font-size:10px; font-weight:600; white-space:nowrap; }
+.flame-time { font-size:11px; color:#475569; width:60px; flex-shrink:0; }
+.bar-red { background:#7f1d1d; color:#fca5a5; }
+.bar-orange { background:#78350f; color:#fcd34d; }
+.bar-yellow { background:#3b3000; color:#fde68a; }
+.bar-green { background:#14532d; color:#86efac; }
+.bar-blue { background:#1e3a5f; color:#93c5fd; }
+
+/* Code comparison */
+.code-compare { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px; }
+.code-panel { background:#0d1424; border-radius:10px; padding:16px; border:1px solid; }
+.code-panel.bad { border-color:#7f1d1d; }
+.code-panel.good { border-color:#15803d; }
+.code-panel-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+.code-panel.bad .code-panel-title { color:#f87171; }
+.code-panel.good .code-panel-title { color:#4ade80; }
+pre { font-family:'SF Mono',Menlo,monospace; font-size:11px; line-height:1.7; color:#cbd5e1; overflow-x:auto; }
+pre .hl-bad { color:#fca5a5; background:#450a0a; border-radius:2px; }
+pre .hl-good { color:#86efac; background:#052e16; border-radius:2px; }
+pre .hl-comment { color:#475569; }
+
+/* Priority table */
+table { width:100%; border-collapse:collapse; font-size:12px; }
+thead tr { background:#0f1f3a; }
+th { padding:10px 14px; text-align:left; border-bottom:1px solid #1e3a5f; color:#60a5fa; }
+td { padding:9px 14px; border-bottom:1px solid #1e293b; color:#94a3b8; vertical-align:top; }
+tr:nth-child(odd) td { background:#0d1424; }
+tr:nth-child(even) td { background:#111827; }
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; }
+.b-p0 { background:#450a0a; color:#fca5a5; }
+.b-p1 { background:#451a03; color:#fcd34d; }
+.b-p2 { background:#0c1a3a; color:#93c5fd; }
+.b-ok { background:#0a2016; color:#4ade80; }
+.speedup { color:#4ade80; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="canvas">
+
+<h1>Solver V4 · 性能根因分析报告</h1>
+<p class="subtitle">基于真实请求数据（request_1245）· 2026-04-08 · OR-Tools CP-SAT</p>
+
+<!-- Real data metrics -->
+<div class="section-title">📊 真实请求数据快照</div>
+<div class="metrics-row">
+  <div class="metric-card">
+    <div class="metric-val val-red">443</div>
+    <div class="metric-label">Operation 数</div>
+    <div class="metric-sub">31 员工，规模严重不对称</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-val val-yellow">24.4</div>
+    <div class="metric-label">平均候选人/岗位</div>
+    <div class="metric-sub">中位数 27，全量 31 人未过滤</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-val val-red">21,905</div>
+    <div class="metric-label">Assignment 变量总数</div>
+    <div class="metric-sub">理想值应在 5,000~8,000</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-val val-blue">26,555</div>
+    <div class="metric-label">CP-SAT 总变量数</div>
+    <div class="metric-sub">+ 4,650 班次变量</div>
+  </div>
+</div>
+
+<!-- Flame graph: where time goes -->
+<div class="section-title">⏱ 求解时间分配（估算）</div>
+<div class="flamegraph">
+  <div style="font-size:11px;color:#475569;margin-bottom:14px;">基于代码分析和规模计算的时间构成估算，时间轴 = 相对耗时</div>
+
+  <div class="flame-row">
+    <div class="flame-label">🔴 CP-SAT 搜索（搜索空间过大）</div>
+    <div class="flame-bar-wrap"><div class="flame-bar bar-red" style="width:60%">2^21905 搜索空间，约束传播效率低</div></div>
+    <div class="flame-time">~60%</div>
+  </div>
+  <div class="flame-row">
+    <div class="flame-label">🟠 UniqueEmployee 约束构建</div>
+    <div class="flame-bar-wrap"><div class="flame-bar bar-orange" style="width:18%">31 员工 × 443 ops ≈ 3M对检查</div></div>
+    <div class="flame-time">~18%</div>
+  </div>
+  <div class="flame-row">
+    <div class="flame-label">🟡 MinimizeDeviation 目标构建</div>
+    <div class="flame-bar-wrap"><div class="flame-bar bar-yellow" style="width:10%">O(E×shift_vars) = 144,150 次迭代</div></div>
+    <div class="flame-time">~10%</div>
+  </div>
+  <div class="flame-row">
+    <div class="flame-label">🔵 ShiftAssignment 约束构建</div>
+    <div class="flame-bar-wrap"><div class="flame-bar bar-blue" style="width:6%">443 ops × 24 candidates 蕴含约束</div></div>
+    <div class="flame-time">~6%</div>
+  </div>
+  <div class="flame-row">
+    <div class="flame-label">🟢 其他（工时/夜班/日期解析等）</div>
+    <div class="flame-bar-wrap"><div class="flame-bar bar-green" style="width:6%">strptime × N 等零碎开销</div></div>
+    <div class="flame-time">~6%</div>
+  </div>
+</div>
+
+<!-- Root causes -->
+<div class="section-title">🔍 根因分析（按影响排序）</div>
+<div class="issues-grid">
+
+  <div class="issue-card p0">
+    <div class="issue-num">根因 #1 · 最高优先级</div>
+    <div class="issue-title">候选人预过滤形同虚设</div>
+    <div class="issue-body">
+      DataAssemblerV4 有预过滤逻辑，但实测中位数 <strong style="color:#fca5a5">27/31</strong> 名员工成为候选人——过滤率仅 ~13%。<br><br>
+      根本原因：过滤条件仅检查资质（qualification_id + level），但生物制药岗位资质设置宽松，大多数员工都具备，导致候选池基本未缩减。<br><br>
+      影响：Assignment 变量从理想的 ~6,000 膨胀到 21,905，<strong style="color:#fca5a5">搜索空间扩大约 3~4 倍</strong>，CP-SAT 需要更长时间传播约束。
+    </div>
+    <span class="impact-tag tag-critical">影响：搜索空间 ×3~4，是最主要慢的原因</span>
+  </div>
+
+  <div class="issue-card p0">
+    <div class="issue-num">根因 #2 · 最高优先级</div>
+    <div class="issue-title">443 个操作超出单次求解合理规模</div>
+    <div class="issue-body">
+      一个月内 443 个 operation_plan_id，对应 31 名员工。<br><br>
+      UniqueEmployee 约束对每名员工做操作对时间重叠检测：理论最大对数 = 443×442/2 ≈ 98,000 对/员工 × 31 = <strong style="color:#fca5a5">3,034,993 次对比</strong>。即使 sweep-line 有剪枝，仍是模型构建主要瓶颈。<br><br>
+      <span class="code">84 种 operation_id</span> 重复出现 443 次，说明同一工序在多批次中重复——适合按批次或按部门分窗口求解。
+    </div>
+    <span class="impact-tag tag-critical">影响：约束构建 O(E×N²)，443 ops 时已超阈值</span>
+  </div>
+
+  <div class="issue-card p1">
+    <div class="issue-num">根因 #3 · 高优先级</div>
+    <div class="issue-title">MinimizeDeviation 目标存在 O(E²) 内层循环</div>
+    <div class="issue-body">
+      <span class="code">objectives/minimize_deviation.py</span> 的实现：<br>
+      <code style="display:block;background:#0f1117;padding:8px;margin:8px 0;border-radius:4px;font-family:monospace;font-size:11px;color:#fca5a5">for emp_id in all_employees:          # 31次
+    for (e_id,date,shift_id),var       # 4650次
+        in shift_assignments.items():  # ← 全量扫描！
+        if e_id == emp_id: ...</code>
+      实际 144,150 次迭代。正确做法是预先按员工分组，降至 4,650 次。<br>
+      同样问题存在于 <span class="code">balance_night_shifts.py</span>。
+    </div>
+    <span class="impact-tag tag-high">影响：模型构建时间 × 31，可优化为 1x</span>
+  </div>
+
+  <div class="issue-card p1">
+    <div class="issue-num">根因 #4 · 高优先级</div>
+    <div class="issue-title">log_search_progress = True 在生产环境开启</div>
+    <div class="issue-body">
+      <span class="code">solver.parameters.log_search_progress = True</span> 硬编码在 <span class="code">SolverV4.__init__</span>。<br><br>
+      CP-SAT 使用 8 个 worker 并行搜索，每个 worker 在找到更优解时都会写一行日志。对于 300s 求解，可能产生数百条日志，每次日志调用都是系统调用级别的 I/O，<strong style="color:#fcd34d">在求解过程中持续竞争 GIL</strong>，并干扰 CP-SAT 的搜索节奏。<br><br>
+      应改为仅在 <span class="code">SOLVER_DEBUG=1</span> 时开启。
+    </div>
+    <span class="impact-tag tag-high">影响：求解中持续 I/O，预计拖慢 5~15%</span>
+  </div>
+
+  <div class="issue-card p1">
+    <div class="issue-num">根因 #5 · 高优先级</div>
+    <div class="issue-title">strptime 在内层循环中调用</div>
+    <div class="issue-body">
+      <span class="code">work_days_limit.py</span>、<span class="code">night_rest.py</span> 中在员工×日期的内层循环里调用 <span class="code">datetime.strptime(d, "%Y-%m-%d")</span>。<br><br>
+      实测 strptime 比 <span class="code">date.fromisoformat()</span> 慢 <strong style="color:#fcd34d">9.1 倍</strong>（0.221s vs 0.024s per 100k 次）。<br><br>
+      简单替换即可消除此开销，且 <span class="code">date.fromisoformat()</span> 从 Python 3.7+ 均可用。
+    </div>
+    <span class="impact-tag tag-high">影响：日期解析开销减少 9x（10ms→1ms）</span>
+  </div>
+
+  <div class="issue-card p1">
+    <div class="issue-num">根因 #6 · 高优先级</div>
+    <div class="issue-title">Python sum() 替代 LinearExpr.Sum()</div>
+    <div class="issue-body">
+      多处约束使用 <span class="code">sum(coef * var for ...)</span>（Python 内置 sum）构建 CP-SAT 表达式，而非 <span class="code">cp_model.LinearExpr.WeightedSum(vars, coeffs)</span>。<br><br>
+      Python sum 对 CP-SAT 对象会在 Python 层反复创建临时 Add 节点，而 <span class="code">LinearExpr.WeightedSum</span> 直接在 C++ 层批量构建，减少 Python→C++ 边界调用次数。<br><br>
+      影响出现在 <span class="code">standard_hours.py</span>（每员工每月构建一次）和目标函数中。
+    </div>
+    <span class="impact-tag tag-high">影响：模型构建时间减少 20~40%</span>
+  </div>
+
+  <div class="issue-card p2">
+    <div class="issue-num">根因 #7 · 中优先级</div>
+    <div class="issue-title">无 Warm Start（每次重建模型）</div>
+    <div class="issue-body">
+      每次 /api/v4/solve 调用都从空白模型开始：<span class="code">SolverV4()</span> → <span class="code">cp_model.CpModel()</span>。<br><br>
+      当用户只改了 1 个锁定操作后重新求解，仍需跑满 300s。<br><br>
+      CP-SAT 支持 <span class="code">model.AddHint(var, val)</span> 注入上次解作为初始提示。加入暖启动后，轻微改动的重算可在 10~30s 内完成。
+    </div>
+    <span class="impact-tag tag-medium">影响：重算场景从 300s → 10~30s</span>
+  </div>
+
+  <div class="issue-card p2">
+    <div class="issue-num">根因 #8 · 中优先级</div>
+    <div class="issue-title">num_workers=8 硬编码，不适配容器</div>
+    <div class="issue-body">
+      CP-SAT 8 路 worker 在本地 MacBook 可能合适，但在容器（2 vCPU）或 CI 环境中，8 workers 会产生严重线程竞争，反而比 2~4 workers 更慢。<br><br>
+      应改为：<span class="code">min(8, os.cpu_count() or 4)</span>，或通过 <span class="code">SOLVER_NUM_WORKERS</span> 环境变量配置。
+    </div>
+    <span class="impact-tag tag-medium">影响：容器部署时可能比优化前更慢</span>
+  </div>
+
+</div>
+
+<!-- Code fixes -->
+<div class="section-title">🛠 具体修复方案（代码级）</div>
+
+<div style="margin-bottom:16px;font-size:12px;color:#64748b;">以下为最高优先级的代码级修改，每个修复独立可实施</div>
+
+<!-- Fix 1: minimize_deviation -->
+<div style="background:#0d1424;border-radius:10px;padding:16px;border:1px solid #1e293b;margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:10px;">Fix #1 · MinimizeDeviation: O(E²) → O(1) 预分组</div>
+  <div class="code-compare">
+    <div class="code-panel bad">
+      <div class="code-panel-title">❌ 当前实现（O(E × total_shift_vars)）</div>
+<pre><span class="hl-comment"># objectives/minimize_deviation.py  第 89-93 行</span>
+for emp_id in all_employees:       <span class="hl-bad"># 31次外层</span>
+    emp_terms = []
+    for (e_id, date, shift_id), var \
+        in shift_assignments.items():  <span class="hl-bad"># 4650次内层</span>
+        if e_id == emp_id:             <span class="hl-bad"># 逐一比较</span>
+            ...</pre>
+    </div>
+    <div class="code-panel good">
+      <div class="code-panel-title">✅ 修复后（O(shift_vars) 预分组）</div>
+<pre><span class="hl-comment"># 在构建 shift_assignments 后做一次预分组</span>
+from collections import defaultdict
+by_emp = defaultdict(list)
+for (emp_id, date, shift_id), var \
+    in shift_assignments.items():
+    by_emp[emp_id].append((shift_id, var))  <span class="hl-good"># O(1)</span>
+
+<span class="hl-comment"># 目标函数中直接用预分组</span>
+for emp_id in all_employees:
+    for shift_id, var in by_emp[emp_id]:   <span class="hl-good"># 无内层全扫</span>
+        ...</pre>
+    </div>
+  </div>
+</div>
+
+<!-- Fix 2: strptime -->
+<div style="background:#0d1424;border-radius:10px;padding:16px;border:1px solid #1e293b;margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:10px;">Fix #2 · strptime → fromisoformat（9.1x 提速）</div>
+  <div class="code-compare">
+    <div class="code-panel bad">
+      <div class="code-panel-title">❌ 当前（work_days_limit.py, night_rest.py）</div>
+<pre>for d in dates:
+    date_objs.append(
+        <span class="hl-bad">datetime.strptime(d, "%Y-%m-%d").date()</span>
+    )
+<span class="hl-comment"># 每次调用约 2.2μs，100员工×30天 = 6.6ms</span></pre>
+    </div>
+    <div class="code-panel good">
+      <div class="code-panel-title">✅ 修复后（Python 3.7+ 内置）</div>
+<pre>from datetime import date
+for d in dates:
+    date_objs.append(
+        <span class="hl-good">date.fromisoformat(d)</span>
+    )
+<span class="hl-comment"># 每次约 0.24μs，快 9.1x</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Fix 3: LinearExpr -->
+<div style="background:#0d1424;border-radius:10px;padding:16px;border:1px solid #1e293b;margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:10px;">Fix #3 · LinearExpr.WeightedSum 替代 Python sum()</div>
+  <div class="code-compare">
+    <div class="code-panel bad">
+      <div class="code-panel-title">❌ 当前（standard_hours.py 等）</div>
+<pre><span class="hl-comment"># Python sum 逐项构建 Add 节点</span>
+total_hours_expr = <span class="hl-bad">sum(</span>
+    coef * var
+    for coef, var in emp_shift_terms
+<span class="hl-bad">)</span>
+model.Add(total_hours_expr >= min_hours_scaled)</pre>
+    </div>
+    <div class="code-panel good">
+      <div class="code-panel-title">✅ 修复后（C++ 层批量构建）</div>
+<pre>vars_list  = [var  for _, var  in emp_shift_terms]
+coefs_list = [coef for coef, _ in emp_shift_terms]
+total_hours_expr = <span class="hl-good">cp_model.LinearExpr.WeightedSum(</span>
+    <span class="hl-good">vars_list, coefs_list</span>
+<span class="hl-good">)</span>
+model.Add(total_hours_expr >= min_hours_scaled)</pre>
+    </div>
+  </div>
+</div>
+
+<!-- Fix 4: log_search_progress -->
+<div style="background:#0d1424;border-radius:10px;padding:16px;border:1px solid #1e293b;margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:10px;">Fix #4 · 生产环境关闭搜索日志</div>
+  <div class="code-compare">
+    <div class="code-panel bad">
+      <div class="code-panel-title">❌ 当前（core/solver.py 第 36 行）</div>
+<pre>self.solver.parameters.<span class="hl-bad">log_search_progress = True</span>
+self.solver.parameters.num_workers = 8
+self.solver.parameters.linearization_level = 2</pre>
+    </div>
+    <div class="code-panel good">
+      <div class="code-panel-title">✅ 修复后（按环境变量控制）</div>
+<pre>import os
+debug = os.getenv("SOLVER_DEBUG","0") == "1"
+self.solver.parameters.<span class="hl-good">log_search_progress = debug</span>
+workers = int(os.getenv("SOLVER_WORKERS",
+    str(min(8, os.cpu_count() or 4))))
+self.solver.parameters.num_workers = workers</pre>
+    </div>
+  </div>
+</div>
+
+<!-- Fix 5: warm start -->
+<div style="background:#0d1424;border-radius:10px;padding:16px;border:1px solid #1e293b;margin-bottom:12px;">
+  <div style="font-size:12px;font-weight:700;color:#fcd34d;margin-bottom:10px;">Fix #5 · 添加暖启动（Warm Start）</div>
+  <div class="code-compare">
+    <div class="code-panel bad">
+      <div class="code-panel-title">❌ 当前（每次从零开始）</div>
+<pre><span class="hl-comment"># app.py: 每个请求新建求解器，无初始解</span>
+solver = SolverV4()
+result = solver.solve(req)
+<span class="hl-comment"># 用户改动 1 个锁定操作后重算：
+# 仍需全量 300s</span></pre>
+    </div>
+    <div class="code-panel good">
+      <div class="code-panel-title">✅ 修复后（注入上次解作为 hint）</div>
+<pre><span class="hl-comment"># 在 _build_variables 后，_run_solver 前：</span>
+if prev_solution := cache.get(req.window):
+    for (op,pos,emp), var in assignments.items():
+        hint_val = prev_solution.get((op,pos,emp),0)
+        <span class="hl-good">self.model.AddHint(var, hint_val)</span>
+<span class="hl-comment"># 轻微变更重算：10~30s 而非 300s</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- Structural fix: decomposition -->
+<div style="background:#0f1f3a;border-radius:10px;padding:16px;border:1px solid #1e40af;margin-bottom:24px;">
+  <div style="font-size:12px;font-weight:700;color:#60a5fa;margin-bottom:10px;">架构级优化 · 按批次分解求解窗口（最大效益）</div>
+  <div style="font-size:12px;color:#93c5fd;line-height:1.8;">
+    一次性求解 443 个操作是当前慢的<strong style="color:#60a5fa">根本原因</strong>。443 个操作含 84 种操作类型，说明是多批次重叠。<br><br>
+    建议：在后端 DataAssemblerV4 层按<strong style="color:#60a5fa">批次 ID（batch_id）或部门/Phase（USP/DSP）</strong>将操作分组，每组独立调用一次 /api/v4/solve：
+    <br><br>
+    <code style="display:block;background:#0a1628;padding:10px 12px;border-radius:6px;font-family:monospace;font-size:11px;color:#7dd3fc;line-height:1.8;">
+      批次 A（USP，~50 ops）→ Solve → 结果锁定<br>
+      批次 B（DSP，~60 ops）→ Solve（含 A 的 frozen_assignments）→ 结果锁定<br>
+      ...<br>
+      而非：所有批次 443 ops → 单次 Solve（当前）
+    </code>
+    <br>
+    每次求解变量从 21,905 降至 ~2,000~3,000，搜索空间从 2^21905 降至 2^3000 量级，<strong style="color:#4ade80">预计求解时间从 300s 降至 10~30s/批次</strong>。已有 <span class="code">frozen_assignments</span> 字段支持跨批次锁定。
+  </div>
+</div>
+
+<!-- Priority table -->
+<div class="section-title">📋 优化优先级总表</div>
+<table>
+  <thead>
+    <tr>
+      <th>优先级</th>
+      <th>优化项</th>
+      <th>实施难度</th>
+      <th>预期提速</th>
+      <th>改动位置</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="badge b-p0">P0</span></td>
+      <td>按批次/Phase 分解求解窗口</td>
+      <td>中（需 DataAssembler 重构）</td>
+      <td><span class="speedup">10x~30x（最高收益）</span></td>
+      <td><code class="code">DataAssemblerV4.ts</code> + 后端调度逻辑</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p0">P0</span></td>
+      <td>加强候选人预过滤（可用性+连续天数）</td>
+      <td>中</td>
+      <td><span class="speedup">3x~5x 搜索空间压缩</span></td>
+      <td><code class="code">DataAssemblerV4.ts</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p1">P1</span></td>
+      <td>MinimizeDeviation/BalanceNight 预分组</td>
+      <td>低（5行代码）</td>
+      <td><span class="speedup">模型构建快 31x</span></td>
+      <td><code class="code">objectives/minimize_deviation.py</code> 等</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p1">P1</span></td>
+      <td>strptime → date.fromisoformat</td>
+      <td>低（搜索替换）</td>
+      <td><span class="speedup">日期解析快 9x</span></td>
+      <td><code class="code">constraints/*.py</code>（21 处）</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p1">P1</span></td>
+      <td>LinearExpr.WeightedSum 替代 sum()</td>
+      <td>低</td>
+      <td><span class="speedup">模型构建快 20~40%</span></td>
+      <td><code class="code">standard_hours.py</code>, <code class="code">objectives/*.py</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p1">P1</span></td>
+      <td>关闭生产环境 log_search_progress</td>
+      <td>极低（1行）</td>
+      <td><span class="speedup">求解快 5~15%</span></td>
+      <td><code class="code">core/solver.py 第 36 行</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p1">P1</span></td>
+      <td>num_workers 改为环境变量配置</td>
+      <td>极低（3行）</td>
+      <td>容器部署正确利用 CPU</td>
+      <td><code class="code">core/solver.py 第 37 行</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p2">P2</span></td>
+      <td>AddHint() 暖启动（重算场景）</td>
+      <td>中</td>
+      <td><span class="speedup">重算从 300s → 10~30s</span></td>
+      <td><code class="code">core/solver.py</code> + 缓存层</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-p2">P2</span></td>
+      <td>UniqueEmployee 操作预过滤（时间不重叠跳过）</td>
+      <td>低</td>
+      <td>约束构建减少 30~50%</td>
+      <td><code class="code">constraints/unique_employee.py</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge b-ok">长期</span></td>
+      <td>FastAPI + Celery（并发求解）</td>
+      <td>高</td>
+      <td>支持多批次并发，解除阻塞</td>
+      <td><code class="code">solver_v4/app.py</code> 整体替换</td>
+    </tr>
+  </tbody>
+</table>
+
+<div style="margin-top:32px;padding:16px;background:#0a2016;border-radius:10px;border:1px solid #15803d;font-size:12px;color:#86efac;line-height:1.8;">
+  <strong style="color:#4ade80">预计综合提速：</strong><br>
+  P0 优化（分解求解）完成后：300s → 10~30s/批次<br>
+  P1 优化全部完成后（代码层）：额外减少 30~50% 模型构建时间<br>
+  P2 暖启动完成后：重算场景 90% 提速<br>
+  <strong style="color:#4ade80">最终目标：用户体验从"等待 5 分钟"降至"等待 15~30 秒"</strong>
+</div>
+
+<div style="margin:32px auto 0;max-width:1200px;padding-bottom:40px;border-top:1px solid #1e293b;padding-top:20px;display:flex;justify-content:space-between;align-items:center;">
+  <div style="font-size:11px;color:#475569">基于真实请求 request_1245 分析 · 443 ops · 31 employees · 30 days</div>
+  <div style="font-size:11px;color:#334155">Solver V4 Performance Analysis · 2026-04-08</div>
+</div>
+
+</div>
+</body>
+</html>

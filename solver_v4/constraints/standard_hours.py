@@ -31,6 +31,8 @@ class StandardHoursConstraint(BaseConstraint):
     """
     
     name = "StandardHours"
+    config_key = "enable_standard_hours"
+    default_enabled = True
     is_hard = True
 
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

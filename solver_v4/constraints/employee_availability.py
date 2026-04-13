@@ -35,6 +35,8 @@ class EmployeeAvailabilityConstraint(BaseConstraint):
     """
     
     name = "EmployeeAvailability"
+    config_key = "enable_employee_availability"
+    default_enabled = True
     is_hard = True
     
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:

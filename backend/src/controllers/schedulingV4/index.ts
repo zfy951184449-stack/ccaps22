@@ -19,3 +19,4 @@ export { getSolveProgressSSEV4, updateSolveProgressV4 } from './solveProgressSSE
 export { getSolveResultV4, receiveSolveResultV4 } from './solveResultHandler';
 export { applySolveResultV4 } from './applyResultController';
 export { stopSolveV4, getSolveStatusV4, listRunsV4 } from './solveLifecycle';
+export { runPrecheckV4 } from './precheckHandler';

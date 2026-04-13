@@ -28,6 +28,8 @@ class ShareGroupConstraint(BaseConstraint):
     """
     
     name = "ShareGroup"
+    config_key = "enable_share_group"
+    default_enabled = True
     is_hard = True
     
     def __init__(self, logger=None):
