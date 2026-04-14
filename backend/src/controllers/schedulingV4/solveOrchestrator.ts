@@ -71,7 +71,7 @@ async function triggerSolveAsync(
         await updateRunStatus(runId, 'RUNNING', null, 'ASSEMBLING');
 
         const teamIds = config?.team_ids || [];
-        const solverRequest = await DataAssemblerV4.assemble(startDate, endDate, batchIds, teamIds, solveRange);
+        const solverRequest = await DataAssemblerV4.assemble(startDate, endDate, batchIds, teamIds, solveRange, config);
 
         console.log(`[SchedulingV4] Data Assembled for Run ${runId}. RequestID: ${solverRequest.request_id}`);
         console.log(`[SchedulingV4] Candidate Stats: ${solverRequest.operation_demands.length} ops, ${solverRequest.employee_profiles.length} employees`);

@@ -211,4 +211,4 @@ const ManualEditDrawer: React.FC<ManualEditDrawerProps> = ({
     );
 };
 
-export default ManualEditDrawer;
+export default React.memo(ManualEditDrawer);

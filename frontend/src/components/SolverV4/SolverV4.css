@@ -843,6 +843,36 @@
     font-weight: 600;
 }
 
+/* ── Standalone Task Tag ── */
+.asgn-standalone-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    padding: 1px 7px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+}
+
+.asgn-list-sec-hdr.standalone {
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.03);
+}
+
+.asgn-list-sec-hdr.standalone:hover {
+    background: rgba(124, 58, 237, 0.06);
+}
+
+.asgn-list-item.selected .asgn-standalone-tag {
+    background: rgba(124, 58, 237, 0.14);
+}
+
 /* ── Right: Detail Panel ── */
 .asgn-detail-panel {
     flex: 1;

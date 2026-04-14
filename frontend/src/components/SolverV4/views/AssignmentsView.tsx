@@ -5,7 +5,7 @@ import {
     ExclamationCircleOutlined, MinusCircleOutlined,
     ClockCircleOutlined, TeamOutlined, WarningOutlined,
     DownOutlined, RightOutlined, SwapOutlined, DeleteOutlined,
-    StarFilled, InfoCircleOutlined, AppstoreOutlined,
+    StarFilled, InfoCircleOutlined, AppstoreOutlined, ToolOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import '../SolverV4.css';
@@ -185,9 +185,12 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     const groupedData = useMemo(() => {
         const groups: Record<string, { name: string; ops: Operation[] }> = {};
         const independent: Operation[] = [];
+        const standalone: Operation[] = [];
 
         operations.filter(op => op.status === 'COMPLETE').forEach(op => {
-            if (op.share_group_ids) {
+            if (op.batch_code === 'STANDALONE') {
+                standalone.push(op);
+            } else if (op.share_group_ids) {
                 const key = op.share_group_ids;
                 if (!groups[key]) groups[key] = { name: op.share_group_name || '未命名组', ops: [] };
                 groups[key].ops.push(op);
@@ -195,7 +198,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                 independent.push(op);
             }
         });
-        return { groups, independent };
+        return { groups, independent, standalone };
     }, [operations]);
 
     // ── Candidate Calculation ──
@@ -380,6 +383,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         const assigned = op.positions?.filter(p => p.status === 'ASSIGNED').length || 0;
         const total = op.positions?.length || op.required_people || 1;
         const dotCls = op.status === 'COMPLETE' ? 'success' : op.status === 'PARTIAL' ? 'warning' : 'error';
+        const isStandalone = op.batch_code === 'STANDALONE';
 
         return (
             <div key={op.operation_plan_id}
@@ -387,7 +391,11 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                 onClick={() => setSelectedOpId(op.operation_plan_id)}>
                 <span className={`asgn-list-dot ${dotCls}`} />
                 <span className="asgn-list-name" title={op.operation_name}>{op.operation_name}</span>
-                <span className="asgn-list-batch">{op.batch_code}</span>
+                {isStandalone ? (
+                    <span className="asgn-standalone-tag">独立</span>
+                ) : (
+                    <span className="asgn-list-batch">{op.batch_code}</span>
+                )}
                 <span className={`asgn-list-ratio ${assigned < total ? 'short' : ''}`}>
                     {assigned}/{total}人
                 </span>
@@ -411,6 +419,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
 
         const assigned = selectedOp.positions?.filter(p => p.status === 'ASSIGNED').length || 0;
         const total = selectedOp.positions?.length || selectedOp.required_people || 1;
+        const isStandalone = selectedOp.batch_code === 'STANDALONE';
         const statusMap: Record<string, { cls: string; label: string; icon: React.ReactNode }> = {
             COMPLETE: { cls: 'success', label: '已覆盖', icon: <CheckCircleOutlined /> },
             PARTIAL: { cls: 'warning', label: '部分覆盖', icon: <ExclamationCircleOutlined /> },
@@ -422,7 +431,13 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
             <div className="asgn-detail-content">
                 {/* Header */}
                 <h3 className="asgn-detail-title">{selectedOp.operation_name}</h3>
-                <span className="asgn-detail-batch">{selectedOp.batch_code}</span>
+                {isStandalone ? (
+                    <span className="asgn-standalone-tag" style={{ fontSize: 12 }}>
+                        <ToolOutlined style={{ marginRight: 4 }} />独立任务
+                    </span>
+                ) : (
+                    <span className="asgn-detail-batch">{selectedOp.batch_code}</span>
+                )}
 
                 {/* Meta */}
                 <div className="asgn-detail-meta">
@@ -534,6 +549,23 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                         );
                     })}
 
+                    {/* Standalone Tasks */}
+                    {groupedData.standalone.length > 0 && (() => {
+                        const filtered = filterOps(groupedData.standalone);
+                        if (filtered.length === 0) return null;
+                        const collapsed = collapsedGroups.has('_standalone');
+                        return (
+                            <div className="asgn-list-section">
+                                <div className="asgn-list-sec-hdr standalone" onClick={() => toggleGroup('_standalone')}>
+                                    {collapsed ? <RightOutlined /> : <DownOutlined />}
+                                    <ToolOutlined style={{ color: '#722ed1', marginLeft: 4 }} />
+                                    独立任务 ({filtered.length})
+                                </div>
+                                {!collapsed && filtered.map(renderOpListItem)}
+                            </div>
+                        );
+                    })()}
+
                     {/* Independent */}
                     {groupedData.independent.length > 0 && (() => {
                         const filtered = filterOps(groupedData.independent);
@@ -604,4 +636,4 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     );
 };
 
-export default AssignmentsView;
+export default React.memo(AssignmentsView);

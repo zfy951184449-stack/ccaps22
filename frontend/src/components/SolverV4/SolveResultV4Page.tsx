@@ -14,6 +14,7 @@ import {
     UndoOutlined,
     HistoryOutlined,
     WarningOutlined,
+    ToolOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -239,12 +240,19 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
             0.15 * weekendBal
         );
 
+        // Standalone task stats
+        const standaloneOps = (data.operations || []).filter((op: any) => op.batch_code === 'STANDALONE');
+        const standaloneTotal = standaloneOps.length;
+        const standaloneAssigned = standaloneOps.filter((op: any) => op.status === 'COMPLETE').length;
+
         return {
             completion_rate: data.metrics.completion_rate,
             coverage_rate: data.metrics.coverage_rate,
             balanceIndex,
             employeeCount: uniqueEmployeeCount,
             qualityScore,
+            standaloneTotal,
+            standaloneAssigned,
         };
     }, [data, uniqueEmployeeCount]);
 
@@ -616,6 +624,7 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
             placement="right"
             maskClosable={false}
             closable={false}
+            destroyOnClose
             styles={{ body: { padding: 0, background: 'var(--v4-bg-primary, #fafbfc)' } }}
             className="v4-result-drawer"
         >
@@ -705,6 +714,14 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                     {kpiMetrics.qualityScore}<span style={{ fontSize: 14, color: '#999' }}>/100</span>
                                 </span>
                             </div>
+                            {kpiMetrics.standaloneTotal > 0 && (
+                                <div className="v4-kpi-item">
+                                    <span className="v4-kpi-label"><ToolOutlined style={{ marginRight: 2 }} />独立任务</span>
+                                    <span className="v4-kpi-value" data-color={kpiMetrics.standaloneAssigned === kpiMetrics.standaloneTotal ? 'green' : 'amber'}>
+                                        {kpiMetrics.standaloneAssigned}/{kpiMetrics.standaloneTotal}
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         {/* ── View Tab Switcher ── */}

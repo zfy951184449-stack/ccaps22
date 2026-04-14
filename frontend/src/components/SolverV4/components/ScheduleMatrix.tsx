@@ -1,6 +1,7 @@
-import React, { useMemo, useState, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import { Popover } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { FixedSizeList as List } from 'react-window';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 
@@ -11,6 +12,7 @@ const ROW_HEIGHT = 24;
 const MIN_COL_WIDTH = 32;
 const SIDEBAR_WIDTH = 140;
 const STAT_WIDTH = 80;
+const OVERSCAN_COUNT = 5;
 
 dayjs.locale('zh-cn');
 
@@ -24,12 +26,18 @@ interface ScheduleMatrixProps {
 
 type MatrixMode = 'shift' | 'operation';
 
+interface PopoverTarget {
+    empId: number;
+    date: string;
+    rect: { top: number; left: number; width: number; height: number };
+}
+
 /**
  * getShiftStyle — Replicates PersonnelScheduleTable's getShiftStyle logic exactly.
  * Returns Tailwind class names and label for cell rendering.
  */
 function getShiftStyle(shiftName: string | undefined, nominalHours: number, planType: string) {
-    const baseClasses = "flex items-center justify-center w-full h-[20px] rounded-sm text-[9px] font-medium transition-all duration-200 shadow-sm hover:shadow-md cursor-default border border-transparent leading-none";
+    const baseClasses = "flex items-center justify-center w-full h-[20px] rounded-sm text-[9px] font-medium shadow-sm cursor-default border border-transparent leading-none";
 
     if (planType === 'REST' || (!shiftName && nominalHours === 0)) {
         return {
@@ -67,6 +75,141 @@ function getShiftStyle(shiftName: string | undefined, nominalHours: number, plan
     }
 }
 
+// ── Employee data type ──
+interface EmployeeRowData {
+    id: number;
+    name: string;
+    code: string;
+    shifts: Record<string, {
+        shift_name: string;
+        shift_code: string;
+        nominal_hours: number;
+        plan_type: string;
+        start_time?: string;
+        end_time?: string;
+        is_night: boolean;
+    }>;
+    ops: Map<string, string[]>;
+    totalHours: number;
+    nightCount: number;
+    weekendCount: number;
+    hasIssue: boolean;
+}
+
+interface DateInfo {
+    date: string;
+    isWorkday: boolean;
+    dayOfWeek: number;
+}
+
+// ── Memoized Row Component ──
+interface EmployeeRowProps {
+    emp: EmployeeRowData;
+    dates: DateInfo[];
+    mode: MatrixMode;
+    today: string;
+    gridTemplateColumns: string;
+    datesLength: number;
+    onCellClick: (empId: number, date: string, e: React.MouseEvent<HTMLDivElement>) => void;
+}
+
+const EmployeeRow = React.memo<EmployeeRowProps>(({
+    emp, dates, mode, today, gridTemplateColumns, datesLength, onCellClick,
+}) => {
+    const rowIndex = 2; // Not used for grid-row in virtualized mode
+    return (
+        <div
+            className="grid"
+            style={{ gridTemplateColumns, height: ROW_HEIGHT }}
+        >
+            {/* Sidebar Cell (Sticky Left) */}
+            <div
+                className={`sticky left-0 z-30 flex flex-col justify-center px-4 border-b border-r border-gray-200/50 bg-white/90 group ${emp.hasIssue ? 'border-l-2 border-l-red-400' : ''}`}
+                style={{ gridColumn: '1 / 2' }}
+            >
+                <div className="flex items-baseline justify-between w-full">
+                    <span className="text-xs font-medium text-gray-800 truncate" title={emp.name}>
+                        {emp.name}
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-normal truncate ml-1 max-w-[50px] text-right">
+                        {emp.code}
+                    </span>
+                </div>
+            </div>
+
+            {/* Shift Cells */}
+            {dates.map((d, dayIndex) => {
+                const shift = emp.shifts[d.date];
+                const ops = emp.ops.get(d.date) || [];
+                const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
+
+                // Orphaned operation detection: employee has ops but no covering work shift
+                const hasOrphanedOps = ops.length > 0 && (!shift || shift.plan_type === 'REST' || shift.nominal_hours <= 0.01);
+
+                let cellContent: React.ReactNode = null;
+
+                if (mode === 'shift') {
+                    if (shift) {
+                        const style = getShiftStyle(shift.shift_name, shift.nominal_hours, shift.plan_type);
+                        cellContent = (
+                            <div className="relative w-full">
+                                <div className={style.className}>{style.label}</div>
+                            </div>
+                        );
+                    }
+                } else {
+                    // Operation mode
+                    if (ops.length > 0) {
+                        const display = ops.length <= 2
+                            ? ops.map(o => o.length > 3 ? o.slice(0, 3) : o).join('/')
+                            : `${ops[0].slice(0, 3)}+${ops.length - 1}`;
+                        cellContent = (
+                            <div className="flex items-center justify-center w-full h-[20px] rounded-sm text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                                {display}
+                            </div>
+                        );
+                    }
+                }
+
+                return (
+                    <div
+                        key={`${emp.id}-${d.date}`}
+                        className={`
+                            relative p-[2px]
+                            border-b border-r border-gray-100/30
+                            flex items-center justify-center
+                            ${isWeekend ? 'bg-gray-50/30' : ''}
+                            ${hasOrphanedOps ? 'schedule-cell-orphan' : ''}
+                            hover:bg-white/40
+                        `}
+                        style={{ gridColumn: `${dayIndex + 2} / ${dayIndex + 3}` }}
+                    >
+                        <div
+                            style={{ cursor: 'pointer', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={(e) => onCellClick(emp.id, d.date, e)}
+                        >
+                            {cellContent}
+                            {hasOrphanedOps && <span className="schedule-cell-orphan-badge" title="此操作无覆盖班次">!</span>}
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Stats Column (Sticky Right) */}
+            <div
+                className="sticky right-0 z-10 flex items-center justify-center px-1 border-b border-l border-gray-200/50 bg-white/90"
+                style={{ gridColumn: `${datesLength + 2} / ${datesLength + 3}` }}
+            >
+                <span className="text-[9px] text-gray-500 whitespace-nowrap">
+                    {emp.totalHours}h/{emp.nightCount}夜
+                </span>
+            </div>
+        </div>
+    );
+});
+
+EmployeeRow.displayName = 'EmployeeRow';
+
 /**
  * ScheduleMatrix — Employee × Date scheduling matrix
  *
@@ -74,6 +217,12 @@ function getShiftStyle(shiftName: string | undefined, nominalHours: number, plan
  * - CSS Grid layout with sticky headers/sidebar
  * - Compact 24px row height with colored pill shift indicators
  * - Green(日班) / Blue(长白) / Red(夜班) color scheme
+ *
+ * Performance optimizations:
+ * - react-window FixedSizeList for row-level virtualization
+ * - Singleton Popover (only 1 instance, not 1 per cell)
+ * - No backdrop-blur, minimal transitions
+ * - React.memo on EmployeeRow + ScheduleMatrix
  *
  * Adds solver-specific features: mode toggle, operation overlay, edit popover, stats column.
  */
@@ -86,6 +235,11 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
 }) => {
     const [mode, setMode] = useState<MatrixMode>('shift');
     const tableContainerRef = useRef<HTMLDivElement>(null);
+    const listRef = useRef<List>(null);
+
+    // ── Singleton Popover state ──
+    const [popoverTarget, setPopoverTarget] = useState<PopoverTarget | null>(null);
+    const popoverAnchorRef = useRef<HTMLDivElement>(null);
 
     // Build sorted dates from calendar
     const dates = useMemo(() => {
@@ -97,25 +251,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
 
     // Build employee list with stats + shifts
     const employeeData = useMemo(() => {
-        const empMap = new Map<number, {
-            id: number;
-            name: string;
-            code: string;
-            shifts: Record<string, {
-                shift_name: string;
-                shift_code: string;
-                nominal_hours: number;
-                plan_type: string;
-                start_time?: string;
-                end_time?: string;
-                is_night: boolean;
-            }>;
-            ops: Map<string, string[]>;
-            totalHours: number;
-            nightCount: number;
-            weekendCount: number;
-            hasIssue: boolean;
-        }>();
+        const empMap = new Map<number, EmployeeRowData>();
 
         const nonWorkDays = new Set(dates.filter(d => !d.isWorkday).map(d => d.date));
 
@@ -172,8 +308,47 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
 
     const weekdayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
-    // Cell popover content (solver-specific: edit button + operation details)
-    const renderCellPopover = useCallback((emp: typeof employeeData[0], date: string) => {
+    // Grid template columns — shared between header and body rows
+    const gridTemplateColumns = useMemo(() => {
+        return `${SIDEBAR_WIDTH}px repeat(${dates.length}, minmax(${MIN_COL_WIDTH}px, 1fr)) ${STAT_WIDTH}px`;
+    }, [dates.length]);
+
+    // ── Singleton Popover: cell click handler ──
+    const handleCellClick = useCallback((empId: number, date: string, e: React.MouseEvent<HTMLDivElement>) => {
+        const target = e.currentTarget;
+        const rect = target.getBoundingClientRect();
+        setPopoverTarget({ empId, date, rect: { top: rect.top, left: rect.left, width: rect.width, height: rect.height } });
+    }, []);
+
+    // Close popover on scroll
+    const handleScroll = useCallback(() => {
+        if (popoverTarget) setPopoverTarget(null);
+    }, [popoverTarget]);
+
+    // Close popover on click outside
+    useEffect(() => {
+        if (!popoverTarget) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            const popoverEl = document.querySelector('.ant-popover');
+            if (popoverEl && popoverEl.contains(e.target as Node)) return;
+            setPopoverTarget(null);
+        };
+        // Delay to avoid catching the triggering click
+        const timer = setTimeout(() => {
+            document.addEventListener('click', handleClickOutside);
+        }, 0);
+        return () => {
+            clearTimeout(timer);
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [popoverTarget]);
+
+    // Popover content (computed only when target changes)
+    const popoverContent = useMemo(() => {
+        if (!popoverTarget) return null;
+        const emp = employeeData.find(e => e.id === popoverTarget.empId);
+        if (!emp) return null;
+        const { date } = popoverTarget;
         const shift = emp.shifts[date];
         const ops = emp.ops.get(date) || [];
         const dow = weekdayNames[dayjs(date).day()];
@@ -209,6 +384,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                                 (s: any) => s.employee_id === emp.id && s.date === date
                             );
                             if (original) onEditShift(original);
+                            setPopoverTarget(null);
                         }}
                         style={{
                             flex: 1, padding: '4px 8px', fontSize: 12, cursor: 'pointer',
@@ -220,7 +396,32 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                 </div>
             </div>
         );
-    }, [onEditShift, shiftAssignments, employeeData]);
+    }, [popoverTarget, employeeData, shiftAssignments, onEditShift]);
+
+    // ── Virtual list item renderer ──
+    const Row = useCallback(({ index, style }: { index: number; style: React.CSSProperties }) => {
+        const emp = employeeData[index];
+        if (!emp) return null;
+        return (
+            <div style={style}>
+                <EmployeeRow
+                    emp={emp}
+                    dates={dates}
+                    mode={mode}
+                    today={today}
+                    gridTemplateColumns={gridTemplateColumns}
+                    datesLength={dates.length}
+                    onCellClick={handleCellClick}
+                />
+            </div>
+        );
+    }, [employeeData, dates, mode, today, gridTemplateColumns, handleCellClick]);
+
+    // Container height for virtual list
+    const listHeight = useMemo(() => {
+        // Cap at viewport minus header area
+        return Math.min(employeeData.length * ROW_HEIGHT, window.innerHeight - 340);
+    }, [employeeData.length]);
 
     return (
         <div className="schedule-matrix-container">
@@ -242,30 +443,31 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                 </div>
             </div>
 
-            {/* === CSS Grid Table — Same structure as PersonnelScheduleTable === */}
-            <div className="flex-1 flex flex-col bg-white/40 backdrop-blur-xl rounded-b-2xl overflow-hidden relative">
+            {/* === CSS Grid Table — Virtualized === */}
+            <div className="flex-1 flex flex-col bg-white/90 rounded-b-2xl overflow-hidden relative">
                 <div
                     ref={tableContainerRef}
                     className="flex-1 overflow-auto relative w-full"
-                    style={{ scrollBehavior: 'smooth', maxHeight: 'calc(100vh - 300px)' }}
+                    style={{ scrollBehavior: 'smooth' }}
+                    onScroll={handleScroll}
                 >
+                    {/* Sticky Header Row (non-virtualized) */}
                     <div
-                        className="grid relative"
+                        className="grid sticky top-0 z-20"
                         style={{
-                            gridTemplateColumns: `${SIDEBAR_WIDTH}px repeat(${dates.length}, minmax(${MIN_COL_WIDTH}px, 1fr)) ${STAT_WIDTH}px`,
-                            gridTemplateRows: `${HEADER_HEIGHT}px repeat(${employeeData.length}, ${ROW_HEIGHT}px)`,
+                            gridTemplateColumns,
                             minWidth: `${SIDEBAR_WIDTH + dates.length * MIN_COL_WIDTH + STAT_WIDTH}px`,
                         }}
                     >
-                        {/* --- Top Left Corner (Fixed) --- */}
+                        {/* Top Left Corner (Fixed) */}
                         <div
-                            className="sticky top-0 left-0 z-40 bg-white/80 backdrop-blur-xl border-r border-b border-gray-200/50 flex items-center justify-center shadow-sm"
-                            style={{ gridColumn: '1 / 2', gridRow: '1 / 2' }}
+                            className="sticky top-0 left-0 z-40 bg-white/95 border-r border-b border-gray-200/50 flex items-center justify-center shadow-sm"
+                            style={{ gridColumn: '1 / 2', height: HEADER_HEIGHT }}
                         >
                             <span className="text-xs font-semibold text-gray-400 tracking-wide">员工</span>
                         </div>
 
-                        {/* --- Date Headers (Sticky Top) --- */}
+                        {/* Date Headers */}
                         {dates.map((d, index) => {
                             const isToday = d.date === today;
                             const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
@@ -276,14 +478,13 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                                         sticky top-0 z-20 
                                         flex flex-col items-center justify-center
                                         border-b border-r border-gray-200/30 
-                                        bg-white/70 backdrop-blur-xl
-                                        transition-colors duration-200
+                                        bg-white/95
                                         ${isWeekend ? 'bg-gray-50/50' : ''}
                                     `}
-                                    style={{ gridColumn: `${index + 2} / ${index + 3}`, gridRow: '1 / 2' }}
+                                    style={{ gridColumn: `${index + 2} / ${index + 3}`, height: HEADER_HEIGHT }}
                                 >
                                     <div className={`
-                                        flex flex-col items-center justify-center w-6 h-8 rounded-lg transition-all
+                                        flex flex-col items-center justify-center w-6 h-8 rounded-lg
                                         ${isToday ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105' : ''}
                                     `}>
                                         <span className={`text-[10px] font-bold leading-none mb-0.5 ${!isToday && isWeekend ? 'text-gray-400 italic' : ''} ${!isToday && !isWeekend ? 'text-gray-600' : ''}`}>
@@ -297,110 +498,52 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                             );
                         })}
 
-                        {/* --- Stats Header (Sticky Top + Right) --- */}
+                        {/* Stats Header (Sticky Top + Right) */}
                         <div
-                            className="sticky top-0 right-0 z-30 bg-white/80 backdrop-blur-xl border-b border-l border-gray-200/50 flex items-center justify-center shadow-sm"
-                            style={{ gridColumn: `${dates.length + 2} / ${dates.length + 3}`, gridRow: '1 / 2' }}
+                            className="sticky top-0 right-0 z-30 bg-white/95 border-b border-l border-gray-200/50 flex items-center justify-center shadow-sm"
+                            style={{ gridColumn: `${dates.length + 2} / ${dates.length + 3}`, height: HEADER_HEIGHT }}
                         >
                             <span className="text-[9px] font-semibold text-gray-400">统计</span>
                         </div>
+                    </div>
 
-                        {/* --- Employee Rows --- */}
-                        {employeeData.map((emp, empIndex) => {
-                            const rowIndex = empIndex + 2;
-                            return (
-                                <React.Fragment key={emp.id}>
-                                    {/* Sidebar Cell (Sticky Left) */}
-                                    <div
-                                        className={`sticky left-0 z-30 flex flex-col justify-center px-4 border-b border-r border-gray-200/50 bg-white/60 backdrop-blur-xl group hover:bg-white/80 transition-colors ${emp.hasIssue ? 'border-l-2 border-l-red-400' : ''}`}
-                                        style={{ gridColumn: '1 / 2', gridRow: `${rowIndex} / ${rowIndex + 1}` }}
-                                    >
-                                        <div className="flex items-baseline justify-between w-full">
-                                            <span className="text-xs font-medium text-gray-800 truncate" title={emp.name}>
-                                                {emp.name}
-                                            </span>
-                                            <span className="text-[9px] text-gray-400 font-normal truncate ml-1 max-w-[50px] text-right">
-                                                {emp.code}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Shift Cells */}
-                                    {dates.map((d, dayIndex) => {
-                                        const shift = emp.shifts[d.date];
-                                        const ops = emp.ops.get(d.date) || [];
-                                        const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
-
-                                        // Orphaned operation detection: employee has ops but no covering work shift
-                                        const hasOrphanedOps = ops.length > 0 && (!shift || shift.plan_type === 'REST' || shift.nominal_hours <= 0.01);
-
-                                        let cellContent: React.ReactNode = null;
-
-                                        if (mode === 'shift') {
-                                            if (shift) {
-                                                const style = getShiftStyle(shift.shift_name, shift.nominal_hours, shift.plan_type);
-                                                cellContent = (
-                                                    <div className="relative w-full">
-                                                        <div className={style.className}>{style.label}</div>
-                                                    </div>
-                                                );
-                                            }
-                                        } else {
-                                            // Operation mode
-                                            if (ops.length > 0) {
-                                                const display = ops.length <= 2
-                                                    ? ops.map(o => o.length > 3 ? o.slice(0, 3) : o).join('/')
-                                                    : `${ops[0].slice(0, 3)}+${ops.length - 1}`;
-                                                cellContent = (
-                                                    <div className="flex items-center justify-center w-full h-[20px] rounded-sm text-[9px] font-medium bg-amber-50 text-amber-700 border border-amber-100">
-                                                        {display}
-                                                    </div>
-                                                );
-                                            }
-                                        }
-
-                                        return (
-                                            <div
-                                                key={`${emp.id}-${d.date}`}
-                                                className={`
-                                                    relative p-[2px]
-                                                    border-b border-r border-gray-100/30
-                                                    flex items-center justify-center
-                                                    transition-colors duration-150
-                                                    ${isWeekend ? 'bg-gray-50/30' : ''}
-                                                    ${hasOrphanedOps ? 'schedule-cell-orphan' : ''}
-                                                    hover:bg-white/40
-                                                `}
-                                                style={{ gridColumn: `${dayIndex + 2} / ${dayIndex + 3}`, gridRow: `${rowIndex} / ${rowIndex + 1}` }}
-                                            >
-                                                <Popover
-                                                    content={renderCellPopover(emp, d.date)}
-                                                    trigger="click"
-                                                    placement="bottom"
-                                                >
-                                                    <div style={{ cursor: 'pointer', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                        {cellContent}
-                                                        {hasOrphanedOps && <span className="schedule-cell-orphan-badge" title="此操作无覆盖班次">!</span>}
-                                                    </div>
-                                                </Popover>
-                                            </div>
-                                        );
-                                    })}
-
-                                    {/* Stats Column (Sticky Right) */}
-                                    <div
-                                        className="sticky right-0 z-10 flex items-center justify-center px-1 border-b border-l border-gray-200/50 bg-white/60 backdrop-blur-sm"
-                                        style={{ gridColumn: `${dates.length + 2} / ${dates.length + 3}`, gridRow: `${rowIndex} / ${rowIndex + 1}` }}
-                                    >
-                                        <span className="text-[9px] text-gray-500 whitespace-nowrap">
-                                            {emp.totalHours}h/{emp.nightCount}夜
-                                        </span>
-                                    </div>
-                                </React.Fragment>
-                            );
-                        })}
+                    {/* Virtualized Employee Rows */}
+                    <div style={{ minWidth: `${SIDEBAR_WIDTH + dates.length * MIN_COL_WIDTH + STAT_WIDTH}px` }}>
+                        <List
+                            ref={listRef}
+                            height={listHeight}
+                            itemCount={employeeData.length}
+                            itemSize={ROW_HEIGHT}
+                            width="100%"
+                            overscanCount={OVERSCAN_COUNT}
+                        >
+                            {Row}
+                        </List>
                     </div>
                 </div>
+
+                {/* Singleton Popover — only 1 instance for entire matrix */}
+                {popoverTarget && (
+                    <Popover
+                        content={popoverContent}
+                        open={!!popoverTarget}
+                        trigger={[]}
+                        placement="bottom"
+                        onOpenChange={(open) => { if (!open) setPopoverTarget(null); }}
+                    >
+                        <div
+                            ref={popoverAnchorRef}
+                            style={{
+                                position: 'fixed',
+                                top: popoverTarget.rect.top + popoverTarget.rect.height,
+                                left: popoverTarget.rect.left + popoverTarget.rect.width / 2,
+                                width: 1,
+                                height: 1,
+                                pointerEvents: 'none',
+                            }}
+                        />
+                    </Popover>
+                )}
 
                 <style>{`
                     .schedule-matrix-container .no-scrollbar::-webkit-scrollbar {
@@ -414,11 +557,12 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                         background: rgba(0,0,0,0.1);
                         border-radius: 3px;
                     }
-                `}</style>
+                `}
+                </style>
             </div>
 
         </div>
     );
 };
 
-export default ScheduleMatrix;
+export default React.memo(ScheduleMatrix);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Modal, Switch, List, Typography, Button, Space, Select, Divider, InputNumber } from 'antd';
-import { SettingOutlined, UndoOutlined, SaveOutlined, TeamOutlined } from '@ant-design/icons';
+import { SettingOutlined, UndoOutlined, SaveOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -16,6 +16,7 @@ export interface SolverConfig {
     enable_max_consecutive_rest_days: boolean; // NEW
     enable_standard_hours: boolean;
     enable_night_rest: boolean;
+    enable_no_isolated_night_shift: boolean;
     enable_night_shift_interval: boolean;
     enable_balance_night_shifts: boolean;
     enable_prefer_standard_shift: boolean;
@@ -49,6 +50,11 @@ export interface SolverConfig {
     allow_position_vacancy: boolean;
     objective_weight_vacancy: number;
     off_hours_multiplier: number;
+
+    // Standalone Tasks
+    enable_standalone_tasks: boolean;
+    allow_standalone_vacancy: boolean;
+    objective_weight_standalone_vacancy: number;
 }
 
 export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
@@ -62,6 +68,7 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     enable_max_consecutive_rest_days: true,
     enable_standard_hours: true,
     enable_night_rest: true,
+    enable_no_isolated_night_shift: true,
     enable_night_shift_interval: true,
     enable_balance_night_shifts: true,
     enable_prefer_standard_shift: false,
@@ -95,6 +102,11 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     allow_position_vacancy: false,
     objective_weight_vacancy: 10000,
     off_hours_multiplier: 1.5,
+
+    // Standalone Task Defaults
+    enable_standalone_tasks: true,
+    allow_standalone_vacancy: true,
+    objective_weight_standalone_vacancy: 5000,
 };
 
 interface SolverConfigurationModalProps {
@@ -178,6 +190,7 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_max_consecutive_rest_days', title: '最大连续休息天数', description: '限制连续休息天数，防止长期缺勤' },
         { key: 'enable_standard_hours', title: '标准工时合规', description: '确保排班符合法定工时要求' },
         { key: 'enable_night_rest', title: '夜班后休息', description: '夜班后强制安排休息日' },
+        { key: 'enable_no_isolated_night_shift', title: '禁止孤立夜班', description: '夜班前一天必须是白班，禁止休息后直接上夜班' },
         { key: 'enable_night_shift_interval', title: '夜班间隔', description: '两次夜班之间的最小间隔天数' },
         { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
         { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '无操作需求时优先安排标准班（白班）' },
@@ -339,6 +352,64 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                         </div>
                     </div>
                 )}
+
+                <Divider orientation="left" style={{ margin: '12px 0' }}>独立任务</Divider>
+
+                <div style={{ background: '#f5f0ff', padding: 16, borderRadius: 8, border: '1px solid #d3adf7', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                        <ToolOutlined style={{ marginRight: 8, color: '#722ed1' }} />
+                        <Text strong style={{ color: '#531dab' }}>独立任务配置</Text>
+                    </div>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+                        控制值班任务（周期/弹性/临时）是否参与自动排班及其空缺策略。
+                    </Text>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {/* Enable standalone tasks */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                                <Text strong style={{ fontSize: 13 }}>纳入独立任务</Text>
+                                <br />
+                                <Text type="secondary" style={{ fontSize: 12 }}>启用后，当月有效的独立任务将参与自动排班</Text>
+                            </div>
+                            <Switch
+                                checked={config.enable_standalone_tasks}
+                                onChange={() => handleToggle('enable_standalone_tasks')}
+                            />
+                        </div>
+
+                        {/* Allow vacancy */}
+                        {config.enable_standalone_tasks && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, borderLeft: '2px solid #d3adf7' }}>
+                                <div>
+                                    <Text strong style={{ fontSize: 13 }}>允许独立任务空缺</Text>
+                                    <br />
+                                    <Text type="secondary" style={{ fontSize: 12 }}>无合适候选人时允许岗位留空</Text>
+                                </div>
+                                <Switch
+                                    checked={config.allow_standalone_vacancy}
+                                    onChange={() => handleToggle('allow_standalone_vacancy')}
+                                />
+                            </div>
+                        )}
+
+                        {/* Vacancy weight */}
+                        {config.enable_standalone_tasks && config.allow_standalone_vacancy && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, borderLeft: '2px solid #d3adf7' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>空缺惩罚权重</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={100}
+                                    max={100000}
+                                    step={1000}
+                                    value={config.objective_weight_standalone_vacancy}
+                                    onChange={(val) => handleWeightChange('objective_weight_standalone_vacancy', val)}
+                                    style={{ width: 100 }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
 
                 <Divider orientation="left" style={{ margin: '12px 0' }}>优化目标</Divider>
                 <List

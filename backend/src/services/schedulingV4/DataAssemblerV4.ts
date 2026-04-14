@@ -205,7 +205,8 @@ export class DataAssemblerV4 {
         endDate: string,
         batchIds: number[],
         teamIds: number[] = [], // Optional Team Filtering
-        solveRange?: { start_date: string; end_date: string } // Optional sub-range for interval solving
+        solveRange?: { start_date: string; end_date: string }, // Optional sub-range for interval solving
+        config?: Record<string, any> // Optional solver config (standalone toggle, etc.)
     ): Promise<V4SolverRequest> {
         const requestId = `V4-${Date.now()}`;
 
@@ -247,8 +248,11 @@ export class DataAssemblerV4 {
         // [OPTIMIZATION] Calculate Candidate Lists
         const enrichedOperations = await this.enrichOperationsWithCandidates(operationsData, employees);
 
-        // [NEW] Fetch and enrich Standalone Tasks
-        const standaloneTasks = await this.fetchAndEnrichStandaloneTasks(startDate, endDate, employees);
+        // [NEW] Fetch and enrich Standalone Tasks (conditionally based on config)
+        const enableStandalone = config?.enable_standalone_tasks !== false; // default: true
+        const standaloneTasks = enableStandalone
+            ? await this.fetchAndEnrichStandaloneTasks(startDate, endDate, employees)
+            : [];
 
         // Merge operations and standalone tasks
         const allDemands = [...enrichedOperations, ...standaloneTasks];
@@ -305,7 +309,13 @@ export class DataAssemblerV4 {
                 frozen_shifts: frozenShifts,
                 frozen_assignments: frozenAssignments,
             } : {}),
-            config: {} // TODO: Add config if needed
+            config: {
+                // Forward standalone task config to solver
+                ...(enableStandalone ? {
+                    allow_standalone_vacancy: config?.allow_standalone_vacancy ?? true,
+                    objective_weight_standalone_vacancy: config?.objective_weight_standalone_vacancy ?? 5000,
+                } : {}),
+            }
         };
     }
 

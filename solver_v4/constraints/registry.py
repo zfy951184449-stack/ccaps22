@@ -26,6 +26,7 @@ from constraints.work_days_limit import MaxConsecutiveWorkDaysConstraint
 from constraints.consecutive_rest_limit import MaxConsecutiveRestDaysConstraint
 from constraints.standard_hours import StandardHoursConstraint
 from constraints.night_rest import NightRestConstraint
+from constraints.no_isolated_night_shift import NoIsolatedNightShiftConstraint
 from constraints.night_shift_interval import NightShiftIntervalConstraint
 from constraints.special_shift_joint_coverage import SpecialShiftJointCoverageConstraint
 from constraints.prefer_standard_shift import PreferStandardShiftConstraint
@@ -51,6 +52,7 @@ SHIFT_CONSTRAINTS = [
     MaxConsecutiveRestDaysConstraint,
     StandardHoursConstraint,
     NightRestConstraint,
+    NoIsolatedNightShiftConstraint,     # Forbid rest→night sequence
     NightShiftIntervalConstraint,
     SpecialShiftJointCoverageConstraint,
     PreferStandardShiftConstraint,      # Block SPECIAL when STANDARD suffices
