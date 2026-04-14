@@ -18,7 +18,6 @@ The repo now prefers short entry docs, conditional skills, and one optional work
 | Biopharma process semantics | Covered | `.agent/skills/biopharma-cmo/SKILL.md`, `docs/biopharma-cmo-domain.md` | Skill routes to the minimum required references. |
 | Biopharma roster semantics | Covered | `.agent/skills/biopharma-roster/SKILL.md`, `docs/scheduling_principles.md` | Loaded only when workforce logic matters. |
 | Execution plans and follow-up tracking | Covered | `docs/exec-plans/README.md`, `docs/exec-plans/` | Durable multi-step work lives here. |
-| Deprecated mirror control | Covered | `.agents/README.md`, `.agents/rules/README.md` | Prevents `.agents/` from becoming a second source of truth. |
 | Security, auth, and secrets | Not covered | none | No dedicated agent-doc artifact yet. |
 | Performance and load guardrails | Not covered | none | Still handled ad hoc inside task-specific docs or code. |
 

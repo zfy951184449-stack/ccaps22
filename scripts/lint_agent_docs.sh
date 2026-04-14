@@ -18,8 +18,6 @@ required_paths=(
   ".agent/skills/biopharma-cmo/agents/openai.yaml"
   ".agent/skills/biopharma-roster/SKILL.md"
   ".agent/skills/biopharma-roster/agents/openai.yaml"
-  ".agents/README.md"
-  ".agents/rules/README.md"
   "docs/README.md"
   "docs/ARCHITECTURE.md"
   "docs/agent-rule-coverage-matrix.md"
@@ -67,20 +65,10 @@ if [[ "$agent_rule_files" != ".agent/rules/README.md" ]]; then
   exit 1
 fi
 
-deprecated_agent_files="$(find .agents -type f | sort)"
-expected_deprecated=$'.agents/README.md\n.agents/rules/README.md'
-if [[ "$deprecated_agent_files" != "$expected_deprecated" ]]; then
-  echo ".agents must contain only deprecated mirror notes." >&2
-  printf 'Actual files:\n%s\n' "$deprecated_agent_files" >&2
+if [[ -e ".agents" ]]; then
+  echo ".agents must not exist in the cleaned layout." >&2
   exit 1
 fi
-
-for path in .agents/README.md .agents/rules/README.md; do
-  if ! rg -Fq "deprecated" "$path"; then
-    echo "$path must explicitly say it is deprecated." >&2
-    exit 1
-  fi
-done
 
 for yaml_path in .agent/skills/*/agents/openai.yaml; do
   for key in name version summary default_prompt; do
@@ -117,7 +105,6 @@ import sys
 ROOT = Path('.').resolve()
 DOCS = [ROOT / 'AGENTS.md']
 DOCS += sorted((ROOT / '.agent').rglob('*.md'))
-DOCS += sorted((ROOT / '.agents').rglob('*.md'))
 DOCS += sorted((ROOT / 'docs').glob('*.md'))
 DOCS += [ROOT / 'docs/exec-plans/README.md', ROOT / 'docs/exec-plans/tech-debt-tracker.md']
 DOCS += sorted((ROOT / 'docs/exec-plans/active').glob('*.md'))
@@ -146,7 +133,7 @@ def should_check(ref: str) -> bool:
     if ' ' in ref:
         return False
     allowed_prefixes = (
-        './', '../', '.agent/', '.agents/', 'docs/', 'backend/', 'frontend/',
+        './', '../', '.agent/', 'docs/', 'backend/', 'frontend/',
         'frontend-next/', 'solver_v4/', 'scripts/', 'database/', 'archive/',
         'README.md', 'AGENTS.md'
     )

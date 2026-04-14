@@ -1,6 +1,6 @@
 # Codex Harness Notes
 
-`MFG8APS` no longer relies on a large in-repo prompt bundle for Codex entry.
+`MFG8APS` no longer supports the old in-repo Codex harness.
 
 Use this read order instead:
 
@@ -12,7 +12,8 @@ Use this read order instead:
 
 - Keep repo-level agent docs short and routing-oriented.
 - Prefer conditional skills over always-on role prompts.
-- Treat wrapper scripts such as `scripts/codex_harness_entry.sh` as compatibility helpers, not as proof that a full in-tree harness implementation exists.
+- Do not use the old Codex harness entry script; that entrypoint is retired.
+- Do not assume the old in-repo harness manager exists or should be restored for normal repo use.
 
 ## Validation
 

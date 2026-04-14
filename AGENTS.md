@@ -11,7 +11,6 @@ Rules for context hygiene:
 
 - Treat `.agent/` as the only active agent-doc source of truth.
 - Do not scan `.agent/` recursively by default.
-- Do not load `.agents/`; it is deprecated compatibility only.
 - Load `.agent/workflows/multi-persona-task.md` only when the task needs extra review structure.
 - Load a specific skill under `.agent/skills/` only when the task clearly matches that domain.
 

@@ -21,7 +21,3 @@ Default behavior:
 - Use persona cards only as optional role reminders; they are not a mandatory orchestration protocol.
 - Use biopharma skills only when the request depends on bioprocess or roster semantics.
 - `.agent/innovations_log.md` is manual reference only. Do not mention it unless the user asks.
-
-## Deprecated Path
-
-- `.agents/` is not active. Ignore it except for migration notes.
