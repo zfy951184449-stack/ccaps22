@@ -18,7 +18,7 @@ Build `frontend-next/` as an independent Next.js workspace for the Precision Lab
 
 - Legacy frontend runtime entry is `frontend/src/App.tsx`; frontend-next runtime entry is `frontend-next/src/app/layout.tsx`.
 - Backend runtime entry remains `backend/src/server.ts` and continues to own the `/api` contract surface.
-- Repo-level routing, verification, and long-running work tracking rules live in `AGENTS.md`, `.agent/rules/`, and `docs/exec-plans/README.md`.
+- Repo-level routing, verification, and long-running work tracking rules live in `AGENTS.md`, `.agent/index.md`, and `docs/exec-plans/README.md`.
 - `frontend-next` must preserve legacy URLs, remain fully isolated by naming and package boundaries, and enforce a first-party Precision Lab design system.
 
 ## Execution steps

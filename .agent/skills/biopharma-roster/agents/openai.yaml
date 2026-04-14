@@ -1,3 +1,4 @@
 name: biopharma-roster
 version: 1
-summary: Workforce scheduling semantics for biopharma CMO
+summary: Workforce, qualification, handover, and rest semantics for biopharma CMO APS
+default_prompt: "Use this skill only for biopharma workforce or shift semantics. Read only the listed references unless the task needs more."

@@ -5,61 +5,30 @@ description: Use when the task involves biopharma CMO production planning, APS s
 
 # Biopharma CMO
 
-Use this skill when the task depends on real biopharmaceutical CMO process semantics rather than generic manufacturing assumptions.
+Use this skill only when the task depends on real biopharma process, equipment, quality, or utility semantics.
 
-## When to use
-
-Trigger this skill for tasks involving any of:
+## Trigger
 
 - USP / DSP / campaign / batch / ancillary flow semantics
-- hold time / zero-wait / shelf life / QC release / sterility blind period
+- hold time / zero-wait / QC release / sterility blind period
 - CIP / SIP / DHT / CHT / changeover / turnover
-- WFI / PW / CIP skid / utility leveling / suite mutex / pre-post viral segregation
-- APS scheduling behavior in API, database, solver, or UI
+- WFI / PW / CIP skid / suite segregation / pre-post viral boundaries
+- APS behavior that depends on the above terms
 
-## Trigger governance with `biopharma-roster`
+## Read Order
 
-- Use only `biopharma-cmo` for pure process/equipment/quality/utility constraints.
-- Use only `biopharma-roster` for pure shift/qualification/handover/gowning/rest work.
-- Use both skills when process scheduling and workforce coverage are coupled.
+1. `references/process-constraints.md`
+2. `references/repo-mapping.md` only if you need contract or UI mapping details
 
-Priority order:
+Read only these files by default. Do not open all references unless the task needs them.
 
-1. `FLOW_WINDOW` + `QUALITY_GATE` + `SPACE_SEGREGATION`
-2. `EQUIPMENT_STATE` + `UTILITY_CAPACITY`
-3. `WORKFORCE_COVERAGE`
+## Use With `biopharma-roster`
 
-## Required workflow
+- Add `biopharma-roster` only when workforce coverage, qualification, handover, gowning, or rest rules are part of the same task.
 
-1. Read `references/process-constraints.md` first (global semantic source).
-2. Read `references/repo-mapping.md` for contract mapping.
-3. If workforce logic appears, load `biopharma-roster` before finalizing.
-4. Treat product-specific values as data; do not invent constants.
+## Non-Negotiables
 
-## Mandatory interfaces
-
-Every rule/check must be mappable to:
-
-- `constraint_code`
-- `severity`
-- `hard_or_soft`
-- `violation_message_template`
-
-And status semantics must preserve:
-
-- task: `completed` vs `released`
-- equipment: `cleaning_cip`, `sterilizing_sip`, `dirty_hold`, `clean_hold`
-- QC and material states as explicit enums
-
-## Non-negotiables
-
-- Do not model biopharma CMO as generic job shop.
-- Do not silently reschedule to hide infeasibility.
-- Do not flatten quality gates into generic completion.
-- Do not collapse equipment to idle/busy when cleaning/hold states matter.
-- Do not redefine terms already fixed by global references.
-
-## References
-
-- `references/process-constraints.md`
-- `references/repo-mapping.md`
+- Do not model biopharma CMO as a generic job shop.
+- Do not hide infeasibility by silent rescheduling.
+- Preserve `completed` vs `released`.
+- Preserve equipment states such as `cleaning_cip`, `sterilizing_sip`, `dirty_hold`, and `clean_hold`.

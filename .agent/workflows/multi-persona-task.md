@@ -1,31 +1,32 @@
 ---
-description: 多人格工作流
+description: 有限状态、单代理优先的可选工作流
 ---
 
-为了实现彻底的自我驱动和“零人工管理”（Vibe Coding），任何一次功能的下界迭代或基础问题的抛出，都必须必须严格且完整地经历以下 8 层闭环。各个节点的输出都要求高度且直接通过聊天窗口暴露给用户，保持全白盒透明模式：
-阶段 1: 统一入口与对接 (Intake)
-主导角色： 🎙️ 主持人 (Host)
-动作： 用户下发一条指令下达（哪怕只是一句话或随笔需求）。Host 必须立刻截获并接管整个体系的引导。“Host收到，开始分发给规划师评估...”，宣告启动并透明化开始工作流轮询。
-阶段 2: 全局研判与规划 (Planning，含 Challenger 辩论)
-主导角色： 🧠 统筹规划师 (Planner) & 💡 挑战者 (Challenger)
-动作：
-Challenger 率先抛出刁难： 强制输出至少一条逆向洞察或激进重构建议。
-Planner 作答与文档撰写： Planner 拿定底座框架，输出极度详尽的实施计划，并且必须在出具的主计划中单开一节，明确书面回复是否采纳 Challenger 的建议及核心理由。同时，Planner 需在此阶段亲自动手完成所有非代码类相关文档的编撰和完善落地，不能推给下游。
-纪律直播： Challenger 的观点和 Planner 最终的“答复+实施计划”必须共同作为清晰的日志呈列给主屏幕用户核阅。
-阶段 3: 架构审查防腐打回 (Assessment)
-主导角色： 🛡️ 评估员 (Assessor)
-动作： Assessor 开展终极安全排雷。双重规则底线：1. 第一轮强制揪出计划中至少一个漏洞（设计冗余、边界不清等）并打回！2. 强制核查 Planner 是否在计划中正面评估回复了 Challenger 的点子，如敷衍无视，立刻一票否决打回！
-流转纠编： 使用一票否决权退回 Planner 要求重修。Planner 必须对 Assessor 的质询进行逐条的“补丁回复”。内循环重修直至缺陷双倍清零，方可交出给下游。
-阶段 4: 分层执行开发 (Execution)
-主导角色： 👨‍💻 程序员 (Coder)
-动作： 纯看架构图纸写源码并执行终端环境命令。纪律红线：Coder 严禁越界修改或创建任何项目业务说明文档、系统逻辑图等非代码文档资产，一旦碰到文档漏洞，请回滚反馈。 解决碰壁 Bug 全靠在终端独立折腾，严禁偏离上级定好的架构逻辑。
-阶段 5: 静态审查与底层验证 (Code QA)
-主导角色： 🐞 质量保证工程师 (QA)
-动作： 代码落盘完毕，QA 接管。查代码拼写、全盘 Lint、排代码深层逻辑以及推到验证跑单元测。
-内循环自驱： 一有 Error、Types 错误，抛回给 Coder 修改。跑起 第一重内部自我闭环修复 (上限 3-5 次)，直到底层无懈可击。这里发生的打脸和报错重试的痕迹也需要对人类反馈展示。
-阶段 6: 版本库清理与封口 (Archiving)
-主导角色： 🧹 清洁工 (Cleaner)
-动作： 所有测试彻底变绿后。Cleaner 大扫除，铲平在 QA 和 Test Engineer 试跑阶段顺手创建的脱节文件、无意义垃圾测试包及废弃残留信息。随后进行收官的 Git Add 打包与精准精炼的代码级 Commit 动作。
-阶段 7: 使命交付阶段性汇报 (Delivery)
-主导角色： 🎙️ 主持人 (Host)
-动作： 主台亮灯。Host 向用户郑重递交开发循环里程碑汇报。“本次完成的闭环成果、在这个自治系统里碰到了哪些自动排出的 Bug 我们怎样化解了危机，以及最后在创新日志文件 innovations_log.md 里躺着两点未过审的天马行空方案供您有空甄选闲读...”。宣告休眠，完毕。
+# Multi-Persona Workflow
+
+This workflow is optional. The default path is still single-agent execution.
+
+Use this workflow only when the task is cross-layer, high-risk, or likely to benefit from one extra review pass.
+
+## Finite State Path
+
+1. `Intake`
+   - Confirm the task and success criteria.
+2. `Repo grounding`
+   - Read the smallest set of files needed to remove ambiguity.
+3. `Plan or execute`
+   - For planning-heavy work, produce a concrete plan.
+   - For straightforward work, execute directly.
+4. `Optional review`
+   - One reviewer-style pass is allowed if the task changes public contracts, cross-layer behavior, or risky data semantics.
+   - At most one pass. No recursive handoff.
+5. `Verification / delivery`
+   - Run the relevant checks once and report the result.
+
+## Guardrails
+
+- Do not require persona fan-out by default.
+- Do not require any mandatory reject cycle.
+- Do not turn internal checks into user-facing debate logs.
+- Do not mention `.agent/innovations_log.md` unless the user explicitly asks.
+- Do not auto-commit or auto-publish changes as part of this workflow.

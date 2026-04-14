@@ -42,7 +42,7 @@ Read in this order:
 1. `frontend-next/src/app/` route entry or layout
 2. `frontend-next/src/features/` and `frontend-next/src/design-system/`
 3. `frontend-next/src/services/`
-4. `frontend-next/src/entities/`
+4. `frontend-next/src/lib/`
 
 Use this lane when changing the independent Next.js workspace, first-party design system, or frontend-next route shells.
 
@@ -51,7 +51,7 @@ Use this lane when changing the independent Next.js workspace, first-party desig
 Read in this order:
 
 1. `backend/src/services/schedulingV4/DataAssemblerV4.ts`
-2. `backend/src/controllers/schedulingV4Controller.ts` and related backend consumers
+2. `backend/src/controllers/schedulingV4/` and related backend consumers
 3. `solver_v4/contracts/`
 4. `solver_v4/constraints/` and `solver_v4/core/`
 5. apply/result consumers in backend and `frontend/src/components/SolverV4/`
@@ -61,19 +61,19 @@ Use this lane when changing request assembly, solver contracts, constraints, app
 ## Cross-Layer Contract Hotspots
 
 - V4 scheduling request/response path:
-  `backend/src/services/schedulingV4/DataAssemblerV4.ts` -> `backend/src/controllers/schedulingV4Controller.ts` -> `solver_v4/contracts/` -> `solver_v4/core/` -> `frontend/src/components/SolverV4/`
+  `backend/src/services/schedulingV4/DataAssemblerV4.ts` -> `backend/src/controllers/schedulingV4/` -> `solver_v4/contracts/` -> `solver_v4/core/` -> `frontend/src/components/SolverV4/`
 - Shift linkage and status semantics:
-  `AGENTS.md`, `docs/LLM_DB_GUIDELINES.md`, and `docs/db-consistency-rules.md`
+  `AGENTS.md`, `.agent/index.md`, `docs/LLM_DB_GUIDELINES.md`, and `docs/db-consistency-rules.md`
 - Biopharma process semantics:
   `docs/scheduling_principles.md`, `docs/biopharma-cmo-domain.md`, and `docs/biopharma-cmo-rules.md`
 
 ## Source-Of-Truth Docs
 
 - Repo-wide routing and hard invariants: `AGENTS.md`
-- Active executable rules: `.agent/rules/README.md`
+- Active agent entry and hygiene rules: `.agent/index.md`, `.agent/rules/README.md`
 - Database semantics and field traps: `docs/LLM_DB_GUIDELINES.md`
 - DB ambiguity clarifications: `docs/db-consistency-rules.md`
 - Scheduling semantics: `docs/scheduling_principles.md`
 - Biopharma CMO semantics: `docs/biopharma-cmo-domain.md`, `docs/biopharma-cmo-rules.md`
 - Multi-step work tracking: `docs/exec-plans/`
-- Manual procedures: `.agent/workflows/`
+- Optional workflow guidance: `.agent/workflows/multi-persona-task.md`

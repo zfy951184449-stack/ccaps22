@@ -19,10 +19,10 @@ Use it for facts that must survive beyond a single chat or PR:
   - `frontend-visual-language.md`
   - `frontend-next-visual-language.md`
   - `../AGENTS.md`
+  - `../.agent/index.md`
   - `../.agent/rules/README.md`
-  - `../.agent/workflows/add-constraint.md`
-  - `../.agent/workflows/codex-v4-verification.md`
-  - `../.agent/workflows/maintain-rules.md`
+  - `../.agent/workflows/multi-persona-task.md`
+  - `../.agent/personas/README.md`
 - Database and API semantics:
   - `LLM_DB_GUIDELINES.md`
   - `db-consistency-rules.md`
@@ -48,5 +48,6 @@ Use it for facts that must survive beyond a single chat or PR:
 - Update docs in the same change when code behavior or business semantics change.
 - Put durable knowledge here instead of relying on chat history, Slack, or oral memory.
 - If guidance becomes checkable, prefer moving it into scripts, tests, or lint rules.
+- Keep agent entry docs short and route-oriented. Do not turn them into long prompt bundles.
 - Keep cross-layer navigation current in `ARCHITECTURE.md` when entrypoints or ownership boundaries change.
 - For active runtime surface, trust executable entry points first (`frontend/src/App.tsx`, `frontend-next/src/app/layout.tsx`, `backend/src/server.ts`) and treat generated reports as secondary evidence unless regenerated.
