@@ -208,7 +208,7 @@ def solve_endpoint():
         return jsonify({"error": str(e), "type": "INTERNAL_ERROR"}), 500
 
 def main():
-    port = int(os.environ.get("SOLVER_V4_PORT", 5005))
+    port = int(os.environ.get("PORT", os.environ.get("SOLVER_V4_PORT", 5005)))
     debug = os.environ.get("FLASK_DEBUG", "0") == "1"
     logger.info(f"Starting Solver V4 on port {port}")
     app.run(host="0.0.0.0", port=port, debug=debug)

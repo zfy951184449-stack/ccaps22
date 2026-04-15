@@ -55,6 +55,8 @@ database/aps_system/
 # Environment and local settings
 # .env
 .env.local
+.env.cloud
+.env.production
 .vscode/
 .DS_Store
 *.swp
