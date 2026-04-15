@@ -32,6 +32,12 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 600s;
+
+        # SSE (Server-Sent Events) support: disable buffering
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+        proxy_set_header X-Accel-Buffering no;
     }
 
     # WebSocket for solver progress
@@ -41,6 +47,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_read_timeout 600s;
     }
 
     # SPA: all other routes -> index.html
@@ -50,12 +57,9 @@ server {
 }
 NGINX_CONF
 
-# nginx:alpine image auto-processes /etc/nginx/templates/*.template
-# using envsubst, but only for specified vars (won't touch $host, $uri, etc.)
 ENV PORT=8080
 ENV BACKEND_URL=http://localhost:3001
 
 EXPOSE 8080
 
-# Only substitute our custom env vars, leave nginx vars ($host etc) alone
 CMD ["/bin/sh", "-c", "envsubst '$PORT $BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
