@@ -50,6 +50,7 @@ import standaloneTaskRoutes from './routes/standaloneTaskRoutes';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const HOST = process.env.HOST || '0.0.0.0';
 
