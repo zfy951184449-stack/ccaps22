@@ -8,6 +8,9 @@ ortools>=9.8.0
 flask>=3.0.0
 flask-cors>=4.0.0
 
+# HTTP 请求库（Callback 通信）
+requests>=2.31.0
+
 # 类型检查（可选）
 typing-extensions>=4.9.0
 
