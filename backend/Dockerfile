@@ -2,11 +2,10 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Install dependencies
 COPY package.json package-lock.json* ./
-RUN npm install
+# Force install ALL deps (including devDeps like typescript) regardless of NODE_ENV
+RUN npm install --include=dev
 
-# Build TypeScript
 COPY . .
 RUN npm run build
 
