@@ -13,6 +13,7 @@ const OrganizationWorkbenchPage = lazy(() => import('./pages/OrganizationWorkben
 const QualificationsPage = lazy(() => import('./pages/QualificationsPage'));
 const QualificationMatrixPage = lazy(() => import('./pages/QualificationMatrixPage'));
 const OperationTypesPage = lazy(() => import('./pages/OperationTypesPage'));
+const ProcessTemplatesPage = lazy(() => import('./pages/ProcessTemplatesPage'));
 const ProcessTemplatesV2Page = lazy(() => import('./pages/ProcessTemplatesV2Page'));
 const BatchManagementV4Page = lazy(() => import('./pages/BatchManagementV4Page'));
 const PersonnelSchedulingPage = lazy(() => import('./pages/PersonnelSchedulingPage'));
@@ -21,7 +22,6 @@ const ShiftDefinitionsPage = lazy(() => import('./pages/ShiftDefinitionsPage'));
 
 const mvpRedirects: Record<string, string> = {
   '/operations': '/operation-types',
-  '/process-templates': '/process-templates-v2',
   '/batch-management': '/batch-management-v4',
   '/task-pool': '/dashboard',
   '/schedule-overview': '/dashboard',
@@ -93,6 +93,7 @@ const AppLayout: React.FC = () => (
             <Route path="/qualifications" element={<QualificationsPage />} />
             <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
             <Route path="/operation-types" element={<OperationTypesPage />} />
+            <Route path="/process-templates" element={<ProcessTemplatesPage />} />
             <Route path="/process-templates-v2" element={<ProcessTemplatesV2Page />} />
             <Route path="/process-templates-v2/:templateId" element={<ProcessTemplatesV2Page />} />
             <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
