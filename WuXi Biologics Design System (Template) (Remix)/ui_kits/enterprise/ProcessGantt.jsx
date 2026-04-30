@@ -1,395 +1,215 @@
 // ============================================================
 // Process Template Gantt · Enterprise UI Kit
-// Mock data + interactive timeline. No external deps.
+// Direct hex values for all colors (DS token equivalents)
 // ============================================================
 
-const STAGE_COLORS = {
-  "Cell Culture":  { primary: "#0B3D7F", css: "var(--wx-blue-700)", light: "#E6F2FB", border: "#C7DCF7" },
-  "Purification":  { primary: "#3AA8C1", css: "var(--wx-cyan-500)", light: "#E0F1F5", border: "#B3DDE6" },
+const C = {
+  blue700:"#0B3D7F", blue500:"#1F6FEB", blue100:"#E6F2FB",
+  cyan500:"#3AA8C1", cyan100:"#E0F1F5",
+  green500:"#2E9D6E", green100:"#E6F4ED",
+  amber500:"#E8B53C", amber100:"#FBF1D9",
+  red100:"#FBE6E3",
+  ink:"#0F1B2D", fg2:"#3A4A5C", fg3:"#5A6B7E", fg4:"#8898A8",
+  border:"#E4EAF1", divider:"#EEF2F7", surface2:"#F5F8FB",
 };
+const ST = {"Cell Culture":{c:C.blue700},"Purification":{c:C.cyan500}};
+const sc = k => ST[k] || ST["Cell Culture"];
 
-const MOCK_TEMPLATE = {
-  name: "CHO-K1 Upstream 14d",
-  id: "TPL-0042",
-  stages: [
-    {
-      id: "s1", name: "Cell Culture", color: "Cell Culture",
-      operations: [
-        { id: "op1", name: "Inoculation",     personnel: 2, hours: 4,  startDay: 0, startHour: 8,  windowStart: 6, windowHours: 8 },
-        { id: "op2", name: "Seed Expansion",  personnel: 3, hours: 8,  startDay: 0, startHour: 14, windowStart: 12, windowHours: 12 },
-        { id: "op3", name: "Production Run",  personnel: 4, hours: 24, startDay: 1, startHour: 6,  windowStart: 4, windowHours: 28 },
-        { id: "op4", name: "Fed Batch",       personnel: 2, hours: 6,  startDay: 2, startHour: 12, windowStart: 10, windowHours: 10 },
-      ],
-    },
-    {
-      id: "s2", name: "Purification", color: "Purification",
-      operations: [
-        { id: "op5", name: "Harvest",         personnel: 2, hours: 6,  startDay: 3, startHour: 8,  windowStart: 6, windowHours: 10 },
-        { id: "op6", name: "Chromatography",  personnel: 3, hours: 12, startDay: 3, startHour: 16, windowStart: 14, windowHours: 16 },
-        { id: "op7", name: "Filtration",      personnel: 2, hours: 4,  startDay: 4, startHour: 10, windowStart: 8, windowHours: 8 },
-      ],
-    },
+const MOCK = {
+  name:"CHO-K1 Upstream 14d",
+  stages:[
+    {id:"s1",name:"Cell Culture",ck:"Cell Culture",ops:[
+      {id:"op1",name:"Inoculation",p:2,h:4,sd:0,sh:8,ws:6,wh:8},
+      {id:"op2",name:"Seed Expansion",p:3,h:8,sd:0,sh:14,ws:12,wh:12},
+      {id:"op3",name:"Production Run",p:4,h:24,sd:1,sh:6,ws:4,wh:28},
+      {id:"op4",name:"Fed Batch",p:2,h:6,sd:2,sh:12,ws:10,wh:10},
+    ]},
+    {id:"s2",name:"Purification",ck:"Purification",ops:[
+      {id:"op5",name:"Harvest",p:2,h:6,sd:3,sh:8,ws:6,wh:10},
+      {id:"op6",name:"Chromatography",p:3,h:12,sd:3,sh:16,ws:14,wh:16},
+      {id:"op7",name:"Filtration",p:2,h:4,sd:4,sh:10,ws:8,wh:8},
+    ]},
   ],
-  constraints: [
-    { from: "op1", to: "op2", type: "FS", lag: 2 },
-    { from: "op2", to: "op3", type: "FS", lag: 0 },
-    { from: "op3", to: "op4", type: "SS", lag: 6 },
-    { from: "op4", to: "op5", type: "FS", lag: 2 },
-    { from: "op5", to: "op6", type: "FS", lag: 0 },
-    { from: "op6", to: "op7", type: "SS", lag: 4 },
+  constraints:[
+    {from:"op1",to:"op2",type:"FS",lag:2},{from:"op2",to:"op3",type:"FS",lag:0},
+    {from:"op3",to:"op4",type:"SS",lag:6},{from:"op4",to:"op5",type:"FS",lag:2},
+    {from:"op5",to:"op6",type:"FS",lag:0},{from:"op6",to:"op7",type:"SS",lag:4},
   ],
 };
+const DAYS=6, RH=36, HPD=24;
 
-const TOTAL_DAYS = 6;
-const ROW_H = 36;
-const HOURS_PER_DAY = 24;
+function ProcessGantt(){
+  const [hw,setHw]=React.useState(20);
+  const [ex,setEx]=React.useState({s1:true,s2:true});
+  const [act,setAct]=React.useState(null);
+  const [tip,setTip]=React.useState(null);
+  const [det,setDet]=React.useState(null);
+  const ref=React.useRef(null);
+  const dw=hw*HPD, tw=dw*DAYS;
 
-function ProcessGantt() {
-  const [hourWidth, setHourWidth] = React.useState(20);
-  const [expanded, setExpanded] = React.useState({ s1: true, s2: true });
-  const [activeRow, setActiveRow] = React.useState(null);
-  const [tooltip, setTooltip] = React.useState(null);
-  const [detail, setDetail] = React.useState(null);
-  const timelineRef = React.useRef(null);
-
-  const dayWidth = hourWidth * HOURS_PER_DAY;
-  const totalWidth = dayWidth * TOTAL_DAYS;
-
-  // Build flat row list
-  const rows = React.useMemo(() => {
-    const list = [];
-    list.push({ type: "template", id: "root", name: MOCK_TEMPLATE.name, depth: 0 });
-    MOCK_TEMPLATE.stages.forEach(stage => {
-      list.push({ type: "stage", id: stage.id, name: stage.name, depth: 1, color: stage.color, stage });
-      if (expanded[stage.id]) {
-        stage.operations.forEach(op => {
-          list.push({ type: "operation", id: op.id, name: op.name, depth: 2, op, stage, color: stage.color });
-        });
-      }
+  const rows=React.useMemo(()=>{
+    const r=[{t:"tpl",id:"root",n:MOCK.name,d:0}];
+    MOCK.stages.forEach(s=>{
+      r.push({t:"stg",id:s.id,n:s.name,d:1,ck:s.ck,stg:s});
+      if(ex[s.id]) s.ops.forEach(o=>r.push({t:"op",id:o.id,n:o.name,d:2,op:o,stg:s,ck:s.ck}));
     });
-    return list;
-  }, [expanded]);
+    return r;
+  },[ex]);
 
-  // Op lookup
-  const opMap = React.useMemo(() => {
-    const m = {};
-    MOCK_TEMPLATE.stages.forEach(s => s.operations.forEach(op => { m[op.id] = { ...op, stageColor: s.color }; }));
-    return m;
-  }, []);
+  const opM=React.useMemo(()=>{const m={};MOCK.stages.forEach(s=>s.ops.forEach(o=>{m[o.id]={...o,ck:s.ck}}));return m;},[]);
+  const idx=id=>rows.findIndex(r=>r.id===id);
+  const h2p=(d,h)=>(d*HPD+h)*hw;
+  const cc=t=>t==="FS"?C.blue500:t==="SS"?C.green500:t==="FF"?C.amber500:C.cyan500;
 
-  // Row index lookup
-  const rowIndexOf = React.useCallback((opId) => {
-    return rows.findIndex(r => r.id === opId);
-  }, [rows]);
+  const peaks=React.useMemo(()=>{
+    const p=[];
+    for(let d=0;d<DAYS;d++){let n=0;MOCK.stages.forEach(s=>s.ops.forEach(o=>{
+      const s0=o.sd*24+o.sh;if(s0<(d+1)*24&&s0+o.h>d*24)n+=o.p;
+    }));p.push(n);}
+    const mx=Math.max(...p,1);
+    return p.map(v=>({v,r:v/mx}));
+  },[]);
 
-  const toggleStage = (stageId) => setExpanded(prev => ({ ...prev, [stageId]: !prev[stageId] }));
+  const pkC=r=>r<0.4?C.green100:r<0.7?C.amber100:C.red100;
 
-  const zoom = (delta) => setHourWidth(prev => Math.max(8, Math.min(60, prev + delta)));
-
-  // Compute peak personnel per day
-  const peakData = React.useMemo(() => {
-    const peaks = [];
-    for (let d = 0; d < TOTAL_DAYS; d++) {
-      let maxP = 0;
-      MOCK_TEMPLATE.stages.forEach(s => {
-        s.operations.forEach(op => {
-          const opStartH = op.startDay * 24 + op.startHour;
-          const opEndH = opStartH + op.hours;
-          const dayStart = d * 24;
-          const dayEnd = dayStart + 24;
-          if (opStartH < dayEnd && opEndH > dayStart) maxP += op.personnel;
-        });
-      });
-      peaks.push(maxP);
-    }
-    const maxPeak = Math.max(...peaks, 1);
-    return peaks.map(p => ({ value: p, ratio: p / maxPeak }));
-  }, []);
-
-  const peakColor = (ratio) => {
-    if (ratio < 0.4) return "var(--wx-green-100)";
-    if (ratio < 0.7) return "var(--wx-amber-100)";
-    return "var(--wx-red-100)";
+  const cPath=c=>{
+    const fo=opM[c.from],to=opM[c.to];if(!fo||!to)return null;
+    const fi=idx(c.from),ti=idx(c.to);if(fi<0||ti<0)return null;
+    const x1=(c.type==="FS"||c.type==="FF")?h2p(fo.sd,fo.sh+fo.h):h2p(fo.sd,fo.sh);
+    const x2=(c.type==="FS"||c.type==="SS")?h2p(to.sd,to.sh):h2p(to.sd,to.sh+to.h);
+    const y1=fi*RH+RH/2,y2=ti*RH+RH/2,mx=(x1+x2)/2;
+    return{d:"M"+x1+","+y1+" L"+mx+","+y1+" L"+mx+","+y2+" L"+x2+","+y2,lx:mx,ly:(y1+y2)/2,cl:cc(c.type),ds:c.type==="FS"?"":"6 4"};
   };
 
-  // Hour → px
-  const hourToPx = (day, hour) => (day * HOURS_PER_DAY + hour) * hourWidth;
-
-  // Tooltip handler
-  const showTip = (e, op, stageColor) => {
-    const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const endHour = op.startHour + op.hours;
-    const endDay = op.startDay + Math.floor(endHour / 24);
-    const endH = endHour % 24;
-    setTooltip({
-      x: x + 14, y: y - 40,
-      name: op.name,
-      startDay: op.startDay, startHour: op.startHour,
-      endDay, endHour: endH,
-      hours: op.hours,
-      personnel: op.personnel,
-      color: stageColor,
-    });
-  };
-  const hideTip = () => setTooltip(null);
-
-  // Constraint path builder
-  const buildConstraintPath = (c) => {
-    const fromOp = opMap[c.from];
-    const toOp = opMap[c.to];
-    if (!fromOp || !toOp) return null;
-    const fromRow = rowIndexOf(c.from);
-    const toRow = rowIndexOf(c.to);
-    if (fromRow < 0 || toRow < 0) return null;
-
-    const fromEndX = hourToPx(fromOp.startDay, fromOp.startHour + fromOp.hours);
-    const fromStartX = hourToPx(fromOp.startDay, fromOp.startHour);
-    const toStartX = hourToPx(toOp.startDay, toOp.startHour);
-    // +1 offset for template/root row
-    const fromY = (fromRow) * ROW_H + ROW_H / 2;
-    const toY = (toRow) * ROW_H + ROW_H / 2;
-
-    let x1, y1, x2, y2;
-    if (c.type === "FS" || c.type === "FF") {
-      x1 = fromEndX; y1 = fromY;
-    } else {
-      x1 = fromStartX; y1 = fromY;
-    }
-    if (c.type === "FS" || c.type === "SS") {
-      x2 = toStartX; y2 = toY;
-    } else {
-      x2 = hourToPx(toOp.startDay, toOp.startHour + toOp.hours); y2 = toY;
-    }
-
-    // Orthogonal path
-    const midX = (x1 + x2) / 2;
-    const path = `M${x1},${y1} L${midX},${y1} L${midX},${y2} L${x2},${y2}`;
-    const labelX = midX;
-    const labelY = (y1 + y2) / 2;
-
-    const color = c.type === "FS" ? "var(--wx-blue-500)" :
-                  c.type === "SS" ? "var(--wx-green-500)" :
-                  c.type === "FF" ? "var(--wx-amber-500)" : "var(--wx-cyan-500)";
-    const dash = c.type === "FS" ? "" : "6 4";
-
-    return { path, x2, y2, labelX, labelY, color, dash, type: c.type };
+  const showT=(e,o)=>{
+    if(!ref.current)return;
+    const r=ref.current.getBoundingClientRect();
+    const eH=o.sh+o.h;
+    setTip({x:e.clientX-r.left+14,y:e.clientY-r.top-40,o:o,eD:o.sd+Math.floor(eH/24),eH:eH%24});
   };
 
-  const totalHeight = rows.length * ROW_H;
+  const th=rows.length*RH;
+  const mids=["Blue","Green","Amber","Cyan"];
+  const mfills=[C.blue500,C.green500,C.amber500,C.cyan500];
 
   return (
     <div>
       <div className="page-head">
         <div>
           <div className="crumb">Operations · Process Template</div>
-          <h1>Process Template · {MOCK_TEMPLATE.name}</h1>
+          <h1>{"Process Template · "+MOCK.name}</h1>
         </div>
         <div className="actions">
-          <button className="btn btn-secondary" onClick={() => alert("Validation complete — 0 conflicts detected.")}><Icon.check/>Validate</button>
-          <button className="btn btn-primary" onClick={() => alert("Auto Schedule completed. 7 operations optimally placed.")}><Icon.cal/>Auto Schedule</button>
+          <button className="btn btn-secondary" onClick={function(){alert("Validation: 0 conflicts")}}>Validate</button>
+          <button className="btn btn-primary" onClick={function(){alert("Auto Schedule done")}}>Auto Schedule</button>
         </div>
       </div>
 
       <div className="card">
         <div className="card-head">
-          <h3>Gantt Chart · {MOCK_TEMPLATE.stages.reduce((a, s) => a + s.operations.length, 0)} Operations across {MOCK_TEMPLATE.stages.length} Stages</h3>
-          <div style={{display:"flex", gap:4, alignItems:"center"}}>
-            <span style={{fontSize:11, color:"var(--wx-fg-3)", marginRight:4}}>Zoom</span>
-            <button className="btn btn-ghost" style={{height:28, padding:"0 6px"}} onClick={() => zoom(-4)}><Icon.zoomOut/></button>
-            <span style={{fontSize:11, color:"var(--wx-fg-3)", fontFamily:"var(--wx-font-mono)", minWidth:32, textAlign:"center"}}>{hourWidth}px</span>
-            <button className="btn btn-ghost" style={{height:28, padding:"0 6px"}} onClick={() => zoom(4)}><Icon.zoomIn/></button>
+          <h3>{"Gantt Chart · "+MOCK.stages.reduce(function(a,s){return a+s.ops.length},0)+" Operations across "+MOCK.stages.length+" Stages"}</h3>
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+            <span style={{fontSize:11,color:C.fg3,marginRight:4}}>Zoom</span>
+            <button className="btn btn-ghost" style={{height:28,padding:"0 6px"}} onClick={function(){setHw(function(p){return Math.max(8,p-4)})}}>−</button>
+            <span style={{fontSize:11,color:C.fg3,minWidth:32,textAlign:"center"}}>{hw+"px"}</span>
+            <button className="btn btn-ghost" style={{height:28,padding:"0 6px"}} onClick={function(){setHw(function(p){return Math.min(60,p+4)})}}>+</button>
           </div>
         </div>
         <div className="card-body flush">
           <div className="gantt-wrap">
-            {/* === SIDEBAR === */}
+            {/* SIDEBAR */}
             <div className="gantt-sidebar">
-              {/* Sidebar header */}
-              <div className="row depth-0" style={{height:46, borderBottom:"1px solid var(--wx-border)", background:"var(--wx-surface-2)", fontWeight:500, fontSize:11.5, letterSpacing:"0.04em", textTransform:"uppercase", color:"var(--wx-fg-3)"}}>
-                Template
-              </div>
-              {/* Peak placeholder row */}
-              <div className="row" style={{height:8, padding:0, cursor:"default", borderBottom:"1px solid var(--wx-divider)"}}/>
-              {/* Data rows */}
-              {rows.map((row) => (
-                <div
-                  key={row.id}
-                  className={"row depth-" + row.depth + (activeRow === row.id ? " active" : "")}
-                  onClick={() => { setActiveRow(row.id); if (row.type === "operation") setDetail(row.op); }}
-                  onMouseEnter={() => setActiveRow(row.id)}
-                >
-                  <span className="indent" style={{width: row.depth * 16}}/>
-                  {row.type === "stage" && (
-                    <span className="toggle" onClick={(e) => { e.stopPropagation(); toggleStage(row.id); }}>
-                      {expanded[row.id] ? <Icon.collapse/> : <Icon.expand/>}
-                    </span>
-                  )}
-                  {row.type === "template" && <span className="toggle"><Icon.collapse/></span>}
-                  {row.type === "stage" && (
-                    <span className="stage-bar" style={{background: STAGE_COLORS[row.color]?.primary}}/>
-                  )}
-                  {row.type === "operation" && <span style={{width:3, marginRight:8, flexShrink:0}}/>}
-                  <span style={{overflow:"hidden", textOverflow:"ellipsis"}}>{row.name}</span>
-                  {row.type === "operation" && (
-                    <span className="meta">{row.op.personnel}p · {row.op.hours}h</span>
-                  )}
-                  {row.type === "stage" && (
-                    <span className="meta">{row.stage.operations.length} ops</span>
-                  )}
-                </div>
-              ))}
+              <div className="row depth-0" style={{height:46,borderBottom:"1px solid "+C.border,background:C.surface2,fontWeight:500,fontSize:11.5,letterSpacing:"0.04em",textTransform:"uppercase",color:C.fg3}}>Template</div>
+              <div className="row" style={{height:8,padding:0,cursor:"default",borderBottom:"1px solid "+C.divider}}></div>
+              {rows.map(function(row){
+                return (
+                  <div key={row.id} className={"row depth-"+row.d+(act===row.id?" active":"")}
+                    onClick={function(){setAct(row.id);if(row.t==="op")setDet(row.op)}}
+                    onMouseEnter={function(){setAct(row.id)}}>
+                    <span className="indent" style={{width:row.d*16}}></span>
+                    {row.t==="stg"?<span className="toggle" onClick={function(e){e.stopPropagation();setEx(function(p){var n={};for(var k in p)n[k]=p[k];n[row.id]=!p[row.id];return n})}}>{ex[row.id]?"▾":"▸"}</span>:null}
+                    {row.t==="tpl"?<span className="toggle">▾</span>:null}
+                    {row.t==="stg"?<span className="stage-bar" style={{background:sc(row.ck).c}}></span>:null}
+                    {row.t==="op"?<span style={{width:3,marginRight:8,flexShrink:0}}></span>:null}
+                    <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{row.n}</span>
+                    {row.t==="op"?<span className="meta">{row.op.p+"p · "+row.op.h+"h"}</span>:null}
+                    {row.t==="stg"?<span className="meta">{row.stg.ops.length+" ops"}</span>:null}
+                  </div>
+                );
+              })}
             </div>
 
-            {/* === TIMELINE === */}
-            <div className="gantt-timeline-wrap" ref={timelineRef}>
-              <div className="gantt-timeline" style={{width: totalWidth}}>
-                {/* Axis header */}
+            {/* TIMELINE */}
+            <div className="gantt-timeline-wrap" ref={ref}>
+              <div className="gantt-timeline" style={{width:tw}}>
+                {/* Axis */}
                 <div className="gantt-axis">
-                  {Array.from({length: TOTAL_DAYS}, (_, d) => (
-                    <div key={d} className="day-col" style={{width: dayWidth}}>
-                      <div className="day-label">Day {d}</div>
-                      <div className="hours">
-                        {[0,3,6,9,12,15,18,21].map(h => (
-                          <span key={h} className="hr-label" style={{width: hourWidth * 3}}>{h}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Peak heat row */}
-                <div className="gantt-peak-row">
-                  {peakData.map((p, i) => (
-                    <div key={i} className="gantt-peak-bar" style={{width: dayWidth, background: peakColor(p.ratio)}} title={`Peak: ${p.value} personnel`}/>
-                  ))}
-                </div>
-
-                {/* Grid area */}
-                <div className="gantt-grid" style={{height: totalHeight, position:"relative"}}>
-                  {/* Work hour backgrounds */}
-                  {Array.from({length: TOTAL_DAYS}, (_, d) => (
-                    <div key={"wk"+d} className="gantt-work-bg" style={{left: hourToPx(d, 9), width: hourWidth * 8}}/>
-                  ))}
-
-                  {/* Day lines */}
-                  {Array.from({length: TOTAL_DAYS + 1}, (_, d) => (
-                    <div key={"dl"+d} className={"gantt-day-line" + (d === 0 ? " origin" : "")} style={{left: d * dayWidth}}/>
-                  ))}
-
-                  {/* Hour lines */}
-                  {Array.from({length: TOTAL_DAYS}, (_, d) => (
-                    [3,6,9,12,15,18,21].map(h => (
-                      <div key={"hl"+d+"-"+h} className="gantt-hour-line" style={{left: hourToPx(d, h)}}/>
-                    ))
-                  ))}
-
-                  {/* Grid rows (background) */}
-                  {rows.map((row, i) => (
-                    <div
-                      key={"gr"+row.id}
-                      className={"gantt-grid-row" + (activeRow === row.id ? " active" : "")}
-                      onMouseEnter={() => setActiveRow(row.id)}
-                    />
-                  ))}
-
-                  {/* Stage bars */}
-                  {rows.filter(r => r.type === "stage" && expanded[r.id]).map((row) => {
-                    const ops = row.stage.operations;
-                    if (ops.length === 0) return null;
-                    const minH = Math.min(...ops.map(o => o.startDay * 24 + o.startHour));
-                    const maxH = Math.max(...ops.map(o => o.startDay * 24 + o.startHour + o.hours));
-                    const rowIdx = rows.indexOf(row);
-                    const firstOpIdx = rows.findIndex(r => r.type === "operation" && r.stage === row.stage);
-                    const lastOpIdx = rows.length - 1 - [...rows].reverse().findIndex(r => r.type === "operation" && r.stage === row.stage);
-                    const topOffset = firstOpIdx * ROW_H + (ROW_H - 20) / 2;
-                    const height = (lastOpIdx - firstOpIdx + 1) * ROW_H - (ROW_H - 20);
-                    const sc = STAGE_COLORS[row.color];
+                  {Array.from({length:DAYS}).map(function(_,d){
                     return (
-                      <div key={"sb"+row.id} className="gantt-stage-bar" style={{
-                        left: minH * hourWidth,
-                        width: (maxH - minH) * hourWidth,
-                        top: topOffset,
-                        height: height,
-                        borderColor: sc?.primary,
-                        background: sc?.primary + "0F",
-                      }}/>
+                      <div key={d} className="day-col" style={{width:dw}}>
+                        <div className="day-label">{"Day "+d}</div>
+                        <div className="hours">
+                          {[0,3,6,9,12,15,18,21].map(function(h){return <span key={h} className="hr-label" style={{width:hw*3}}>{h}</span>})}
+                        </div>
+                      </div>
                     );
                   })}
+                </div>
 
-                  {/* Time window bars */}
-                  {rows.filter(r => r.type === "operation").map((row) => {
-                    const op = row.op;
-                    const rowIdx = rows.indexOf(row);
-                    const sc = STAGE_COLORS[row.color];
-                    const wLeft = hourToPx(op.startDay, op.windowStart);
-                    const wWidth = op.windowHours * hourWidth;
-                    const rawColor = row.color === "Cell Culture" ? "#0B3D7F" : "#3AA8C1";
-                    return (
-                      <div key={"tw"+op.id} className="gantt-window-bar" style={{
-                        left: wLeft,
-                        width: wWidth,
-                        top: rowIdx * ROW_H + (ROW_H - 20) / 2,
-                        borderColor: rawColor + "60",
-                        background: `repeating-linear-gradient(45deg, ${rawColor}0D 0px, ${rawColor}0D 4px, ${rawColor}1A 4px, ${rawColor}1A 8px)`,
-                      }}/>
-                    );
+                {/* Peak heat */}
+                <div className="gantt-peak-row">
+                  {peaks.map(function(p,i){return <div key={i} className="gantt-peak-bar" style={{width:dw,background:pkC(p.r)}} title={"Peak: "+p.v}></div>})}
+                </div>
+
+                {/* Grid */}
+                <div className="gantt-grid" style={{height:th,position:"relative"}}>
+                  {/* Work bg */}
+                  {Array.from({length:DAYS}).map(function(_,d){return <div key={"w"+d} className="gantt-work-bg" style={{left:h2p(d,9),width:hw*8}}></div>})}
+                  {/* Day lines */}
+                  {Array.from({length:DAYS+1}).map(function(_,d){return <div key={"dl"+d} className={"gantt-day-line"+(d===0?" origin":"")} style={{left:d*dw}}></div>})}
+                  {/* Hour lines */}
+                  {Array.from({length:DAYS}).map(function(_,d){return [3,6,9,12,15,18,21].map(function(h){return <div key={"hl"+d+"-"+h} className="gantt-hour-line" style={{left:h2p(d,h)}}></div>})})}
+                  {/* Grid rows */}
+                  {rows.map(function(row){return <div key={"gr"+row.id} className={"gantt-grid-row"+(act===row.id?" active":"")} onMouseEnter={function(){setAct(row.id)}}></div>})}
+
+                  {/* Stage bars */}
+                  {rows.filter(function(r){return r.t==="stg"&&ex[r.id]}).map(function(row){
+                    var ops=row.stg.ops;if(!ops.length)return null;
+                    var mn=Infinity,mx=-Infinity;
+                    ops.forEach(function(o){var s=o.sd*24+o.sh;if(s<mn)mn=s;if(s+o.h>mx)mx=s+o.h});
+                    var fi=rows.findIndex(function(r){return r.t==="op"&&r.stg===row.stg});
+                    var li=-1;rows.forEach(function(r,i){if(r.t==="op"&&r.stg===row.stg)li=i});
+                    var top=fi*RH+(RH-20)/2,ht=(li-fi+1)*RH-(RH-20);
+                    var clr=sc(row.ck).c;
+                    return <div key={"sb"+row.id} className="gantt-stage-bar" style={{left:mn*hw,width:(mx-mn)*hw,top:top,height:ht,borderColor:clr,background:clr+"0F"}}></div>;
+                  })}
+
+                  {/* Time windows */}
+                  {rows.filter(function(r){return r.t==="op"}).map(function(row){
+                    var o=row.op,ri=rows.indexOf(row),clr=sc(row.ck).c;
+                    return <div key={"tw"+o.id} className="gantt-window-bar" style={{left:h2p(o.sd,o.ws),width:o.wh*hw,top:ri*RH+(RH-20)/2,borderColor:clr+"60",background:"repeating-linear-gradient(45deg,"+clr+"0D 0px,"+clr+"0D 4px,"+clr+"1A 4px,"+clr+"1A 8px)"}}></div>;
                   })}
 
                   {/* Operation bars */}
-                  {rows.filter(r => r.type === "operation").map((row) => {
-                    const op = row.op;
-                    const rowIdx = rows.indexOf(row);
-                    const sc = STAGE_COLORS[row.color];
-                    const left = hourToPx(op.startDay, op.startHour);
-                    const width = op.hours * hourWidth;
-                    return (
-                      <div
-                        key={"ob"+op.id}
-                        className="gantt-bar"
-                        style={{
-                          left, width,
-                          top: rowIdx * ROW_H + (ROW_H - 24) / 2,
-                          background: sc?.primary,
-                        }}
-                        onMouseMove={(e) => showTip(e, op, row.color)}
-                        onMouseLeave={hideTip}
-                        onDoubleClick={() => setDetail(op)}
-                      >
-                        <span className="resize-handle left"/>
-                        {width > 50 && op.name}
-                        <span className="resize-handle right"/>
-                      </div>
-                    );
+                  {rows.filter(function(r){return r.t==="op"}).map(function(row){
+                    var o=row.op,ri=rows.indexOf(row),clr=sc(row.ck).c;
+                    var left=h2p(o.sd,o.sh),w=o.h*hw;
+                    return <div key={"ob"+o.id} className="gantt-bar" style={{left:left,width:w,top:ri*RH+(RH-24)/2,background:clr}} onMouseMove={function(e){showT(e,o)}} onMouseLeave={function(){setTip(null)}} onDoubleClick={function(){setDet(o)}}>{w>50?o.name:null}</div>;
                   })}
 
-                  {/* Constraint arrows SVG */}
-                  <svg className="gantt-constraints" width={totalWidth} height={totalHeight} style={{overflow:"visible"}}>
+                  {/* Constraint SVG */}
+                  <svg className="gantt-constraints" width={tw} height={th} style={{overflow:"visible"}}>
                     <defs>
-                      <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="var(--wx-blue-500)"/>
-                      </marker>
-                      <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="var(--wx-green-500)"/>
-                      </marker>
-                      <marker id="arrowAmber" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="var(--wx-amber-500)"/>
-                      </marker>
-                      <marker id="arrowCyan" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-                        <polygon points="0 0, 8 3, 0 6" fill="var(--wx-cyan-500)"/>
-                      </marker>
+                      {mids.map(function(n,i){return <marker key={n} id={"arr"+n} markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill={mfills[i]}></polygon></marker>})}
                     </defs>
-                    {MOCK_TEMPLATE.constraints.map((c, i) => {
-                      const cp = buildConstraintPath(c);
-                      if (!cp) return null;
-                      const markerId = c.type === "FS" ? "arrowBlue" : c.type === "SS" ? "arrowGreen" : c.type === "FF" ? "arrowAmber" : "arrowCyan";
+                    {MOCK.constraints.map(function(c,i){
+                      var p=cPath(c);if(!p)return null;
+                      var mid=c.type==="FS"?"Blue":c.type==="SS"?"Green":c.type==="FF"?"Amber":"Cyan";
                       return (
                         <g key={i}>
-                          <path d={cp.path} fill="none" stroke={cp.color} strokeWidth="1.5"
-                            strokeDasharray={cp.dash} markerEnd={`url(#${markerId})`}/>
-                          <rect className="gantt-constraint-pill" x={cp.labelX - 10} y={cp.labelY - 8} width="20" height="16" rx="6"/>
-                          <text className="gantt-constraint-label" x={cp.labelX} y={cp.labelY + 3}>{cp.type}</text>
+                          <path d={p.d} fill="none" stroke={p.cl} strokeWidth="1.5" strokeDasharray={p.ds} markerEnd={"url(#arr"+mid+")"}></path>
+                          <rect x={p.lx-12} y={p.ly-9} width="24" height="18" rx="9" fill="rgba(15,27,45,0.7)"></rect>
+                          <text x={p.lx} y={p.ly+4} fill="#fff" textAnchor="middle" style={{fontSize:9,fontWeight:600}}>{c.type}</text>
                         </g>
                       );
                     })}
@@ -397,48 +217,30 @@ function ProcessGantt() {
                 </div>
 
                 {/* Tooltip */}
-                {tooltip && (
-                  <div className="gantt-tip on" style={{left: tooltip.x, top: tooltip.y}}>
-                    <div className="tip-title">{tooltip.name}</div>
-                    <div className="tip-row"><span>Start</span><span className="val">Day {tooltip.startDay} {String(tooltip.startHour).padStart(2,"0")}:00</span></div>
-                    <div className="tip-row"><span>End</span><span className="val">Day {tooltip.endDay} {String(tooltip.endHour).padStart(2,"0")}:00</span></div>
-                    <div className="tip-row"><span>Duration</span><span className="val">{tooltip.hours}.0h</span></div>
-                    <div className="tip-row"><span>Resource</span><span className="val">{tooltip.personnel} operators</span></div>
-                  </div>
-                )}
+                {tip?<div className="gantt-tip on" style={{left:tip.x,top:tip.y}}>
+                  <div className="tip-title">{tip.o.name}</div>
+                  <div className="tip-row"><span>Start</span><span className="val">{"Day "+tip.o.sd+" "+String(tip.o.sh).padStart(2,"0")+":00"}</span></div>
+                  <div className="tip-row"><span>End</span><span className="val">{"Day "+tip.eD+" "+String(tip.eH).padStart(2,"0")+":00"}</span></div>
+                  <div className="tip-row"><span>Duration</span><span className="val">{tip.o.h+".0h"}</span></div>
+                  <div className="tip-row"><span>Resource</span><span className="val">{tip.o.p+" operators"}</span></div>
+                </div>:null}
 
                 {/* Detail panel */}
-                <div className={"gantt-detail" + (detail ? " open" : "")}>
-                  {detail && (
-                    <>
-                      <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4}}>
-                        <h4>{detail.name}</h4>
-                        <button className="btn btn-ghost" style={{height:28, padding:"0 6px"}} onClick={() => setDetail(null)}>✕</button>
-                      </div>
-                      <div className="sub">Operation · {MOCK_TEMPLATE.name}</div>
-                      <hr className="div"/>
-                      <div className="field"><div className="lbl">Start</div><div className="val mono">Day {detail.startDay} · {String(detail.startHour).padStart(2,"0")}:00</div></div>
-                      <div className="field"><div className="lbl">Duration</div><div className="val mono">{detail.hours}.0 hours</div></div>
-                      <div className="field"><div className="lbl">Personnel</div><div className="val">{detail.personnel} operators</div></div>
-                      <div className="field"><div className="lbl">Time Window</div><div className="val mono">{String(detail.windowStart).padStart(2,"0")}:00 – {String(detail.windowStart + detail.windowHours).padStart(2,"0")}:00 ({detail.windowHours}h)</div></div>
-                      <div className="field">
-                        <div className="lbl">Constraints</div>
-                        <div style={{display:"flex", gap:6, flexWrap:"wrap", marginTop:4}}>
-                          {MOCK_TEMPLATE.constraints.filter(c => c.from === detail.id || c.to === detail.id).map((c, i) => (
-                            <span key={i} className={"chip chip-" + (c.type === "FS" ? "info" : c.type === "SS" ? "ok" : "warn")}>
-                              <span className="dot"/>
-                              {c.type} {c.from === detail.id ? "→" : "←"} {opMap[c.from === detail.id ? c.to : c.from]?.name}
-                              {c.lag > 0 && ` +${c.lag}h`}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <hr className="div"/>
-                      <div className="field"><div className="lbl">Status</div>
-                        <span className="chip chip-info" style={{marginTop:4}}><span className="dot"/>Scheduled</span>
-                      </div>
-                    </>
-                  )}
+                <div className={"gantt-detail"+(det?" open":"")}>
+                  {det?<div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                      <h4>{det.name}</h4>
+                      <button className="btn btn-ghost" style={{height:28,padding:"0 6px"}} onClick={function(){setDet(null)}}>✕</button>
+                    </div>
+                    <div className="sub">{"Operation · "+MOCK.name}</div>
+                    <hr style={{border:"none",borderTop:"1px solid "+C.divider,margin:"12px 0"}} />
+                    <div className="field"><div className="lbl">Start</div><div className="val mono">{"Day "+det.sd+" · "+String(det.sh).padStart(2,"0")+":00"}</div></div>
+                    <div className="field"><div className="lbl">Duration</div><div className="val mono">{det.h+".0 hours"}</div></div>
+                    <div className="field"><div className="lbl">Personnel</div><div className="val">{det.p+" operators"}</div></div>
+                    <div className="field"><div className="lbl">Time Window</div><div className="val mono">{String(det.ws).padStart(2,"0")+":00 – "+String(det.ws+det.wh).padStart(2,"0")+":00 ("+det.wh+"h)"}</div></div>
+                    <hr style={{border:"none",borderTop:"1px solid "+C.divider,margin:"12px 0"}} />
+                    <div className="field"><div className="lbl">Status</div><span className="chip chip-info" style={{marginTop:4}}><span className="dot"></span>Scheduled</span></div>
+                  </div>:null}
                 </div>
               </div>
             </div>
@@ -447,34 +249,15 @@ function ProcessGantt() {
       </div>
 
       {/* Legend */}
-      <div style={{marginTop:16, display:"flex", gap:24, flexWrap:"wrap", fontSize:12, color:"var(--wx-fg-3)"}}>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:10, borderRadius:2, background:"var(--wx-blue-700)"}}/>Cell Culture Ops
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:10, borderRadius:2, background:"var(--wx-cyan-500)"}}/>Purification Ops
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:20, height:10, borderRadius:2, border:"1.5px dashed var(--wx-blue-500)", background:"rgba(11,61,127,0.06)"}}/>Stage Span
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:20, height:10, borderRadius:2, background:"repeating-linear-gradient(45deg, #0B3D7F0D 0px, #0B3D7F0D 3px, #0B3D7F1A 3px, #0B3D7F1A 6px)"}}/>Time Window
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:2, background:"var(--wx-blue-500)"}}/>FS
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:2, background:"var(--wx-green-500)", backgroundImage:"repeating-linear-gradient(90deg, var(--wx-green-500) 0px, var(--wx-green-500) 4px, transparent 4px, transparent 7px)"}}/>SS
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:4, borderRadius:999, background:"var(--wx-green-100)"}}/>Low Peak
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:4, borderRadius:999, background:"var(--wx-amber-100)"}}/>Med Peak
-        </span>
-        <span style={{display:"inline-flex", alignItems:"center", gap:6}}>
-          <span style={{width:10, height:4, borderRadius:999, background:"var(--wx-red-100)"}}/>High Peak
-        </span>
+      <div style={{marginTop:16,display:"flex",gap:24,flexWrap:"wrap",fontSize:12,color:C.fg3}}>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:2,background:C.blue700}}></span>Cell Culture</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:10,borderRadius:2,background:C.cyan500}}></span>Purification</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:20,height:10,borderRadius:2,border:"1.5px dashed "+C.blue500,background:C.blue700+"0F"}}></span>Stage</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:14,height:2,background:C.blue500}}></span>FS</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:14,height:2,borderTop:"2px dashed "+C.green500}}></span>SS</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:4,borderRadius:999,background:C.green100}}></span>Low</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:4,borderRadius:999,background:C.amber100}}></span>Med</span>
+        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><span style={{width:10,height:4,borderRadius:999,background:C.red100}}></span>High</span>
       </div>
     </div>
   );

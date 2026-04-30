@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Card,
   Button,
   Table,
   Modal,
@@ -12,10 +11,9 @@ import {
   Tooltip,
   Popconfirm,
   Typography,
-  Row,
-  Col,
   Tabs,
-  Tag
+  Tag,
+  Empty,
 } from 'antd';
 import {
   PlusOutlined,
@@ -24,12 +22,14 @@ import {
   CopyOutlined,
   ProjectOutlined,
   UploadOutlined,
-  DownloadOutlined,
+  ExperimentOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons';
 import axios from 'axios';
 import ProcessTemplateGantt from './ProcessTemplateGantt';
 import TemplateWorkbookImportModal from './TemplateWorkbookImportModal';
 import { exportSingleTemplateToExcel, SingleTemplateReportData } from '../utils/exportSingleTemplateExcel';
+import './ProcessTemplateWuXi.css';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -62,6 +62,7 @@ const ProcessTemplate: React.FC = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [activeTeamId, setActiveTeamId] = useState<string>('all');
+  const [searchValue, setSearchValue] = useState('');
   const [workbookImportOpen, setWorkbookImportOpen] = useState(false);
   const [exportingWorkbook, setExportingWorkbook] = useState(false);
   const [form] = Form.useForm();
@@ -189,6 +190,39 @@ const ProcessTemplate: React.FC = () => {
     () => templates.find((template) => template.id === Number(selectedRowKeys[0])) ?? null,
     [selectedRowKeys, templates],
   );
+
+  const displayedTemplates = useMemo(() => {
+    const query = searchValue.trim().toLowerCase();
+    if (!query) {
+      return templates;
+    }
+
+    return templates.filter((template) =>
+      [
+        template.template_code,
+        template.template_name,
+        template.team_code,
+        template.team_name,
+        template.description,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [searchValue, templates]);
+
+  const summaryCards = useMemo(() => {
+    const totalDays = displayedTemplates.reduce((sum, item) => sum + Number(item.total_days || 0), 0);
+    const averageDays = displayedTemplates.length > 0 ? Math.round((totalDays / displayedTemplates.length) * 10) / 10 : 0;
+    const maxDays = displayedTemplates.reduce((max, item) => Math.max(max, Number(item.total_days || 0)), 0);
+    const linkedTeams = displayedTemplates.filter((item) => item.team_id !== null).length;
+
+    return [
+      { label: '模板数量', value: `${displayedTemplates.length}`, unit: '个', tone: 'primary' },
+      { label: '平均周期', value: `${averageDays}`, unit: '天', tone: 'info' },
+      { label: '最长周期', value: `${maxDays}`, unit: '天', tone: 'success' },
+      { label: '已绑团队', value: `${linkedTeams}`, unit: '个', tone: 'warning' },
+    ];
+  }, [displayedTemplates]);
 
   const handleExportWorkbook = useCallback(async () => {
     if (!selectedTemplateRecord) {
@@ -320,62 +354,109 @@ const ProcessTemplate: React.FC = () => {
 
   if (selectedTemplate) {
     return (
-      <ProcessTemplateGantt
-        template={selectedTemplate}
-        onBack={() => {
-          setSelectedTemplate(null);
-          fetchTemplates(activeTeamId);
-        }}
-      />
+      <div className="wxb-template-gantt-shell">
+        <ProcessTemplateGantt
+          template={selectedTemplate}
+          onBack={() => {
+            setSelectedTemplate(null);
+            fetchTemplates(activeTeamId);
+          }}
+        />
+      </div>
     );
   }
 
   return (
-    <div>
-      <Card>
-        <Row justify="space-between" align="middle" style={{ marginBottom: 16 }}>
-          <Col>
-            <Title level={4} style={{ margin: 0 }}>
-              <ProjectOutlined /> 工艺模版管理
-            </Title>
-          </Col>
-          <Col>
-            <Space>
-              <Button
-                icon={<UploadOutlined />}
-                onClick={() => setWorkbookImportOpen(true)}
-              >
-                导入 Excel
-              </Button>
-              <Button
-                icon={<DownloadOutlined />}
-                onClick={handleExportWorkbook}
-                loading={exportingWorkbook}
-                disabled={!selectedTemplateRecord}
-              >
-                导出 Excel
-              </Button>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleCreate}
-              >
-                新增模版
-              </Button>
-            </Space>
-          </Col>
-        </Row>
+    <div className="wxb-template-page">
+      <section className="wxb-template-hero">
+        <div className="wxb-template-hero-copy">
+          <div className="wxb-template-eyebrow">
+            <ExperimentOutlined />
+            Process Template · 工艺模版
+          </div>
+          <Title level={2}>工艺模版管理</Title>
+          <p>
+            维护 USP / DSP 阶段、工序时间窗、资源需求与共享组规则。列表页负责模板治理，甘特图负责时间轴编辑与约束校验。
+          </p>
+        </div>
 
-        <Tabs
-          activeKey={activeTeamId}
-          onChange={setActiveTeamId}
-          items={tabItems}
-          style={{ marginBottom: 16 }}
-        />
+        <div className="wxb-template-metrics" aria-label="工艺模版概览">
+          {summaryCards.map((card) => (
+            <div className={`wxb-template-metric is-${card.tone}`} key={card.label}>
+              <span>{card.label}</span>
+              <strong>
+                {card.value}
+                <em>{card.unit}</em>
+              </strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="wxb-template-toolbar">
+        <div className="wxb-template-tabs">
+          <Tabs
+            activeKey={activeTeamId}
+            onChange={setActiveTeamId}
+            items={tabItems}
+            tabBarStyle={{ marginBottom: 0 }}
+          />
+        </div>
+
+        <div className="wxb-template-actions">
+          <Input.Search
+            allowClear
+            placeholder="搜索编码 / 名称 / Team"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            onSearch={setSearchValue}
+            className="wxb-template-search"
+          />
+          <Button
+            icon={<UploadOutlined />}
+            onClick={() => setWorkbookImportOpen(true)}
+          >
+            导入 Excel
+          </Button>
+          <Button
+            icon={<FileExcelOutlined />}
+            onClick={handleExportWorkbook}
+            loading={exportingWorkbook}
+            disabled={!selectedTemplateRecord}
+          >
+            导出 Excel
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCreate}
+          >
+            新增模版
+          </Button>
+        </div>
+      </section>
+
+      <section className="wxb-template-table-panel">
+        <div className="wxb-template-table-head">
+          <div>
+            <div className="wxb-template-eyebrow">Template Library</div>
+            <h3>模板库</h3>
+          </div>
+          <div className="wxb-template-selection">
+            {selectedTemplateRecord ? (
+              <Tag color="blue">
+                已选 {selectedTemplateRecord.template_code} · {selectedTemplateRecord.template_name}
+              </Tag>
+            ) : (
+              <span>单选模板后可导出 Excel</span>
+            )}
+          </div>
+        </div>
 
         <Table
+          className="wxb-template-table"
           columns={columns}
-          dataSource={templates}
+          dataSource={displayedTemplates}
           rowKey="id"
           rowSelection={{
             type: 'radio',
@@ -383,13 +464,21 @@ const ProcessTemplate: React.FC = () => {
             onChange: (keys) => setSelectedRowKeys(keys),
           }}
           loading={loading}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={searchValue ? '没有匹配的工艺模版' : '暂无工艺模版'}
+              />
+            ),
+          }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,
             showTotal: (total) => `共 ${total} 条记录`
           }}
         />
-      </Card>
+      </section>
 
       <Modal
         title={editingTemplate ? '编辑模版' : '新增模版'}

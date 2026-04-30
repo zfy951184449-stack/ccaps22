@@ -1,21 +1,27 @@
 export const TOKENS = {
-    primary: '#2563EB',
-    secondary: '#64748B',
-    alert: '#DC2626',
-    background: '#F8FAFC',
+    primary: '#0B3D7F',
+    secondary: '#5A6B7E',
+    alert: '#D6493A',
+    background: '#F5F8FB',
     card: '#FFFFFF',
-    border: '#E5E7EB',
-    textPrimary: '#111827',
-    textSecondary: '#374151'
+    border: '#E4EAF1',
+    divider: '#EEF2F7',
+    surface: '#FAFCFE',
+    infoBg: '#E6F2FB',
+    success: '#2E9D6E',
+    warning: '#E8B53C',
+    textPrimary: '#0F1B2D',
+    textSecondary: '#3A4A5C',
+    textMuted: '#8898A8'
 } as const;
 
 export const STAGE_COLORS: Record<string, string> = {
-    STAGE1: '#2563EB',
-    STAGE2: '#0F766E',
-    STAGE3: '#D97706',
-    STAGE4: '#B91C1C',
-    STAGE5: '#7C3AED',
-    DEFAULT: '#475569'
+    STAGE1: '#0B3D7F',
+    STAGE2: '#2E9D6E',
+    STAGE3: '#3AA8C1',
+    STAGE4: '#E8B53C',
+    STAGE5: '#D6493A',
+    DEFAULT: '#5A6B7E'
 };
 
 // 时间轴配置

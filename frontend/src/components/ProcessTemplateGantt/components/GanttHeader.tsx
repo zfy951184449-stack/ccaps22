@@ -65,12 +65,13 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
         <div
             style={{
                 padding: '12px 20px',
-                background: TOKENS.card,
+                background: 'linear-gradient(180deg, #FFFFFF 0%, #FAFCFE 100%)',
                 borderBottom: `1px solid ${TOKENS.border}`,
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                height: TITLE_BAR_HEIGHT
+                height: TITLE_BAR_HEIGHT,
+                boxShadow: '0 1px 2px rgba(15, 27, 45, 0.04)'
             }}
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -78,15 +79,15 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                     icon={<ArrowLeftOutlined />}
                     onClick={onBack}
                     type="default"
-                    style={{ borderRadius: 8, marginRight: 4 }}
+                    style={{ borderRadius: 4, marginRight: 4 }}
                 >
                     返回
                 </Button>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <Text style={{ fontSize: 18, fontWeight: 600, color: TOKENS.textPrimary }}>
-                        增强甘特图编辑器
+                        工艺甘特编辑器
                     </Text>
-                    <Text style={{ fontSize: 14, fontWeight: 500, color: TOKENS.textSecondary }}>
+                    <Text style={{ fontSize: 13, fontWeight: 500, color: TOKENS.textMuted, fontFamily: 'JetBrains Mono, SFMono-Regular, Menlo, monospace' }}>
                         {template.template_code || template.template_name}
                     </Text>
                 </div>
@@ -101,9 +102,9 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                             icon={<TeamOutlined />}
                             onClick={onToggleSharePanel}
                             style={{
-                                borderRadius: 8,
-                                borderColor: '#1890ff',
-                                color: '#1890ff'
+                                borderRadius: 4,
+                                borderColor: TOKENS.primary,
+                                color: TOKENS.primary
                             }}
                         >
                             共享组 {shareGroupCount > 0 && <Tag color="blue" style={{ marginLeft: 4, marginRight: 0 }}>{shareGroupCount}</Tag>}
@@ -119,9 +120,9 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                                 icon={<PlusCircleOutlined />}
                                 onClick={onEnterShareGroupMode}
                                 style={{
-                                    borderRadius: 8,
-                                    borderColor: '#52c41a',
-                                    color: '#52c41a'
+                                    borderRadius: 4,
+                                    borderColor: TOKENS.success,
+                                    color: TOKENS.success
                                 }}
                             >
                                 添加共享组
@@ -136,14 +137,14 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                             icon={<CheckOutlined />}
                             onClick={onConfirmShareGroup}
                             disabled={selectedOperationCount < 2}
-                            style={{ borderRadius: 8 }}
+                            style={{ borderRadius: 4 }}
                         >
                             确认创建 ({selectedOperationCount})
                         </Button>
                         <Button
                             icon={<CloseOutlined />}
                             onClick={onCancelShareGroup}
-                            style={{ borderRadius: 8 }}
+                            style={{ borderRadius: 4 }}
                         >
                             取消
                         </Button>
@@ -197,7 +198,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 <Button
                     type="primary"
                     icon={<SaveOutlined />}
-                    style={{ borderRadius: 8, height: 36, paddingInline: 16 }}
+                    style={{ borderRadius: 4, height: 36, paddingInline: 16 }}
                     onClick={handleSaveTemplate}
                     disabled={!isDirty}
                 >
@@ -205,7 +206,7 @@ export const GanttHeader: React.FC<GanttHeaderProps> = ({
                 </Button>
                 <Button
                     icon={<SafetyOutlined />}
-                    style={{ borderRadius: 8, height: 36, paddingInline: 16, borderColor: TOKENS.primary, color: TOKENS.primary }}
+                    style={{ borderRadius: 4, height: 36, paddingInline: 16, borderColor: TOKENS.primary, color: TOKENS.primary }}
                     onClick={handleAutoSchedule}
                     loading={scheduling}
                 >
