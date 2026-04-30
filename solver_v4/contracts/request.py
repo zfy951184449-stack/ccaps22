@@ -41,6 +41,7 @@ class EmployeeProfile:
     employee_name: str
     qualifications: List[Dict[str, Any]]  # {qualification_id, level}
     unavailable_periods: List[Dict[str, str]] # {start_datetime, end_datetime}
+    org_role: str = "FRONTLINE"  # FRONTLINE | SHIFT_LEADER | GROUP_LEADER | TEAM_LEADER | DEPT_MANAGER
 
 @dataclass
 class SpecialShiftRequirement:

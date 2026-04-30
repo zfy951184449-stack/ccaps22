@@ -1,6 +1,7 @@
 import React from 'react';
-import { DownloadOutlined, UploadOutlined } from '@ant-design/icons';
-import { Button, Input, Segmented, Select, Space, Tag } from 'antd';
+import { DownloadOutlined, FileExcelOutlined, UploadOutlined, DownOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Input, Segmented, Select, Space, Tag } from 'antd';
+import type { MenuProps } from 'antd';
 
 export type TemplateStatusFilter = 'all' | 'risk' | 'recent';
 export type TemplateSortBy = 'updated' | 'cycle' | 'name';
@@ -21,6 +22,8 @@ interface TemplateListToolbarProps {
   onExport: () => void;
   exportDisabled: boolean;
   exportLoading?: boolean;
+  onExportOverview: () => void;
+  exportOverviewLoading?: boolean;
 }
 
 const TemplateListToolbar: React.FC<TemplateListToolbarProps> = ({
@@ -38,7 +41,26 @@ const TemplateListToolbar: React.FC<TemplateListToolbarProps> = ({
   onExport,
   exportDisabled,
   exportLoading = false,
+  onExportOverview,
+  exportOverviewLoading = false,
 }) => {
+  const exportMenuItems: MenuProps['items'] = [
+    {
+      key: 'overview',
+      icon: <FileExcelOutlined />,
+      label: '导出模版总览',
+      disabled: exportOverviewLoading,
+      onClick: onExportOverview,
+    },
+    {
+      key: 'workbook',
+      icon: <DownloadOutlined />,
+      label: '导出 Workbook (数据交换)',
+      disabled: exportDisabled || exportLoading,
+      onClick: onExport,
+    },
+  ];
+
   return (
     <section className="sticky top-2 z-20 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur">
       <div className="flex flex-wrap items-center gap-3">
@@ -88,14 +110,17 @@ const TemplateListToolbar: React.FC<TemplateListToolbarProps> = ({
             <Button icon={<UploadOutlined />} onClick={onImport}>
               导入 Excel
             </Button>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={onExport}
-              disabled={exportDisabled}
-              loading={exportLoading}
+            <Dropdown
+              menu={{ items: exportMenuItems }}
+              placement="bottomRight"
             >
-              导出 Excel
-            </Button>
+              <Button
+                icon={<DownloadOutlined />}
+                loading={exportLoading || exportOverviewLoading}
+              >
+                导出 <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
+              </Button>
+            </Dropdown>
           </Space>
         </div>
       </div>

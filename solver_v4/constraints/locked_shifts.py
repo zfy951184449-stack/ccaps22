@@ -48,21 +48,26 @@ class LockedShiftsConstraint(BaseConstraint):
             target_key = (locked.employee_id, locked.date, target_shift_id)
             target_var = shift_assignments.get(target_key)
             if target_var is None:
-                self.log(
-                    f"Locked shift {target_key} not present in model; forcing infeasible.",
-                    level="warning",
-                )
-                model.Add(0 == 1)
-                constraints_added += 1
+                config = data.config or {}
+                if config.get("strict_locked_shifts", False):
+                    self.log(
+                        f"[STRICT] Locked shift {target_key} not present in model; forcing infeasible.",
+                        level="error",
+                    )
+                    model.Add(0 == 1)
+                    constraints_added += 1
+                else:
+                    self.log(
+                        f"Locked shift {target_key} not present in model; skipping (data inconsistency).",
+                        level="warning",
+                    )
                 continue
 
             model.Add(target_var == 1)
             constraints_added += 1
-
-            for (emp_id, date, shift_id), var in shift_assignments.items():
-                if emp_id == locked.employee_id and date == locked.date and shift_id != target_shift_id:
-                    model.Add(var == 0)
-                    constraints_added += 1
+            # NOTE: No need to explicitly zero out other shifts for the same (emp, date).
+            # ShiftAssignment already ensures sum(shifts_per_day) == 1. Combined with
+            # target_var == 1, all other shift vars are implicitly forced to 0.
 
         self.log(f"Total locked-shift constraints: {constraints_added}")
         return constraints_added

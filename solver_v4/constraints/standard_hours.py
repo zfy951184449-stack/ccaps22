@@ -74,8 +74,11 @@ class StandardHoursConstraint(BaseConstraint):
         month_buckets = self._split_window_by_month(data.window)
         self.log(f"Window split into {len(month_buckets)} month bucket(s).")
         
-        # 5. Get All Employees
-        all_employees = {ep.employee_id for ep in data.employee_profiles}
+        # Only constrain employees who are candidates for at least one operation
+        all_employees = set()
+        for op in data.operation_demands:
+            for pos in op.position_qualifications:
+                all_employees.update(pos.candidate_employee_ids)
         
         constraints_added = 0
         

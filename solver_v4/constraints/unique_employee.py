@@ -31,17 +31,55 @@ class UniqueEmployeeConstraint(BaseConstraint):
     default_enabled = True
     is_hard = True
     
+    @staticmethod
+    def _build_op_to_group_uf(shared_preferences) -> Dict[int, int]:
+        """
+        Build op_id -> canonical_group_id mapping using Union-Find.
+        
+        Merges all share groups that share at least one common operation
+        into a single canonical group, ensuring transitivity:
+          Group A: {op1, op2}
+          Group B: {op2, op3}
+          → op1, op2, op3 all map to the same canonical group.
+        """
+        if not shared_preferences:
+            return {}
+        
+        parent: Dict[int, int] = {}
+        
+        def find(x: int) -> int:
+            if x not in parent:
+                parent[x] = x
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]  # path compression
+                x = parent[x]
+            return x
+        
+        def union(a: int, b: int) -> None:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+        
+        # Union all operations within each share group
+        for group in shared_preferences:
+            op_ids = [m["operation_plan_id"] for m in group.members]
+            for i in range(1, len(op_ids)):
+                union(op_ids[0], op_ids[i])
+        
+        # Build final mapping: op_id -> canonical root
+        result: Dict[int, int] = {}
+        for op_id in parent:
+            result[op_id] = find(op_id)
+        
+        return result
+    
     def apply(self, ctx: SolverContext, data: SolverRequest) -> int:
         """Apply unique employee constraints"""
         model = ctx.model
         index = ctx.index
         
-        # 1. Map Operation -> Share Group ID
-        op_to_group = {}
-        if data.shared_preferences:
-            for group in data.shared_preferences:
-                for member in group.members:
-                    op_to_group[member["operation_plan_id"]] = group.share_group_id
+        # 1. Map Operation -> Canonical Share Group ID (Union-Find for transitivity)
+        op_to_group = self._build_op_to_group_uf(data.shared_preferences)
                     
         # 2. Precompute Operation Time Intervals (Unix Timestamp)
         # Map: op_id -> (start, end)
@@ -190,28 +228,3 @@ class UniqueEmployeeConstraint(BaseConstraint):
         model.AddMaxEquality(or_var, relevant)
         return or_var
 
-    def _merge_intervals(self, intervals: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
-        """Merge overlapping intervals"""
-        if not intervals:
-            return []
-            
-        # Sort by start time
-        sorted_ints = sorted(intervals, key=lambda x: x[0])
-        merged = []
-        
-        current_start, current_end = sorted_ints[0]
-        
-        for i in range(1, len(sorted_ints)):
-            next_start, next_end = sorted_ints[i]
-            
-            if next_start < current_end: # Overlap or touch? Strict overlap needed? 
-                # If 10-11 and 11-12. Touch. Not overlap. 
-                # If next_start < current_end means they share time. 
-                # Merge.
-                current_end = max(current_end, next_end)
-            else:
-                merged.append((current_start, current_end))
-                current_start, current_end = next_start, next_end
-                
-        merged.append((current_start, current_end))
-        return merged

@@ -20,6 +20,7 @@ export interface EnrichedAssignment {
     employee_code: string;
     planned_start: string | Date;
     planned_end: string | Date;
+    stage_name?: string | null;
 }
 
 export interface ResultSummaryV4 {

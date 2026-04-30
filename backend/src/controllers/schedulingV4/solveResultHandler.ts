@@ -62,17 +62,20 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                     bop.planned_start_datetime,
                     bop.planned_end_datetime,
                     GROUP_CONCAT(DISTINCT bsg.id ORDER BY bsg.id) as share_group_ids,
-                    MIN(bsg.group_name) as share_group_name
+                    MIN(bsg.group_name) as share_group_name,
+                    ps.stage_name
                 FROM batch_operation_plans bop
                 JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
                 JOIN operations o ON bop.operation_id = o.id
+                LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
+                LEFT JOIN process_stages ps ON sos.stage_id = ps.id
                 LEFT JOIN batch_share_group_members bsgm ON bsgm.batch_operation_plan_id = bop.id
                 LEFT JOIN batch_share_groups bsg ON bsg.id = bsgm.group_id
                 WHERE pbp.id IN (${placeholders})
                   AND bop.planned_start_datetime >= ?
                   AND bop.planned_start_datetime <= DATE_ADD(?, INTERVAL 1 DAY)
                 GROUP BY bop.id, pbp.batch_code, o.operation_name, bop.required_people, 
-                         bop.planned_start_datetime, bop.planned_end_datetime
+                         bop.planned_start_datetime, bop.planned_end_datetime, ps.stage_name
             `, [...batchIds, windowStart, windowEnd]);
 
             opRows.forEach(r => opMap.set(r.operation_plan_id, r));
@@ -158,10 +161,19 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                  ORDER BY calendar_date`,
                 [windowStart, windowEnd]
             );
-            calendarDays = calRows.map(r => ({
-                date: r.date instanceof Date ? r.date.toISOString().split('T')[0] : String(r.date).split('T')[0],
-                is_workday: Boolean(r.is_workday)
-            }));
+            calendarDays = calRows.map(r => {
+                let dateStr: string;
+                if (r.date instanceof Date) {
+                    // Use local-time getters to avoid UTC timezone shift
+                    const y = r.date.getFullYear();
+                    const m = String(r.date.getMonth() + 1).padStart(2, '0');
+                    const d = String(r.date.getDate()).padStart(2, '0');
+                    dateStr = `${y}-${m}-${d}`;
+                } else {
+                    dateStr = String(r.date).split('T')[0];
+                }
+                return { date: dateStr, is_workday: Boolean(r.is_workday) };
+            });
             workdayCount = calendarDays.filter(d => d.is_workday).length;
         }
 
@@ -185,13 +197,15 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                 const isNight = !!shiftDef?.is_night_shift;
 
                 const ops = sched.tasks.map((t: any) => {
+                    const opMeta = opMap.get(t.operation_id);
                     return {
                         operation_plan_id: t.operation_id,
                         planned_start: t.start,
                         planned_end: t.end,
                         duration_minutes: (new Date(t.end).getTime() - new Date(t.start).getTime()) / 60000,
                         operation_name: t.operation_name,
-                        batch_code: t.batch_code
+                        batch_code: t.batch_code,
+                        stage_name: opMeta?.stage_name || null
                     };
                 });
 
@@ -233,7 +247,8 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                                 employee_name: emp.employee_name,
                                 employee_code: emp.employee_code,
                                 planned_start: t.start,
-                                planned_end: t.end
+                                planned_end: t.end,
+                                stage_name: opMeta?.stage_name || null
                             });
                             coveredOps.add(t.operation_id);
                         }
@@ -256,7 +271,8 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                         employee_name: emp.employee_name,
                         employee_code: emp.employee_code,
                         planned_start: op.planned_start_datetime,
-                        planned_end: op.planned_end_datetime
+                        planned_end: op.planned_end_datetime,
+                        stage_name: op.stage_name || null
                     });
                     coveredOps.add(a.operation_id);
                 }
@@ -330,6 +346,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                 required_people: op.required_people,
                 share_group_ids: op.share_group_ids || null,
                 share_group_name: op.share_group_name || null,
+                stage_name: op.stage_name || null,
                 positions: []
             });
 

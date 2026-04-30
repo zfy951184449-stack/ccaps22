@@ -1,4 +1,0 @@
-name: biopharma-cmo
-version: 1
-summary: Process, equipment, quality, and utility semantics for biopharma CMO APS
-default_prompt: "Use this skill only for biopharma process, equipment, quality, or utility constraints. Read only the listed references unless the task needs more."

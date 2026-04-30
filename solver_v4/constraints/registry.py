@@ -22,15 +22,13 @@ from constraints.employee_availability import EmployeeAvailabilityConstraint
 from constraints.locked_shifts import LockedShiftsConstraint
 from constraints.shift_assignment import ShiftAssignmentConstraint
 from constraints.flexible_scheduling import FlexibleSchedulingConstraint
-from constraints.work_days_limit import MaxConsecutiveWorkDaysConstraint
-from constraints.consecutive_rest_limit import MaxConsecutiveRestDaysConstraint
+from constraints.consecutive_days import ConsecutiveDaysConstraint
 from constraints.standard_hours import StandardHoursConstraint
-from constraints.night_rest import NightRestConstraint
-from constraints.no_isolated_night_shift import NoIsolatedNightShiftConstraint
-from constraints.night_shift_interval import NightShiftIntervalConstraint
+from constraints.night_shift import NightShiftConstraint
 from constraints.special_shift_joint_coverage import SpecialShiftJointCoverageConstraint
 from constraints.prefer_standard_shift import PreferStandardShiftConstraint
 from constraints.consecutive_work_rest_pattern import ConsecutiveWorkRestPatternConstraint
+from constraints.leadership_coverage import LeadershipCoverageConstraint
 
 
 # Phase 1: Core constraints (no shift dependency)
@@ -47,13 +45,11 @@ CORE_CONSTRAINTS = [
 SHIFT_CONSTRAINTS = [
     LockedShiftsConstraint,
     ShiftAssignmentConstraint,
+    LeadershipCoverageConstraint,          # Leadership: coverage + role ban + soft prefs
     FlexibleSchedulingConstraint,
-    MaxConsecutiveWorkDaysConstraint,
-    MaxConsecutiveRestDaysConstraint,
+    ConsecutiveDaysConstraint,          # Covers: max work days + max rest days + boundary
     StandardHoursConstraint,
-    NightRestConstraint,
-    NoIsolatedNightShiftConstraint,     # Forbid rest→night sequence
-    NightShiftIntervalConstraint,
+    NightShiftConstraint,               # Covers: night rest + no isolated + interval
     SpecialShiftJointCoverageConstraint,
     PreferStandardShiftConstraint,      # Block SPECIAL when STANDARD suffices
     ConsecutiveWorkRestPatternConstraint,   # Default OFF

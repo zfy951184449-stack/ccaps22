@@ -103,6 +103,7 @@ interface V4EmployeeProfile {
     employee_id: number;
     employee_code: string;
     employee_name: string;
+    org_role: string;
     qualifications: { qualification_id: number; level: number }[];
     unavailable_periods: { start_datetime: string; end_datetime: string }[];
 }
@@ -686,7 +687,7 @@ export class DataAssemblerV4 {
 
     private static async fetchEmployees(startDate: string, endDate: string, teamIds: number[] = []): Promise<V4EmployeeProfile[]> {
         // Fetch basic info
-        let query = "SELECT id, employee_code, employee_name FROM employees WHERE employment_status = 'ACTIVE'";
+        let query = "SELECT id, employee_code, employee_name, org_role FROM employees WHERE employment_status = 'ACTIVE'";
         const params: any[] = [];
 
         if (teamIds.length > 0) {
@@ -700,7 +701,7 @@ export class DataAssemblerV4 {
                     SELECT ou.id FROM organization_units ou
                     INNER JOIN unit_tree ut ON ou.parent_id = ut.id
                 )
-                SELECT e.id, e.employee_code, e.employee_name 
+                SELECT e.id, e.employee_code, e.employee_name, e.org_role 
                 FROM employees e
                 WHERE e.employment_status = 'ACTIVE'
                   AND e.unit_id IN (SELECT id FROM unit_tree)
@@ -741,6 +742,7 @@ export class DataAssemblerV4 {
             employee_id: emp.id,
             employee_code: emp.employee_code,
             employee_name: emp.employee_name,
+            org_role: emp.org_role || 'FRONTLINE',
             qualifications: (qualMap.get(emp.id) || []).map(q => ({
                 qualification_id: q.qualification_id,
                 level: q.qualification_level

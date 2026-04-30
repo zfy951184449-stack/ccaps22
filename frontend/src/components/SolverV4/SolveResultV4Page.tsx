@@ -566,7 +566,14 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                         items: [
                             {
                                 key: 'excel', icon: <FileExcelOutlined />, label: '导出 Excel',
-                                onClick: () => { if (data && runId) { exportV4ScheduleToExcel(data, runId); message.success('Excel 导出成功'); } }
+                                onClick: async () => {
+                                    if (data && runId) {
+                                        const hide = message.loading('生成 Excel...', 0);
+                                        try { await exportV4ScheduleToExcel(data, runId); message.success('Excel 导出成功'); }
+                                        catch { message.error('Excel 导出失败'); }
+                                        finally { hide(); }
+                                    }
+                                }
                             },
                             {
                                 key: 'pdf', icon: <FilePdfOutlined />, label: '导出 PDF',

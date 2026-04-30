@@ -481,5 +481,177 @@ export const recalculateTemplate = async (req: Request, res: Response) => {
   }
 };
 
+// 导出模版总览数据（用于前端 Excel 生成）
+export const getTemplateExportData = async (req: Request, res: Response) => {
+  try {
+    const { team_id } = req.query;
+
+    // 1. 获取所有模版
+    let templateQuery = `
+      SELECT 
+        pt.*,
+        ou.unit_code as team_code,
+        ou.unit_name as team_name,
+        COUNT(DISTINCT ps.id) as stage_count
+      FROM process_templates pt
+      LEFT JOIN process_stages ps ON pt.id = ps.template_id
+      LEFT JOIN organization_units ou ON pt.team_id = ou.id
+    `;
+    const params: any[] = [];
+    if (team_id) {
+      templateQuery += ' WHERE pt.team_id = ?';
+      params.push(team_id);
+    }
+    templateQuery += ' GROUP BY pt.id, ou.unit_code, ou.unit_name ORDER BY pt.template_code';
+
+    const [templates] = await pool.execute(templateQuery, params) as any;
+
+    if (!templates.length) {
+      return res.json({ templates: [], stages: [], operations: [] });
+    }
+
+    const templateIds = templates.map((t: any) => t.id);
+    const placeholders = templateIds.map(() => '?').join(',');
+
+    // 2. 获取所有阶段
+    const [stages] = await pool.execute(`
+      SELECT
+        ps.id,
+        ps.template_id,
+        pt.template_code,
+        ps.stage_code,
+        ps.stage_name,
+        ps.stage_order,
+        ps.start_day,
+        ps.description,
+        COUNT(DISTINCT sos.id) as operation_count
+      FROM process_stages ps
+      JOIN process_templates pt ON pt.id = ps.template_id
+      LEFT JOIN stage_operation_schedules sos ON sos.stage_id = ps.id
+      WHERE ps.template_id IN (${placeholders})
+      GROUP BY ps.id
+      ORDER BY pt.template_code, ps.stage_order
+    `, templateIds) as any;
+
+    // 3. 获取所有工序调度（带绑定状态）
+    const [operations] = await pool.execute(`
+      SELECT
+        sos.id,
+        pt.template_code,
+        ps.stage_name,
+        ps.stage_code,
+        o.operation_code,
+        o.operation_name,
+        sos.operation_day,
+        sos.recommended_time,
+        o.standard_time,
+        o.required_people,
+        sos.operation_order,
+        tsb.resource_node_id,
+        rn.node_name AS resource_node_name,
+        CASE
+          WHEN tsb.resource_node_id IS NULL THEN 'UNBOUND'
+          WHEN rn.id IS NULL THEN 'INVALID_NODE'
+          WHEN rn.is_active = 0 THEN 'NODE_INACTIVE'
+          ELSE 'BOUND'
+        END AS binding_status
+      FROM stage_operation_schedules sos
+      JOIN process_stages ps ON ps.id = sos.stage_id
+      JOIN process_templates pt ON pt.id = ps.template_id
+      JOIN operations o ON o.id = sos.operation_id
+      LEFT JOIN template_stage_operation_resource_bindings tsb ON tsb.template_schedule_id = sos.id
+      LEFT JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
+      WHERE ps.template_id IN (${placeholders})
+      ORDER BY pt.template_code, ps.stage_order, sos.operation_day, sos.operation_order
+    `, templateIds) as any;
+
+    res.json({ templates, stages, operations });
+  } catch (error) {
+    console.error('Error fetching template export data:', error);
+    res.status(500).json({ error: 'Failed to fetch template export data' });
+  }
+};
+
+// 单模板报告数据（用于前端 Excel 甘特图生成）
+export const getTemplateReportData = async (req: Request, res: Response) => {
+  try {
+    const templateId = Number(req.params.id);
+    if (Number.isNaN(templateId)) {
+      return res.status(400).json({ error: 'Invalid template id' });
+    }
+
+    // 1. 模板基础信息
+    const [templateRows] = await pool.execute(
+      `SELECT
+          pt.*,
+          ou.unit_code AS team_code,
+          ou.unit_name AS team_name
+       FROM process_templates pt
+       LEFT JOIN organization_units ou ON ou.id = pt.team_id
+       WHERE pt.id = ?`,
+      [templateId],
+    ) as any;
+
+    if (!templateRows.length) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    const template = templateRows[0];
+
+    // 2. 阶段列表（含工序计数）
+    const [stages] = await pool.execute(
+      `SELECT
+          ps.id,
+          ps.stage_code,
+          ps.stage_name,
+          ps.stage_order,
+          ps.start_day,
+          ps.description,
+          COUNT(DISTINCT sos.id) AS operation_count
+       FROM process_stages ps
+       LEFT JOIN stage_operation_schedules sos ON sos.stage_id = ps.id
+       WHERE ps.template_id = ?
+       GROUP BY ps.id
+       ORDER BY ps.stage_order`,
+      [templateId],
+    ) as any;
+
+    // 3. 工序列表（含资源绑定状态）
+    const [operations] = await pool.execute(
+      `SELECT
+          sos.id,
+          ps.stage_code,
+          ps.stage_name,
+          o.operation_code,
+          o.operation_name,
+          sos.operation_day,
+          sos.recommended_time,
+          o.standard_time,
+          o.required_people,
+          sos.operation_order,
+          rn.node_name AS resource_node_name,
+          CASE
+            WHEN tsb.resource_node_id IS NULL THEN 'UNBOUND'
+            WHEN rn.id IS NULL THEN 'INVALID_NODE'
+            WHEN rn.is_active = 0 THEN 'NODE_INACTIVE'
+            ELSE 'BOUND'
+          END AS binding_status
+       FROM stage_operation_schedules sos
+       JOIN process_stages ps ON ps.id = sos.stage_id
+       JOIN operations o ON o.id = sos.operation_id
+       LEFT JOIN template_stage_operation_resource_bindings tsb ON tsb.template_schedule_id = sos.id
+       LEFT JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
+       WHERE ps.template_id = ?
+       ORDER BY ps.stage_order, sos.operation_day, sos.operation_order`,
+      [templateId],
+    ) as any;
+
+    res.json({ template, stages, operations });
+  } catch (error) {
+    console.error('Error fetching template report data:', error);
+    res.status(500).json({ error: 'Failed to fetch template report data' });
+  }
+};
+
 // 导出更新总天数函数，供其他控制器使用
 export { updateTemplateTotalDays };

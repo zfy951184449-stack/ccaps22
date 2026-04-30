@@ -11,6 +11,7 @@ import { TemplateRiskFocus } from './TemplateRiskBadges';
 import { TeamSummary, TemplateSummary } from './types';
 import TemplateWorkbookImportModal from '../TemplateWorkbookImportModal';
 import { exportTemplateWorkbook } from '../../services/templateWorkbookApi';
+import { exportTemplateToExcel, TemplateExportData } from '../../utils/exportTemplateExcel';
 
 const RECENT_DAYS = 14;
 
@@ -49,6 +50,7 @@ const ProcessTemplateV2: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [workbookImportOpen, setWorkbookImportOpen] = useState(false);
   const [exportingWorkbook, setExportingWorkbook] = useState(false);
+  const [exportingOverview, setExportingOverview] = useState(false);
 
   const loadTeams = useCallback(async () => {
     try {
@@ -241,6 +243,43 @@ const ProcessTemplateV2: React.FC = () => {
     }
   }, [selectedTemplate]);
 
+  const handleExportOverview = useCallback(async () => {
+    try {
+      setExportingOverview(true);
+      const params: Record<string, string> = {};
+      if (activeTeamId && activeTeamId !== 'all') {
+        params.team_id = activeTeamId;
+      }
+      const response = await axios.get('/api/process-templates/export-data', { params });
+      const exportData: TemplateExportData = {
+        templates: response.data.templates ?? [],
+        stages: response.data.stages ?? [],
+        operations: (response.data.operations ?? []).map((op: any) => ({
+          id: Number(op.id),
+          template_code: op.template_code,
+          stage_name: op.stage_name,
+          stage_code: op.stage_code,
+          operation_code: op.operation_code,
+          operation_name: op.operation_name,
+          operation_day: Number(op.operation_day),
+          recommended_time: Number(op.recommended_time),
+          standard_time: op.standard_time != null ? Number(op.standard_time) : undefined,
+          required_people: op.required_people != null ? Number(op.required_people) : undefined,
+          resource_node_name: op.resource_node_name || null,
+          binding_status: op.binding_status,
+          operation_order: Number(op.operation_order),
+        })),
+      };
+      await exportTemplateToExcel(exportData);
+      message.success('模版总览 Excel 导出成功');
+    } catch (error) {
+      console.error('Failed to export template overview:', error);
+      message.error('导出模版总览 Excel 失败');
+    } finally {
+      setExportingOverview(false);
+    }
+  }, [activeTeamId]);
+
   return (
     <>
       <div className="flex h-full flex-col gap-4 pb-4" style={{ minHeight: 'calc(100vh - 120px)' }}>
@@ -301,6 +340,8 @@ const ProcessTemplateV2: React.FC = () => {
           onExport={handleExportWorkbook}
           exportDisabled={!selectedTemplate}
           exportLoading={exportingWorkbook}
+          onExportOverview={handleExportOverview}
+          exportOverviewLoading={exportingOverview}
         />
 
         {errorMessage ? (

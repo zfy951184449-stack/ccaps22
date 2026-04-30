@@ -36,11 +36,7 @@ class NightRestConstraint(BaseConstraint):
         model = ctx.model
         shift_assignments = ctx.shift_assignments
         
-        # 0. Check if constraint is enabled
         config = data.config or {}
-        if not config.get("enforce_night_rest", True):
-            self.log("Night rest constraint is disabled.", level="info")
-            return 0
         
         if not shift_assignments:
             self.log("Shift assignments not present. Skipping.", level="info")

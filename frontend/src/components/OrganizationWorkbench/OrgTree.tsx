@@ -6,11 +6,13 @@ import {
     TeamOutlined,
     ClusterOutlined,
     DeploymentUnitOutlined,
-    MoreOutlined,
+    EditOutlined,
+    PlusOutlined,
+    SwapOutlined,
     DeleteOutlined
 } from '@ant-design/icons';
 import { OrganizationUnitNode } from '../../types/organizationWorkbench';
-import { Dropdown, MenuProps } from 'antd';
+import { Dropdown, MenuProps, Divider } from 'antd';
 
 interface OrgTreeProps {
     units: OrganizationUnitNode[];
@@ -20,6 +22,9 @@ interface OrgTreeProps {
     expandedKeys?: React.Key[];
     autoExpandParent?: boolean;
     onDelete?: (unitId: number) => void;
+    onEdit?: (unit: OrganizationUnitNode) => void;
+    onAddChild?: (parentId: number) => void;
+    onMove?: (unitId: number) => void;
 }
 
 const OrgTree: React.FC<OrgTreeProps> = ({
@@ -29,7 +34,10 @@ const OrgTree: React.FC<OrgTreeProps> = ({
     onExpand,
     expandedKeys,
     autoExpandParent,
-    onDelete
+    onDelete,
+    onEdit,
+    onAddChild,
+    onMove
 }) => {
 
     const treeData = useMemo(() => {
@@ -45,6 +53,34 @@ const OrgTree: React.FC<OrgTreeProps> = ({
             if (node.unitType === 'SHIFT') icon = <DeploymentUnitOutlined className="text-gray-500" />;
 
             const menuItems: MenuProps['items'] = [
+                {
+                    key: 'edit',
+                    label: 'Edit Unit',
+                    icon: <EditOutlined />,
+                    onClick: (e) => {
+                        e.domEvent.stopPropagation();
+                        if (onEdit) onEdit(node);
+                    }
+                },
+                {
+                    key: 'add-child',
+                    label: 'Add Sub-Unit',
+                    icon: <PlusOutlined />,
+                    onClick: (e) => {
+                        e.domEvent.stopPropagation();
+                        if (onAddChild) onAddChild(node.id);
+                    }
+                },
+                {
+                    key: 'move',
+                    label: 'Move To...',
+                    icon: <SwapOutlined />,
+                    onClick: (e) => {
+                        e.domEvent.stopPropagation();
+                        if (onMove) onMove(node.id);
+                    }
+                },
+                { type: 'divider' },
                 {
                     key: 'delete',
                     label: 'Delete Unit',
@@ -76,7 +112,7 @@ const OrgTree: React.FC<OrgTreeProps> = ({
 
             return {
                 key: node.id,
-                title: onDelete ? (
+                title: (onDelete || onEdit || onAddChild || onMove) ? (
                     <Dropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
                         {titleNode}
                     </Dropdown>

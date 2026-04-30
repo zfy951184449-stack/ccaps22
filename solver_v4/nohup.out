@@ -1,0 +1,32 @@
+2026-04-18 22:02:26 [INFO] [SolverV4] ============================================================
+2026-04-18 22:02:26 [INFO] [SolverV4] Solver V4 Logging Initialized at 2026-04-18T22:02:26.788786
+2026-04-18 22:02:26 [INFO] [SolverV4] Log directory: /Users/zhengfengyi/MFG8APS/solver_v4/logs
+2026-04-18 22:02:26 [INFO] [SolverV4] ============================================================
+2026-04-18 22:02:26 [INFO] [SolverV4.App] Starting Solver V4 on port 5005
+ * Serving Flask app 'app' (lazy loading)
+ * Environment: production
+   WARNING: This is a development server. Do not use it in a production deployment.
+   Use a production WSGI server instead.
+ * Debug mode: off
+Traceback (most recent call last):
+  File "/Users/zhengfengyi/MFG8APS/solver_v4/app.py", line 217, in <module>
+    main()
+  File "/Users/zhengfengyi/MFG8APS/solver_v4/app.py", line 214, in main
+    app.run(host="0.0.0.0", port=port, debug=debug)
+  File "/Users/zhengfengyi/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 922, in run
+    run_simple(t.cast(str, host), port, self, **options)
+  File "/Users/zhengfengyi/Library/Python/3.9/lib/python/site-packages/werkzeug/serving.py", line 1008, in run_simple
+    inner()
+  File "/Users/zhengfengyi/Library/Python/3.9/lib/python/site-packages/werkzeug/serving.py", line 948, in inner
+    srv = make_server(
+  File "/Users/zhengfengyi/Library/Python/3.9/lib/python/site-packages/werkzeug/serving.py", line 780, in make_server
+    return ThreadedWSGIServer(
+  File "/Users/zhengfengyi/Library/Python/3.9/lib/python/site-packages/werkzeug/serving.py", line 686, in __init__
+    super().__init__(server_address, handler)  # type: ignore
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 452, in __init__
+    self.server_bind()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/server.py", line 138, in server_bind
+    socketserver.TCPServer.server_bind(self)
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 466, in server_bind
+    self.socket.bind(self.server_address)
+OSError: [Errno 48] Address already in use

@@ -313,5 +313,104 @@ class TestShareGroupConstraint(unittest.TestCase):
         self.assertEqual(solver.Value(assignments[(2, 1, 101)]), 1)
         self.assertEqual(solver.Value(assignments[(3, 1, 101)]), 1)
 
+    def test_transitive_share_group_overlap(self):
+        """
+        Reproduces the transitivity bug from Run 1266 (2026-07-15):
+        
+        Share Group A: Op1 (取样) ↔ Op2 (接种)
+        Share Group B: Op2 (接种) ↔ Op3 (留样)
+        
+        All three ops overlap in time. Before fix, the dict-based op_to_group
+        would assign Op1 → GroupA, Op2 → GroupB (overwritten), Op3 → GroupB.
+        UniqueEmployee would then block Op1+Op3 overlap (different group IDs),
+        while ShareGroup requires Op1==Op3 (transitive) → INFEASIBLE.
+        
+        After fix (Union-Find), all three ops get the same canonical group ID,
+        so UniqueEmployee correctly exempts their overlap → OPTIMAL.
+        """
+        # Op1 (取样): 09:00-11:00, 2 people
+        op1 = OperationDemand(
+            operation_plan_id=1, batch_id=1, batch_code="B1", operation_id=1, operation_name="SUB取样",
+            planned_start="2023-10-01T01:00:00Z", planned_end="2023-10-01T03:00:00Z",
+            planned_duration_minutes=120, required_people=2,
+            position_qualifications=[
+                PositionQualification(1, [], [101, 102, 103]),
+                PositionQualification(2, [], [101, 102, 103]),
+            ]
+        )
+        # Op2 (接种): 10:00-13:00, 2 people (overlaps with Op1 AND Op3)
+        op2 = OperationDemand(
+            operation_plan_id=2, batch_id=1, batch_code="B1", operation_id=2, operation_name="50L SUB接种",
+            planned_start="2023-10-01T02:00:00Z", planned_end="2023-10-01T05:00:00Z",
+            planned_duration_minutes=180, required_people=2,
+            position_qualifications=[
+                PositionQualification(1, [], [101, 102, 103]),
+                PositionQualification(2, [], [101, 102, 103]),
+            ]
+        )
+        # Op3 (留样): 09:00-09:30, 2 people (overlaps with Op1)
+        op3 = OperationDemand(
+            operation_plan_id=3, batch_id=1, batch_code="B1", operation_id=3, operation_name="留样",
+            planned_start="2023-10-01T01:00:00Z", planned_end="2023-10-01T01:30:00Z",
+            planned_duration_minutes=30, required_people=2,
+            position_qualifications=[
+                PositionQualification(1, [], [101, 102, 103]),
+                PositionQualification(2, [], [101, 102, 103]),
+            ]
+        )
+
+        req = SolverRequest(
+            request_id="test_transitive", window={"start_date": "2023-10-01", "end_date": "2023-10-01"},
+            operation_demands=[op1, op2, op3], employee_profiles=[], calendar=[], shift_definitions=[],
+            shared_preferences=[
+                # Two separate groups sharing Op2 as pivot
+                SharedPreference(100, "取样↔接种", [
+                    {"operation_plan_id": 1, "required_people": 2},
+                    {"operation_plan_id": 2, "required_people": 2},
+                ]),
+                SharedPreference(200, "接种↔留样", [
+                    {"operation_plan_id": 2, "required_people": 2},
+                    {"operation_plan_id": 3, "required_people": 2},
+                ]),
+            ]
+        )
+
+        assignments = {}
+        for op_id in (1, 2, 3):
+            for pos in (1, 2):
+                for emp_id in (101, 102, 103):
+                    assignments[(op_id, pos, emp_id)] = self.model.NewBoolVar(f"A_{op_id}_{pos}_{emp_id}")
+
+        # Basic scheduling: exactly 1 person per position, at most 1 position per person per op
+        for op_id in (1, 2, 3):
+            for pos in (1, 2):
+                self.model.AddExactlyOne(assignments[(op_id, pos, emp)] for emp in (101, 102, 103))
+            for emp in (101, 102, 103):
+                self.model.AddAtMostOne(assignments[(op_id, pos, emp)] for pos in (1, 2))
+
+        idx = AssignmentIndex(assignments)
+        ctx = SolverContext(model=self.model, assignments=assignments, index=idx,
+                            shift_assignments={}, shift_index=None, config={})
+
+        # Apply BOTH constraints (order matters: ShareGroup binds, UniqueEmployee exempts)
+        ShareGroupConstraint(logger=self.logger).apply(ctx, req)
+        UniqueEmployeeConstraint(logger=self.logger).apply(ctx, req)
+
+        # Force employee 101 and 102 to all three ops
+        self.model.Add(assignments[(1, 1, 101)] == 1)
+        self.model.Add(assignments[(1, 2, 102)] == 1)
+
+        solver = self._create_solver()
+        status = solver.Solve(self.model)
+
+        # After fix: should be OPTIMAL (all three ops get same canonical group → overlap exempt)
+        self.assertEqual(status, cp_model.OPTIMAL)
+
+        # Verify transitivity: Op3 (留样) must use the same team as Op1 (取样)
+        for emp in (101, 102):
+            op3_emp = solver.Value(assignments[(3, 1, emp)]) + solver.Value(assignments[(3, 2, emp)])
+            self.assertEqual(op3_emp, 1, f"Employee {emp} should be assigned to Op3 (留样)")
+
 if __name__ == '__main__':
     unittest.main()
+

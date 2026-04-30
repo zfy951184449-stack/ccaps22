@@ -34,3 +34,8 @@ class SolverContext:
 
     # Parsed config dict (from req.config)
     config: Dict[str, Any] = field(default_factory=dict)
+
+    # Soft constraint penalty terms: list of (var, weight) tuples
+    # Shared channel for all soft penalties → summed into objective by _build_objectives
+    # Producers: LeadershipCoverageConstraint, NightShiftConstraint (extended rest), etc.
+    leadership_penalty_vars: list = field(default_factory=list)

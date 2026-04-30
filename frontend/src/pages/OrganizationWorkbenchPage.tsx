@@ -6,6 +6,8 @@ import { SearchOutlined, PlusOutlined, UploadOutlined, DownloadOutlined } from '
 import OrgTree from '../components/OrganizationWorkbench/OrgTree';
 import EmployeeTable from '../components/OrganizationWorkbench/EmployeeTable';
 import EditEmployeeModalV2 from '../components/OrganizationWorkbench/EditEmployeeModalV2';
+import CreateEmployeeModal from '../components/OrganizationWorkbench/CreateEmployeeModal';
+import EditUnitModal from '../components/OrganizationWorkbench/EditUnitModal';
 import OrgUnitSelectorModal from '../components/OrganizationWorkbench/OrgUnitSelectorModal';
 import UnavailabilityTab from '../components/UnavailabilityTab';
 import AddUnitModal from '../components/OrganizationWorkbench/AddUnitModal';
@@ -49,6 +51,18 @@ const OrganizationWorkbenchPage: React.FC = () => {
 
   // Add Unit Modal
   const [isAddUnitModalVisible, setIsAddUnitModalVisible] = useState(false);
+  const [addUnitParentId, setAddUnitParentId] = useState<number | null>(null);
+
+  // Create Employee Modal
+  const [isCreateEmployeeModalVisible, setIsCreateEmployeeModalVisible] = useState(false);
+
+  // Edit Unit Modal
+  const [isEditUnitModalVisible, setIsEditUnitModalVisible] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<OrganizationUnitNode | null>(null);
+
+  // Move Unit Modal
+  const [isMoveUnitModalVisible, setIsMoveUnitModalVisible] = useState(false);
+  const [movingUnitId, setMovingUnitId] = useState<number | null>(null);
 
   // --- Effects ---
   useEffect(() => {
@@ -222,6 +236,37 @@ const OrganizationWorkbenchPage: React.FC = () => {
     });
   };
 
+  const handleEditUnit = (unit: OrganizationUnitNode) => {
+    setEditingUnit(unit);
+    setIsEditUnitModalVisible(true);
+  };
+
+  const handleAddChildUnit = (parentId: number) => {
+    setAddUnitParentId(parentId);
+    setIsAddUnitModalVisible(true);
+  };
+
+  const handleMoveUnit = (unitId: number) => {
+    setMovingUnitId(unitId);
+    setIsMoveUnitModalVisible(true);
+  };
+
+  const handleMoveUnitSelect = async (newParentId: number) => {
+    if (!movingUnitId) return;
+    try {
+      await axios.put(`/api/org-structure/units/${movingUnitId}`, {
+        parent_id: newParentId,
+      });
+      message.success('Unit moved successfully');
+      setIsMoveUnitModalVisible(false);
+      setMovingUnitId(null);
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      message.error(err?.response?.data?.message || 'Failed to move unit');
+    }
+  };
+
   const selectedUnit = selectedUnitId ? unitMap.get(selectedUnitId) : null;
 
   return (
@@ -245,12 +290,18 @@ const OrganizationWorkbenchPage: React.FC = () => {
               expandedKeys={expandedKeys}
               autoExpandParent={autoExpandParent}
               onDelete={handleDeleteUnit}
+              onEdit={handleEditUnit}
+              onAddChild={handleAddChildUnit}
+              onMove={handleMoveUnit}
             />
           )}
         </div>
 
         <div className="p-4 border-t border-gray-100 bg-white">
-          <Button block icon={<PlusOutlined />} className="text-gray-600" onClick={() => setIsAddUnitModalVisible(true)}>
+          <Button block icon={<PlusOutlined />} className="text-gray-600" onClick={() => {
+            setAddUnitParentId(selectedUnitId);
+            setIsAddUnitModalVisible(true);
+          }}>
             Add Unit
           </Button>
         </div>
@@ -288,7 +339,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
               <Space>
                 <Button icon={<DownloadOutlined />}>Export</Button>
                 <Button icon={<UploadOutlined />}>Import</Button>
-                <Button type="primary" icon={<PlusOutlined />}>Add Employee</Button>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateEmployeeModalVisible(true)}>Add Employee</Button>
               </Space>
             </div>
 
@@ -351,8 +402,41 @@ const OrganizationWorkbenchPage: React.FC = () => {
           setIsAddUnitModalVisible(false);
           fetchData();
         }}
-        parentUnitId={selectedUnitId}
+        parentUnitId={addUnitParentId}
         allUnits={hierarchy?.units || []}
+      />
+
+      <CreateEmployeeModal
+        visible={isCreateEmployeeModalVisible}
+        onCancel={() => setIsCreateEmployeeModalVisible(false)}
+        onSuccess={() => {
+          setIsCreateEmployeeModalVisible(false);
+          reloadEmployees();
+          fetchData(); // Refresh counts
+        }}
+        defaultUnitId={selectedUnitId}
+        defaultUnitName={selectedUnit?.unitName || null}
+      />
+
+      <EditUnitModal
+        visible={isEditUnitModalVisible}
+        onCancel={() => setIsEditUnitModalVisible(false)}
+        onSuccess={() => {
+          setIsEditUnitModalVisible(false);
+          fetchData();
+        }}
+        unit={editingUnit}
+        allUnits={hierarchy?.units || []}
+      />
+
+      <OrgUnitSelectorModal
+        visible={isMoveUnitModalVisible}
+        onCancel={() => {
+          setIsMoveUnitModalVisible(false);
+          setMovingUnitId(null);
+        }}
+        onSelect={handleMoveUnitSelect}
+        title="Move Unit To..."
       />
     </div>
   );

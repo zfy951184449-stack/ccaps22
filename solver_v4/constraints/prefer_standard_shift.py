@@ -73,6 +73,9 @@ class PreferStandardShiftConstraint(BaseConstraint):
         op_map = {op.operation_plan_id: op for op in data.operation_demands}
 
         for op in data.operation_demands:
+            # Skip FLEXIBLE tasks — their planned times are not final
+            if getattr(op, 'scheduling_mode', 'FIXED') == 'FLEXIBLE':
+                continue
             op_start = parse_iso_to_unix(op.planned_start)
             op_end = parse_iso_to_unix(op.planned_end)
 

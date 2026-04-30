@@ -11,9 +11,10 @@ export interface SolverConfig {
     enable_one_position: boolean;
     enable_locked_operations: boolean;
     enable_locked_shifts: boolean;
+    strict_locked_shifts: boolean;
     enable_shift_assignment: boolean;
     enable_max_consecutive_work_days: boolean;
-    enable_max_consecutive_rest_days: boolean; // NEW
+    enable_max_consecutive_rest_days: boolean;
     enable_standard_hours: boolean;
     enable_night_rest: boolean;
     enable_no_isolated_night_shift: boolean;
@@ -29,9 +30,14 @@ export interface SolverConfig {
     max_consecutive_rest_days_pattern: number;
 
     // Parameters
-    max_consecutive_rest_days: number; // NEW
-    min_night_shift_interval: number; // NEW
-    min_rest_after_night_block: number; // NEW
+    max_consecutive_rest_days: number;
+    min_night_shift_interval: number;
+    min_rest_after_night_block: number;
+
+    // Night Rest Extension (soft)
+    enable_prefer_extended_night_rest: boolean;
+    preferred_night_rest_days: number;
+    objective_weight_night_rest_extend: number;
 
     team_ids?: number[]; // Optional list of team IDs to filter by
 
@@ -40,7 +46,7 @@ export interface SolverConfig {
     enable_minimize_special_shifts: boolean;
     objective_weight_deviation: number;
     objective_weight_special_shifts: number;
-    objective_weight_night_balance: number; // NEW
+    objective_weight_night_balance: number;
     enable_balance_weekend_work: boolean;
     objective_weight_weekend_balance: number;
     enable_minimize_triple_salary: boolean;
@@ -55,6 +61,17 @@ export interface SolverConfig {
     enable_standalone_tasks: boolean;
     allow_standalone_vacancy: boolean;
     objective_weight_standalone_vacancy: number;
+
+    // Leadership Coverage
+    enable_leadership_coverage: boolean;
+    objective_weight_leader_nonworkday: number;
+    objective_weight_leader_workday_rest: number;
+    objective_weight_leader_ops: number;
+    objective_weight_leader_special: number;
+
+    // Solver Time Control
+    max_time_seconds: number;
+    stagnation_limit: number;
 }
 
 export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
@@ -63,6 +80,7 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     enable_one_position: true,
     enable_locked_operations: true,
     enable_locked_shifts: true,
+    strict_locked_shifts: false,
     enable_shift_assignment: true,
     enable_max_consecutive_work_days: true,
     enable_max_consecutive_rest_days: true,
@@ -84,6 +102,11 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     max_consecutive_rest_days: 4,
     min_night_shift_interval: 7,
     min_rest_after_night_block: 2,
+
+    // Night Rest Extension Defaults
+    enable_prefer_extended_night_rest: true,
+    preferred_night_rest_days: 2,
+    objective_weight_night_rest_extend: 15,
 
     team_ids: [], // Default to empty (all teams)
 
@@ -107,6 +130,17 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     enable_standalone_tasks: true,
     allow_standalone_vacancy: true,
     objective_weight_standalone_vacancy: 5000,
+
+    // Leadership Coverage Defaults
+    enable_leadership_coverage: true,
+    objective_weight_leader_nonworkday: 20,
+    objective_weight_leader_workday_rest: 10,
+    objective_weight_leader_ops: 30,
+    objective_weight_leader_special: 50,
+
+    // Solver Time Control Defaults
+    max_time_seconds: 300,
+    stagnation_limit: 300,
 };
 
 interface SolverConfigurationModalProps {
@@ -185,20 +219,29 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_one_position', title: '一人一岗', description: '同一操作内禁止多岗位分配' },
         { key: 'enable_locked_operations', title: '保留锁定操作', description: '手工锁定的操作人员分配将作为硬约束保留' },
         { key: 'enable_locked_shifts', title: '保留锁定班次', description: '手工锁定的员工班次将作为硬约束保留' },
+        { key: 'strict_locked_shifts', title: '└ 严格模式', description: '锁定数据异常时直接报错（关闭则跳过异常条目）', indent: true },
         { key: 'enable_shift_assignment', title: '班次分配规则', description: '根据任务需求自动关联班次' },
+        { key: 'enable_standard_hours', title: '标准工时合规', description: '确保排班符合法定工时要求' },
+        { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '无操作需求时优先安排标准班（白班）' },
+        { key: 'enable_leadership_coverage', title: '领导层排班约束', description: '生产日必须有管理岗在岗；主管/经理不参与操作；管理人员优先工作日出勤' },
+    ];
+
+    const consecutiveDaysConstraints = [
         { key: 'enable_max_consecutive_work_days', title: '最大连续工作天数', description: '限制连续工作天数上限' },
         { key: 'enable_max_consecutive_rest_days', title: '最大连续休息天数', description: '限制连续休息天数，防止长期缺勤' },
-        { key: 'enable_standard_hours', title: '标准工时合规', description: '确保排班符合法定工时要求' },
-        { key: 'enable_night_rest', title: '夜班后休息', description: '夜班后强制安排休息日' },
-        { key: 'enable_no_isolated_night_shift', title: '禁止孤立夜班', description: '夜班前一天必须是白班，禁止休息后直接上夜班' },
-        { key: 'enable_night_shift_interval', title: '夜班间隔', description: '两次夜班之间的最小间隔天数' },
-        { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
-        { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '无操作需求时优先安排标准班（白班）' },
         {
             key: 'enable_consecutive_work_rest_pattern',
             title: '上班/休息节奏约束',
             description: '有操作安排时：连续上班 [最少–最多] 天，连续休息 [最少–最多] 天',
         },
+    ];
+
+    const nightShiftConstraints = [
+        { key: 'enable_night_rest', title: '夜班后休息', description: '夜班后强制安排休息日' },
+        { key: 'enable_prefer_extended_night_rest', title: '└ 优先延长休息', description: '夜班后尽可能休息更多天（软约束）', indent: true },
+        { key: 'enable_no_isolated_night_shift', title: '禁止孤立夜班', description: '夜班前一天必须是白班，禁止休息后直接上夜班' },
+        { key: 'enable_night_shift_interval', title: '夜班间隔', description: '两次夜班之间的最小间隔天数' },
+        { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
     ];
 
     return (
@@ -251,17 +294,159 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                     </Select>
                 </div>
 
+                {/* Solver Time Control */}
+                <div style={{ marginBottom: 24, background: '#f0f5ff', padding: 16, borderRadius: 8, border: '1px solid #adc6ff' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                        <SettingOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                        <Text strong>求解参数</Text>
+                    </div>
+                    <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
+                        时间越长结果越优，但响应更慢。建议范围 60–600 秒。
+                    </Text>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 13 }}>最大求解时间</Text>
+                            <InputNumber
+                                size="small"
+                                min={30}
+                                max={3600}
+                                step={30}
+                                value={config.max_time_seconds}
+                                onChange={(val) => handleWeightChange('max_time_seconds', val)}
+                                style={{ width: 80 }}
+                                addonAfter="秒"
+                            />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 13 }}>停滞超时</Text>
+                            <InputNumber
+                                size="small"
+                                min={30}
+                                max={3600}
+                                step={30}
+                                value={config.stagnation_limit}
+                                onChange={(val) => handleWeightChange('stagnation_limit', val)}
+                                style={{ width: 80 }}
+                                addonAfter="秒"
+                            />
+                        </div>
+                    </div>
+                </div>
+
                 <Divider orientation="left" style={{ margin: '12px 0' }}>硬约束</Divider>
 
                 <List
                     itemLayout="horizontal"
                     dataSource={constraints}
+                    renderItem={(item: any) => (
+                        <List.Item
+                            style={item.indent ? { paddingLeft: 24, background: '#fafafa', borderRadius: 4 } : {}}
+                            actions={[
+                                <Switch
+                                    checked={config[item.key as keyof SolverConfig] as boolean}
+                                    onChange={() => handleToggle(item.key as keyof SolverConfig)}
+                                    disabled={item.key === 'strict_locked_shifts' && !config.enable_locked_shifts}
+                                />
+                            ]}
+                        >
+                            <List.Item.Meta
+                                title={<Text strong>{item.title}</Text>}
+                                description={item.description}
+                            />
+                        </List.Item>
+                    )}
+                />
+
+                {/* Leadership Coverage Parameters */}
+                {config.enable_leadership_coverage && (
+                    <div style={{ padding: '12px 16px', background: '#f0f5ff', borderRadius: 8, marginTop: 8, border: '1px solid #adc6ff' }}>
+                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
+                            管理岗偏好权重配置（数值越大，优化压力越高）
+                        </Text>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>非工作日出勤惩罚</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={0}
+                                    max={1000}
+                                    value={config.objective_weight_leader_nonworkday}
+                                    onChange={(val) => handleWeightChange('objective_weight_leader_nonworkday', val)}
+                                    style={{ width: 70 }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>工作日休息惩罚</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={0}
+                                    max={1000}
+                                    value={config.objective_weight_leader_workday_rest}
+                                    onChange={(val) => handleWeightChange('objective_weight_leader_workday_rest', val)}
+                                    style={{ width: 70 }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>操作分配惩罚</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={0}
+                                    max={1000}
+                                    value={config.objective_weight_leader_ops}
+                                    onChange={(val) => handleWeightChange('objective_weight_leader_ops', val)}
+                                    style={{ width: 70 }}
+                                />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text type="secondary" style={{ fontSize: 13 }}>特殊班次惩罚</Text>
+                                <InputNumber
+                                    size="small"
+                                    min={0}
+                                    max={1000}
+                                    value={config.objective_weight_leader_special}
+                                    onChange={(val) => handleWeightChange('objective_weight_leader_special', val)}
+                                    style={{ width: 70 }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <Divider orientation="left" style={{ margin: '12px 0' }}>连续天数约束</Divider>
+
+                <List
+                    itemLayout="horizontal"
+                    dataSource={consecutiveDaysConstraints}
                     renderItem={(item) => (
                         <List.Item
                             actions={[
                                 <Switch
                                     checked={config[item.key as keyof SolverConfig] as boolean}
                                     onChange={() => handleToggle(item.key as keyof SolverConfig)}
+                                />
+                            ]}
+                        >
+                            <List.Item.Meta
+                                title={<Text strong>{item.title}</Text>}
+                                description={item.description}
+                            />
+                        </List.Item>
+                    )}
+                />
+
+                <Divider orientation="left" style={{ margin: '12px 0' }}>夜班约束</Divider>
+
+                <List
+                    itemLayout="horizontal"
+                    dataSource={nightShiftConstraints}
+                    renderItem={(item: any) => (
+                        <List.Item
+                            style={item.indent ? { paddingLeft: 24, background: '#fafafa', borderRadius: 4 } : {}}
+                            actions={[
+                                <Switch
+                                    checked={config[item.key as keyof SolverConfig] as boolean}
+                                    onChange={() => handleToggle(item.key as keyof SolverConfig)}
+                                    disabled={item.key === 'enable_prefer_extended_night_rest' && !config.enable_night_rest}
                                 />
                             ]}
                         >
@@ -290,6 +475,38 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                         </div>
                         <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
                             当前设置：两次夜班之间至少间隔 {(config.min_night_shift_interval || 7) - 1} 天
+                        </Text>
+                    </div>
+                )}
+
+                {/* Prefer Extended Night Rest Parameters */}
+                {config.enable_prefer_extended_night_rest && config.enable_night_rest && (
+                    <div style={{ padding: '8px 16px', background: '#f6f8fa', borderRadius: 8, marginTop: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text type="secondary" style={{ fontSize: 13 }}>期望休息天数</Text>
+                            <InputNumber
+                                size="small"
+                                min={2}
+                                max={4}
+                                value={config.preferred_night_rest_days}
+                                onChange={(val) => handleWeightChange('preferred_night_rest_days', val)}
+                                style={{ width: 70 }}
+                                addonAfter="天"
+                            />
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text type="secondary" style={{ fontSize: 13 }}>惩罚权重</Text>
+                            <InputNumber
+                                size="small"
+                                min={0}
+                                max={500}
+                                value={config.objective_weight_night_rest_extend}
+                                onChange={(val) => handleWeightChange('objective_weight_night_rest_extend', val)}
+                                style={{ width: 70 }}
+                            />
+                        </div>
+                        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                            强制休息 1 天 + 尽量多休 {(config.preferred_night_rest_days || 2) - 1} 天
                         </Text>
                     </div>
                 )}

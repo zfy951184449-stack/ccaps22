@@ -29,7 +29,7 @@ import {
 import axios from 'axios';
 import ProcessTemplateGantt from './ProcessTemplateGantt';
 import TemplateWorkbookImportModal from './TemplateWorkbookImportModal';
-import { exportTemplateWorkbook } from '../services/templateWorkbookApi';
+import { exportSingleTemplateToExcel, SingleTemplateReportData } from '../utils/exportSingleTemplateExcel';
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -198,10 +198,12 @@ const ProcessTemplate: React.FC = () => {
 
     try {
       setExportingWorkbook(true);
-      await exportTemplateWorkbook(selectedTemplateRecord.id);
+      const response = await axios.get(`${API_BASE_URL}/process-templates/${selectedTemplateRecord.id}/report-data`);
+      const reportData: SingleTemplateReportData = response.data;
+      await exportSingleTemplateToExcel(reportData);
       message.success(`已导出 ${selectedTemplateRecord.template_code}`);
     } catch (error) {
-      console.error('Failed to export template workbook:', error);
+      console.error('Failed to export template Excel:', error);
       message.error('导出 Excel 失败');
     } finally {
       setExportingWorkbook(false);

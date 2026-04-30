@@ -9,7 +9,9 @@ import {
   copyTemplate,
   recalculateTemplate,
   autoScheduleTemplate,
-  getTemplatePersonnelCurve
+  getTemplatePersonnelCurve,
+  getTemplateExportData,
+  getTemplateReportData,
 } from '../controllers/processTemplateController';
 import {
   exportProcessTemplateWorkbook,
@@ -33,9 +35,11 @@ const workbookUpload = multer({
 
 // 模版路由
 router.get('/', getAllTemplates);
+router.get('/export-data', getTemplateExportData);
 router.post('/workbook/preview', workbookUpload.single('file'), previewProcessTemplateWorkbookImport);
 router.post('/workbook/import', workbookUpload.single('file'), importProcessTemplateWorkbook);
 router.get('/:id/workbook/export', exportProcessTemplateWorkbook);
+router.get('/:id/report-data', getTemplateReportData);
 router.get('/:id', getTemplateById);
 router.post('/', createTemplate);
 router.put('/:id', updateTemplate);

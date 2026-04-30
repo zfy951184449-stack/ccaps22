@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, DatePicker, Tag, Button, Divider, message } from 'antd';
-import { CloseOutlined, PlusOutlined, UserOutlined, IdcardOutlined, ClusterOutlined } from '@ant-design/icons';
+import { Modal, Form, Input, Select, DatePicker, Tag, Button, Divider, message, InputNumber, Collapse } from 'antd';
+import { CloseOutlined, PlusOutlined, UserOutlined, IdcardOutlined, ClusterOutlined, SettingOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { Employee } from '../../types/organizationWorkbench';
 import axios from 'axios';
@@ -24,6 +24,14 @@ interface EmployeeAssignment {
 }
 
 const { Option } = Select;
+
+const ORG_ROLE_OPTIONS = [
+    { value: 'FRONTLINE', label: 'Frontline' },
+    { value: 'SHIFT_LEADER', label: 'Shift Leader' },
+    { value: 'GROUP_LEADER', label: 'Group Leader' },
+    { value: 'TEAM_LEADER', label: 'Team Leader' },
+    { value: 'DEPT_MANAGER', label: 'Dept Manager' },
+];
 
 const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
     visible,
@@ -89,6 +97,9 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
                 position: employee.primary_role_id, // Use ID
                 employmentStatus: employee.employment_status,
                 hireDate: employee.hire_date ? dayjs(employee.hire_date) : null,
+                orgRole: employee.org_role || 'FRONTLINE',
+                shopfloorBaselinePct: employee.shopfloor_baseline_pct != null ? Math.round(employee.shopfloor_baseline_pct * 100) : null,
+                shopfloorUpperPct: employee.shopfloor_upper_pct != null ? Math.round(employee.shopfloor_upper_pct * 100) : null,
             };
             form.setFieldsValue(initialValues);
         } else {
@@ -103,13 +114,22 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
 
             setLoading(true);
 
-            const payload = {
+            const payload: Record<string, any> = {
                 employeeName: values.employeeName,
                 primaryRoleId: values.position, // Send ID
                 employmentStatus: values.employmentStatus,
                 hireDate: values.hireDate ? values.hireDate.format('YYYY-MM-DD') : null,
-                unitId: currentUnitId // Use local state which reflects recent changes
+                unitId: currentUnitId, // Use local state which reflects recent changes
+                orgRole: values.orgRole || undefined,
             };
+
+            // Workload profile — send as 0-1 decimal if changed
+            if (values.shopfloorBaselinePct != null) {
+                payload.shopfloorBaselinePct = values.shopfloorBaselinePct / 100;
+            }
+            if (values.shopfloorUpperPct != null) {
+                payload.shopfloorUpperPct = values.shopfloorUpperPct / 100;
+            }
 
             await axios.put(`/api/employees/${employee.id}`, payload);
 
@@ -240,6 +260,14 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
                                 </Select>
                             </Form.Item>
 
+                            <Form.Item label="Org Role" name="orgRole">
+                                <Select className="rounded-lg" size="large" placeholder="Select Org Role">
+                                    {ORG_ROLE_OPTIONS.map(opt => (
+                                        <Option key={opt.value} value={opt.value}>{opt.label}</Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+
                             <Form.Item label="Organization">
                                 <div className="flex flex-wrap gap-2 p-3 bg-gray-50/50 rounded-xl border border-gray-200/50 min-h-[50px]">
                                     {assignments.map(assign => (
@@ -288,6 +316,41 @@ const EditEmployeeModalV2: React.FC<EditEmployeeModalV2Props> = ({
                                 </Form.Item>
                             </div>
                         </div>
+
+                        {/* Section: Workload Profile */}
+                        <Collapse
+                            ghost
+                            items={[{
+                                key: 'workload',
+                                label: (
+                                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                                        <SettingOutlined /> Workload Profile
+                                    </span>
+                                ),
+                                children: (
+                                    <div className="grid grid-cols-2 gap-5 pt-2">
+                                        <Form.Item label="Baseline %" name="shopfloorBaselinePct" tooltip="Target shopfloor time percentage (0-100)">
+                                            <InputNumber
+                                                min={0}
+                                                max={100}
+                                                addonAfter="%"
+                                                className="w-full rounded-lg"
+                                                placeholder="e.g. 80"
+                                            />
+                                        </Form.Item>
+                                        <Form.Item label="Upper Limit %" name="shopfloorUpperPct" tooltip="Maximum shopfloor time percentage (0-100)">
+                                            <InputNumber
+                                                min={0}
+                                                max={100}
+                                                addonAfter="%"
+                                                className="w-full rounded-lg"
+                                                placeholder="e.g. 100"
+                                            />
+                                        </Form.Item>
+                                    </div>
+                                ),
+                            }]}
+                        />
 
                     </Form>
                 </div>

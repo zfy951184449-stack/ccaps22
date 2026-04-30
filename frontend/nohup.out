@@ -1,0 +1,83 @@
+
+> aps-frontend@0.1.0 start
+> HOST=0.0.0.0 react-scripts start
+
+Attempting to bind to HOST environment variable: 0.0.0.0
+If this was unintentional, check that you haven't mistakenly set it in your shell.
+Learn more here: https://cra.link/advanced-config
+
+[HPM] Proxy created: /  -> http://localhost:3001
+(node:53726) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:53726) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+Starting the development server...
+
+Compiled successfully!
+
+You can now view aps-frontend in the browser.
+
+  Local:            http://localhost:3000
+  On Your Network:  http://192.168.31.213:3000
+
+Note that the development build is not optimized.
+To create a production build, use npm run build.
+
+webpack compiled successfully
+Files successfully emitted, waiting for typecheck results...
+Issues checking in progress...
+(node:53726) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+No issues found.
+Compiling...
+Compiled successfully!
+webpack compiled successfully
+No issues found.
+Compiling...
+Compiled successfully!
+webpack compiled successfully
+No issues found.
+Compiling...
+Compiled successfully!
+webpack compiled successfully
+ERROR in src/components/ProcessTemplateV2/ProcessTemplateV2.tsx:343:11
+TS2322: Type '{ searchValue: string; onSearchValueChange: Dispatch<SetStateAction<string>>; statusFilter: TemplateStatusFilter; onStatusFilterChange: Dispatch<...>; ... 11 more ...; exportOverviewLoading: boolean; }' is not assignable to type 'IntrinsicAttributes & TemplateListToolbarProps'.
+  Property 'onExportOverview' does not exist on type 'IntrinsicAttributes & TemplateListToolbarProps'.
+    341 |           exportDisabled={!selectedTemplate}
+    342 |           exportLoading={exportingWorkbook}
+  > 343 |           onExportOverview={handleExportOverview}
+        |           ^^^^^^^^^^^^^^^^
+    344 |           exportOverviewLoading={exportingOverview}
+    345 |         />
+    346 |
+
+Compiling...
+Compiled successfully!
+webpack compiled successfully
+No issues found.
+Compiling...
+Compiled successfully!
+webpack compiled successfully
+Files successfully emitted, waiting for typecheck results...
+Issues checking in progress...
+No issues found.
+Compiling...
+Compiled successfully!
+webpack compiled successfully
+No issues found.
+Compiling...
+Compiled with warnings.
+
+[eslint] 
+src/utils/exportSingleTemplateExcel.ts
+  Line 320:9:   'totalCols' is assigned a value but never used                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  Line 329:22:  Function declared in a loop contains unsafe references to variable(s) 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow'  no-loop-func
+
+Search for the keywords to learn more about each warning.
+To ignore, add // eslint-disable-next-line to the line before.
+
+WARNING in [eslint] 
+src/utils/exportSingleTemplateExcel.ts
+  Line 320:9:   'totalCols' is assigned a value but never used                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  Line 329:22:  Function declared in a loop contains unsafe references to variable(s) 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow', 'currentRow'  no-loop-func
+
+webpack compiled with 1 warning
+No issues found.

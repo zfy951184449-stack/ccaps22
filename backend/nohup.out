@@ -1,0 +1,97 @@
+
+> aps-backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/server.ts
+
+[INFO] 22:02:25 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Server is running at http://0.0.0.0:3001
+WebSocket available at ws://0.0.0.0:3001/ws/solver-progress
+[0mGET /api/dashboard/shifts [36m304[0m 202.619 ms - -[0m
+[0mGET /api/dashboard/shifts [36m304[0m 1.154 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [32m200[0m 200.628 ms - 163[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 0.949 ms - -[0m
+[0mGET /api/org-structure/tree [32m200[0m 218.353 ms - 2652[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 7.449 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 20.193 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-04-18 [32m200[0m 255.866 ms - 34[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-04-18 [36m304[0m 7.455 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-04 [32m200[0m 293.046 ms - 10767[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-04 [36m304[0m 12.686 ms - -[0m
+[0mGET /api/dashboard/shifts [36m304[0m 139.856 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 113.925 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 96.401 ms - -[0m
+[0mGET /api/dashboard/shifts [36m304[0m 97.953 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 1.642 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 228.216 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-04-18 [36m304[0m 221.146 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 7.738 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-04-18 [36m304[0m 7.774 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-04 [36m304[0m 258.405 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-04 [36m304[0m 10.420 ms - -[0m
+[INFO] 12:02:43 Restarting: /Users/zhengfengyi/MFG8APS/backend/src/controllers/processTemplateController.ts has been modified
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Server is running at http://0.0.0.0:3001
+WebSocket available at ws://0.0.0.0:3001/ws/solver-progress
+[INFO] 12:02:59 Restarting: /Users/zhengfengyi/MFG8APS/backend/src/routes/processTemplates.ts has been modified
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Server is running at http://0.0.0.0:3001
+WebSocket available at ws://0.0.0.0:3001/ws/solver-progress
+[INFO] 16:27:43 Restarting: /Users/zhengfengyi/MFG8APS/backend/src/controllers/processTemplateController.ts has been modified
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Error: listen EADDRINUSE: address already in use 0.0.0.0:3001
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at node:net:2274:7
+    at processTicksAndRejections (node:internal/process/task_queues:90:21)
+[ERROR] 16:27:43 Error: listen EADDRINUSE: address already in use 0.0.0.0:3001
+[INFO] 01:59:42 Restarting: /Users/zhengfengyi/MFG8APS/backend/src/controllers/processTemplateController.ts has been modified
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Server is running at http://0.0.0.0:3001
+WebSocket available at ws://0.0.0.0:3001/ws/solver-progress
+[INFO] 01:59:52 Restarting: /Users/zhengfengyi/MFG8APS/backend/src/routes/processTemplates.ts has been modified
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Server is running at http://0.0.0.0:3001
+WebSocket available at ws://0.0.0.0:3001/ws/solver-progress
+[INFO] 02:00:02 Restarting: /Users/zhengfengyi/MFG8APS/backend/src/routes/processTemplates.ts has been modified
+=== Loading personnelSchedules routes ===
+=== Loading personnelSchedulesV2 routes ===
+Serving frontend build from /Users/zhengfengyi/MFG8APS/frontend/build
+[WebSocket] Solver progress WebSocket server initialized at /ws/solver-progress
+节假日API缓存清理定时器已启动
+Server is running at http://0.0.0.0:3001
+WebSocket available at ws://0.0.0.0:3001/ws/solver-progress
+[0mGET /api/dashboard/shifts [36m304[0m 88.159 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 82.753 ms - -[0m
+[0mGET /api/dashboard/shifts [36m304[0m 28.968 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 6.820 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 149.014 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-04-22 [32m200[0m 177.970 ms - 34[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-04 [36m304[0m 2.263 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 3.271 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-04-22 [36m304[0m 23.379 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-04 [36m304[0m 189.232 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-04 [36m304[0m 10.541 ms - -[0m

@@ -423,6 +423,19 @@ class SolverV4:
                 objective_terms.append(w5 * expr5)
                 objective_desc.append(f"三倍薪日(×{w5})")
 
+        # O8: Leadership Coverage Soft Penalties
+        if (config.get("enable_leadership_coverage", True)
+                and hasattr(self, 'solver_context')
+                and self.solver_context.leadership_penalty_vars):
+            leadership_expr = sum(
+                var * weight
+                for var, weight in self.solver_context.leadership_penalty_vars
+            )
+            if leadership_expr is not None and not isinstance(leadership_expr, int):
+                objective_terms.append(leadership_expr)
+                n_terms = len(self.solver_context.leadership_penalty_vars)
+                objective_desc.append(f"管理岗偏好({n_terms}项)")
+
         # Apply combined objective
         if objective_terms:
             self.model.Minimize(sum(objective_terms))
