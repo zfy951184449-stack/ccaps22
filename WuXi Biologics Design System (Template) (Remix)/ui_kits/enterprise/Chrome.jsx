@@ -49,7 +49,8 @@ function SideNav({ route, setRoute }) {
       <Item id="overview" ic={<Icon.trend/>} label="Dashboard"/>
       <Item id="batches"  ic={<Icon.batch/>} label="Batch Execution"/>
       <Item id="floor"    ic={<Icon.bioreactor/>} label="Floor View"/>
-      <div className="item"><span className="ic"><Icon.cal/></span>Schedule</div>
+      <div className={"item " + (route === "gantt" ? "active" : "")} onClick={() => setRoute("gantt")}><span className="ic"><Icon.cal/></span>Schedule</div>
+      <Item id="gantt" ic={<Icon.gantt/>} label="Process Template"/>
       <h6>Quality</h6>
       <Item id="deviation" ic={<Icon.alert/>} label="Deviations" badge="3"/>
       <div className="item"><span className="ic"><Icon.shield/></span>QA Releases</div>

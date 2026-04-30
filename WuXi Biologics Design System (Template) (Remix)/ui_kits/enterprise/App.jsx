@@ -13,6 +13,7 @@ function App() {
         {route === "batches"   && <BatchList goDev={() => setRoute("deviation")}/>}
         {route === "floor"     && <FloorView/>}
         {route === "deviation" && <DeviationDetail goBatch={() => setRoute("batches")}/>}
+        {route === "gantt"     && <ProcessGantt/>}
       </main>
     </div>
   );
