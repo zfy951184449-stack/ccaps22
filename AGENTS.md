@@ -17,7 +17,6 @@ Rules for context hygiene:
 Runtime entrypoints:
 
 - Legacy frontend: `frontend/src/App.tsx`
-- Next frontend: `frontend-next/src/app/layout.tsx`
 - Backend API: `backend/src/server.ts`
 - Solver V4: `solver_v4/app.py`
 

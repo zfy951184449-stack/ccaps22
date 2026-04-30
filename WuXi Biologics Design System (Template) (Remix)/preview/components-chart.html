@@ -1,0 +1,391 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{background:#F5F8FB; font-family: var(--wx-font-sans);}
+  .panel { background:#fff; border:1px solid #E4EAF1; border-radius:8px; padding:16px 18px; box-shadow:0 1px 2px rgba(15,27,45,.04); overflow: hidden;}
+  .head { display:flex; justify-content:space-between; align-items:flex-start; gap: 12px; margin-bottom:6px; flex-wrap: wrap;}
+  .head h3 { margin:0; font:600 14px/1 Inter; color:#0F1B2D;}
+  .ctrls { display:flex; gap: 4px; padding: 3px; background:#F5F8FB; border:1px solid #E4EAF1; border-radius: 999px;}
+  .ctrls button { font: 500 11px/1 Inter; color:#5A6B7E; background:transparent; border:none; padding: 6px 11px; border-radius: 999px; cursor: pointer; transition: all 200ms;}
+  .ctrls button:hover { color:#0B3D7F;}
+  .ctrls button.on { background:#fff; color:#0B3D7F; box-shadow: 0 1px 3px rgba(11,61,127,.15);}
+  .legend { display:flex; gap:14px; font:400 11.5px/1 Inter; color:#5A6B7E; flex-wrap: wrap;}
+  .legend span{ display:inline-flex; align-items:center; gap:6px;}
+  .sw{ width:10px;height:10px;border-radius:2px;display:inline-block;}
+  .sw.dash{ background: repeating-linear-gradient(90deg,#8898A8 0,#8898A8 3px,transparent 3px,transparent 6px); border-radius: 0;}
+  .sub { font: 400 11.5px/1 Inter; color:#8898A8; margin-bottom: 12px;}
+
+  .chart { position: relative; cursor: crosshair; width: 100%;}
+  .chart svg { display: block; width: 100%; height: auto;}
+
+  /* Tooltip */
+  .tip {
+    position: absolute;
+    background: #fff; border:1px solid #E4EAF1; border-radius:6px;
+    box-shadow: 0 8px 24px rgba(15,27,45,.12);
+    padding: 9px 11px; font-family: var(--wx-font-sans);
+    pointer-events: none;
+    transition: opacity 120ms;
+    opacity: 0; min-width: 180px; max-width: 220px;
+    z-index: 3;
+  }
+  .tip.on { opacity: 1;}
+  .tip .when { font:600 10.5px/1 'JetBrains Mono'; letter-spacing:.06em; text-transform:uppercase; color:#0F1B2D; margin-bottom:8px; padding-bottom: 6px; border-bottom: 1px solid #EEF2F7;}
+  .tip .row { display:flex; justify-content:space-between; gap:14px; font-size:11.5px; margin: 3px 0; align-items: center;}
+  .tip .row .l{ display:inline-flex; align-items:center; gap:6px; color:#3A4A5C;}
+  .tip .row .v{ font-family: var(--wx-font-mono); color:#0F1B2D; font-weight:600;}
+  .tip .row.cmp .v { color:#5A6B7E; font-weight: 500;}
+  .tip .delta { font-family: var(--wx-font-mono); font-weight: 600; padding: 1px 6px; border-radius: 4px; font-size: 10.5px;}
+  .tip .delta.bad { color:#A2342A; background: #FBE6E3;}
+  .tip .delta.good{ color:#1F7A53; background: #E6F4ED;}
+  .tip .divider { border-top: 1px dashed #EEF2F7; margin: 6px 0;}
+
+  /* Crosshair: vertical AND horizontal lines */
+  .crosshair line { stroke:#1F6FEB; stroke-dasharray: 2 3; stroke-width:1; opacity: 0; transition: opacity 140ms;}
+  .crosshair.on line { opacity: 0.55;}
+  /* Floating axis tags that follow cursor */
+  .axis-tag { opacity: 0; transition: opacity 140ms;}
+  .axis-tag.on { opacity: 1;}
+  .axis-tag rect { fill:#0B3D7F;}
+  .axis-tag text { fill:#fff; font: 600 9.5px/1 'JetBrains Mono';}
+
+  /* Active markers - bigger, with halo */
+  .markers circle { opacity: 0; transition: opacity 140ms;}
+  .markers.on circle { opacity: 1;}
+  .markers .halo { opacity: 0;}
+  .markers.on .halo { opacity: 0.25; animation: pulse-halo 1.4s ease-in-out infinite;}
+  @keyframes pulse-halo {
+    0%, 100% { r: 8;}
+    50% { r: 11;}
+  }
+
+  /* Vertical band: the slice the cursor is in */
+  .slice { fill: #1F6FEB; opacity: 0; transition: opacity 140ms;}
+  .slice.on { opacity: 0.05;}
+
+  .hint { position:absolute; right: 0; top: -22px; font: 500 10px/1 'JetBrains Mono'; color:#8898A8;}
+  .hint.fade { transition: opacity 200ms; }
+  .hint.hide { opacity: 0;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">Line Chart · Period comparison &amp; live mouse-follow inspection</div>
+  <div class="panel">
+    <div class="head">
+      <h3>Capacity Utilization</h3>
+      <div class="ctrls" id="cmpCtrls">
+        <button data-cmp="off" class="on">No comparison</button>
+        <button data-cmp="prev">vs Previous 13w</button>
+        <button data-cmp="yoy">vs Year ago</button>
+      </div>
+    </div>
+    <div class="sub">13-week trend · Wuxi MFG18 · sampled weekly · CST</div>
+
+    <div class="legend" style="margin-bottom:8px;">
+      <span><span class="sw" style="background:#0B3D7F"></span>Used % (current)</span>
+      <span><span class="sw" style="background:#A3CC4F"></span>Available % (current)</span>
+      <span id="cmpLegend" style="display:none;"><span class="sw dash"></span><span id="cmpLegendLabel">Used % (previous)</span></span>
+      <span><span class="sw" style="background:#E8B53C"></span>Target 80%</span>
+    </div>
+
+    <div class="chart" id="chart">
+      <span class="hint fade" id="hint">⟶ hover to inspect</span>
+      <svg viewBox="0 0 660 200" id="svg" preserveAspectRatio="xMidYMid meet">
+        <!-- Slice highlight (sits behind everything) -->
+        <rect class="slice" id="slice" x="0" y="6" width="0" height="156"/>
+
+        <!-- Y-axis labels & gridlines -->
+        <g font-family="JetBrains Mono" font-size="10" fill="#8898A8">
+          <text x="0" y="10">100%</text><line x1="40" y1="6"   x2="640" y2="6"   stroke="#EEF2F7"/>
+          <text x="6" y="46">75%</text> <line x1="40" y1="42"  x2="640" y2="42"  stroke="#EEF2F7"/>
+          <text x="6" y="86">50%</text> <line x1="40" y1="82"  x2="640" y2="82"  stroke="#EEF2F7"/>
+          <text x="6" y="126">25%</text><line x1="40" y1="122" x2="640" y2="122" stroke="#EEF2F7"/>
+          <text x="12" y="166">0%</text> <line x1="40" y1="162" x2="640" y2="162" stroke="#E4EAF1"/>
+        </g>
+
+        <!-- Target band 80% -->
+        <line x1="40" y1="35" x2="640" y2="35" stroke="#E8B53C" stroke-dasharray="3 3" stroke-width="1"/>
+        <text x="636" y="32" font-family="JetBrains Mono" font-size="9" fill="#8A6A1F" text-anchor="end">target 80%</text>
+
+        <!-- Comparison series (rendered behind, hidden by default) -->
+        <g id="cmpGroup" style="display:none;">
+          <polyline id="cmpUsed" fill="none" stroke="#0B3D7F" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.55" points=""/>
+          <polyline id="cmpAvail" fill="none" stroke="#A3CC4F" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.45" points=""/>
+        </g>
+
+        <!-- Used area + line -->
+        <polygon id="usedArea" fill="#0B3D7F" fill-opacity="0.10" points=""/>
+        <polyline id="usedLine" fill="none" stroke="#0B3D7F" stroke-width="1.7" points=""/>
+
+        <!-- Available -->
+        <polyline id="availLine" fill="none" stroke="#A3CC4F" stroke-width="1.6" points=""/>
+
+        <!-- Static data points -->
+        <g id="dotsUsed" fill="#fff" stroke="#0B3D7F" stroke-width="1.5"></g>
+
+        <!-- Crosshair (vertical + horizontal) -->
+        <g class="crosshair" id="cross">
+          <line id="vline" x1="0" y1="6" x2="0" y2="162"/>
+          <line id="hline" x1="40" y1="0" x2="640" y2="0"/>
+        </g>
+
+        <!-- Hover markers -->
+        <g class="markers" id="marks">
+          <circle class="halo" id="halo" cx="0" cy="0" r="8" fill="#1F6FEB"/>
+          <circle id="mUsed" cx="0" cy="0" r="5.5" fill="#0B3D7F" stroke="#fff" stroke-width="2"/>
+          <circle id="mAvail" cx="0" cy="0" r="4.5" fill="#A3CC4F" stroke="#fff" stroke-width="2"/>
+          <circle id="mCmp" cx="0" cy="0" r="3.5" fill="#fff" stroke="#0B3D7F" stroke-width="1.5" opacity="0"/>
+        </g>
+
+        <!-- Floating Y-axis tag -->
+        <g class="axis-tag" id="yTag">
+          <rect id="yTagRect" x="0" y="0" width="36" height="14" rx="3"/>
+          <text id="yTagText" x="0" y="0" text-anchor="middle">0%</text>
+        </g>
+        <!-- Floating X-axis tag -->
+        <g class="axis-tag" id="xTag">
+          <rect id="xTagRect" x="0" y="170" width="40" height="14" rx="3"/>
+          <text id="xTagText" x="0" y="180" text-anchor="middle">W14</text>
+        </g>
+
+        <!-- X-axis labels -->
+        <g id="xLabels" font-family="JetBrains Mono" font-size="10" fill="#8898A8"></g>
+        <text x="340" y="196" font-family="Inter" font-size="10" fill="#5A6B7E" text-anchor="middle">Week of 2026</text>
+      </svg>
+
+      <div class="tip" id="tip">
+        <div class="when" id="tipWhen">W22 · 2026-05-26</div>
+        <div class="row"><span class="l"><span class="sw" style="background:#0B3D7F"></span>Used</span><span class="v" id="tipUsed">74.0 %</span></div>
+        <div class="row"><span class="l"><span class="sw" style="background:#A3CC4F"></span>Available</span><span class="v" id="tipAvail">26.0 %</span></div>
+        <div class="row"><span class="l"><span class="sw" style="background:#E8B53C"></span>vs Target</span><span class="delta" id="tipDelta">−6.0</span></div>
+        <div id="cmpRows" style="display:none;">
+          <div class="divider"></div>
+          <div class="row cmp"><span class="l"><span class="sw dash"></span><span id="cmpRowLabel">Prev. period</span></span><span class="v" id="tipCmpUsed">—</span></div>
+          <div class="row"><span class="l">Δ vs comp.</span><span class="delta" id="tipCmpDelta">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Plot area: x ∈ [40, 640] (600 wide), y ∈ [6, 162] (0%->162, 100%->6)
+  const X0 = 40, X1 = 640, Y0 = 6, Y1 = 162;
+  const data = [
+    {used:65, avail:64, label:'W14', date:'2026-04-07'},
+    {used:67, avail:60, label:'W15', date:'2026-04-14'},
+    {used:70, avail:55, label:'W16', date:'2026-04-21'},
+    {used:67, avail:58, label:'W17', date:'2026-04-28'},
+    {used:73, avail:48, label:'W18', date:'2026-05-05'},
+    {used:77, avail:43, label:'W19', date:'2026-05-12'},
+    {used:80, avail:38, label:'W20', date:'2026-05-19'},
+    {used:83, avail:33, label:'W21', date:'2026-05-26'},
+    {used:84, avail:31, label:'W22', date:'2026-06-02'},
+    {used:86, avail:27, label:'W23', date:'2026-06-09'},
+    {used:88, avail:23, label:'W24', date:'2026-06-16'},
+    {used:89, avail:21, label:'W25', date:'2026-06-23'},
+    {used:90, avail:20, label:'W26', date:'2026-06-30'},
+  ];
+  // Comparison series (same shape, lower)
+  const prev = [62,61,63,60,64,68,71,73,72,74,76,78,79];      // previous 13w
+  const yoy  = [58,60,59,62,61,63,65,66,68,67,69,70,72];      // year ago
+
+  const N = data.length;
+  // assign x positions evenly across plot area
+  data.forEach((d,i) => d.x = X0 + i * ((X1-X0) / (N-1)));
+  const yFor = pct => Y1 - (pct/100) * (Y1-Y0);
+
+  // === Build series paths ===
+  const usedPts  = data.map(d => `${d.x},${yFor(d.used)}`).join(' ');
+  const availPts = data.map(d => `${d.x},${yFor(d.avail)}`).join(' ');
+  const areaPts  = `${data[0].x},${Y1} ${usedPts} ${data[N-1].x},${Y1}`;
+  document.getElementById('usedArea').setAttribute('points', areaPts);
+  document.getElementById('usedLine').setAttribute('points', usedPts);
+  document.getElementById('availLine').setAttribute('points', availPts);
+
+  // dots
+  const dotsG = document.getElementById('dotsUsed');
+  data.forEach(d => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', d.x); c.setAttribute('cy', yFor(d.used)); c.setAttribute('r', 3);
+    dotsG.appendChild(c);
+  });
+
+  // x labels
+  const xL = document.getElementById('xLabels');
+  data.forEach(d => {
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', d.x); t.setAttribute('y', 180); t.setAttribute('text-anchor','middle');
+    t.textContent = d.label;
+    xL.appendChild(t);
+  });
+
+  // === Comparison toggle ===
+  const cmpGroup = document.getElementById('cmpGroup');
+  const cmpUsed = document.getElementById('cmpUsed');
+  const cmpAvail = document.getElementById('cmpAvail');
+  const cmpLegend = document.getElementById('cmpLegend');
+  const cmpLegendLabel = document.getElementById('cmpLegendLabel');
+  const cmpRows = document.getElementById('cmpRows');
+  const cmpRowLabel = document.getElementById('cmpRowLabel');
+  const mCmp = document.getElementById('mCmp');
+
+  let cmpMode = 'off';
+  let cmpData = null;
+  function setCmp(mode){
+    cmpMode = mode;
+    document.querySelectorAll('#cmpCtrls button').forEach(b => b.classList.toggle('on', b.dataset.cmp === mode));
+    if (mode === 'off') {
+      cmpGroup.style.display = 'none';
+      cmpLegend.style.display = 'none';
+      cmpRows.style.display = 'none';
+      cmpData = null;
+      return;
+    }
+    cmpData = (mode === 'prev') ? prev : yoy;
+    cmpLegend.style.display = '';
+    cmpLegendLabel.textContent = mode === 'prev' ? 'Used % (previous 13w)' : 'Used % (year ago)';
+    cmpRowLabel.textContent = mode === 'prev' ? 'Previous 13w' : 'Year ago';
+    const cmpUsedPts = cmpData.map((v,i) => `${data[i].x},${yFor(v)}`).join(' ');
+    cmpUsed.setAttribute('points', cmpUsedPts);
+    cmpAvail.setAttribute('points', '');
+    cmpGroup.style.display = '';
+  }
+  document.querySelectorAll('#cmpCtrls button').forEach(b => {
+    b.addEventListener('click', () => setCmp(b.dataset.cmp));
+  });
+
+  // === Mouse interaction ===
+  const chart = document.getElementById('chart');
+  const cross = document.getElementById('cross');
+  const vline = document.getElementById('vline');
+  const hline = document.getElementById('hline');
+  const slice = document.getElementById('slice');
+  const marks = document.getElementById('marks');
+  const halo = document.getElementById('halo');
+  const mUsed = document.getElementById('mUsed');
+  const mAvail = document.getElementById('mAvail');
+  const tip = document.getElementById('tip');
+  const tipWhen = document.getElementById('tipWhen');
+  const tipUsed = document.getElementById('tipUsed');
+  const tipAvail = document.getElementById('tipAvail');
+  const tipDelta = document.getElementById('tipDelta');
+  const tipCmpUsed = document.getElementById('tipCmpUsed');
+  const tipCmpDelta = document.getElementById('tipCmpDelta');
+  const yTag = document.getElementById('yTag');
+  const yTagRect = document.getElementById('yTagRect');
+  const yTagText = document.getElementById('yTagText');
+  const xTag = document.getElementById('xTag');
+  const xTagRect = document.getElementById('xTagRect');
+  const xTagText = document.getElementById('xTagText');
+  const svg = document.getElementById('svg');
+  const hint = document.getElementById('hint');
+
+  function snap(svgX){
+    let bestI = 0, bd = Infinity;
+    for (let i=0; i<data.length; i++){
+      const dist = Math.abs(data[i].x - svgX);
+      if (dist < bd){ bd = dist; bestI = i;}
+    }
+    return bestI;
+  }
+
+  chart.addEventListener('mousemove', e => {
+    const rect = svg.getBoundingClientRect();
+    const sx = (e.clientX - rect.left) * (660 / rect.width);
+    const sy = (e.clientY - rect.top)  * (200 / rect.height);
+    if (sx < X0 || sx > X1 || sy < Y0 || sy > Y1) { hide(); return;}
+    hint.classList.add('hide');
+
+    const i = snap(sx);
+    const d = data[i];
+
+    // crosshair: vertical snaps to x, horizontal follows raw cursor y
+    cross.classList.add('on');
+    vline.setAttribute('x1', d.x);
+    vline.setAttribute('x2', d.x);
+    hline.setAttribute('y1', sy);
+    hline.setAttribute('y2', sy);
+
+    // slice band: half-step on either side
+    const stepW = (X1-X0)/(N-1);
+    slice.classList.add('on');
+    slice.setAttribute('x', d.x - stepW/2);
+    slice.setAttribute('width', stepW);
+
+    // markers
+    marks.classList.add('on');
+    const yU = yFor(d.used), yA = yFor(d.avail);
+    halo.setAttribute('cx', d.x); halo.setAttribute('cy', yU);
+    mUsed.setAttribute('cx', d.x); mUsed.setAttribute('cy', yU);
+    mAvail.setAttribute('cx', d.x); mAvail.setAttribute('cy', yA);
+    if (cmpData){
+      const yC = yFor(cmpData[i]);
+      mCmp.setAttribute('cx', d.x); mCmp.setAttribute('cy', yC);
+      mCmp.setAttribute('opacity', 1);
+    } else {
+      mCmp.setAttribute('opacity', 0);
+    }
+
+    // y-axis tag (left, follows cursor y) — show the actual % at cursor y
+    const pctAtCursor = ((Y1 - sy) / (Y1-Y0)) * 100;
+    yTag.classList.add('on');
+    yTagRect.setAttribute('x', 4);
+    yTagRect.setAttribute('y', sy - 7);
+    yTagText.setAttribute('x', 22);
+    yTagText.setAttribute('y', sy + 3);
+    yTagText.textContent = pctAtCursor.toFixed(0) + '%';
+
+    // x-axis tag (bottom, snaps to step)
+    xTag.classList.add('on');
+    xTagRect.setAttribute('x', d.x - 18);
+    xTagText.setAttribute('x', d.x);
+
+    xTagText.textContent = d.label;
+
+    // tooltip
+    tipWhen.textContent = `${d.label} · ${d.date}`;
+    tipUsed.textContent = `${d.used.toFixed(1)} %`;
+    tipAvail.textContent = `${d.avail.toFixed(1)} %`;
+    const dv = d.used - 80;
+    tipDelta.textContent = (dv >= 0 ? '+' : '−') + Math.abs(dv).toFixed(1);
+    tipDelta.classList.toggle('good', dv >= 0);
+    tipDelta.classList.toggle('bad', dv < 0);
+
+    if (cmpData){
+      cmpRows.style.display = '';
+      tipCmpUsed.textContent = cmpData[i].toFixed(1) + ' %';
+      const cdelta = d.used - cmpData[i];
+      tipCmpDelta.textContent = (cdelta >= 0 ? '+' : '−') + Math.abs(cdelta).toFixed(1);
+      tipCmpDelta.classList.toggle('good', cdelta >= 0);
+      tipCmpDelta.classList.toggle('bad', cdelta < 0);
+    } else {
+      cmpRows.style.display = 'none';
+    }
+
+    // tooltip position (px space) — never overflow
+    const px = (d.x / 660) * rect.width;
+    const py = (yU / 200) * rect.height;
+    const tipW = tip.offsetWidth, tipH = tip.offsetHeight;
+    const margin = 12;
+    let left = px + 14;
+    if (left + tipW + margin > rect.width) left = px - tipW - 14;
+    left = Math.max(2, Math.min(rect.width - tipW - 2, left));
+    let top = py - tipH/2;
+    top = Math.max(2, Math.min(rect.height - tipH - 2, top));
+    tip.style.left = left + 'px';
+    tip.style.top  = top + 'px';
+    tip.classList.add('on');
+  });
+
+  function hide(){
+    cross.classList.remove('on');
+    marks.classList.remove('on');
+    slice.classList.remove('on');
+    yTag.classList.remove('on');
+    xTag.classList.remove('on');
+    tip.classList.remove('on');
+    hint.classList.remove('hide');
+  }
+  chart.addEventListener('mouseleave', hide);
+</script>
+</body></html>

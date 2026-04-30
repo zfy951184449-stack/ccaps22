@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom: 12px;}
+  .row:last-child{margin-bottom:0;}
+  .row-label { font-family: var(--wx-font-mono); font-size: 11px; color: var(--wx-fg-3); min-width: 64px; }
+  .btn { font: 500 14px/1 Inter, sans-serif; padding: 0 16px; height: 36px; border-radius: 4px; cursor: pointer; display:inline-flex; align-items:center; gap:6px; transition: background 180ms cubic-bezier(.2,0,0,1);}
+  .primary { background: #0B3D7F; color: #fff; border: 1px solid #0B3D7F; }
+  .primary:hover { background: #0A3470;}
+  .primary:active { background: #082A5C;}
+  .secondary { background: #fff; color: #0B3D7F; border: 1px solid #0B3D7F; }
+  .secondary:hover { background: #E6F2FB;}
+  .ghost { background: transparent; color: #1F6FEB; border: 1px solid transparent; }
+  .ghost:hover { background: #E6F2FB;}
+  .danger { background: #D6493A; color: #fff; border: 1px solid #D6493A;}
+  .danger:hover { background: #B83A2D;}
+  .disabled { background: #F5F8FB; color: #8898A8; border: 1px solid #E4EAF1; cursor: not-allowed;}
+  .sm { height: 28px; padding: 0 12px; font-size: 13px;}
+  .lg { height: 44px; padding: 0 20px; font-size: 15px;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Buttons · Variants &amp; Sizes</div>
+  <div class="row"><span class="row-label">Primary</span>
+    <button class="btn primary">Release Batch</button>
+    <button class="btn primary">Approve Deviation</button>
+    <button class="btn primary disabled">Disabled</button>
+  </div>
+  <div class="row"><span class="row-label">Secondary</span>
+    <button class="btn secondary">Export Report</button>
+    <button class="btn secondary">View Audit Log</button>
+  </div>
+  <div class="row"><span class="row-label">Ghost</span>
+    <button class="btn ghost">Cancel</button>
+    <button class="btn ghost">Filter ▾</button>
+  </div>
+  <div class="row"><span class="row-label">Danger</span>
+    <button class="btn danger">Stop Run</button>
+    <button class="btn danger">Reject Lot</button>
+  </div>
+  <div class="row"><span class="row-label">Sizes</span>
+    <button class="btn primary sm">Compact 32</button>
+    <button class="btn primary">Default 36</button>
+    <button class="btn primary lg">Hero 44</button>
+  </div>
+</div></body></html>

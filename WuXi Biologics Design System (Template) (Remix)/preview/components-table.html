@@ -1,0 +1,30 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  table{ width:100%; border-collapse: collapse; font: 400 13px/1.4 Inter, sans-serif;}
+  thead th { text-align:left; font: 500 11.5px/1.2 Inter; letter-spacing: 0.04em; text-transform: uppercase; color: #5A6B7E; background: #F5F8FB; padding: 10px 14px; border-bottom: 1px solid #E4EAF1;}
+  tbody td { padding: 12px 14px; border-bottom: 1px solid #EEF2F7; color: #3A4A5C; vertical-align: middle;}
+  tbody tr:last-child td { border-bottom: none;}
+  tbody tr:hover td{ background: #FAFCFE;}
+  .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--wx-font-mono); font-size: 12.5px; color:#0F1B2D;}
+  .lot { font-family: var(--wx-font-mono); font-size: 12.5px; color: #0B3D7F;}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding: 0 8px;border-radius:4px;font:500 11.5px/1 Inter;border:1px solid transparent;}
+  .ok { background:#E6F4ED; color:#1F7A53; border-color:#C8E5D6;}
+  .info{ background:#E6F2FB; color:#0B3D7F; border-color:#C7DCF7;}
+  .warn{background:#FBF1D9;color:#8A6A1F;border-color:#F2DFAB;}
+  .dot{width:6px;height:6px;border-radius:999px;display:inline-block;}
+  .ok .dot{background:#2E9D6E;}.info .dot{background:#1F6FEB;}.warn .dot{background:#E8B53C;}
+  .wrap{ border: 1px solid #E4EAF1; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(15,27,45,.04);}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">Table · Generous Rows, GMP Lot Listing</div>
+  <div class="wrap"><table>
+    <thead><tr><th>Lot</th><th>Bioreactor</th><th>Stage</th><th class="num">Yield</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="lot">BX-2418-A03</td><td>BR-204</td><td>Harvest</td><td class="num">5.84 g/L</td><td><span class="chip info"><span class="dot"></span>QA Review</span></td></tr>
+      <tr><td class="lot">BX-2418-A02</td><td>BR-204</td><td>Released</td><td class="num">5.62 g/L</td><td><span class="chip ok"><span class="dot"></span>Released</span></td></tr>
+      <tr><td class="lot">BX-2418-A01</td><td>BR-201</td><td>Production</td><td class="num">— </td><td><span class="chip info"><span class="dot"></span>Day 6 of 14</span></td></tr>
+      <tr><td class="lot">BX-2417-D11</td><td>BR-307</td><td>Investigation</td><td class="num">4.10 g/L</td><td><span class="chip warn"><span class="dot"></span>Near Limit</span></td></tr>
+    </tbody>
+  </table></div>
+</div></body></html>

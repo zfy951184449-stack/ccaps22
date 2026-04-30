@@ -1,8 +1,6 @@
 # Frontend Visual Language
 
-This document is the source of truth for the `frontend/` (legacy) visual and interaction language.
-
-> **Scope**: This document applies to `frontend/` only. For `frontend-next/`, see `docs/frontend-next-visual-language.md`.
+This document is the source of truth for the `frontend/` visual and interaction language.
 
 ## Default Direction
 
@@ -10,7 +8,7 @@ The default direction is an industrial production workbench for manufacturing an
 
 It is not a marketing site, not a consumer product shell, and not a large-screen command center.
 
-This direction applies to both `frontend/` and `frontend-next/`. Different stacks may implement it differently, but they should converge on the same interaction and visual semantics.
+This direction applies to the `frontend/` stack.
 
 ## Style Goals
 

@@ -1,0 +1,368 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{ background:#F5F8FB; font-family: var(--wx-font-sans);}
+  .nav {
+    --mx: 50%; --my: 50%;
+    height: 64px;
+    background: #fff;
+    border: 1px solid #E4EAF1;
+    border-radius: 12px;
+    padding: 0 14px 0 16px;
+    display:flex; align-items: center; gap: 16px;
+    box-shadow: 0 8px 28px rgba(15,27,45,.07), 0 1px 2px rgba(15,27,45,.04);
+    position: relative;
+    overflow: hidden;
+  }
+  /* Mouse-following soft glow */
+  .nav::before {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background: radial-gradient(220px 90px at var(--mx) var(--my), rgba(31,111,235,0.10), transparent 70%);
+    transition: background 120ms linear;
+    z-index: 0;
+  }
+  /* Animated bottom hairline */
+  .nav::after {
+    content:""; position:absolute; left:0; right:0; bottom:0; height: 1px;
+    background: linear-gradient(90deg, transparent 0%, #1F6FEB 25%, #2E9D6E 60%, #A3CC4F 80%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer-line 6s linear infinite;
+    opacity: 0.65;
+  }
+  @keyframes shimmer-line {
+    0%   { background-position: 0% 0;}
+    100% { background-position: 200% 0;}
+  }
+
+  .nav > * { position: relative; z-index: 1;}
+
+  /* === Logo with magnetic + parallax sheen === */
+  .logo { display:flex; align-items:center; gap: 12px; padding-right: 16px; border-right: 1px solid #E4EAF1; height: 38px; cursor: pointer;}
+  .markwrap {
+    position: relative; width: 34px; height: 34px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #0B3D7F 0%, #1F6FEB 60%, #2E9D6E 130%);
+    display: inline-flex; align-items: center; justify-content:center;
+    box-shadow: 0 6px 14px rgba(11,61,127,.32), inset 0 0 0 1px rgba(255,255,255,.10);
+    transition: transform 220ms cubic-bezier(.2,0,0,1);
+  }
+  .logo:hover .markwrap { transform: translateY(-1px) rotate(-2deg) scale(1.04);}
+  .markwrap::after {
+    content:""; position:absolute; inset:0; border-radius: 9px;
+    background: radial-gradient(circle at 28% 22%, rgba(255,255,255,.55), transparent 55%);
+    pointer-events:none;
+  }
+  .markwrap::before {
+    content:""; position:absolute; inset:-2px; border-radius: 11px;
+    background: conic-gradient(from var(--ang, 0deg), rgba(31,111,235,.0), rgba(46,157,110,.6), rgba(31,111,235,.0));
+    filter: blur(6px); opacity: 0; transition: opacity 240ms;
+    z-index: -1;
+  }
+  .logo:hover .markwrap::before { opacity: 0.9; animation: spin 4s linear infinite;}
+  @keyframes spin { to { --ang: 360deg;}}
+  @property --ang { syntax: '<angle>'; inherits: false; initial-value: 0deg;}
+
+  .markwrap svg.hex {
+    color: #fff;
+    transition: transform 600ms cubic-bezier(.2,0,0,1);
+  }
+  .logo:hover .markwrap svg.hex { transform: rotate(60deg);}
+
+  .logo .name { display:flex; flex-direction: column; gap: 3px;}
+  .logo .nameMain { font: 700 14px/1 Inter; color: #0F1B2D; letter-spacing: -0.01em;}
+  .logo .nameSub { font: 500 9.5px/1 Inter; letter-spacing: 0.18em; text-transform: uppercase; color: #5A6B7E;}
+
+  /* === Links with sliding pill === */
+  .links { position: relative; display:flex; gap: 2px;}
+  .pill {
+    position: absolute; top: 4px; bottom: 4px;
+    background: linear-gradient(180deg, #E6F2FB, #DDEBF8);
+    border-radius: 8px;
+    transition: left 360ms cubic-bezier(.5, 1.4, .4, 1), width 360ms cubic-bezier(.5, 1.4, .4, 1);
+    z-index: 0;
+    box-shadow: 0 2px 8px rgba(31,111,235,.18), inset 0 0 0 1px rgba(31,111,235,.10);
+  }
+  .lk {
+    position: relative; z-index: 1;
+    padding: 0 14px; height: 36px;
+    display:inline-flex; align-items:center; gap: 8px;
+    border-radius: 8px;
+    font: 500 13px/1 Inter; color: #5A6B7E;
+    cursor: pointer;
+    transition: color 220ms cubic-bezier(.2,0,0,1), transform 220ms cubic-bezier(.2,0,0,1);
+  }
+  .lk:hover { color: #0F1B2D;}
+  .lk:hover .ic { color:#1F6FEB;}
+  .lk.on { color: #0B3D7F;}
+  .lk.on .ic { color:#0B3D7F;}
+  .lk .label{ position: relative;}
+  /* underline on the active item */
+  .lk.on .label::after {
+    content:""; position:absolute; left: 0; right: 0; bottom: -8px; height: 2px;
+    background: linear-gradient(90deg, #0B3D7F, #1F6FEB);
+    border-radius: 999px;
+    box-shadow: 0 0 6px rgba(31,111,235,.6);
+    animation: underline-grow 360ms cubic-bezier(.2,0,0,1);
+  }
+  @keyframes underline-grow { from { transform: scaleX(0.2); opacity:0;} to { transform: scaleX(1); opacity:1;}}
+
+  /* Animated icons */
+  .ic { width: 16px; height: 16px; color: #8898A8; transition: color 220ms;}
+  .lk:hover .ic.spin path,
+  .lk:hover .ic.spin circle:last-child { animation: bob 1.1s ease-in-out infinite;}
+  .lk:hover .ic.compass g { animation: needle 1.6s ease-in-out infinite;}
+  .lk:hover .ic.shield path { animation: shield 1.2s ease-in-out infinite;}
+  .lk:hover .ic.cube g { animation: floaty 1.6s ease-in-out infinite;}
+  @keyframes bob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-1px);} }
+  @keyframes needle { 0%,100%{ transform: rotate(-30deg);} 50%{ transform: rotate(30deg);} }
+  @keyframes shield { 0%,100%{ transform: scale(1);} 50%{ transform: scale(1.06);} }
+  @keyframes floaty { 0%,100% { transform: translateY(0) rotate(0);} 50% { transform: translateY(-1.5px) rotate(2deg);}}
+
+  .spacer { flex: 1;}
+  .right { display:flex; align-items:center; gap: 10px;}
+
+  /* === Search expands on focus, with caret pulse === */
+  .search { position: relative;}
+  .search input {
+    width: 220px; height: 34px; padding: 0 12px 0 32px;
+    border: 1px solid #E4EAF1; border-radius: 999px; background: #F5F8FB;
+    font: 400 12.5px/1 Inter; color: #0F1B2D;
+    transition: width 320ms cubic-bezier(.2,0,0,1), background 220ms, border-color 220ms, box-shadow 220ms;
+  }
+  .search input::placeholder { color: #8898A8;}
+  .search input:focus { outline: none; width: 300px; background:#fff; border-color: #1F6FEB; box-shadow: 0 0 0 3px rgba(31,111,235,.18);}
+  .search .lens { position:absolute; left: 10px; top: 9px; color:#8898A8; transition: color 220ms, transform 220ms;}
+  .search input:focus ~ .lens { color: #1F6FEB; transform: rotate(-6deg) scale(1.05);}
+  /* caret blink dot when empty/focused */
+  .search .kbd {
+    position:absolute; right:10px; top: 8px;
+    font: 600 9.5px/1 'JetBrains Mono'; color: #8898A8;
+    border:1px solid #E4EAF1; border-radius: 4px; padding: 3px 5px; background: #fff;
+    transition: opacity 220ms;
+  }
+  .search input:focus ~ .kbd { opacity: 0;}
+
+  /* === Icon button with ripple ring === */
+  .iconbtn {
+    width: 34px; height: 34px; border-radius: 999px; background: #F5F8FB;
+    display:inline-flex; align-items:center; justify-content:center; color: #5A6B7E;
+    cursor: pointer; position: relative; overflow: visible;
+    transition: background 220ms, color 220ms, transform 220ms;
+  }
+  .iconbtn:hover { background: #E6F2FB; color: #0B3D7F;}
+  .iconbtn:active { transform: scale(0.92);}
+  .iconbtn::after {
+    content:""; position:absolute; inset: 0; border-radius:999px; pointer-events:none;
+    border: 1.5px solid rgba(31,111,235,.55);
+    transform: scale(0.8); opacity: 0;
+  }
+  .iconbtn:hover::after { animation: ripple 700ms cubic-bezier(.2,0,0,1);}
+  @keyframes ripple {
+    0%   { transform: scale(0.85); opacity: 0.7;}
+    100% { transform: scale(1.6);  opacity: 0;}
+  }
+
+  /* Bell — swing on hover */
+  .iconbtn:hover .bell { transform-origin: 50% 4px; animation: swing 1.1s ease-in-out infinite;}
+  @keyframes swing { 0%,100%{transform:rotate(-12deg);} 50%{transform:rotate(12deg);} }
+
+  .iconbtn .dotn {
+    position: absolute; top: 6px; right: 7px; width: 9px; height: 9px;
+    background: #D6493A; border: 2px solid #fff; border-radius: 999px;
+  }
+  .iconbtn .dotn::after {
+    content:""; position:absolute; inset:-3px; border-radius:999px; border:2px solid #D6493A;
+    animation: pingn 1.6s cubic-bezier(.2,0,0,1) infinite;
+  }
+  @keyframes pingn {
+    0%   { transform: scale(0.6); opacity: .9;}
+    100% { transform: scale(1.6); opacity: 0;}
+  }
+
+  /* === Env LED with EKG line === */
+  .env {
+    height: 30px; padding: 0 12px 0 10px; border-radius: 999px;
+    background: linear-gradient(180deg, #E6F4ED 0%, #F4FAF6 100%);
+    color: #1F7A53; border: 1px solid #C8E5D6;
+    font: 500 10.5px/1 Inter; letter-spacing:0.10em; text-transform:uppercase;
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    overflow: hidden; position: relative;
+    transition: filter 200ms, transform 200ms;
+  }
+  .env:hover { filter: brightness(1.02); transform: translateY(-1px);}
+  .env .led {
+    width: 8px; height: 8px; border-radius: 999px; background: #2E9D6E;
+    box-shadow: 0 0 0 0 rgba(46,157,110,.7);
+    animation: led 1.8s infinite cubic-bezier(.4,0,.2,1);
+  }
+  @keyframes led { 0%{box-shadow:0 0 0 0 rgba(46,157,110,.6);} 70%{box-shadow:0 0 0 8px rgba(46,157,110,0);} 100%{box-shadow:0 0 0 0 rgba(46,157,110,0);}}
+  .env svg.ekg {
+    height: 14px; width: 36px; color: #2E9D6E;
+  }
+  .env svg.ekg path {
+    stroke-dasharray: 80; stroke-dashoffset: 80;
+    animation: ekg 2.4s linear infinite;
+  }
+  @keyframes ekg { 0%{stroke-dashoffset:80;} 60%{stroke-dashoffset:0;} 100%{stroke-dashoffset:-80;}}
+
+  /* === Avatar with conic ring === */
+  .ava {
+    position: relative;
+    width: 36px; height: 36px; border-radius: 999px;
+    background: linear-gradient(135deg, #0B3D7F 0%, #1F6FEB 100%);
+    color: #fff; font: 600 12px/1 Inter;
+    display:inline-flex; align-items:center; justify-content:center;
+    cursor: pointer;
+    box-shadow: 0 0 0 2px #fff;
+    transition: transform 220ms;
+  }
+  .ava::before {
+    content:""; position:absolute; inset:-3px; border-radius:999px;
+    background: conic-gradient(from 0deg, #1F6FEB, #2E9D6E, #A3CC4F, #1F6FEB);
+    z-index:-1;
+    opacity: 0;
+    transition: opacity 220ms;
+    animation: spinring 4s linear infinite;
+  }
+  .ava:hover { transform: scale(1.06);}
+  .ava:hover::before { opacity: 1;}
+  @keyframes spinring { to { transform: rotate(360deg);}}
+  .ava .pres { position:absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border-radius: 999px; background: #2E9D6E; border: 2px solid #fff;}
+</style></head>
+<body>
+<div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">Top Navigation · Dynamic icons, mouse-follow glow, sliding pill</div>
+
+  <nav class="nav" id="nav">
+    <div class="logo">
+      <span class="markwrap">
+        <svg class="hex" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/>
+          <circle cx="12" cy="12" r="2.4" fill="currentColor"/>
+        </svg>
+      </span>
+      <span class="name">
+        <span class="nameMain">WuXi Biologics</span>
+        <span class="nameSub">药明生物</span>
+      </span>
+    </div>
+
+    <div class="links" id="links">
+      <span class="pill" id="pill"></span>
+
+      <span class="lk" data-on="false">
+        <svg class="ic spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+          <circle cx="12" cy="12" r="2.5"/>
+        </svg>
+        <span class="label">Overview</span>
+      </span>
+
+      <span class="lk on" data-on="true">
+        <svg class="ic cube" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <g>
+            <path d="M21 8 12 3 3 8l9 5 9-5z"/>
+            <path d="M3 8v8l9 5 9-5V8"/>
+            <path d="M12 13v8"/>
+          </g>
+        </svg>
+        <span class="label">Operations</span>
+      </span>
+
+      <span class="lk" data-on="false">
+        <svg class="ic shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+        <span class="label">Quality</span>
+      </span>
+
+      <span class="lk" data-on="false">
+        <svg class="ic compass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <g style="transform-origin:12px 12px;">
+            <polygon points="12,7 14,12 12,17 10,12" fill="currentColor" stroke="none"/>
+          </g>
+        </svg>
+        <span class="label">Sites</span>
+      </span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="right">
+      <div class="search">
+        <input id="searchInput" placeholder="Search lots, batches, BR…"/>
+        <svg class="lens" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="M21 21l-4.3-4.3"/>
+        </svg>
+        <span class="kbd">⌘K</span>
+      </div>
+
+      <span class="env">
+        <span class="led"></span>
+        <svg class="ekg" viewBox="0 0 36 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M0 7 H7 L9 3 L11 11 L13 5 L15 9 L17 7 H36"/>
+        </svg>
+        GMP · Wuxi MFG18
+      </span>
+
+      <span class="iconbtn" title="Notifications">
+        <svg class="bell" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9"/>
+          <path d="M10.3 21a1.94 1.94 0 003.4 0"/>
+        </svg>
+        <span class="dotn"></span>
+      </span>
+
+      <span class="ava">LZ<span class="pres"></span></span>
+    </div>
+  </nav>
+
+  <div style="font: 400 12.5px/1.55 Inter; color: #5A6B7E; margin-top: 12px;">
+    Mouse-follow soft glow tracks the cursor across the bar. Active pill slides between links with a slight overshoot. Icons are stateful SVGs that animate on hover (gear bobs, cube floats, shield pulses, compass needle sweeps). Notification bell swings; ripple ring expands from icon buttons; live env LED + EKG line confirms connectivity. Logo mark gains a conic glow halo on hover.
+  </div>
+</div>
+
+<script>
+  // Mouse-follow glow
+  const nav = document.getElementById('nav');
+  nav.addEventListener('mousemove', e => {
+    const r = nav.getBoundingClientRect();
+    nav.style.setProperty('--mx', (e.clientX - r.left) + 'px');
+    nav.style.setProperty('--my', (e.clientY - r.top)  + 'px');
+  });
+
+  // Sliding active pill
+  const links = document.getElementById('links');
+  const pill = document.getElementById('pill');
+  const lks = links.querySelectorAll('.lk');
+  function movePill(target){
+    const r = target.getBoundingClientRect();
+    const pr = links.getBoundingClientRect();
+    pill.style.left = (r.left - pr.left) + 'px';
+    pill.style.width = r.width + 'px';
+  }
+  function setActive(target){
+    lks.forEach(l => l.classList.remove('on'));
+    target.classList.add('on');
+    movePill(target);
+  }
+  // initial position to the .on link
+  requestAnimationFrame(() => {
+    const active = links.querySelector('.lk.on') || lks[0];
+    movePill(active);
+  });
+  lks.forEach(l => {
+    l.addEventListener('mouseenter', () => movePill(l));
+    l.addEventListener('click', () => setActive(l));
+  });
+  links.addEventListener('mouseleave', () => {
+    const active = links.querySelector('.lk.on') || lks[0];
+    movePill(active);
+  });
+</script>
+</div>
+</body></html>

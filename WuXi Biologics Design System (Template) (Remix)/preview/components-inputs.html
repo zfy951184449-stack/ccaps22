@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px;}
+  .field { display: flex; flex-direction: column; gap: 6px;}
+  label { font: 500 13px/1.3 Inter, sans-serif; color: #3A4A5C;}
+  .input { height: 36px; border: 1px solid #E4EAF1; background:#fff; border-radius: 4px; padding: 0 12px; font: 400 14px/1 Inter, sans-serif; color: #0F1B2D;}
+  .input::placeholder { color: #8898A8;}
+  .input:focus { outline: none; border-color: #1F6FEB; box-shadow: 0 0 0 2px rgba(31,111,235,.40);}
+  .input.disabled { background:#F5F8FB; color:#8898A8;}
+  .input.error { border-color: #D6493A; }
+  .help { font: 400 12px/1.3 Inter, sans-serif; color:#5A6B7E;}
+  .help.err { color: #A2342A;}
+  .select { display:flex; align-items:center; justify-content:space-between;}
+  .select::after{ content:"▾"; color:#5A6B7E; font-size:11px;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Form Inputs · Default, Focus, Disabled, Error</div>
+  <div class="grid">
+    <div class="field">
+      <label>Lot No.</label>
+      <input class="input" value="BX-2418-A03" />
+      <span class="help">Format: BX-YYWW-A##</span>
+    </div>
+    <div class="field">
+      <label>Bioreactor</label>
+      <div class="input select">BR-204 · 12,400 L</div>
+    </div>
+    <div class="field">
+      <label>Operator</label>
+      <input class="input disabled" value="Locked to QA-002" disabled/>
+      <span class="help">Inherited from batch record</span>
+    </div>
+    <div class="field">
+      <label>Yield (g/L)</label>
+      <input class="input error" value="0.00" />
+      <span class="help err">Yield must be greater than 0.</span>
+    </div>
+  </div>
+</div></body></html>

@@ -17,7 +17,6 @@ Use it for facts that must survive beyond a single chat or PR:
   - `codex-harness.md`
   - `agent-rule-coverage-matrix.md`
   - `frontend-visual-language.md`
-  - `frontend-next-visual-language.md`
   - `../AGENTS.md`
   - `../.agent/index.md`
   - `../.agent/rules/README.md`
@@ -50,4 +49,4 @@ Use it for facts that must survive beyond a single chat or PR:
 - If guidance becomes checkable, prefer moving it into scripts, tests, or lint rules.
 - Keep agent entry docs short and route-oriented. Do not turn them into long prompt bundles.
 - Keep cross-layer navigation current in `ARCHITECTURE.md` when entrypoints or ownership boundaries change.
-- For active runtime surface, trust executable entry points first (`frontend/src/App.tsx`, `frontend-next/src/app/layout.tsx`, `backend/src/server.ts`) and treat generated reports as secondary evidence unless regenerated.
+- For active runtime surface, trust executable entry points first (`frontend/src/App.tsx`, `backend/src/server.ts`) and treat generated reports as secondary evidence unless regenerated.

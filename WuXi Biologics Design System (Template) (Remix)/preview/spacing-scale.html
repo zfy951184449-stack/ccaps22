@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .row { display:flex; align-items:flex-end; gap:14px; margin-bottom: 14px; }
+  .row:last-child { margin-bottom: 0; }
+  .box { background: #1F6FEB; border-radius: 4px; }
+  .lbl { font-family: var(--wx-font-mono); font-size: 11px; color: var(--wx-fg-3); min-width: 56px;}
+  .name { font-size: 12px; color: var(--wx-fg-2); font-weight: 500;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Spacing · 8-pt Grid Tokens</div>
+  <div class="row"><span class="lbl">sp-2</span><div class="box" style="width:2px;height:16px;"></div><span class="name">2px · hairline gap</span></div>
+  <div class="row"><span class="lbl">sp-4</span><div class="box" style="width:4px;height:16px;"></div><span class="name">4px · inline gaps, label/value</span></div>
+  <div class="row"><span class="lbl">sp-8</span><div class="box" style="width:8px;height:16px;"></div><span class="name">8px · stacked fields, chip gap</span></div>
+  <div class="row"><span class="lbl">sp-12</span><div class="box" style="width:12px;height:16px;"></div><span class="name">12px · row internal padding</span></div>
+  <div class="row"><span class="lbl">sp-16</span><div class="box" style="width:16px;height:16px;"></div><span class="name">16px · card padding (compact)</span></div>
+  <div class="row"><span class="lbl">sp-24</span><div class="box" style="width:24px;height:16px;"></div><span class="name">24px · card padding, panel gap</span></div>
+  <div class="row"><span class="lbl">sp-32</span><div class="box" style="width:32px;height:16px;"></div><span class="name">32px · section gap, page padding</span></div>
+  <div class="row"><span class="lbl">sp-48</span><div class="box" style="width:48px;height:16px;"></div><span class="name">48px · hero / page top</span></div>
+</div></body></html>

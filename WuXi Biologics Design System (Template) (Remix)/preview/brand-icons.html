@@ -1,0 +1,174 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{ background:#F5F8FB; font-family: var(--wx-font-sans);}
+  .group { margin-top: 6px;}
+  .group h6 { font: 600 11px/1 Inter; letter-spacing:.10em; text-transform: uppercase; color:#0B3D7F; margin: 18px 0 4px; display:flex; align-items:baseline; gap:8px;}
+  .group h6 .cn { font: 500 11px/1 Inter; color:#5A6B7E; letter-spacing: 0;}
+  .group h6:first-child { margin-top: 4px;}
+  .group .desc { font: 400 11px/1.4 Inter; color:#8898A8; margin: 0 0 10px;}
+  .grid {
+    display:grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 8px;
+  }
+  .ic {
+    background:#fff; border:1px solid #E4EAF1; border-radius:8px;
+    aspect-ratio: 1 / 1;
+    display:flex; flex-direction: column; align-items:center; justify-content:center;
+    gap: 5px; color:#0F1B2D; padding: 6px 4px;
+    transition: border-color 180ms, transform 180ms, box-shadow 180ms;
+    cursor: default;
+  }
+  .ic:hover { border-color:#1F6FEB; color:#0B3D7F; box-shadow: 0 4px 12px rgba(31,111,235,.12); transform: translateY(-1px);}
+  .ic svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round;}
+  .ic span { font: 500 9px/1.1 'JetBrains Mono'; color:#8898A8; text-align:center; letter-spacing: .01em;}
+
+  .footnote { font:400 12px/1.5 Inter; color:#5A6B7E; margin-top: 18px; padding-top: 12px; border-top: 1px solid #EEF2F7;}
+  .footnote strong { color:#0F1B2D; font-weight:600;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:6px;">Iconography · Bioprocess workflow library · 24×24 · 1.55px stroke · currentColor</div>
+
+  <div class="group">
+    <h6>Upstream <span class="cn">上游 · cell culture &amp; expansion</span></h6>
+    <div class="desc">Vial thaw → seed train → N-1 → production bioreactor; covers media transfer, sampling, gassing, harvest.</div>
+    <div class="grid">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M9 2v3h6V2"/><path d="M8 5h8l-1 14a2 2 0 01-2 2h-2a2 2 0 01-2-2L8 5z"/><path d="M9 11h6"/><path d="M11 17h2"/></svg><span>vial-thaw</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg><span>cell-line</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M7 3h10v3l-2 3v3a3 3 0 11-6 0V9L7 6V3z"/><circle cx="12" cy="14" r="0.6" fill="currentColor"/><circle cx="11" cy="11" r="0.6" fill="currentColor"/><circle cx="13" cy="12.5" r="0.6" fill="currentColor"/></svg><span>shake-flask</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="4" height="18" rx="0.5"/><rect x="14" y="3" width="4" height="18" rx="0.5"/><path d="M7 10h2M15 14h2"/></svg><span>seed-train</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v3a4 4 0 01-1 2.5L15 11v8a2 2 0 01-2 2h-2a2 2 0 01-2-2v-8L7 8.5A4 4 0 016 6V3z"/><path d="M9 13h6"/><circle cx="11" cy="16" r="0.5" fill="currentColor"/><circle cx="13" cy="17.5" r="0.5" fill="currentColor"/></svg><span>n-1-vessel</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="4" rx="0.5"/><path d="M7 7v12a2 2 0 002 2h6a2 2 0 002-2V7"/><path d="M9 13h6"/><path d="M3 10v3M3 11.5h3"/><path d="M21 16v3M21 17.5h-3"/></svg><span>bioreactor</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3h6v18H5z"/><path d="M13 5h6v14h-6z"/><path d="M7 7h2M7 11h2M15 9h2M15 13h2"/></svg><span>media-tank</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M6 9v9"/><path d="M3 13c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg><span>gassing-O2</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l5 9 5-9"/><path d="M12 13v8"/><circle cx="12" cy="18" r="2"/></svg><span>sampling</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12c1-3 5-3 6 0M8 14h8"/><path d="M12 6v3M12 15v3"/></svg><span>ph-probe</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v6"/><path d="M9 8h6l1 3-2 9H10l-2-9 1-3z"/><path d="M10 14h4"/></svg><span>thermo-probe</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12c3 0 3-4 6-4s3 8 6 8 3-4 6-4"/><path d="M3 17h18"/></svg><span>perfusion</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="4"/><path d="M8 12l-3 9h14l-3-9"/><path d="M11 6c0-1 2-1 2 0"/></svg><span>harvest</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a14 14 0 010 18M3 12h18"/><path d="M12 3v18" stroke-dasharray="2 2"/></svg><span>centrifuge</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 21V9l7-6 7 6v12"/><path d="M5 13h14"/><path d="M9 21v-5h6v5"/></svg><span>upstream-suite</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="14" height="12" rx="1"/><path d="M17 10h2a2 2 0 012 2v0a2 2 0 01-2 2h-2"/><path d="M7 12h6M7 15h4"/></svg><span>sub-incubator</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h6>Downstream <span class="cn">下游 · purification</span></h6>
+    <div class="desc">Clarification, capture chromatography, viral inactivation, polishing, UF/DF, viral filtration, formulation/fill prep.</div>
+    <div class="grid">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 4h18l-7 9v6l-4 2v-8z"/></svg><span>clarification</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2"/><path d="M9 7h6M9 11h6M9 15h6M9 19h6"/></svg><span>chrom-column</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="4" height="18" rx="1"/><rect x="14" y="3" width="4" height="18" rx="1"/><path d="M10 8h4M10 12h4M10 16h4"/></svg><span>capture-protA</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 4v16"/><path d="M8 8l8 8M16 8l-8 8" stroke-dasharray="2 2"/></svg><span>viral-inact</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><path d="M5 9h14M5 15h14"/><path d="M9 6l3 0M9 12l3 0M9 18l3 0"/></svg><span>polish-AEX</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="1"/><path d="M6 8h12M6 13h12M6 18h12" stroke-dasharray="1 2"/><path d="M2 12h2M20 12h2"/></svg><span>polish-CEX</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>uv-detector</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="1"/><path d="M3 12h18" stroke-dasharray="1 2"/><path d="M7 7v10M11 7v10M15 7v10"/><path d="M2 9l-1 0M2 15l-1 0M22 9l1 0M22 15l1 0"/></svg><span>uf-df-cassette</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12c3-3 6-3 9 0s6 3 9 0"/><path d="M3 12c3 3 6 3 9 0s6-3 9 0"/></svg><span>tff-skid</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 9h16M9 4v16M4 14h16M14 4v16"/></svg><span>diafilter</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3h14v6l-3 4v8H8v-8L5 9z"/><path d="M5 9h14"/><circle cx="12" cy="15" r="0.6" fill="currentColor"/><circle cx="10" cy="18" r="0.6" fill="currentColor"/></svg><span>viral-filter</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="6" rx="1"/><rect x="3" y="15" width="18" height="6" rx="1"/><path d="M9 9v6M15 9v6"/></svg><span>buffer-skid</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12a3 3 0 016 0c0 2-3 2-3 4"/><path d="M12 18h.01"/></svg><span>conductivity</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 8h16v8H4z"/><path d="M4 12h16" stroke-dasharray="1 2"/><circle cx="8" cy="12" r="0.6" fill="currentColor"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/><circle cx="16" cy="12" r="0.6" fill="currentColor"/></svg><span>inline-mix</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12v6l-2 2v8a2 2 0 01-2 2h-4a2 2 0 01-2-2v-8L6 9z"/><path d="M9 14h6"/></svg><span>fill-prep</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M7 9V6a2 2 0 014 0M13 9V6a2 2 0 014 0"/><path d="M3 12h18" stroke-dasharray="1 2"/></svg><span>downstream-line</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h6>Buffer &amp; Media Prep <span class="cn">配液 · solution preparation</span></h6>
+    <div class="desc">Weigh / dispense / mix / hydrate / sterilize / hold; covers WFI, salts, surfactants and concentrate dilution.</div>
+    <div class="grid">
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/></svg><span>wfi</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 18h18"/><path d="M5 18l3-9h8l3 9"/><path d="M12 9V5"/><path d="M9 5h6"/></svg><span>weigh</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3v6l3 3v9h8v-9l3-3V3z"/><path d="M5 9h14"/><path d="M10 16h4"/></svg><span>dispense</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="6" rx="1"/><path d="M7 9v10a2 2 0 002 2h6a2 2 0 002-2V9"/><circle cx="12" cy="14" r="2"/><path d="M12 11v3"/></svg><span>mix-tank</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/><path d="M9 12h6M12 9v6"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/></svg><span>impeller</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v3"/><path d="M9 6h6"/><path d="M9 6l-3 12a3 3 0 003 3h6a3 3 0 003-3l-3-12"/><path d="M8 14c2-1 4 1 6 0s4-1 4 0"/></svg><span>buffer-prep</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 13c2 2 6 2 8 0"/><circle cx="9" cy="9" r="0.8" fill="currentColor"/><circle cx="15" cy="9" r="0.8" fill="currentColor"/></svg><span>hydrate</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12h6"/><path d="M12 9v6" stroke-dasharray="1 1"/><path d="M5 5l14 14" stroke-dasharray="2 2"/></svg><span>sterilize</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/><path d="M8 6V3M16 6V3"/><path d="M4 11h16"/><path d="M8 14h2M14 14h2"/></svg><span>autoclave</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h6" stroke-dasharray="1 2"/><circle cx="12" cy="6" r="0.8" fill="currentColor"/></svg><span>concentrate</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 7h18M3 12h18M3 17h18"/><circle cx="6" cy="7" r="1.2" fill="currentColor"/><circle cx="14" cy="12" r="1.2" fill="currentColor"/><circle cx="9" cy="17" r="1.2" fill="currentColor"/></svg><span>recipe</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 3h12l-1 5h-10z"/><path d="M7 8l1 13h8l1-13"/><path d="M10 12h4"/></svg><span>hold-vessel</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 12h6l-3-4M4 12l3 4"/><path d="M14 8h6l-3-4M14 16h6l-3 4"/><circle cx="12" cy="12" r="2"/></svg><span>flow-divert</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 1"/><path d="M3 12h2M19 12h2"/></svg><span>hold-time</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3h14v8a7 7 0 01-14 0z"/><path d="M5 11h14"/><path d="M9 21h6"/><path d="M12 18v3"/></svg><span>scale-readout</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 8h2l3 12h8l3-12h2"/><path d="M8 4h8v4H8z"/></svg><span>cip-system</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h6>Materials <span class="cn">物料 · raw materials &amp; warehousing</span></h6>
+    <div class="desc">Receipt, sampling, quarantine, release, kanban, lot trace, cold-chain, expiry.</div>
+    <div class="grid">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg><span>receipt</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M9 4v16"/></svg><span>warehouse</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg><span>kanban</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M6 6v12M9 6v12M13 6v12M17 6v12"/></svg><span>barcode</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"/><rect x="15" y="3" width="6" height="6"/><rect x="3" y="15" width="6" height="6"/><path d="M13 13h2v2h-2zM17 13h2v2h-2zM13 17h2v2h-2zM17 17h2v2h-2z"/></svg><span>qr-trace</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v6"/><path d="M9 5l3 3 3-3"/><circle cx="12" cy="14" r="6"/><path d="M12 11v3l2 1"/></svg><span>quarantine</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-5"/></svg><span>released</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><path d="M6 6l3 3M15 15l3 3M6 18l3-3M15 9l3-3"/></svg><span>cold-chain</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M9 9l6 6M15 9l-6 6"/><path d="M4 4l4 4M16 16l4 4"/></svg><span>rejected</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5l3 1.5"/><path d="M16 5l3-2M5 19l-2 2"/></svg><span>expiry</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="14" height="10" rx="1"/><path d="M16 10h4l2 3v4h-6"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="19" r="2"/></svg><span>shipment</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 8l7-4 7 4-7 4-7-4z"/><path d="M5 8v8l7 4 7-4V8"/><path d="M9 18l-2-2"/></svg><span>lot</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 3v4l3 3v8a2 2 0 002 2h6a2 2 0 002-2v-8l3-3V3z"/><path d="M4 7h16"/><path d="M9 14h6"/></svg><span>raw-mat</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2v4"/><path d="M9 6h6l2 4-5 12h-0L7 10z"/><path d="M9 14h6"/></svg><span>powder</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="14" rx="1"/><path d="M9 6V4h6v2"/><path d="M10 11h4M10 15h4"/></svg><span>reagent</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4z"/><path d="M4 14h16v6H4z"/><path d="M9 7h6M9 17h6"/></svg><span>pallet</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h6>Equipment &amp; Consumables <span class="cn">器具 · single-use &amp; durables</span></h6>
+    <div class="desc">Connectors, bags, tubing, filters, sensors, single-use mixers, sampling assemblies.</div>
+    <div class="grid">
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="6" height="12" rx="1"/><path d="M9 12h6"/><rect x="15" y="6" width="6" height="12" rx="1"/></svg><span>su-connector</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 5h14l-2 14H7z"/><path d="M9 9h6M9 13h6"/><path d="M11 5V3h2v2"/></svg><span>su-bag</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12c3 0 3-3 6-3s3 6 6 6 3-3 6-3"/></svg><span>tubing</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg><span>filter-disk</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="6" rx="1"/><path d="M9 9v9a3 3 0 006 0V9"/><path d="M11 14h2"/></svg><span>su-bioreactor</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M9 2v6"/><path d="M15 2v6"/><path d="M5 8h14l-2 13H7L5 8z"/><path d="M8 14h8"/></svg><span>vial</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M8 3h8v3l-2 3v9a2 2 0 01-2 2 2 2 0 01-2-2V9L8 6V3z"/></svg><span>flask</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="6"/><path d="M9 14l-3 7h12l-3-7"/></svg><span>petri</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M11 2v8"/><path d="M9 10h6l1 4-2 8h-4l-2-8 1-4z"/><path d="M9.5 14h5"/></svg><span>pipette</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="3"/><path d="M12 9v9"/><path d="M9 18h6"/><path d="M9 21h6"/></svg><span>sensor-probe</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="6" rx="1"/><path d="M3 12h18" stroke-dasharray="1 2"/><path d="M7 6v3M11 6v3M15 6v3"/></svg><span>su-mixer</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/></svg><span>aseptic-port</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="6" rx="1"/><path d="M7 9v9a2 2 0 002 2h6a2 2 0 002-2V9"/><path d="M9 13h6"/></svg><span>tote</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 9h18M3 15h18"/><path d="M12 3v18"/></svg><span>cap-seal</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M6 4h12v4H6z"/><path d="M7 8l1 13h8l1-13"/><path d="M10 12v6M14 12v6"/></svg><span>cuvette</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M5 6v12h14V6"/><path d="M9 10v6M13 10v6"/></svg><span>tray</span></div>
+    </div>
+  </div>
+
+  <div class="group">
+    <h6>QA / QC <span class="cn">质量 · sampling, testing, batch release</span></h6>
+    <div class="desc">In-process sampling, identity, potency, bioburden, endotoxin, deviation, CAPA, batch record review &amp; release.</div>
+    <div class="grid">
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l5 9 5-9"/><path d="M12 13v8"/><circle cx="12" cy="18" r="2"/></svg><span>sampling</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 8c4 0 4 8 8 8s4-8 8-8"/><path d="M4 16c4 0 4-8 8-8s4 8 8 8"/></svg><span>identity</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 4l8 16 8-16"/><path d="M8 12h8"/></svg><span>potency</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="2"/><circle cx="15" cy="11" r="1.5"/><circle cx="11" cy="14" r="2.5"/><circle cx="16" cy="16" r="1.2"/><circle cx="7" cy="14" r="1"/></svg><span>bioburden</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M8 3h8v6l-2 3v9h-4v-9L8 9z"/><path d="M9 12h6"/><path d="M12 4v3"/></svg><span>endotoxin</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 12c1-3 5-3 6 0"/><path d="M12 6v3"/></svg><span>ph-test</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="1"/><path d="M3 12h18" stroke-dasharray="1 2"/><path d="M7 9v6M11 9v6M15 9v6M19 9v6"/></svg><span>hplc</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 18l6-7 4 5 8-9"/><path d="M21 7v4h-4"/></svg><span>spectro</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M16 16l5 5"/><path d="M9 11h4M11 9v4"/></svg><span>inspect</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.86 1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span>deviation</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0115-6.7M21 4v5h-5"/><path d="M21 12a9 9 0 01-15 6.7M3 20v-5h5"/></svg><span>capa</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/></svg><span>batch-record</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 14l2 2 4-5"/></svg><span>review-ok</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span>release</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><path d="M3 3l3 3M21 3l-3 3"/></svg><span>oos-clock</span></div>
+      <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 5h18l-9 8z"/><path d="M3 5v14h18V5"/><path d="M9 13l-3 6M15 13l3 6"/></svg><span>chain-custody</span></div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    <strong>Library: 96 process icons across 6 groups.</strong> Maps directly to GMP biologics workflow — <em>upstream → downstream → buffer/media prep → materials → consumables → QA/QC</em>. All icons are 24×24, 1.55px stroke, rounded joins, drawn in <code>currentColor</code> so a single asset reads on white surfaces, deep blue chrome, and gradient marks. Tag names match audit-log nomenclature (e.g. <code>uf-df-cassette</code>, <code>viral-inact</code>, <code>capa</code>) so engineering can wire 1:1.
+  </div>
+</div></body></html>

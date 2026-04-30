@@ -1,0 +1,93 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{font-family: var(--wx-font-sans);}
+  .group { margin-bottom: 14px; }
+  .group:last-child { margin-bottom: 0; }
+  .group-title { font: 500 10.5px/1 Inter; letter-spacing: 0.08em; text-transform: uppercase; color: var(--wx-fg-4); margin-bottom: 8px; }
+  .row { display:flex; gap: 10px; align-items: center; flex-wrap:wrap;}
+
+  /* A. Bracketed mono codes — enterprise terminal style */
+  .code { font-family: var(--wx-font-mono); font-size: 11.5px; font-weight: 500; letter-spacing: 0.02em; padding: 3px 0; display:inline-flex; align-items:center; gap:6px;}
+  .code .br { color: var(--wx-fg-4);}
+  .code .lbl { letter-spacing: 0.06em; text-transform: uppercase;}
+  .code.ok  { color: #1F7A53;}
+  .code.info{ color: #0B3D7F;}
+  .code.warn{ color: #8A6A1F;}
+  .code.err { color: #A2342A;}
+  .code.neu { color: #5A6B7E;}
+
+  /* B. Left-bar accent — flat, no fill */
+  .bar { display: inline-flex; align-items: center; height: 22px; border-left: 3px solid; padding: 0 10px 0 9px; font: 500 12px/1 Inter; letter-spacing: 0.01em;}
+  .bar.ok  { border-color: #2E9D6E; color: #1F7A53;}
+  .bar.info{ border-color: #1F6FEB; color: #0B3D7F;}
+  .bar.warn{ border-color: #E8B53C; color: #8A6A1F;}
+  .bar.err { border-color: #D6493A; color: #A2342A;}
+  .bar.neu { border-color: #8898A8; color: #5A6B7E;}
+
+  /* C. Uppercase tracked — typographic, no shape at all */
+  .trk { font: 600 10.5px/1 Inter; letter-spacing: 0.14em; text-transform: uppercase; padding: 3px 0;}
+  .trk.ok  { color: #1F7A53;}
+  .trk.info{ color: #0B3D7F;}
+  .trk.warn{ color: #8A6A1F;}
+  .trk.err { color: #A2342A;}
+  .trk.neu { color: #5A6B7E;}
+  .trk::before { content: "—"; margin-right: 6px; opacity: 0.5;}
+
+  /* D. Outlined — 1px hairline, white fill, mono ID + label */
+  .out { display:inline-flex; align-items: stretch; height: 22px; border: 1px solid; border-radius: 3px; font: 500 11.5px/1 Inter; overflow: hidden;}
+  .out .k { font-family: var(--wx-font-mono); font-weight: 500; letter-spacing: 0.04em; padding: 0 7px; display:inline-flex; align-items:center; color: #fff;}
+  .out .v { padding: 0 9px; display:inline-flex; align-items:center; background:#fff;}
+  .out.ok  { border-color: #2E9D6E;} .out.ok  .k { background: #2E9D6E;} .out.ok  .v { color:#1F7A53;}
+  .out.info{ border-color: #1F6FEB;} .out.info .k { background: #1F6FEB;} .out.info .v { color:#0B3D7F;}
+  .out.warn{ border-color: #E8B53C;} .out.warn .k { background: #E8B53C; color:#5A4612;} .out.warn .v { color:#8A6A1F;}
+  .out.err { border-color: #D6493A;} .out.err  .k { background: #D6493A;} .out.err  .v { color:#A2342A;}
+  .out.neu { border-color: #C7D1DD;} .out.neu  .k { background: #C7D1DD; color:#3A4A5C;} .out.neu  .v { color:#5A6B7E;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Status Indicators · Four Treatments</div>
+
+  <div class="group">
+    <div class="group-title">A · Bracketed Code (mono, enterprise terminal)</div>
+    <div class="row">
+      <span class="code ok"><span class="br">[</span><span class="lbl">In Spec</span><span class="br">]</span></span>
+      <span class="code info"><span class="br">[</span><span class="lbl">QA Review</span><span class="br">]</span></span>
+      <span class="code warn"><span class="br">[</span><span class="lbl">Near Limit</span><span class="br">]</span></span>
+      <span class="code err"><span class="br">[</span><span class="lbl">OOS</span><span class="br">]</span></span>
+      <span class="code neu"><span class="br">[</span><span class="lbl">Idle</span><span class="br">]</span></span>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">B · Left-Bar Accent (flat, structural)</div>
+    <div class="row">
+      <span class="bar ok">Released</span>
+      <span class="bar info">Scheduled</span>
+      <span class="bar warn">Awaiting Action</span>
+      <span class="bar err">Deviation</span>
+      <span class="bar neu">Archived</span>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">C · Tracked Uppercase (typographic only)</div>
+    <div class="row">
+      <span class="trk ok">Qualified</span>
+      <span class="trk info">In Progress</span>
+      <span class="trk warn">Hold</span>
+      <span class="trk err">Stopped</span>
+      <span class="trk neu">Offline</span>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">D · Two-part Outlined (status code + label)</div>
+    <div class="row">
+      <span class="out ok"><span class="k">REL</span><span class="v">Released</span></span>
+      <span class="out info"><span class="k">QA</span><span class="v">Under Review</span></span>
+      <span class="out warn"><span class="k">WRN</span><span class="v">Near Limit</span></span>
+      <span class="out err"><span class="k">OOS</span><span class="v">Out of Spec</span></span>
+      <span class="out neu"><span class="k">IDL</span><span class="v">Idle</span></span>
+    </div>
+  </div>
+</div></body></html>

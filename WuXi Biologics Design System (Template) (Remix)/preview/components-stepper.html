@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{ background:#F5F8FB;}
+  .panel { background: #fff; border: 1px solid #E4EAF1; border-radius: 8px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,27,45,.04);}
+  .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px;}
+  .head h3 { margin:0; font: 600 16px/1 Inter; color: #0F1B2D;}
+  .head span { font-size: 12px; color: #5A6B7E;}
+  .stages { display: flex; align-items: center; gap: 0;}
+  .stage { flex: 1; display:flex; flex-direction: column; gap: 6px; position: relative; padding-right: 12px;}
+  .stage:not(:last-child)::after { content:""; position: absolute; top: 8px; right: 0; width: 12px; height: 1px; background: #C7D1DD;}
+  .ic { width: 18px; height:18px; border-radius: 999px; background:#E6F2FB; color:#0B3D7F; display: inline-flex; align-items:center; justify-content:center; font: 600 10px/1 Inter; border: 1.5px solid #1F6FEB;}
+  .stage.done .ic { background:#2E9D6E; border-color:#2E9D6E; color:#fff;}
+  .stage.curr .ic { background:#fff; border-color:#0B3D7F; color:#0B3D7F;}
+  .stage.todo .ic { background:#fff; border-color:#C7D1DD; color:#8898A8;}
+  .lbl { font: 500 12px/1.2 Inter; color: #3A4A5C;}
+  .stage.done .lbl{ color:#1F7A53;}
+  .stage.curr .lbl{ color:#0B3D7F; font-weight: 600;}
+  .stage.todo .lbl{ color:#8898A8;}
+  .day { font: 500 11px/1 Inter; color: #5A6B7E; font-variant-numeric: tabular-nums;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">Process Stepper · Batch Stages</div>
+  <div class="panel">
+    <div class="head"><h3>Batch BX-2418-A03 · Production</h3><span>Day 9 of 14</span></div>
+    <div class="stages">
+      <div class="stage done"><span class="ic">✓</span><span class="lbl">Inoculation</span><span class="day">D0</span></div>
+      <div class="stage done"><span class="ic">✓</span><span class="lbl">Seed Train</span><span class="day">D1–D4</span></div>
+      <div class="stage curr"><span class="ic">●</span><span class="lbl">Production</span><span class="day">D5–D11</span></div>
+      <div class="stage todo"><span class="ic"></span><span class="lbl">Harvest</span><span class="day">D12</span></div>
+      <div class="stage todo"><span class="ic"></span><span class="lbl">Clarification</span><span class="day">D13</span></div>
+      <div class="stage todo"><span class="ic"></span><span class="lbl">QA Release</span><span class="day">D14</span></div>
+    </div>
+  </div>
+</div></body></html>

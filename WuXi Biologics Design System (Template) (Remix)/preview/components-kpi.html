@@ -1,0 +1,91 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{background:#F5F8FB; font-family: var(--wx-font-sans);}
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 12px;}
+  .crd { background:#fff; border:1px solid #E4EAF1; border-radius:8px; padding:14px 16px; box-shadow:0 1px 2px rgba(15,27,45,.04); display:grid; grid-template-columns: 1fr auto; gap: 14px; align-items:center;}
+  .ttl { font: 500 11px/1 Inter; letter-spacing:.08em; text-transform:uppercase; color:#5A6B7E; margin-bottom:6px;}
+  .v { font: 600 28px/1 Inter; color:#0F1B2D; font-variant-numeric: tabular-nums; letter-spacing:-0.02em;}
+  .u { font:500 13px/1 Inter; color:#5A6B7E; margin-left:3px;}
+  .d { font: 500 11.5px/1 Inter; margin-top:6px; font-variant-numeric: tabular-nums;}
+  .up{ color:#1F7A53;} .down{ color:#A2342A;} .neu{ color:#5A6B7E;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">KPI Tiles · Visualization carries the data</div>
+  <div class="grid">
+
+    <!-- Sparkline trend (capacity over weeks) -->
+    <div class="crd">
+      <div>
+        <div class="ttl">Capacity Utilization · 12w</div>
+        <div class="v">78<span class="u">%</span></div>
+        <div class="d up">▲ 4.2 pts WoW · peak 82%</div>
+      </div>
+      <svg width="92" height="44" viewBox="0 0 92 44">
+        <polyline fill="none" stroke="#0B3D7F" stroke-width="1.5"
+          points="2,32 10,30 18,28 26,30 34,24 42,22 50,18 58,14 66,12 74,10 82,8 90,6"/>
+        <polygon fill="#0B3D7F" fill-opacity="0.08"
+          points="2,32 10,30 18,28 26,30 34,24 42,22 50,18 58,14 66,12 74,10 82,8 90,6 90,42 2,42"/>
+        <circle cx="90" cy="6" r="3" fill="#fff" stroke="#0B3D7F" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+    <!-- Bar count (active batches per stage) -->
+    <div class="crd">
+      <div>
+        <div class="ttl">Active Batches</div>
+        <div class="v">24</div>
+        <div class="d up">▲ 2 vs last week · 4 stages</div>
+      </div>
+      <svg width="92" height="44" viewBox="0 0 92 44">
+        <rect x="2"  y="14" width="14" height="28" fill="#1F6FEB"/>
+        <rect x="22" y="6"  width="14" height="36" fill="#0B3D7F"/>
+        <rect x="42" y="20" width="14" height="22" fill="#3AA8C1"/>
+        <rect x="62" y="28" width="14" height="14" fill="#A3CC4F"/>
+        <text x="9"  y="40" font-size="7" font-family="JetBrains Mono" fill="#fff" text-anchor="middle">5</text>
+        <text x="29" y="40" font-size="7" font-family="JetBrains Mono" fill="#fff" text-anchor="middle">9</text>
+        <text x="49" y="40" font-size="7" font-family="JetBrains Mono" fill="#fff" text-anchor="middle">7</text>
+        <text x="69" y="40" font-size="7" font-family="JetBrains Mono" fill="#fff" text-anchor="middle">3</text>
+      </svg>
+    </div>
+
+    <!-- Ring (in-spec rate) -->
+    <div class="crd">
+      <div>
+        <div class="ttl">In-Spec Rate · 30d</div>
+        <div class="v">99.4<span class="u">%</span></div>
+        <div class="d up">▲ 0.3 pts · 1 OOS in 168 lots</div>
+      </div>
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r="20" fill="none" stroke="#EEF2F7" stroke-width="5"/>
+        <circle cx="24" cy="24" r="20" fill="none" stroke="#2E9D6E" stroke-width="5"
+          stroke-dasharray="125" stroke-dashoffset="0.75" stroke-linecap="round"
+          transform="rotate(-90 24 24)"/>
+      </svg>
+    </div>
+
+    <!-- Severity stack (deviations) -->
+    <div class="crd">
+      <div>
+        <div class="ttl">Open Deviations</div>
+        <div class="v">3</div>
+        <div class="d down">▲ 1 vs last week · 1 major</div>
+      </div>
+      <svg width="92" height="44" viewBox="0 0 92 44">
+        <!-- horizontal severity bars -->
+        <text x="2"  y="11" font-size="8" font-family="JetBrains Mono" fill="#5A6B7E">MAJ</text>
+        <rect x="28" y="4"  width="14" height="10" fill="#D6493A"/>
+        <text x="45" y="11" font-size="8" font-family="JetBrains Mono" fill="#0F1B2D">1</text>
+
+        <text x="2"  y="25" font-size="8" font-family="JetBrains Mono" fill="#5A6B7E">MIN</text>
+        <rect x="28" y="18" width="28" height="10" fill="#E8B53C"/>
+        <text x="59" y="25" font-size="8" font-family="JetBrains Mono" fill="#0F1B2D">2</text>
+
+        <text x="2"  y="39" font-size="8" font-family="JetBrains Mono" fill="#5A6B7E">OBS</text>
+        <rect x="28" y="32" width="0"  height="10" fill="#8898A8"/>
+        <text x="31" y="39" font-size="8" font-family="JetBrains Mono" fill="#8898A8">0</text>
+      </svg>
+    </div>
+
+  </div>
+</div></body></html>

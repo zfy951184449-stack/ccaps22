@@ -8,7 +8,6 @@ cd "${SCRIPT_DIR}"
 HOST="${HOST:-0.0.0.0}"
 BACKEND_PORT="${BACKEND_PORT:-3001}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
-FRONTEND_NEXT_PORT="${FRONTEND_NEXT_PORT:-3002}"
 SOLVER_V4_PORT="${SOLVER_V4_PORT:-5005}"
 BREW_MYSQL_SERVICE="${BREW_MYSQL_SERVICE:-mysql}"
 
@@ -62,7 +61,6 @@ wait_for_url() {
 # 1. 确保端口没被占用
 ensure_port_available "${BACKEND_PORT}" "后端"
 ensure_port_available "${FRONTEND_PORT}" "老前端"
-ensure_port_available "${FRONTEND_NEXT_PORT}" "新前端"
 ensure_port_available "${SOLVER_V4_PORT}" "V4求解器"
 
 # 2. 检查 MySQL (macOS brew)
@@ -121,20 +119,10 @@ PIDS+=($!)
 cd "${SCRIPT_DIR}"
 wait_for_url "http://127.0.0.1:${FRONTEND_PORT}" "老前端项目" 60 2
 
-# 6. 新版本前端 (Next.js)
-echo "✨ 启动新前端服务 (端口${FRONTEND_NEXT_PORT})..."
-cd frontend-next
-if [[ ! -d "node_modules" ]]; then npm install; fi
-HOST="${HOST}" PORT="${FRONTEND_NEXT_PORT}" npm run dev &
-PIDS+=($!)
-cd "${SCRIPT_DIR}"
-wait_for_url "http://127.0.0.1:${FRONTEND_NEXT_PORT}" "新前端项目(Next.js)" 60 2
-
 echo ""
 echo "==========================================="
 echo "✅ 所有服务均已启动/就绪!"
-echo "📱 老版本前端:   http://localhost:${FRONTEND_PORT}"
-echo "📱 新版本前端:   http://localhost:${FRONTEND_NEXT_PORT}"
+echo "📱 前端:         http://localhost:${FRONTEND_PORT}"
 echo "🔗 后端 API:     http://localhost:${BACKEND_PORT}"
 echo "🧠 求解器 V4:    http://localhost:${SOLVER_V4_PORT}"
 echo "==========================================="

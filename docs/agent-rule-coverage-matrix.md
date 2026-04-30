@@ -14,7 +14,7 @@ The repo now prefers short entry docs, conditional skills, and one optional work
 | Persona reminders | Covered | `.agent/personas/README.md`, `.agent/personas/` | Lightweight cards only; not an orchestration protocol. |
 | Cross-layer architecture navigation | Covered | `docs/ARCHITECTURE.md` | Stable entrypoints and read order. |
 | Database and API semantics | Covered | `docs/LLM_DB_GUIDELINES.md`, `docs/db-consistency-rules.md` | Durable semantics stay in docs, not entry prompts. |
-| Frontend visual language | Covered | `docs/frontend-visual-language.md`, `docs/frontend-next-visual-language.md` | Read only when the task touches UI. |
+| Frontend visual language | Covered | `docs/frontend-visual-language.md` | Read only when the task touches UI. |
 | Biopharma process semantics | Covered | `.agent/skills/biopharma-cmo/SKILL.md`, `docs/biopharma-cmo-domain.md` | Skill routes to the minimum required references. |
 | Biopharma roster semantics | Covered | `.agent/skills/biopharma-roster/SKILL.md`, `docs/scheduling_principles.md` | Loaded only when workforce logic matters. |
 | Execution plans and follow-up tracking | Covered | `docs/exec-plans/README.md`, `docs/exec-plans/` | Durable multi-step work lives here. |

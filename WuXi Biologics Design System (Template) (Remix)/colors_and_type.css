@@ -1,0 +1,214 @@
+/* ============================================================
+   WuXi Biologics Design System — Tokens
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ---------- Color: Brand & Primaries ---------- */
+  --wx-blue-900: #082A5C;
+  --wx-blue-800: #0A3470;
+  --wx-blue-700: #0B3D7F;   /* WuXi Blue — primary */
+  --wx-blue-600: #1556B5;
+  --wx-blue-500: #1F6FEB;   /* Tech Blue — interactive */
+  --wx-blue-400: #5A93F0;
+  --wx-blue-300: #9DBEF5;
+  --wx-blue-200: #C7DCF7;
+  --wx-blue-100: #E6F2FB;   /* Sky — info bg */
+  --wx-blue-50:  #F2F7FC;
+
+  /* ---------- Color: Cyan / Aqua ---------- */
+  --wx-cyan-700: #226E80;
+  --wx-cyan-500: #3AA8C1;
+  --wx-cyan-200: #B3DDE6;
+  --wx-cyan-100: #E0F1F5;
+
+  /* ---------- Color: Bio Green ---------- */
+  --wx-green-700: #1F7A53;
+  --wx-green-600: #267F5C;
+  --wx-green-500: #2E9D6E;   /* In-spec / success */
+  --wx-green-300: #A3D9BF;
+  --wx-green-100: #E6F4ED;
+
+  /* ---------- Color: Lime / Life Accent ---------- */
+  --wx-lime-600: #7FA533;
+  --wx-lime-500: #A3CC4F;
+  --wx-lime-100: #EEF6DD;
+
+  /* ---------- Color: Amber (warning, used sparingly) ---------- */
+  --wx-amber-700: #8A6A1F;
+  --wx-amber-500: #E8B53C;
+  --wx-amber-100: #FBF1D9;
+
+  /* ---------- Color: Red (error, used sparingly) ---------- */
+  --wx-red-700: #A2342A;
+  --wx-red-500: #D6493A;
+  --wx-red-100: #FBE6E3;
+
+  /* ---------- Color: Neutrals ---------- */
+  --wx-ink:       #0F1B2D;   /* primary text */
+  --wx-fg-1:      #0F1B2D;
+  --wx-fg-2:      #3A4A5C;   /* body */
+  --wx-fg-3:      #5A6B7E;   /* secondary */
+  --wx-fg-4:      #8898A8;   /* muted / placeholder */
+  --wx-divider:   #EEF2F7;
+  --wx-border:    #E4EAF1;
+  --wx-border-strong: #C7D1DD;
+  --wx-surface-3: #EDF1F6;
+  --wx-surface-2: #F5F8FB;   /* light blue-grey */
+  --wx-surface-1: #FAFCFE;
+  --wx-bg:        #FFFFFF;
+
+  /* ---------- Semantic shortcuts ---------- */
+  --wx-primary:        var(--wx-blue-700);
+  --wx-primary-hover:  var(--wx-blue-800);
+  --wx-primary-active: var(--wx-blue-900);
+  --wx-link:           var(--wx-blue-500);
+  --wx-success:        var(--wx-green-500);
+  --wx-warning:        var(--wx-amber-500);
+  --wx-danger:         var(--wx-red-500);
+  --wx-info:           var(--wx-blue-500);
+
+  /* ---------- Type ---------- */
+  --wx-font-sans: "Inter", "PingFang SC", "Source Han Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --wx-font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  --wx-fs-12: 12px;
+  --wx-fs-13: 13px;
+  --wx-fs-14: 14px;
+  --wx-fs-16: 16px;
+  --wx-fs-18: 18px;
+  --wx-fs-22: 22px;
+  --wx-fs-28: 28px;
+  --wx-fs-36: 36px;
+  --wx-fs-48: 48px;
+
+  --wx-lh-tight:  1.2;
+  --wx-lh-snug:   1.3;
+  --wx-lh-normal: 1.5;
+
+  --wx-fw-regular: 400;
+  --wx-fw-medium:  500;
+  --wx-fw-semibold:600;
+  --wx-fw-bold:    700;
+
+  /* ---------- Spacing ---------- */
+  --wx-sp-2:  2px;
+  --wx-sp-4:  4px;
+  --wx-sp-8:  8px;
+  --wx-sp-12: 12px;
+  --wx-sp-16: 16px;
+  --wx-sp-24: 24px;
+  --wx-sp-32: 32px;
+  --wx-sp-48: 48px;
+  --wx-sp-64: 64px;
+
+  /* ---------- Radii ---------- */
+  --wx-r-2: 2px;
+  --wx-r-4: 4px;
+  --wx-r-6: 6px;
+  --wx-r-8: 8px;
+  --wx-r-12: 12px;
+  --wx-r-pill: 999px;
+
+  /* ---------- Shadow / Elevation ---------- */
+  --wx-sh-1: 0 1px 2px rgba(15, 27, 45, 0.04), 0 0 0 1px rgba(15, 27, 45, 0.04);
+  --wx-sh-2: 0 8px 24px rgba(15, 27, 45, 0.08), 0 0 0 1px rgba(15, 27, 45, 0.06);
+  --wx-sh-focus: 0 0 0 2px rgba(31, 111, 235, 0.40);
+
+  /* ---------- Motion ---------- */
+  --wx-ease: cubic-bezier(0.2, 0, 0, 1);
+  --wx-dur-1: 120ms;
+  --wx-dur-2: 180ms;
+  --wx-dur-3: 240ms;
+  --wx-dur-4: 320ms;
+}
+
+/* ============================================================
+   Semantic typography classes
+   ============================================================ */
+
+.wx-eyebrow {
+  font: var(--wx-fw-medium) var(--wx-fs-12)/var(--wx-lh-snug) var(--wx-font-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--wx-fg-3);
+}
+
+.wx-h1 {
+  font: var(--wx-fw-semibold) var(--wx-fs-36)/var(--wx-lh-tight) var(--wx-font-sans);
+  letter-spacing: -0.01em;
+  color: var(--wx-ink);
+}
+
+.wx-h2 {
+  font: var(--wx-fw-semibold) var(--wx-fs-28)/var(--wx-lh-snug) var(--wx-font-sans);
+  letter-spacing: -0.005em;
+  color: var(--wx-ink);
+}
+
+.wx-h3 {
+  font: var(--wx-fw-semibold) var(--wx-fs-22)/var(--wx-lh-snug) var(--wx-font-sans);
+  color: var(--wx-ink);
+}
+
+.wx-h4 {
+  font: var(--wx-fw-semibold) var(--wx-fs-18)/var(--wx-lh-snug) var(--wx-font-sans);
+  color: var(--wx-ink);
+}
+
+.wx-body {
+  font: var(--wx-fw-regular) var(--wx-fs-14)/var(--wx-lh-normal) var(--wx-font-sans);
+  color: var(--wx-fg-2);
+}
+
+.wx-body-lg {
+  font: var(--wx-fw-regular) var(--wx-fs-16)/var(--wx-lh-normal) var(--wx-font-sans);
+  color: var(--wx-fg-2);
+}
+
+.wx-caption {
+  font: var(--wx-fw-regular) var(--wx-fs-12)/var(--wx-lh-snug) var(--wx-font-sans);
+  color: var(--wx-fg-3);
+}
+
+.wx-label {
+  font: var(--wx-fw-medium) var(--wx-fs-13)/var(--wx-lh-snug) var(--wx-font-sans);
+  color: var(--wx-fg-2);
+}
+
+.wx-metric {
+  font: var(--wx-fw-semibold) var(--wx-fs-36)/var(--wx-lh-tight) var(--wx-font-sans);
+  color: var(--wx-ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.wx-metric-sm {
+  font: var(--wx-fw-semibold) var(--wx-fs-22)/var(--wx-lh-tight) var(--wx-font-sans);
+  color: var(--wx-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wx-mono {
+  font: var(--wx-fw-regular) var(--wx-fs-13)/var(--wx-lh-snug) var(--wx-font-mono);
+  color: var(--wx-fg-2);
+}
+
+/* ============================================================
+   Base
+   ============================================================ */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--wx-bg);
+  color: var(--wx-fg-1);
+  font-family: var(--wx-font-sans);
+  font-size: var(--wx-fs-14);
+  line-height: var(--wx-lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }

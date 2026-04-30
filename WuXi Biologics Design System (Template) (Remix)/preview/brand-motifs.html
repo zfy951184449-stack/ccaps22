@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{ background: #FFFFFF;}
+  .stack { display:flex; flex-direction:column; gap: 10px;}
+  .strip { height: 56px; border-radius: 8px; border: 1px solid #E4EAF1; display:flex; align-items:center; padding: 0 16px; font: 500 12px/1 Inter; color: #0F1B2D; position: relative; overflow: hidden;}
+  .strip svg { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.18;}
+  .lbl { position: relative; z-index:1;}
+  .s2 { background: linear-gradient(180deg, #E6F2FB 0%, #FFFFFF 100%);}
+  .s3 { background: #FFFFFF;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">Background Motifs · ≤ 8% opacity decoration</div>
+  <div class="stack">
+    <div class="strip s2">
+      <svg viewBox="0 0 600 60" preserveAspectRatio="none">
+        <defs><pattern id="hxA" width="40" height="34" patternUnits="userSpaceOnUse">
+          <polygon points="20,1 38,11 38,31 20,41 2,31 2,11" fill="none" stroke="#0B3D7F" stroke-width="0.7"/>
+        </pattern></defs>
+        <rect width="600" height="60" fill="url(#hxA)"/>
+      </svg>
+      <span class="lbl">Hex lattice over sky-gradient · hero blocks</span>
+    </div>
+    <div class="strip s3">
+      <svg viewBox="0 0 600 60" preserveAspectRatio="none">
+        <path d="M-10 50 Q 150 20 300 40 T 620 30" fill="none" stroke="#1F6FEB" stroke-width="1"/>
+        <path d="M-10 30 Q 150 60 300 30 T 620 50" fill="none" stroke="#2E9D6E" stroke-width="1"/>
+      </svg>
+      <span class="lbl">DNA helix line · login &amp; hero only</span>
+    </div>
+    <div class="strip s3">
+      <svg viewBox="0 0 600 60" preserveAspectRatio="none">
+        <ellipse cx="300" cy="120" rx="260" ry="80" fill="none" stroke="#0B3D7F" stroke-width="0.7"/>
+        <ellipse cx="300" cy="60" rx="260" ry="40" fill="none" stroke="#0B3D7F" stroke-width="0.7"/>
+        <ellipse cx="300" cy="30" rx="260" ry="20" fill="none" stroke="#0B3D7F" stroke-width="0.7"/>
+        <line x1="300" y1="-20" x2="300" y2="80" stroke="#0B3D7F" stroke-width="0.7"/>
+        <circle cx="160" cy="40" r="2" fill="#1F6FEB"/>
+        <circle cx="430" cy="35" r="2" fill="#1F6FEB"/>
+        <circle cx="240" cy="20" r="2" fill="#2E9D6E"/>
+      </svg>
+      <span class="lbl">Globe meridian · global facility / sites views</span>
+    </div>
+  </div>
+</div></body></html>

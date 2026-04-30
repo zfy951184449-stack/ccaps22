@@ -1,0 +1,20 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+  .cell { display: flex; flex-direction: column; align-items:center; gap:6px;}
+  .demo { width: 56px; height: 56px; background: #FFFFFF; border: 1px solid var(--wx-border); }
+  .name { font-size: 11px; font-weight:600; color: var(--wx-ink);}
+  .val { font-family: var(--wx-font-mono); font-size: 10.5px; color: var(--wx-fg-3);}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Radii · Restrained, Enterprise</div>
+  <div class="grid">
+    <div class="cell"><div class="demo" style="border-radius:2px"></div><span class="name">r-2</span><span class="val">2px</span></div>
+    <div class="cell"><div class="demo" style="border-radius:4px"></div><span class="name">r-4 · inputs</span><span class="val">4px</span></div>
+    <div class="cell"><div class="demo" style="border-radius:6px"></div><span class="name">r-6</span><span class="val">6px</span></div>
+    <div class="cell"><div class="demo" style="border-radius:8px"></div><span class="name">r-8 · cards</span><span class="val">8px</span></div>
+    <div class="cell"><div class="demo" style="border-radius:12px"></div><span class="name">r-12 · modals</span><span class="val">12px</span></div>
+    <div class="cell"><div class="demo" style="border-radius:999px"></div><span class="name">r-pill</span><span class="val">999px</span></div>
+  </div>
+</div></body></html>

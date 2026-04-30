@@ -1,0 +1,74 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  body{ background:#F5F8FB; font-family: var(--wx-font-sans);}
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap: 14px;}
+
+  .crd {
+    background:#fff;
+    border: 1px solid #E4EAF1;
+    border-radius: 8px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 2px rgba(15,27,45,.04);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+
+  /* Top: tiny eyebrow + status. Single line, both small, equal weight. */
+  .head { display:flex; justify-content: space-between; align-items: center; }
+  .eye { font: 500 11px/1 Inter; letter-spacing: 0.10em; text-transform: uppercase; color: #5A6B7E;}
+  .status { font: 500 11px/1 Inter; letter-spacing: 0.10em; text-transform: uppercase; display:inline-flex; align-items:center; gap:6px;}
+  .status .dot{ width:6px; height:6px; border-radius:999px; display:inline-block;}
+  .ok { color:#1F7A53;}   .ok .dot { background:#2E9D6E;}
+  .info { color:#0B3D7F;} .info .dot { background:#1F6FEB;}
+
+  /* Hero: ONE big value. This is what the eye lands on. */
+  .hero { display:flex; align-items: baseline; gap: 8px;}
+  .id   { font: 600 22px/1 Inter; color: #0F1B2D; letter-spacing: -0.01em; font-family: var(--wx-font-mono);}
+  .v    { font: 600 32px/1 Inter; color: #0F1B2D; letter-spacing: -0.02em; font-variant-numeric: tabular-nums;}
+  .u    { font: 500 14px/1 Inter; color: #5A6B7E;}
+  .sub  { font: 400 13px/1.4 Inter; color: #5A6B7E; }
+
+  /* Foot: small data row, divider above */
+  .foot { display:flex; gap: 28px; padding-top: 14px; border-top: 1px solid #EEF2F7;}
+  .met { display:flex; flex-direction: column; gap: 2px;}
+  .met .l { font: 400 11px/1 Inter; color: #8898A8; letter-spacing: 0.04em; text-transform: uppercase;}
+  .met .vv { font: 500 13px/1 Inter; color: #3A4A5C; font-variant-numeric: tabular-nums;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:12px;">Cards · One hero value, quiet supporting data</div>
+  <div class="grid">
+
+    <div class="crd">
+      <div class="head">
+        <span class="eye">Bioreactor</span>
+        <span class="status info"><span class="dot"></span>In Run</span>
+      </div>
+      <div>
+        <div class="hero"><span class="id">BR-204</span></div>
+        <div class="sub">Production · Day 9 of 14</div>
+      </div>
+      <div class="foot">
+        <div class="met"><span class="l">Volume</span><span class="vv">12,400 L</span></div>
+        <div class="met"><span class="l">Temp</span><span class="vv">36.2 °C</span></div>
+        <div class="met"><span class="l">pH</span><span class="vv">7.10</span></div>
+      </div>
+    </div>
+
+    <div class="crd">
+      <div class="head">
+        <span class="eye">Yield · BX-2418-A03</span>
+        <span class="status ok"><span class="dot"></span>Released</span>
+      </div>
+      <div>
+        <div class="hero"><span class="v">5.84</span><span class="u">g/L</span></div>
+        <div class="sub">+0.22 vs spec floor · QA closed Apr 24</div>
+      </div>
+      <div class="foot">
+        <div class="met"><span class="l">Tests</span><span class="vv">12 / 12</span></div>
+        <div class="met"><span class="l">Operator</span><span class="vv">QA-002</span></div>
+        <div class="met"><span class="l">Closed</span><span class="vv">2026-04-24</span></div>
+      </div>
+    </div>
+
+  </div>
+</div></body></html>

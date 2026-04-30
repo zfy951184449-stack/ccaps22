@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .cell { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 0; background: #F5F8FB; border-radius: 8px;}
+  .demo { width: 200px; height: 60px; background: #FFFFFF; border-radius: 8px; }
+  .sh-1 { box-shadow: 0 1px 2px rgba(15, 27, 45, 0.04), 0 0 0 1px rgba(15, 27, 45, 0.04);}
+  .sh-2 { box-shadow: 0 8px 24px rgba(15, 27, 45, 0.08), 0 0 0 1px rgba(15, 27, 45, 0.06);}
+  .name { font-size: 12px; font-weight:600; color: var(--wx-ink);}
+  .val { font-family: var(--wx-font-mono); font-size: 10.5px; color: var(--wx-fg-3); text-align:center; max-width: 240px;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Elevation · Two-Level Soft System</div>
+  <div class="grid">
+    <div class="cell">
+      <div class="demo sh-1"></div>
+      <span class="name">sh-1 · cards, tables</span>
+      <span class="val">0 1px 2px rgba(15,27,45,.04) + 1px hairline</span>
+    </div>
+    <div class="cell">
+      <div class="demo sh-2"></div>
+      <span class="name">sh-2 · popovers, modals</span>
+      <span class="val">0 8px 24px rgba(15,27,45,.08) + 1px hairline</span>
+    </div>
+  </div>
+</div></body></html>

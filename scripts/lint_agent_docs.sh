@@ -24,7 +24,6 @@ required_paths=(
   "docs/harness.md"
   "docs/codex-harness.md"
   "docs/frontend-visual-language.md"
-  "docs/frontend-next-visual-language.md"
   "docs/LLM_DB_GUIDELINES.md"
   "docs/db-consistency-rules.md"
   "docs/scheduling_principles.md"
@@ -134,7 +133,7 @@ def should_check(ref: str) -> bool:
         return False
     allowed_prefixes = (
         './', '../', '.agent/', 'docs/', 'backend/', 'frontend/',
-        'frontend-next/', 'solver_v4/', 'scripts/', 'database/', 'archive/',
+        'frontend/', 'solver_v4/', 'scripts/', 'database/', 'archive/',
         'README.md', 'AGENTS.md'
     )
     if ref.startswith(allowed_prefixes):

@@ -1,0 +1,25 @@
+/* Shared scaffold for preview cards. Each card is 700px wide. */
+@import url('../colors_and_type.css');
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #FFFFFF;
+  font-family: var(--wx-font-sans);
+  color: var(--wx-fg-1);
+}
+.card {
+  width: 700px;
+  padding: 20px 24px;
+  box-sizing: border-box;
+}
+.row { display: flex; align-items: center; gap: 12px; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.muted { color: var(--wx-fg-3); }
+.eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wx-fg-3);
+}

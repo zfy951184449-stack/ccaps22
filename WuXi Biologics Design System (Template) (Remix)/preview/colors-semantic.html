@@ -1,0 +1,44 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .tile { padding: 14px 16px; border-radius: 8px; border: 1px solid var(--wx-border); }
+  .role { font-size: 10.5px; letter-spacing:0.06em; text-transform:uppercase; font-weight:600; color:var(--wx-fg-3); margin-bottom:6px;}
+  .label { font-family: var(--wx-font-mono); font-size: 11px; color:var(--wx-fg-3);}
+  .swatch { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:middle; margin-right:8px; border:1px solid rgba(15,27,45,0.08);}
+  .name { font-size: 13px; font-weight:600; color:var(--wx-ink);}
+  .row { display:flex; align-items:center; gap:0; padding: 4px 0;}
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Semantic Tokens</div>
+  <div class="grid">
+    <div class="tile">
+      <div class="role">Foreground</div>
+      <div class="row"><span class="swatch" style="background:#0F1B2D"></span><span class="name">--wx-fg-1</span></div>
+      <div class="row"><span class="swatch" style="background:#3A4A5C"></span><span class="name">--wx-fg-2</span></div>
+      <div class="row"><span class="swatch" style="background:#5A6B7E"></span><span class="name">--wx-fg-3</span></div>
+      <div class="row"><span class="swatch" style="background:#8898A8"></span><span class="name">--wx-fg-4</span></div>
+    </div>
+    <div class="tile">
+      <div class="role">Action</div>
+      <div class="row"><span class="swatch" style="background:#0B3D7F"></span><span class="name">--wx-primary</span></div>
+      <div class="row"><span class="swatch" style="background:#0A3470"></span><span class="name">--wx-primary-hover</span></div>
+      <div class="row"><span class="swatch" style="background:#082A5C"></span><span class="name">--wx-primary-active</span></div>
+      <div class="row"><span class="swatch" style="background:#1F6FEB"></span><span class="name">--wx-link</span></div>
+    </div>
+    <div class="tile">
+      <div class="role">Surface</div>
+      <div class="row"><span class="swatch" style="background:#FFFFFF"></span><span class="name">--wx-bg</span></div>
+      <div class="row"><span class="swatch" style="background:#F5F8FB"></span><span class="name">--wx-surface-2</span></div>
+      <div class="row"><span class="swatch" style="background:#E4EAF1"></span><span class="name">--wx-border</span></div>
+      <div class="row"><span class="swatch" style="background:#EEF2F7"></span><span class="name">--wx-divider</span></div>
+    </div>
+    <div class="tile">
+      <div class="role">Status</div>
+      <div class="row"><span class="swatch" style="background:#2E9D6E"></span><span class="name">--wx-success</span></div>
+      <div class="row"><span class="swatch" style="background:#1F6FEB"></span><span class="name">--wx-info</span></div>
+      <div class="row"><span class="swatch" style="background:#E8B53C"></span><span class="name">--wx-warning</span></div>
+      <div class="row"><span class="swatch" style="background:#D6493A"></span><span class="name">--wx-danger</span></div>
+    </div>
+  </div>
+</div></body></html>

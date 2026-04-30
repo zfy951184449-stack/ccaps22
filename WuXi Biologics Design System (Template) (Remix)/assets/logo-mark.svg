@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="56" height="56">
+  <defs>
+    <linearGradient id="wxg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B3D7F"></stop>
+      <stop offset="100%" stop-color="#1F6FEB"></stop>
+    </linearGradient>
+  </defs>
+  <g transform="translate(4,4)">
+    <polygon points="24,0 44,12 44,36 24,48 4,36 4,12" fill="url(#wxg2)"></polygon>
+    <polygon points="24,8 38,16 38,32 24,40 10,32 10,16" fill="none" stroke="#fff" stroke-width="1.4" opacity="0.9"></polygon>
+    <circle cx="24" cy="24" r="3.2" fill="#A3CC4F"></circle>
+    <circle cx="14" cy="18" r="1.6" fill="#fff" opacity="0.9"></circle>
+    <circle cx="34" cy="18" r="1.6" fill="#fff" opacity="0.9"></circle>
+    <circle cx="14" cy="30" r="1.6" fill="#fff" opacity="0.9"></circle>
+    <circle cx="34" cy="30" r="1.6" fill="#fff" opacity="0.9"></circle>
+    <line x1="14" y1="18" x2="24" y2="24" stroke="#fff" stroke-width="0.8" opacity="0.7"></line>
+    <line x1="34" y1="18" x2="24" y2="24" stroke="#fff" stroke-width="0.8" opacity="0.7"></line>
+    <line x1="14" y1="30" x2="24" y2="24" stroke="#fff" stroke-width="0.8" opacity="0.7"></line>
+    <line x1="34" y1="30" x2="24" y2="24" stroke="#fff" stroke-width="0.8" opacity="0.7"></line>
+  </g>
+</svg>

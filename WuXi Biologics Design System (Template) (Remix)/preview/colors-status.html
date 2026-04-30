@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+  .row5 { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom:12px;}
+  .sw { display: flex; flex-direction: column; gap: 3px; }
+  .chip { height: 48px; border-radius: 5px; border: 1px solid rgba(15,27,45,0.06); }
+  .name { font-size: 11px; font-weight: 600; color: var(--wx-ink); }
+  .hex  { font-family: var(--wx-font-mono); font-size: 10px; color: var(--wx-fg-3); }
+  .group-title { font-size: 11px; font-weight: 600; color: var(--wx-fg-3); letter-spacing:0.06em; text-transform: uppercase; margin-bottom:8px; }
+</style></head>
+<body><div class="card">
+  <div class="eyebrow" style="margin-bottom:14px;">Status · Warning &amp; Error (use sparingly)</div>
+
+  <div class="group-title">Amber — warnings, near-limit, attention</div>
+  <div class="row5">
+    <div class="sw"><div class="chip" style="background:#8A6A1F"></div><span class="name">Amber 700</span><span class="hex">#8A6A1F</span></div>
+    <div class="sw"><div class="chip" style="background:#E8B53C"></div><span class="name">Amber 500</span><span class="hex">#E8B53C</span></div>
+    <div class="sw"><div class="chip" style="background:#FBF1D9"></div><span class="name">Amber 100</span><span class="hex">#FBF1D9</span></div>
+    <div class="sw"></div><div class="sw"></div>
+  </div>
+
+  <div class="group-title" style="margin-top:6px;">Red — error, OOS, deviation</div>
+  <div class="row5">
+    <div class="sw"><div class="chip" style="background:#A2342A"></div><span class="name">Red 700</span><span class="hex">#A2342A</span></div>
+    <div class="sw"><div class="chip" style="background:#D6493A"></div><span class="name">Red 500</span><span class="hex">#D6493A</span></div>
+    <div class="sw"><div class="chip" style="background:#FBE6E3"></div><span class="name">Red 100</span><span class="hex">#FBE6E3</span></div>
+    <div class="sw"></div><div class="sw"></div>
+  </div>
+</div></body></html>
