@@ -71,6 +71,7 @@ export function useGanttLayout(
           isExpanded: !isCollapsed,
           color: group.color,
           groupType: group.type,
+          groupId: group.parentId,
         });
 
         if (!isCollapsed) {

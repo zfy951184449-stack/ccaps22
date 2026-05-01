@@ -15,7 +15,7 @@ import {
 } from './ganttUtils';
 
 // ===== Drawing Config =====
-interface DrawConfig {
+export interface DrawConfig {
   startHour: number;
   endHour: number;
   hourWidth: number;
@@ -30,10 +30,21 @@ interface DrawConfig {
   showHeatmap: boolean;
   hoveredTaskId: string | null;
   selectedTaskId: string | null;
+  hoveredRow: number;
+  hoveredColX: number;
   expandedDay: number | null;
   todayHour: number | null;
   viewMode: string;
   dpr: number;
+}
+
+/** Clip rendering to below-header area. Must call ctx.restore() after. */
+export function clipBelowHeader(ctx: CanvasRenderingContext2D, cfg: DrawConfig): void {
+  const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, totalHeaderH, cfg.canvasW, cfg.canvasH - totalHeaderH);
+  ctx.clip();
 }
 
 // ===== L0: Grid =====
@@ -53,9 +64,17 @@ export function drawGrid(
   for (let r = firstVisibleRow; r <= lastVisibleRow && r < flatRows.length; r++) {
     const y = totalHeaderH + r * rowHeight - scrollY;
     if (y + rowHeight < totalHeaderH || y > canvasH) continue;
+    const clippedY = Math.max(totalHeaderH, y);
+    const clippedH = Math.min(y + rowHeight, canvasH) - clippedY;
+    // Alternating row stripe
     if (r % 2 === 0) {
       ctx.fillStyle = THEME.surface1;
-      ctx.fillRect(0, Math.max(totalHeaderH, y), canvasW, rowHeight);
+      ctx.fillRect(0, clippedY, canvasW, clippedH);
+    }
+    // Hover row highlight
+    if (r === cfg.hoveredRow) {
+      ctx.fillStyle = hexToRgba(THEME.blue100, 0.45);
+      ctx.fillRect(0, clippedY, canvasW, clippedH);
     }
   }
 
@@ -112,6 +131,18 @@ export function drawGrid(
       ctx.stroke();
       ctx.setLineDash([]);
     }
+  }
+
+  // Hover column vertical indicator
+  if (cfg.hoveredColX >= 0) {
+    ctx.strokeStyle = hexToRgba(THEME.blue500, 0.3);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cfg.hoveredColX, totalHeaderH);
+    ctx.lineTo(cfg.hoveredColX, canvasH);
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 }
 
@@ -227,7 +258,106 @@ export function drawTimeAxis(
   }
 }
 
-// ===== L2: Task Bars =====
+// ===== L2a: Group Summary Bars (1st/2nd level) =====
+export function drawGroupBars(
+  ctx: CanvasRenderingContext2D,
+  cfg: DrawConfig,
+  flatRows: FlatRow[],
+  tasks: GanttTask[],
+  taskRowMap: Map<string, number>
+): void {
+  const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight } = cfg;
+  const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
+  const startRow = Math.floor(scrollY / rowHeight);
+  const endRow = Math.ceil((scrollY + canvasH - totalHeaderH) / rowHeight);
+
+  // Build group → time span map
+  const groupSpan = new Map<string, { min: number; max: number }>();
+  for (const task of tasks) {
+    if (!task.groupId) continue;
+    const span = groupSpan.get(task.groupId);
+    if (span) {
+      if (task.start < span.min) span.min = task.start;
+      if (task.end > span.max) span.max = task.end;
+    } else {
+      groupSpan.set(task.groupId, { min: task.start, max: task.end });
+    }
+  }
+
+  // Propagate spans up through parent groups
+  // Walk flatRows in reverse to propagate child→parent
+  const groupParent = new Map<string, string>();
+  for (const row of flatRows) {
+    if (row.type === 'group' && row.groupId) {
+      groupParent.set(row.id, row.groupId);
+    }
+  }
+  // Simple propagation: iterate until stable
+  for (let pass = 0; pass < 3; pass++) {
+    for (const row of flatRows) {
+      if (row.type !== 'group') continue;
+      // Check children groups
+      for (const childRow of flatRows) {
+        if (childRow.type === 'group' && childRow.groupId === row.id) {
+          const childSpan = groupSpan.get(childRow.id);
+          if (!childSpan) continue;
+          const parentSpan = groupSpan.get(row.id);
+          if (parentSpan) {
+            if (childSpan.min < parentSpan.min) parentSpan.min = childSpan.min;
+            if (childSpan.max > parentSpan.max) parentSpan.max = childSpan.max;
+          } else {
+            groupSpan.set(row.id, { min: childSpan.min, max: childSpan.max });
+          }
+        }
+      }
+    }
+  }
+
+  // Draw group summary bars
+  for (let r = 0; r < flatRows.length; r++) {
+    const row = flatRows[r];
+    if (row.type !== 'group') continue;
+    if (r < startRow - 1 || r > endRow + 1) continue;
+
+    const span = groupSpan.get(row.id);
+    if (!span) continue;
+
+    const x = hourToX(span.min, startHour, hourWidth) - scrollX;
+    const w = Math.max((span.max - span.min) * hourWidth, 4);
+    if (x + w < 0 || x > canvasW) continue;
+
+    const y = totalHeaderH + r * rowHeight - scrollY;
+    const color = row.color || STAGE_COLORS[row.depth % STAGE_COLORS.length];
+    const barH = 6;
+    const barY = y + rowHeight - barH - 2;
+
+    // Diamond end markers + bar line (classic Gantt group bar style)
+    ctx.fillStyle = hexToRgba(color, 0.7);
+    ctx.fillRect(x, barY, w, barH);
+
+    // Left diamond
+    const dSize = 5;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, barY + barH / 2);
+    ctx.lineTo(x + dSize, barY);
+    ctx.lineTo(x + dSize * 2, barY + barH / 2);
+    ctx.lineTo(x + dSize, barY + barH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right diamond
+    ctx.beginPath();
+    ctx.moveTo(x + w - dSize * 2, barY + barH / 2);
+    ctx.lineTo(x + w - dSize, barY);
+    ctx.lineTo(x + w, barY + barH / 2);
+    ctx.lineTo(x + w - dSize, barY + barH);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ===== L2b: Task Bars =====
 export function drawBars(
   ctx: CanvasRenderingContext2D,
   cfg: DrawConfig,

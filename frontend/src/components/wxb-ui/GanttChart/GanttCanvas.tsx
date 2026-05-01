@@ -6,7 +6,7 @@ import type { GanttTask, GanttDependency, GanttLink, FlatRow } from './types';
 import type { GanttState } from './useGanttStore';
 import type { GanttAction } from './useGanttStore';
 import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT } from './constants';
-import { drawGrid, drawTimeAxis, drawBars, drawDependencies, drawLinks } from './useGanttRenderer';
+import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, drawLinks, clipBelowHeader } from './useGanttRenderer';
 import { useGanttHitTest } from './useGanttHitTest';
 import { useGanttDrag } from './useGanttDrag';
 import { clamp } from './ganttUtils';
@@ -106,17 +106,27 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           showGrid, showToday, showProgress, showHeatmap,
           hoveredTaskId: s.hoveredTaskId,
           selectedTaskId: s.selectedTaskId,
+          hoveredRow: s.hoveredRow,
+          hoveredColX: s.hoveredColX,
           expandedDay: s.expandedDay,
           todayHour: null as number | null,
           viewMode: s.viewMode,
           dpr,
         };
 
+        // L0: Grid (row bg + hover highlight + grid lines)
         drawGrid(ctx, cfg, flatRows);
+
+        // L1: Time Axis Header (drawn on top of grid, below clip)
         drawTimeAxis(ctx, cfg, personnelPeaks);
+
+        // L2-L4: Bars, Dependencies, Links — clipped below header
+        clipBelowHeader(ctx, cfg);
+        drawGroupBars(ctx, cfg, flatRows, tasks, taskRowMap);
         drawBars(ctx, cfg, tasks, taskRowMap);
         drawDependencies(ctx, cfg, tasks, taskRowMap, dependencies);
         drawLinks(ctx, cfg, tasks, taskRowMap, links);
+        ctx.restore();
       }
       rafId.current = requestAnimationFrame(tick);
     };
@@ -132,6 +142,15 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   useEffect(() => {
     dispatch({ type: 'MARK_DIRTY' });
   }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, dispatch]);
+
+  // Compute scroll limits when row count or canvas size changes
+  useEffect(() => {
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+    const contentH = flatRows.length * ROW_HEIGHT;
+    const viewportH = state.canvasH - totalHeaderH;
+    const maxY = Math.max(0, contentH - viewportH);
+    dispatch({ type: 'SET_MAX_SCROLL_Y', maxY });
+  }, [flatRows.length, state.canvasH, showHeatmap, dispatch]);
 
   // Wheel handler: scroll + zoom
   useEffect(() => {
@@ -196,6 +215,12 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const s = stateRef.current;
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+
+    // Compute hovered row for crosshair
+    const worldY = cy + s.scrollY - totalHeaderH;
+    const rowIdx = worldY >= 0 ? Math.floor(worldY / ROW_HEIGHT) : -1;
+    dispatch({ type: 'HOVER_ROW', row: rowIdx, colX: cx });
 
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
     const newHover = hit?.taskId ?? null;
@@ -253,6 +278,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const handleMouseLeave = useCallback(() => {
     isPanning.current = false;
     dispatch({ type: 'HOVER', taskId: null });
+    dispatch({ type: 'HOVER_ROW', row: -1, colX: -1 });
     onTooltipHide?.();
   }, [dispatch, onTooltipHide]);
 
