@@ -2,7 +2,7 @@
  * WxbGanttChart v2 — Canvas Rendering Engine
  * 5-layer drawing pipeline: Grid → TimeAxis → Bars → Dependencies → Links
  */
-import type { GanttTask, GanttDependency, GanttLink, FlatRow, GanttTheme } from './types';
+import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme } from './types';
 import {
   THEME, ROW_HEIGHT, HEADER_HEIGHT, HEATMAP_HEIGHT,
   BAR_HEIGHT, STAGE_BAR_HEIGHT, BAR_RADIUS, STAGE_BAR_RADIUS,
@@ -263,6 +263,7 @@ export function drawGroupBars(
   ctx: CanvasRenderingContext2D,
   cfg: DrawConfig,
   flatRows: FlatRow[],
+  groups: GanttGroup[],
   tasks: GanttTask[],
   taskRowMap: Map<string, number>
 ): void {
@@ -271,7 +272,7 @@ export function drawGroupBars(
   const startRow = Math.floor(scrollY / rowHeight);
   const endRow = Math.ceil((scrollY + canvasH - totalHeaderH) / rowHeight);
 
-  // Build group → time span map
+  // Build group → time span map from ALL tasks (not filtered by collapse)
   const groupSpan = new Map<string, { min: number; max: number }>();
   for (const task of tasks) {
     if (!task.groupId) continue;
@@ -284,32 +285,27 @@ export function drawGroupBars(
     }
   }
 
-  // Propagate spans up through parent groups
-  // Walk flatRows in reverse to propagate child→parent
+  // Propagate spans up through parent groups using FULL groups array
+  // (groups is unfiltered, so collapsed children are still present)
   const groupParent = new Map<string, string>();
-  for (const row of flatRows) {
-    if (row.type === 'group' && row.groupId) {
-      groupParent.set(row.id, row.groupId);
+  for (const g of groups) {
+    if (g.parentId) {
+      groupParent.set(g.id, g.parentId);
     }
   }
-  // Simple propagation: iterate until stable
-  for (let pass = 0; pass < 3; pass++) {
-    for (const row of flatRows) {
-      if (row.type !== 'group') continue;
-      // Check children groups
-      for (const childRow of flatRows) {
-        if (childRow.type === 'group' && childRow.groupId === row.id) {
-          const childSpan = groupSpan.get(childRow.id);
-          if (!childSpan) continue;
-          const parentSpan = groupSpan.get(row.id);
-          if (parentSpan) {
-            if (childSpan.min < parentSpan.min) parentSpan.min = childSpan.min;
-            if (childSpan.max > parentSpan.max) parentSpan.max = childSpan.max;
-          } else {
-            groupSpan.set(row.id, { min: childSpan.min, max: childSpan.max });
-          }
-        }
+  // Walk each group's span upward to all ancestors
+  for (const [groupId, span] of Array.from(groupSpan.entries())) {
+    let current = groupId;
+    while (groupParent.has(current)) {
+      const parentId = groupParent.get(current)!;
+      const parentSpan = groupSpan.get(parentId);
+      if (parentSpan) {
+        if (span.min < parentSpan.min) parentSpan.min = span.min;
+        if (span.max > parentSpan.max) parentSpan.max = span.max;
+      } else {
+        groupSpan.set(parentId, { min: span.min, max: span.max });
       }
+      current = parentId;
     }
   }
 

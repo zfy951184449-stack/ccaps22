@@ -140,6 +140,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
 
         <GanttCanvas
           tasks={tasks}
+          groups={groups}
           flatRows={flatRows}
           taskRowMap={taskRowMap}
           dependencies={dependencies}

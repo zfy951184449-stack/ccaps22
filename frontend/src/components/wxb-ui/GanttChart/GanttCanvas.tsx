@@ -2,7 +2,7 @@
  * WxbGanttChart v2 — Single Canvas Container + RAF Loop
  */
 import React, { useRef, useEffect, useCallback } from 'react';
-import type { GanttTask, GanttDependency, GanttLink, FlatRow } from './types';
+import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow } from './types';
 import type { GanttState } from './useGanttStore';
 import type { GanttAction } from './useGanttStore';
 import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT, BAR_HEIGHT } from './constants';
@@ -13,6 +13,7 @@ import { clamp } from './ganttUtils';
 
 interface GanttCanvasProps {
   tasks: GanttTask[];
+  groups: GanttGroup[];
   flatRows: FlatRow[];
   taskRowMap: Map<string, number>;
   dependencies: GanttDependency[];
@@ -37,7 +38,7 @@ interface GanttCanvasProps {
 }
 
 const GanttCanvas: React.FC<GanttCanvasProps> = ({
-  tasks, flatRows, taskRowMap, dependencies, links,
+  tasks, groups, flatRows, taskRowMap, dependencies, links,
   state, stateRef, dispatch,
   startHour, endHour,
   showGrid, showToday, showProgress, showHeatmap, readOnly, zoomRange,
@@ -52,13 +53,13 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
 
   // ===== DATA REFS: mirror props into refs so RAF closure always reads latest =====
   const dataRef = useRef({
-    tasks, flatRows, taskRowMap, dependencies, links,
+    tasks, groups, flatRows, taskRowMap, dependencies, links,
     startHour, endHour,
     showGrid, showToday, showProgress, showHeatmap,
     personnelPeaks,
   });
   dataRef.current = {
-    tasks, flatRows, taskRowMap, dependencies, links,
+    tasks, groups, flatRows, taskRowMap, dependencies, links,
     startHour, endHour,
     showGrid, showToday, showProgress, showHeatmap,
     personnelPeaks,
@@ -138,7 +139,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
 
         // L2-L4: Bars, Dependencies, Links — clipped below header
         clipBelowHeader(ctx, cfg);
-        drawGroupBars(ctx, cfg, d.flatRows, d.tasks, d.taskRowMap);
+        drawGroupBars(ctx, cfg, d.flatRows, d.groups, d.tasks, d.taskRowMap);
         drawBars(ctx, cfg, d.tasks, d.taskRowMap);
         drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
         drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links);
