@@ -12,6 +12,7 @@ import GanttSidebar from './GanttSidebar';
 import GanttCanvas from './GanttCanvas';
 import GanttTooltip from './GanttTooltip';
 import GanttMinimap from './GanttMinimap';
+import GanttContextMenu, { DEFAULT_TASK_MENU_ITEMS, DEFAULT_BG_MENU_ITEMS } from './GanttContextMenu';
 import './GanttChart.css';
 
 const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
@@ -73,6 +74,31 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   const handleTooltipHide = useCallback(() => {
     setTooltipState(prev => ({ ...prev, visible: false }));
   }, []);
+
+  // Context menu state
+  const [ctxMenu, setCtxMenu] = useState<{
+    visible: boolean; x: number; y: number; task: GanttTask | null;
+  }>({ visible: false, x: 0, y: 0, task: null });
+
+  const handleContextMenu = useCallback((task: GanttTask | null, x: number, y: number) => {
+    setCtxMenu({ visible: true, x, y, task });
+  }, []);
+
+  const handleCtxClose = useCallback(() => {
+    setCtxMenu(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleCtxAction = useCallback((key: string, task: GanttTask | null) => {
+    // Built-in actions
+    if (key === 'expand-all') {
+      dispatch({ type: 'EXPAND_ALL' });
+    } else if (key === 'collapse-all') {
+      const groupIds = groups.map(g => g.id);
+      dispatch({ type: 'COLLAPSE_ALL', groupIds });
+    }
+    // Forward to consumer
+    (onTaskClick as any)?.contextAction?.(key, task);
+  }, [dispatch, groups, onTaskClick]);
 
   // Minimap: current viewport day + active tasks
   const currentDay = useMemo(() => {
@@ -163,6 +189,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onTaskDragEnd={onTaskDragEnd}
           onTooltipShow={handleTooltipShow}
           onTooltipHide={handleTooltipHide}
+          onContextMenu={handleContextMenu}
         />
 
         {/* Minimap */}
@@ -181,6 +208,17 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         x={tooltipState.x}
         y={tooltipState.y}
         visible={tooltipState.visible}
+      />
+
+      {/* Context menu overlay */}
+      <GanttContextMenu
+        visible={ctxMenu.visible}
+        x={ctxMenu.x}
+        y={ctxMenu.y}
+        task={ctxMenu.task}
+        items={ctxMenu.task ? DEFAULT_TASK_MENU_ITEMS : DEFAULT_BG_MENU_ITEMS}
+        onAction={handleCtxAction}
+        onClose={handleCtxClose}
       />
     </div>
   );

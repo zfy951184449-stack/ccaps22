@@ -37,19 +37,38 @@ export function useGanttDrag({
 
   const createGhost = useCallback((rect: DOMRect, color: string) => {
     const ghost = document.createElement('div');
+    // WXB accent-bar ghost style: tinted fill + left accent + focus ring
     ghost.style.cssText = `
       position: fixed;
       pointer-events: none;
       z-index: 10000;
-      border-radius: 6px;
-      opacity: 0.85;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.25), 0 0 0 2px rgba(31,111,235,0.5);
-      background: ${color || '#1F6FEB'};
+      border-radius: 4px;
+      opacity: 0.92;
+      background: ${color}1A;
+      border: 1px solid ${color}4D;
+      border-left: 3px solid ${color};
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15), 0 0 0 2px rgba(31,111,235,0.4);
       width: ${rect.width}px;
       height: ${rect.height}px;
       left: ${rect.left}px;
       top: ${rect.top}px;
+      transition: top 0.05s ease-out;
     `;
+    // Label inside ghost
+    const label = document.createElement('span');
+    label.style.cssText = `
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font: 500 11px "Inter", "PingFang SC", system-ui, sans-serif;
+      color: #3A4A5C;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: calc(100% - 16px);
+    `;
+    ghost.appendChild(label);
     document.body.appendChild(ghost);
     ghostRef.current = ghost;
     return ghost;
@@ -60,15 +79,18 @@ export function useGanttDrag({
       const el = document.createElement('div');
       el.style.cssText = `
         position: fixed;
-        background: rgba(0,0,0,0.85);
+        background: rgba(15,27,45,0.92);
         color: white;
-        padding: 4px 8px;
+        padding: 4px 10px;
         border-radius: 4px;
-        font-size: 12px;
+        font-size: 11px;
+        font-weight: 500;
         pointer-events: none;
         z-index: 10001;
         white-space: nowrap;
-        font-family: "Inter", sans-serif;
+        font-family: "Inter", "PingFang SC", system-ui, sans-serif;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        letter-spacing: 0.02em;
       `;
       document.body.appendChild(el);
       tooltipRef.current = el;
@@ -120,13 +142,22 @@ export function useGanttDrag({
         const clampedHour = clamp(newHour, startHour, endHour - duration);
         const pxDelta = (clampedHour - state.startHour) * hourWidth;
         ghostRef.current.style.left = `${state.startLeft + pxDelta}px`;
+        // Keep ghost on original row (don't follow Y to prevent row-jump confusion)
         updateTooltip(e.clientX, e.clientY, clampedHour);
+        // Update ghost label
+        const label = ghostRef.current.querySelector('span');
+        if (label) label.textContent = formatHour(clampedHour);
       } else if (state.type === 'resize-end') {
         const newWidth = Math.max(SNAP_HOURS * hourWidth, state.startWidth + dx);
         const snappedW = Math.round(newWidth / snapW) * snapW;
         ghostRef.current.style.width = `${Math.max(snapW, snappedW)}px`;
         const newEndHour = state.startHour + snappedW / hourWidth;
         updateTooltip(e.clientX, e.clientY, newEndHour);
+        const label = ghostRef.current.querySelector('span');
+        if (label) {
+          const dur = newEndHour - state.startHour;
+          label.textContent = `${dur.toFixed(1)}h`;
+        }
       } else if (state.type === 'resize-start') {
         const newLeft = state.startLeft + dx;
         const newWidth = state.startWidth - dx;
@@ -136,6 +167,8 @@ export function useGanttDrag({
         ghostRef.current.style.width = `${Math.max(snapW, state.startWidth - (snappedLeft - state.startLeft))}px`;
         const newStartHour = state.startHour + (snappedLeft - state.startLeft) / hourWidth;
         updateTooltip(e.clientX, e.clientY, newStartHour);
+        const label = ghostRef.current.querySelector('span');
+        if (label) label.textContent = formatHour(newStartHour);
       }
     });
   }, [hourWidth, startHour, endHour, createGhost, updateTooltip]);

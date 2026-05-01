@@ -10,3 +10,4 @@ export type {
   GanttLink,
   ViewMode,
 } from './types';
+export type { ContextMenuItem } from './GanttContextMenu';

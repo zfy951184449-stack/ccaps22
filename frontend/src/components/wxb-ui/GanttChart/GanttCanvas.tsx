@@ -35,6 +35,7 @@ interface GanttCanvasProps {
   onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void;
   onTooltipShow?: (task: GanttTask, x: number, y: number) => void;
   onTooltipHide?: () => void;
+  onContextMenu?: (task: GanttTask | null, x: number, y: number) => void;
 }
 
 const GanttCanvas: React.FC<GanttCanvasProps> = ({
@@ -44,7 +45,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   showGrid, showToday, showProgress, showHeatmap, readOnly, zoomRange,
   personnelPeaks,
   onTaskClick, onTaskDoubleClick, onTaskDragEnd,
-  onTooltipShow, onTooltipHide,
+  onTooltipShow, onTooltipHide, onContextMenu,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -353,6 +354,17 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     onTooltipHide?.();
   }, [dispatch, onTooltipHide]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!onContextMenu) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const s = stateRef.current;
+    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
+    onContextMenu(hit?.task ?? null, e.clientX, e.clientY);
+  }, [onContextMenu, hitTest, stateRef, showHeatmap]);
+
   return (
     <div ref={containerRef} className="wxb-gantt-canvas-container" style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
       <canvas
@@ -364,6 +376,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
         onMouseLeave={handleMouseLeave}
+        onContextMenu={handleContextMenu}
         style={{ display: 'block', cursor: 'grab' }}
       />
     </div>

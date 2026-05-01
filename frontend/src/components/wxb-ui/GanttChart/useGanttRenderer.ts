@@ -80,7 +80,7 @@ export function drawGrid(
 
   if (!showGrid) return;
 
-  // Day column lines + shift zebra backgrounds + hour lines
+  // Day column lines + work-shift zebra backgrounds + hour lines
   const totalDays = Math.ceil((cfg.endHour - startHour) / 24);
   for (let d = 0; d <= totalDays; d++) {
     const dayHour = (startDay + d) * 24;
@@ -95,74 +95,44 @@ export function drawGrid(
       ctx.fillRect(x, totalHeaderH, dayW, canvasH - totalHeaderH);
     }
 
-    // Shift zebra backgrounds (8h blocks):
-    // Night (00-08): subtle blue tint
-    // Day   (08-16): clear (no tint)
-    // Evening (16-24): subtle amber tint
+    // Work-shift zebra backgrounds (matching old GanttTimeline):
+    // 工作时段 (09:00-17:00): subtle blue tint
+    // 长白时段 (17:00-21:00): subtle amber tint
     if (dayW > 40) {
-      const shiftW = hourWidth * 8;
-      // Night shift (00-08)
-      const nightX = x;
-      if (nightX + shiftW > 0 && nightX < canvasW) {
-        ctx.fillStyle = hexToRgba('#1F6FEB', 0.035);
-        ctx.fillRect(nightX, totalHeaderH, shiftW, canvasH - totalHeaderH);
+      // 工作时段 9:00-17:00
+      const workX = x + 9 * hourWidth;
+      const workW = 8 * hourWidth;
+      if (workX + workW > 0 && workX < canvasW) {
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.06)';
+        ctx.fillRect(workX, totalHeaderH, workW, canvasH - totalHeaderH);
       }
-      // Evening shift (16-24)
-      const eveningX = x + hourWidth * 16;
-      if (eveningX + shiftW > 0 && eveningX < canvasW) {
-        ctx.fillStyle = hexToRgba('#E8B53C', 0.035);
-        ctx.fillRect(eveningX, totalHeaderH, shiftW, canvasH - totalHeaderH);
+      // 长白时段 17:00-21:00
+      const overtimeX = x + 17 * hourWidth;
+      const overtimeW = 4 * hourWidth;
+      if (overtimeX + overtimeW > 0 && overtimeX < canvasW) {
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
+        ctx.fillRect(overtimeX, totalHeaderH, overtimeW, canvasH - totalHeaderH);
       }
     }
 
-    // Vertical day line (strong)
-    ctx.strokeStyle = THEME.divider;
-    ctx.lineWidth = 1;
+    // Vertical day line (strong — matches old: 1.5px, #94A3B8)
+    ctx.strokeStyle = '#94A3B8';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(x, totalHeaderH);
     ctx.lineTo(x, canvasH);
     ctx.stroke();
 
-    // Shift boundary lines (8h, 16h) — medium weight
-    if (dayW > 60) {
-      for (const h of [8, 16]) {
-        const sx = x + h * hourWidth;
-        if (sx < 0 || sx > canvasW) continue;
-        ctx.strokeStyle = hexToRgba(THEME.divider, 0.6);
-        ctx.lineWidth = 0.75;
-        ctx.beginPath();
-        ctx.moveTo(sx, totalHeaderH);
-        ctx.lineTo(sx, canvasH);
-        ctx.stroke();
-      }
-    }
-
-    // Individual hour lines — thin, only when zoomed in enough
-    if (dayW > 200) {
-      for (let h = 1; h < 24; h++) {
-        if (h === 8 || h === 16) continue; // already drawn as shift boundaries
-        const hx = x + h * hourWidth;
-        if (hx < 0 || hx > canvasW) continue;
-        const isMajor = h % 6 === 0;
-        ctx.strokeStyle = hexToRgba(THEME.divider, isMajor ? 0.4 : 0.2);
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(hx, totalHeaderH);
-        ctx.lineTo(hx, canvasH);
-        ctx.stroke();
-      }
-    } else if (dayW > 80) {
-      // 6-hour sub-lines at lower zoom
-      for (const h of [6, 12, 18]) {
-        const sx = x + h * hourWidth;
-        if (sx < 0 || sx > canvasW) continue;
-        ctx.strokeStyle = hexToRgba(THEME.divider, 0.4);
-        ctx.lineWidth = 0.5;
-        ctx.beginPath();
-        ctx.moveTo(sx, totalHeaderH);
-        ctx.lineTo(sx, canvasH);
-        ctx.stroke();
-      }
+    // Hour gridlines — always visible (matches old: #E2E8F0, 0.5px)
+    for (let h = 1; h < 24; h++) {
+      const hx = x + h * hourWidth;
+      if (hx < 0 || hx > canvasW) continue;
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(hx, totalHeaderH);
+      ctx.lineTo(hx, canvasH);
+      ctx.stroke();
     }
   }
 
@@ -255,14 +225,36 @@ export function drawTimeAxis(
       ctx.textAlign = 'center';
       ctx.fillText(`Day ${startDay + d}`, x + dayW / 2, 18);
 
-      // Hour sub-labels
+      // Hour sub-labels: adaptive density based on zoom
       if (showHourSubs) {
         ctx.fillStyle = THEME.fg4;
         ctx.font = `400 9px ${FONT_SANS}`;
-        for (const h of [0, 6, 12, 18]) {
+        ctx.textAlign = 'center';
+
+        let step = 6; // default: 0, 6, 12, 18
+        if (dayW > 400) step = 1;      // every hour
+        else if (dayW > 200) step = 2; // every 2 hours
+        else if (dayW > 120) step = 3; // every 3 hours
+
+        for (let h = 0; h < 24; h += step) {
           const hx = x + h * hourWidth;
           if (hx < 0 || hx > canvasW) continue;
           ctx.fillText(`${h.toString().padStart(2, '0')}`, hx, 34);
+        }
+
+        // Hour tick marks in header (small vertical lines at each hour)
+        if (dayW > 120) {
+          for (let h = 0; h < 24; h++) {
+            const hx = x + h * hourWidth;
+            if (hx < 0 || hx > canvasW) continue;
+            const isLabeled = h % step === 0;
+            ctx.strokeStyle = isLabeled ? THEME.border : hexToRgba(THEME.border, 0.5);
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(hx, isLabeled ? 38 : 40);
+            ctx.lineTo(hx, HEADER_HEIGHT);
+            ctx.stroke();
+          }
         }
       }
 
