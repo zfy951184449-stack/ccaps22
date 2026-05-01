@@ -5,10 +5,12 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import type { FlatRow } from './types';
 import type { GanttAction } from './useGanttStore';
 import { ROW_HEIGHT, HEADER_HEIGHT, HEATMAP_HEIGHT, THEME, FONT_SANS } from './constants';
+import { hexToRgba } from './ganttUtils';
 
 interface GanttSidebarProps {
   flatRows: FlatRow[];
   scrollY: number;
+  hoveredRow: number;
   canvasH: number;
   showHeatmap: boolean;
   dispatch: React.Dispatch<GanttAction>;
@@ -17,7 +19,7 @@ interface GanttSidebarProps {
 }
 
 const GanttSidebar: React.FC<GanttSidebarProps> = ({
-  flatRows, scrollY, canvasH, showHeatmap, dispatch, sidebarWidth, onGroupToggle,
+  flatRows, scrollY, hoveredRow, canvasH, showHeatmap, dispatch, sidebarWidth, onGroupToggle,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isSync = useRef(false);
@@ -39,13 +41,19 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
     requestAnimationFrame(() => { isSync.current = false; });
   }, [dispatch]);
 
-  // Override SET_SCROLL to not change x when x is -1
-  // This is a simple approach; in practice the reducer handles it
-
   const handleToggle = useCallback((groupId: string, isExpanded: boolean) => {
     dispatch({ type: 'TOGGLE_GROUP', groupId });
     onGroupToggle?.(groupId, !isExpanded);
   }, [dispatch, onGroupToggle]);
+
+  // Sidebar row hover → dispatch to canvas
+  const handleRowMouseEnter = useCallback((rowIndex: number) => {
+    dispatch({ type: 'HOVER_ROW', row: rowIndex, colX: -1 });
+  }, [dispatch]);
+
+  const handleRowMouseLeave = useCallback(() => {
+    dispatch({ type: 'HOVER_ROW', row: -1, colX: -1 });
+  }, [dispatch]);
 
   // Virtualization
   const visibleStart = Math.floor(scrollY / ROW_HEIGHT);
@@ -99,6 +107,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
             const i = renderStart + idx;
             const top = i * ROW_HEIGHT;
             const isGroup = row.type === 'group';
+            const isHovered = i === hoveredRow;
             return (
               <div
                 key={row.id}
@@ -112,12 +121,17 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   paddingLeft: 8 + row.depth * 16,
-                  background: i % 2 === 0 ? THEME.surface1 : THEME.bg,
+                  background: isHovered
+                    ? hexToRgba('#E6F2FB', 0.45)
+                    : i % 2 === 0 ? THEME.surface1 : THEME.bg,
                   cursor: isGroup ? 'pointer' : 'default',
                   borderBottom: `1px solid ${THEME.divider}`,
                   userSelect: 'none',
+                  transition: 'background 0.1s ease',
                 }}
                 onClick={() => isGroup && handleToggle(row.id, row.isExpanded)}
+                onMouseEnter={() => handleRowMouseEnter(i)}
+                onMouseLeave={handleRowMouseLeave}
               >
                 {/* Expand/collapse arrow */}
                 {row.hasChildren && (

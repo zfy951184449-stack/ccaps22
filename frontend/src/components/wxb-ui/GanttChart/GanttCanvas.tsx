@@ -51,6 +51,47 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const mountedRef = useRef(true);
   const rafId = useRef(0);
 
+  // Smooth scroll animation for collapse/expand
+  const prevRowCount = useRef(flatRows.length);
+  const animRafId = useRef(0);
+  useEffect(() => {
+    const prevCount = prevRowCount.current;
+    const newCount = flatRows.length;
+    prevRowCount.current = newCount;
+
+    if (prevCount === newCount) return;
+
+    // Animate scrollY to clamp smoothly when rows decrease
+    const s = stateRef.current;
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+    const viewportH = s.canvasH - totalHeaderH;
+    const targetMaxY = Math.max(0, newCount * ROW_HEIGHT - viewportH);
+    const targetY = Math.min(s.scrollY, targetMaxY);
+
+    if (targetY === s.scrollY) return; // no animation needed
+
+    const startY = s.scrollY;
+    const duration = 200; // ms
+    const startTime = performance.now();
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      const currentY = startY + (targetY - startY) * eased;
+      dispatch({ type: 'SET_SCROLL', y: currentY });
+      if (t < 1) {
+        animRafId.current = requestAnimationFrame(animate);
+      }
+    };
+    cancelAnimationFrame(animRafId.current);
+    animRafId.current = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animRafId.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flatRows.length]);
+
   // ===== DATA REFS: mirror props into refs so RAF closure always reads latest =====
   const dataRef = useRef({
     tasks, groups, flatRows, taskRowMap, dependencies, links,
@@ -168,6 +209,14 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const maxY = Math.max(0, contentH - viewportH);
     dispatch({ type: 'SET_MAX_SCROLL_Y', maxY });
   }, [flatRows.length, state.canvasH, showHeatmap, dispatch]);
+
+  // Compute horizontal scroll limit
+  useEffect(() => {
+    const hourWidth = state.dayWidth / 24;
+    const contentW = (endHour - startHour) * hourWidth;
+    const maxX = Math.max(0, contentW - state.canvasW);
+    dispatch({ type: 'SET_MAX_SCROLL_X', maxX });
+  }, [state.dayWidth, startHour, endHour, state.canvasW, dispatch]);
 
   // Wheel handler: scroll + zoom
   useEffect(() => {

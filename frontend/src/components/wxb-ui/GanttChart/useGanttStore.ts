@@ -10,6 +10,7 @@ import { DEFAULT_DAY_WIDTH, MIN_DAY_WIDTH, MAX_DAY_WIDTH } from './constants';
 export interface GanttState {
   scrollX: number;
   scrollY: number;
+  maxScrollX: number;        // scroll limit computed from content width
   maxScrollY: number;        // scroll limit computed from content height
   dayWidth: number;
   viewMode: ViewMode;
@@ -39,6 +40,7 @@ export type GanttAction =
   | { type: 'SELECT'; taskId: string | null }
   | { type: 'RESIZE'; w: number; h: number }
   | { type: 'SET_MAX_SCROLL_Y'; maxY: number }
+  | { type: 'SET_MAX_SCROLL_X'; maxX: number }
   | { type: 'MARK_DIRTY' }
   | { type: 'MARK_CLEAN' };
 
@@ -46,6 +48,7 @@ function createInitialState(dayWidth?: number): GanttState {
   return {
     scrollX: 0,
     scrollY: 0,
+    maxScrollX: 0,
     maxScrollY: 0,
     dayWidth: dayWidth ?? DEFAULT_DAY_WIDTH,
     viewMode: 'day',
@@ -61,28 +64,28 @@ function createInitialState(dayWidth?: number): GanttState {
   };
 }
 
-function clampScrollY(y: number, maxY: number): number {
-  return Math.max(0, Math.min(y, maxY));
+function clampScroll(v: number, max: number): number {
+  return Math.max(0, Math.min(v, max));
 }
 
 function ganttReducer(state: GanttState, action: GanttAction): GanttState {
   switch (action.type) {
     case 'SCROLL': {
-      const newX = Math.max(0, state.scrollX + action.dx);
-      const newY = clampScrollY(state.scrollY + action.dy, state.maxScrollY);
+      const newX = clampScroll(state.scrollX + action.dx, state.maxScrollX);
+      const newY = clampScroll(state.scrollY + action.dy, state.maxScrollY);
       if (newX === state.scrollX && newY === state.scrollY) return state;
       return { ...state, scrollX: newX, scrollY: newY, dirty: true };
     }
     case 'SET_SCROLL': {
-      const newX = action.x !== undefined ? Math.max(0, action.x) : state.scrollX;
-      const newY = action.y !== undefined ? clampScrollY(action.y, state.maxScrollY) : state.scrollY;
+      const newX = action.x !== undefined ? clampScroll(action.x, state.maxScrollX) : state.scrollX;
+      const newY = action.y !== undefined ? clampScroll(action.y, state.maxScrollY) : state.scrollY;
       if (newX === state.scrollX && newY === state.scrollY) return state;
       return { ...state, scrollX: newX, scrollY: newY, dirty: true };
     }
     case 'ZOOM': {
       const clamped = Math.max(MIN_DAY_WIDTH, Math.min(MAX_DAY_WIDTH, action.dayWidth));
       if (clamped === state.dayWidth) return state;
-      const newScrollX = Math.max(0, state.scrollX * (clamped / state.dayWidth));
+      const newScrollX = clampScroll(state.scrollX * (clamped / state.dayWidth), state.maxScrollX);
       return { ...state, dayWidth: clamped, scrollX: newScrollX, dirty: true };
     }
     case 'SET_VIEW': {
@@ -94,7 +97,7 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       if (next.has(action.groupId)) next.delete(action.groupId);
       else next.add(action.groupId);
       // Clamp scrollY since row count may decrease
-      const newScrollY = clampScrollY(state.scrollY, state.maxScrollY);
+      const newScrollY = clampScroll(state.scrollY, state.maxScrollY);
       return { ...state, collapsedGroups: next, scrollY: newScrollY, dirty: true };
     }
     case 'EXPAND_ALL': {
@@ -119,6 +122,9 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
     case 'SET_MAX_SCROLL_Y':
       if (action.maxY === state.maxScrollY) return state;
       return { ...state, maxScrollY: action.maxY };
+    case 'SET_MAX_SCROLL_X':
+      if (action.maxX === state.maxScrollX) return state;
+      return { ...state, maxScrollX: action.maxX };
     case 'MARK_DIRTY':
       return state.dirty ? state : { ...state, dirty: true };
     case 'MARK_CLEAN':

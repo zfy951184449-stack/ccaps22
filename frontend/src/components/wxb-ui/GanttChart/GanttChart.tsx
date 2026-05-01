@@ -131,6 +131,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         <GanttSidebar
           flatRows={flatRows}
           scrollY={state.scrollY}
+          hoveredRow={state.hoveredRow}
           canvasH={state.canvasH}
           showHeatmap={showHeatmap}
           dispatch={dispatch}
