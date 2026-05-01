@@ -309,7 +309,7 @@ export function drawGroupBars(
     }
   }
 
-  // Draw group summary bars
+  // Draw group summary bars — WXB enterprise accent-bar style
   for (let r = 0; r < flatRows.length; r++) {
     const row = flatRows[r];
     if (row.type !== 'group') continue;
@@ -325,54 +325,34 @@ export function drawGroupBars(
     const y = totalHeaderH + r * rowHeight - scrollY;
     const color = row.color || STAGE_COLORS[row.depth % STAGE_COLORS.length];
     const barH = BAR_HEIGHT;
-    const barR = BAR_RADIUS;
+    const barR = 4;  // WXB standard radius
     const barY = y + (rowHeight - barH) / 2;
-
-    // Distinct group bar: gradient fill + dashed border (vs solid fill for leaf tasks)
     const isTopLevel = row.depth === 0;
-    const fillAlpha = isTopLevel ? 0.18 : 0.12;
 
-    // Gradient fill
-    const grad = ctx.createLinearGradient(x, barY, x, barY + barH);
-    grad.addColorStop(0, hexToRgba(color, fillAlpha + 0.08));
-    grad.addColorStop(1, hexToRgba(color, fillAlpha));
-    ctx.fillStyle = grad;
+    // Flat tinted fill — low opacity, enterprise feel
+    const fillAlpha = isTopLevel ? 0.10 : 0.07;
+    ctx.fillStyle = hexToRgba(color, fillAlpha);
     roundRect(ctx, x, barY, w, barH, barR);
     ctx.fill();
 
-    // Dashed border
-    ctx.strokeStyle = hexToRgba(color, 0.55);
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 3]);
+    // Left accent border (wxb-badge-bar style: 3px solid left edge)
+    ctx.fillStyle = color;
+    roundRect(ctx, x, barY, 3, barH, [barR, 0, 0, barR]);
+    ctx.fill();
+
+    // Subtle bottom border
+    ctx.strokeStyle = hexToRgba(color, 0.25);
+    ctx.lineWidth = 1;
     roundRect(ctx, x, barY, w, barH, barR);
     ctx.stroke();
-    ctx.setLineDash([]);
 
-    // Down-pointing triangles at ends (group bracket markers)
-    const triSize = 5;
-    ctx.fillStyle = color;
-    // Left bracket
-    ctx.beginPath();
-    ctx.moveTo(x, barY + barH);
-    ctx.lineTo(x + triSize, barY + barH + triSize);
-    ctx.lineTo(x + triSize * 2, barY + barH);
-    ctx.closePath();
-    ctx.fill();
-    // Right bracket
-    ctx.beginPath();
-    ctx.moveTo(x + w - triSize * 2, barY + barH);
-    ctx.lineTo(x + w - triSize, barY + barH + triSize);
-    ctx.lineTo(x + w, barY + barH);
-    ctx.closePath();
-    ctx.fill();
-
-    // Group label inside bar
-    if (w > 50) {
-      ctx.fillStyle = color;
-      ctx.font = `600 10px ${FONT_SANS}`;
+    // Group label — dark text, uppercase tracking (wxb-badge-tracked style)
+    if (w > 40) {
+      ctx.fillStyle = hexToRgba(color, 0.85);
+      ctx.font = `600 ${isTopLevel ? 10.5 : 10}px ${FONT_SANS}`;
       ctx.textAlign = 'left';
-      const label = truncateText(ctx, row.label, w - 16);
-      ctx.fillText(label, x + 8, barY + barH / 2 + 3.5);
+      const label = truncateText(ctx, row.label.toUpperCase(), w - 20);
+      ctx.fillText(label, x + 10, barY + barH / 2 + 3.5);
     }
   }
 }
@@ -403,21 +383,19 @@ export function drawBars(
     const isStage = task.type === 'stage';
     const isTimeWindow = task.type === 'timeWindow';
     const barH = isStage ? STAGE_BAR_HEIGHT : BAR_HEIGHT;
-    const barR = isStage ? STAGE_BAR_RADIUS : BAR_RADIUS;
+    const barR = 4;  // WXB standard radius
     const y = totalHeaderH + row * rowHeight + (rowHeight - barH) / 2 - scrollY;
     const color = task.color || STAGE_COLORS[0];
 
     if (isTimeWindow) {
-      // Diagonal stripe pattern
+      // Time window: diagonal stripe pattern — unchanged (already distinct)
       ctx.save();
       roundRect(ctx, x, y, w, barH, barR);
       ctx.clip();
-      // Base fill
-      ctx.fillStyle = hexToRgba(color, 0.15);
+      ctx.fillStyle = hexToRgba(color, 0.12);
       ctx.fillRect(x, y, w, barH);
-      // Stripes
-      ctx.strokeStyle = hexToRgba(color, 0.35);
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = hexToRgba(color, 0.28);
+      ctx.lineWidth = 1.5;
       const step = 8;
       for (let sx = x - barH; sx < x + w + barH; sx += step) {
         ctx.beginPath();
@@ -426,78 +404,103 @@ export function drawBars(
         ctx.stroke();
       }
       ctx.restore();
-      // Dashed border
-      ctx.strokeStyle = hexToRgba(color, 0.6);
-      ctx.lineWidth = 1.5;
+      // Hairline border
+      ctx.strokeStyle = hexToRgba(color, 0.4);
+      ctx.lineWidth = 1;
       ctx.setLineDash([4, 3]);
       roundRect(ctx, x, y, w, barH, barR);
       ctx.stroke();
       ctx.setLineDash([]);
     } else if (isStage) {
-      // Stage: glass fill + dashed border
-      ctx.fillStyle = hexToRgba(color, 0.08);
+      // Stage: subtle tinted fill + solid thin border
+      ctx.fillStyle = hexToRgba(color, 0.06);
       roundRect(ctx, x, y, w, barH, barR);
       ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = hexToRgba(color, 0.35);
+      ctx.lineWidth = 1;
       roundRect(ctx, x, y, w, barH, barR);
       ctx.stroke();
-      ctx.setLineDash([]);
-      // Stage label (colored)
+      // Left accent
+      ctx.fillStyle = hexToRgba(color, 0.5);
+      roundRect(ctx, x, y, 2.5, barH, [barR, 0, 0, barR]);
+      ctx.fill();
+      // Stage label
       if (w > 30) {
-        ctx.fillStyle = color;
+        ctx.fillStyle = hexToRgba(color, 0.75);
         ctx.font = `500 10px ${FONT_SANS}`;
         ctx.textAlign = 'left';
-        const label = truncateText(ctx, task.label, w - 8);
-        ctx.fillText(label, x + 4, y + barH / 2 + 3);
+        const label = truncateText(ctx, task.label, w - 12);
+        ctx.fillText(label, x + 8, y + barH / 2 + 3);
       }
     } else {
-      // Operation: solid bar
+      // ===== WXB Operation Bar: Left-accent + tinted fill =====
+      // Background fill — tinted, not solid
+      ctx.fillStyle = hexToRgba(color, 0.14);
       roundRect(ctx, x, y, w, barH, barR);
-      ctx.fillStyle = color;
       ctx.fill();
-      // Inset highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.15)';
-      ctx.fillRect(x, y, w, 1);
 
-      // Progress
+      // Left accent border — 3px solid (wxb-badge-bar signature)
+      ctx.fillStyle = color;
+      roundRect(ctx, x, y, 3, barH, [barR, 0, 0, barR]);
+      ctx.fill();
+
+      // Subtle outer border — 1px hairline
+      ctx.strokeStyle = hexToRgba(color, 0.3);
+      ctx.lineWidth = 1;
+      roundRect(ctx, x, y, w, barH, barR);
+      ctx.stroke();
+
+      // Progress — darker tinted fill, not opaque overlay
       if (showProgress && task.progress && task.progress > 0) {
         const pw = w * Math.min(task.progress, 100) / 100;
+        ctx.fillStyle = hexToRgba(color, 0.22);
         roundRect(ctx, x, y, pw, barH, barR);
-        ctx.fillStyle = darken(color, 0.2);
         ctx.fill();
+        // Progress accent line at edge
+        const edgeX = x + pw;
+        if (pw > 4 && pw < w - 2) {
+          ctx.strokeStyle = hexToRgba(color, 0.5);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(edgeX, y + 2);
+          ctx.lineTo(edgeX, y + barH - 2);
+          ctx.stroke();
+        }
       }
 
-      // Conflict border
+      // Conflict border — WXB alert colors
       if (task.conflictType) {
-        const cColors = { CYCLE: '#ff4d4f', WINDOW: '#fa8c16', OVERLAP: '#1890ff' };
-        ctx.strokeStyle = cColors[task.conflictType];
+        const cColors: Record<string, string> = {
+          CYCLE: THEME.danger,
+          WINDOW: THEME.warning,
+          OVERLAP: THEME.blue500,
+        };
+        const cColor = cColors[task.conflictType] || THEME.danger;
+        ctx.strokeStyle = cColor;
         ctx.lineWidth = 2;
         roundRect(ctx, x, y, w, barH, barR);
         ctx.stroke();
-        // Glow ring
-        ctx.strokeStyle = hexToRgba(cColors[task.conflictType], 0.35);
+        // Focus ring — wxb style (2px spread, 15% opacity)
+        ctx.strokeStyle = hexToRgba(cColor, 0.15);
         ctx.lineWidth = 4;
         roundRect(ctx, x - 1, y - 1, w + 2, barH + 2, barR + 1);
         ctx.stroke();
       }
 
-      // Hover highlight
+      // Hover — wxb surface-1 lift + focus ring
       if (task.id === cfg.hoveredTaskId) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-        ctx.lineWidth = 2;
-        roundRect(ctx, x, y, w, barH, barR);
-        ctx.stroke();
-        // Shadow glow
-        ctx.shadowColor = 'rgba(0,0,0,0.2)';
-        ctx.shadowBlur = 8;
+        // Stronger tint on hover
+        ctx.fillStyle = hexToRgba(color, 0.08);
         roundRect(ctx, x, y, w, barH, barR);
         ctx.fill();
-        ctx.shadowBlur = 0;
+        // Blue focus ring (wxb-blue-400 with 25% opacity)
+        ctx.strokeStyle = hexToRgba(THEME.blue400, 0.5);
+        ctx.lineWidth = 2;
+        roundRect(ctx, x - 1, y - 1, w + 2, barH + 2, barR + 1);
+        ctx.stroke();
       }
 
-      // Selected
+      // Selected — wxb-blue-500 focus ring
       if (task.id === cfg.selectedTaskId) {
         ctx.strokeStyle = THEME.blue500;
         ctx.lineWidth = 2;
@@ -505,17 +508,17 @@ export function drawBars(
         ctx.stroke();
       }
 
-      // Label
+      // Label — dark text (wxb-fg-2), not white
       if (w > 30) {
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = THEME.fg2;
         ctx.font = `500 11px ${FONT_SANS}`;
         ctx.textAlign = 'left';
         let labelText = task.label;
         if (task.progress !== undefined && w > 80) {
           labelText += ` ${task.progress}%`;
         }
-        const label = truncateText(ctx, labelText, w - 8);
-        ctx.fillText(label, x + 4, y + barH / 2 + 4);
+        const label = truncateText(ctx, labelText, w - 14);
+        ctx.fillText(label, x + 8, y + barH / 2 + 4);
       }
     }
   }

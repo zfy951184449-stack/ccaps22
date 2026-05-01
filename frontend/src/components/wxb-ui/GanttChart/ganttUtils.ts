@@ -37,20 +37,28 @@ export function isWeekend(dayIndex: number, startDayOfWeek: number): boolean {
  */
 export function roundRect(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number, w: number, h: number, r: number
+  x: number, y: number, w: number, h: number, r: number | [number, number, number, number]
 ): void {
   if (w <= 0 || h <= 0) return;
-  r = Math.min(r, w / 2, h / 2);
+  let tl: number, tr: number, br: number, bl: number;
+  if (typeof r === 'number') {
+    tl = tr = br = bl = Math.min(r, w / 2, h / 2);
+  } else {
+    tl = Math.min(r[0], w / 2, h / 2);
+    tr = Math.min(r[1], w / 2, h / 2);
+    br = Math.min(r[2], w / 2, h / 2);
+    bl = Math.min(r[3], w / 2, h / 2);
+  }
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.arcTo(x + w, y, x + w, y + r, r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-  ctx.lineTo(x + r, y + h);
-  ctx.arcTo(x, y + h, x, y + h - r, r);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
+  ctx.moveTo(x + tl, y);
+  ctx.lineTo(x + w - tr, y);
+  ctx.arcTo(x + w, y, x + w, y + tr, tr);
+  ctx.lineTo(x + w, y + h - br);
+  ctx.arcTo(x + w, y + h, x + w - br, y + h, br);
+  ctx.lineTo(x + bl, y + h);
+  ctx.arcTo(x, y + h, x, y + h - bl, bl);
+  ctx.lineTo(x, y + tl);
+  ctx.arcTo(x, y, x + tl, y, tl);
   ctx.closePath();
 }
 
