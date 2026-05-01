@@ -562,7 +562,7 @@ const UiKitShowcasePage: React.FC = () => {
           links={[
             { id: 'l1', taskIds: ['t4', 't7'], label: '共享设备', color: '#722ed1', style: 'dashed' },
           ]}
-          onTaskClick={(task) => console.log('Task clicked:', task.label)}
+          onTaskClick={(task: { label: string }) => console.log('Task clicked:', task.label)}
         />
       </section>
 

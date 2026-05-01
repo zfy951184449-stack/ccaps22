@@ -62,6 +62,6 @@ export * from './BarChart/BarChart';
 export * from './PieChart/PieChart';
 export * from './AreaChart/AreaChart';
 export * from './MiniGantt/MiniGantt';
-export * from './GanttChart/GanttChart';
+export * from './GanttChart';
 export * from './Gauge/Gauge';
 export * from './Sparkline/Sparkline';

@@ -1,92 +1,82 @@
 /**
- * WxbGanttChart — Utility Functions
+ * WxbGanttChart v2 — Pure Utility Functions
  */
-import { GanttTask, ThemeColors } from './types';
 
-/** Read CSS variable from :root */
-export function getCssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-/** Read all WXB theme colors */
-export function readThemeColors(): ThemeColors {
-  return {
-    primary: getCssVar('--wx-blue-700') || '#0B3D7F',
-    primaryHover: getCssVar('--wx-blue-800') || '#0A3470',
-    success: getCssVar('--wx-green-500') || '#2E9D6E',
-    warning: getCssVar('--wx-amber-500') || '#E8B53C',
-    danger: getCssVar('--wx-red-500') || '#D6493A',
-    ink: getCssVar('--wx-ink') || '#0F1B2D',
-    fg2: getCssVar('--wx-fg-2') || '#3A4A5C',
-    fg3: getCssVar('--wx-fg-3') || '#5A6B7E',
-    fg4: getCssVar('--wx-fg-4') || '#8898A8',
-    border: getCssVar('--wx-border') || '#E4EAF1',
-    divider: getCssVar('--wx-divider') || '#EEF2F7',
-    surface1: getCssVar('--wx-surface-1') || '#FAFCFE',
-    surface2: getCssVar('--wx-surface-2') || '#F5F8FB',
-    surface3: getCssVar('--wx-surface-3') || '#EDF1F6',
-    bg: getCssVar('--wx-bg') || '#FFFFFF',
-    blue500: getCssVar('--wx-blue-500') || '#1F6FEB',
-    blue400: getCssVar('--wx-blue-400') || '#5A93F0',
-    blue300: getCssVar('--wx-blue-300') || '#9DBEF5',
-    blue100: getCssVar('--wx-blue-100') || '#E6F2FB',
-    green500: getCssVar('--wx-green-500') || '#2E9D6E',
-    green300: getCssVar('--wx-green-300') || '#A3D9BF',
-    amber500: getCssVar('--wx-amber-500') || '#E8B53C',
-  };
-}
-
-/** Convert hours offset to pixel X */
-export function timeToX(hour: number, startHour: number, hourWidth: number): number {
+/**
+ * Convert hours offset to pixel X position
+ */
+export function hourToX(hour: number, startHour: number, hourWidth: number): number {
   return (hour - startHour) * hourWidth;
 }
 
-/** Convert pixel X to hours offset */
-export function xToTime(x: number, startHour: number, hourWidth: number): number {
+/**
+ * Convert pixel X to hours offset
+ */
+export function xToHour(x: number, startHour: number, hourWidth: number): number {
   return x / hourWidth + startHour;
 }
 
-/** Compute time range from tasks */
-export function computeTimeRange(tasks: GanttTask[]): { startHour: number; endHour: number } {
-  if (tasks.length === 0) return { startHour: 0, endHour: 24 * 7 };
-  let min = Infinity;
-  let max = -Infinity;
-  for (const task of tasks) {
-    const s = task.windowStart !== undefined ? Math.min(task.start, task.windowStart) : task.start;
-    const e = task.windowEnd !== undefined ? Math.max(task.end, task.windowEnd) : task.end;
-    if (s < min) min = s;
-    if (e > max) max = e;
-  }
-  // Pad to full days
-  const startDay = Math.floor(min / 24);
-  const endDay = Math.ceil(max / 24);
-  return { startHour: startDay * 24, endHour: Math.max(endDay * 24, startDay * 24 + 24) };
+/**
+ * Snap hour value to nearest grid interval
+ */
+export function snapHour(hour: number, snapInterval: number): number {
+  return Math.round(hour / snapInterval) * snapInterval;
 }
 
-/** Draw a rounded rect on canvas context */
+/**
+ * Check if a day number is a weekend (Saturday=6, Sunday=0)
+ * Assuming day 0 starts from a known date; simplified: every 7th day pattern
+ */
+export function isWeekend(dayIndex: number, startDayOfWeek: number): boolean {
+  const dow = (startDayOfWeek + dayIndex) % 7;
+  return dow === 0 || dow === 6;
+}
+
+/**
+ * Draw a rounded rectangle on canvas
+ */
 export function roundRect(
   ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
+  x: number, y: number, w: number, h: number, r: number
 ): void {
-  const radius = Math.min(r, w / 2, h / 2);
+  if (w <= 0 || h <= 0) return;
+  r = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + w - radius, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
-  ctx.lineTo(x + w, y + h - radius);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-  ctx.lineTo(x + radius, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
   ctx.closePath();
 }
 
-/** Truncate text to fit width */
+/**
+ * Convert hex color to rgba string
+ */
+export function hexToRgba(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/**
+ * Darken a hex color by percentage
+ */
+export function darken(hex: string, percent: number): string {
+  const r = Math.max(0, Math.round(parseInt(hex.slice(1, 3), 16) * (1 - percent)));
+  const g = Math.max(0, Math.round(parseInt(hex.slice(3, 5), 16) * (1 - percent)));
+  const b = Math.max(0, Math.round(parseInt(hex.slice(5, 7), 16) * (1 - percent)));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * Truncate text to fit within a given pixel width
+ */
 export function truncateText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -100,25 +90,52 @@ export function truncateText(
   return truncated.length > 0 ? truncated + '…' : '';
 }
 
-/** Darken a hex color by a factor (0-1) */
-export function darkenColor(hex: string, factor: number): string {
-  const c = hex.replace('#', '');
-  const r = Math.max(0, Math.round(parseInt(c.slice(0, 2), 16) * (1 - factor)));
-  const g = Math.max(0, Math.round(parseInt(c.slice(2, 4), 16) * (1 - factor)));
-  const b = Math.max(0, Math.round(parseInt(c.slice(4, 6), 16) * (1 - factor)));
-  return `rgb(${r},${g},${b})`;
+/**
+ * Get heatmap color based on peak ratio
+ */
+export function getHeatColor(peak: number, minPeak: number, maxPeak: number): string {
+  if (peak === 0) return 'transparent';
+  if (maxPeak === minPeak) return 'rgba(52, 211, 153, 0.6)';
+  const ratio = (peak - minPeak) / (maxPeak - minPeak);
+  if (ratio < 0.25) return 'rgba(52, 211, 153, 0.6)';  // green
+  if (ratio < 0.50) return 'rgba(251, 191, 36, 0.6)';   // yellow
+  if (ratio < 0.75) return 'rgba(251, 146, 60, 0.7)';   // orange
+  return 'rgba(239, 68, 68, 0.8)';                       // red
 }
 
-/** Convert hex to rgba */
-export function hexToRgba(hex: string, alpha: number): string {
-  const c = hex.replace('#', '');
-  const r = parseInt(c.slice(0, 2), 16);
-  const g = parseInt(c.slice(2, 4), 16);
-  const b = parseInt(c.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
+/**
+ * Get dependency anchor points based on type
+ */
+export function getAnchorType(type: string): { from: 'start' | 'end'; to: 'start' | 'end' } {
+  switch (type) {
+    case 'SS': return { from: 'start', to: 'start' };
+    case 'FF': return { from: 'end', to: 'end' };
+    case 'SF': return { from: 'start', to: 'end' };
+    case 'FS':
+    default:   return { from: 'end', to: 'start' };
+  }
 }
 
-/** Clamp number between min and max */
+/**
+ * Clamp a number between min and max
+ */
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Format hour offset to "Day N HH:MM" string
+ */
+export function formatHour(hour: number): string {
+  const day = Math.floor(hour / 24);
+  const h = Math.floor(hour % 24);
+  const m = Math.round((hour % 1) * 60);
+  return `Day ${day} ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Get stage color from rotation palette
+ */
+export function getStageColor(index: number, palette: string[]): string {
+  return palette[index % palette.length];
 }

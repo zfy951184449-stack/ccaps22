@@ -1,17 +1,20 @@
 /**
- * WxbGanttChart — Main Component
- * High-performance Gantt chart with Canvas 2D + DOM hybrid rendering
+ * WxbGanttChart v2 — Main Component
+ * Assembles: Toolbar + Sidebar + Canvas + Tooltip + Minimap
  */
-import React, { useMemo, useCallback, useEffect, useState } from 'react';
-import './GanttChart.css';
-import { WxbGanttChartProps, ThemeColors } from './types';
+import React, { useRef, useMemo, useCallback, useState } from 'react';
+import type { WxbGanttChartProps, GanttTask } from './types';
+import { useGanttStore } from './useGanttStore';
 import { useGanttLayout } from './useGanttLayout';
-import { useGanttInteraction } from './useGanttInteraction';
-import { computeTimeRange, readThemeColors } from './ganttUtils';
-import { GanttSidebar } from './GanttSidebar';
-import { GanttCanvas } from './GanttCanvas';
+import { DEFAULT_DAY_WIDTH, MIN_DAY_WIDTH, MAX_DAY_WIDTH, SIDEBAR_WIDTH } from './constants';
+import GanttToolbar from './GanttToolbar';
+import GanttSidebar from './GanttSidebar';
+import GanttCanvas from './GanttCanvas';
+import GanttTooltip from './GanttTooltip';
+import GanttMinimap from './GanttMinimap';
+import './GanttChart.css';
 
-export const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
+const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   tasks,
   groups = [],
   dependencies = [],
@@ -19,196 +22,166 @@ export const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   timeRange,
   timeUnit = 'day',
   rowHeight = 32,
-  sidebarWidth = 180,
+  sidebarWidth = SIDEBAR_WIDTH,
   showGrid = true,
   showToday = true,
   showProgress = true,
-  zoomRange = [40, 600],
+  showHeatmap = false,
+  showMinimap = false,
+  enableFullscreen = false,
+  readOnly = false,
+  initialDayWidth = DEFAULT_DAY_WIDTH,
+  zoomRange = [MIN_DAY_WIDTH, MAX_DAY_WIDTH],
+  personnelPeaks,
   onTaskClick,
   onTaskDoubleClick,
   onTaskDragEnd,
   onGroupToggle,
-  className = '',
+  onViewModeChange,
+  className,
   style,
 }) => {
-  // ─── Theme Colors ───
-  const [theme, setTheme] = useState<ThemeColors>(() => readThemeColors());
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { state, dispatch, stateRef } = useGanttStore(initialDayWidth);
 
-  useEffect(() => {
-    // Re-read theme on mount (CSS vars might not be available during SSR)
-    setTheme(readThemeColors());
-  }, []);
-
-  // ─── Layout ───
-  const { flatRows, taskRowMap, toggleGroup } = useGanttLayout(tasks, groups);
-
-  const handleGroupToggle = useCallback(
-    (groupId: string) => {
-      toggleGroup(groupId);
-      if (onGroupToggle) {
-        onGroupToggle(groupId, true); // TODO: pass actual state
-      }
-    },
-    [toggleGroup, onGroupToggle]
-  );
-
-  // ─── Time Range ───
+  // Compute time range
   const { startHour, endHour } = useMemo(() => {
-    if (timeRange) {
-      return { startHour: timeRange.start, endHour: timeRange.end };
+    if (timeRange) return { startHour: timeRange.start, endHour: timeRange.end };
+    if (tasks.length === 0) return { startHour: 0, endHour: 240 };
+    let min = Infinity, max = -Infinity;
+    for (const t of tasks) {
+      if (t.start < min) min = t.start;
+      if (t.end > max) max = t.end;
+      if (t.windowStart !== undefined && t.windowStart < min) min = t.windowStart;
+      if (t.windowEnd !== undefined && t.windowEnd > max) max = t.windowEnd;
     }
-    return computeTimeRange(tasks);
+    // Add padding: 1 day on each side
+    return { startHour: Math.floor(min / 24) * 24 - 24, endHour: Math.ceil(max / 24) * 24 + 24 };
   }, [tasks, timeRange]);
 
-  const totalHours = endHour - startHour;
+  // Layout
+  const { flatRows, taskRowMap } = useGanttLayout(tasks, groups, state.collapsedGroups);
 
-  // ─── Today ───
-  const todayHour = useMemo(() => {
-    const now = new Date();
-    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
-    return dayOfYear * 24 + now.getHours() + now.getMinutes() / 60;
+  // Tooltip state
+  const [tooltipState, setTooltipState] = useState<{
+    task: GanttTask | null; x: number; y: number; visible: boolean
+  }>({ task: null, x: 0, y: 0, visible: false });
+
+  const handleTooltipShow = useCallback((task: GanttTask, x: number, y: number) => {
+    setTooltipState({ task, x, y, visible: true });
+  }, []);
+  const handleTooltipHide = useCallback(() => {
+    setTooltipState(prev => ({ ...prev, visible: false }));
   }, []);
 
-  // ─── Interaction ───
-  const interaction = useGanttInteraction(
-    {
-      zoomRange,
-      rowHeight,
-      totalRows: flatRows.length,
-      totalHours,
-      startHour,
-      sidebarWidth,
-    },
-    onTaskDragEnd
-  );
+  // Minimap: current viewport day + active tasks
+  const currentDay = useMemo(() => {
+    const hourWidth = state.dayWidth / 24;
+    const centerHour = startHour + (state.scrollX + state.canvasW / 2) / hourWidth;
+    return Math.floor(centerHour / 24);
+  }, [state.scrollX, state.canvasW, state.dayWidth, startHour]);
 
-  // ─── View mode (for toolbar) ───
-  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
+  const activeMiniTasks = useMemo(() => {
+    const dayStart = currentDay * 24;
+    const dayEnd = dayStart + 24;
+    return tasks
+      .filter(t => t.type !== 'timeWindow' && t.type !== 'stage' && t.end > dayStart && t.start < dayEnd)
+      .slice(0, 8)
+      .map(t => ({ id: t.id, label: t.label }));
+  }, [currentDay, tasks]);
 
-  const handleViewModeChange = useCallback(
-    (mode: 'day' | 'week' | 'month') => {
-      setViewMode(mode);
-      switch (mode) {
-        case 'day':
-          interaction.setDayWidth(120);
-          break;
-        case 'week':
-          interaction.setDayWidth(60);
-          break;
-        case 'month':
-          interaction.setDayWidth(20);
-          break;
+  // ESC handler for expanded day
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && state.expandedDay !== null) {
+        dispatch({ type: 'EXPAND_DAY', day: null });
       }
-    },
-    [interaction.setDayWidth]
-  );
-
-  // ─── Stats ───
-  const taskCount = tasks.length;
-  const groupCount = groups.filter(g => !g.parentId || groups.every(gg => gg.id !== g.parentId)).length;
-  const totalDuration = tasks.reduce((sum, t) => sum + (t.end - t.start), 0);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [state.expandedDay, dispatch]);
 
   return (
     <div
-      className={`wxb-gantt-chart ${className}`}
-      style={{ height: 420, ...style }}
+      ref={containerRef}
+      className={`wxb-gantt-chart ${className || ''}`}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+        borderRadius: 8,
+        border: '1px solid var(--wx-border, #E4EAF1)',
+        background: 'var(--wx-bg, #fff)',
+        ...style,
+      }}
     >
-      {/* ─── Toolbar ─── */}
-      <div className="wxb-gantt-toolbar">
-        <span className="wxb-gantt-toolbar-title">工序甘特图</span>
+      {/* Toolbar */}
+      <GanttToolbar
+        dayWidth={state.dayWidth}
+        viewMode={state.viewMode}
+        dispatch={dispatch}
+        enableFullscreen={enableFullscreen}
+        containerRef={containerRef}
+        onViewModeChange={onViewModeChange}
+      />
 
-        <div className="wxb-gantt-toolbar-group">
-          <button
-            className="wxb-gantt-zoom-btn"
-            onClick={() => interaction.handleZoom(-20)}
-            title="缩小"
-          >
-            −
-          </button>
-          <input
-            type="range"
-            className="wxb-gantt-zoom-slider"
-            min={zoomRange[0]}
-            max={zoomRange[1]}
-            value={interaction.dayWidth}
-            onChange={e => interaction.setDayWidth(Number(e.target.value))}
-          />
-          <button
-            className="wxb-gantt-zoom-btn"
-            onClick={() => interaction.handleZoom(20)}
-            title="放大"
-          >
-            +
-          </button>
-        </div>
-
-        <div className="wxb-gantt-toolbar-group">
-          {(['day', 'week', 'month'] as const).map(mode => (
-            <button
-              key={mode}
-              className={`wxb-gantt-view-btn ${viewMode === mode ? 'active' : ''}`}
-              onClick={() => handleViewModeChange(mode)}
-            >
-              {mode === 'day' ? '天' : mode === 'week' ? '周' : '月'}
-            </button>
-          ))}
-        </div>
-
-        <button
-          className="wxb-gantt-today-btn"
-          onClick={() => {
-            // Scroll to today
-            const todayX = (todayHour - startHour) * interaction.hourWidth;
-            interaction.setScrollX(Math.max(0, todayX - 200));
-          }}
-        >
-          Today
-        </button>
-      </div>
-
-      {/* ─── Body ─── */}
-      <div className="wxb-gantt-body">
+      {/* Body: Sidebar + Canvas */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         <GanttSidebar
           flatRows={flatRows}
-          rowHeight={rowHeight}
+          scrollY={state.scrollY}
+          canvasH={state.canvasH}
+          showHeatmap={showHeatmap}
+          dispatch={dispatch}
           sidebarWidth={sidebarWidth}
-          scrollY={interaction.scrollY}
-          containerHeight={420 - 44 - 28}
-          onGroupToggle={handleGroupToggle}
+          onGroupToggle={onGroupToggle}
         />
+
         <GanttCanvas
           tasks={tasks}
           flatRows={flatRows}
           taskRowMap={taskRowMap}
           dependencies={dependencies}
           links={links}
-          theme={theme}
-          rowHeight={rowHeight}
+          state={state}
+          stateRef={stateRef}
+          dispatch={dispatch}
           startHour={startHour}
           endHour={endHour}
-          hourWidth={interaction.hourWidth}
-          scrollX={interaction.scrollX}
-          scrollY={interaction.scrollY}
           showGrid={showGrid}
           showToday={showToday}
           showProgress={showProgress}
-          todayHour={todayHour}
-          onWheel={interaction.handleWheel}
-          onPanStart={interaction.handlePanStart}
-          onPanMove={interaction.handlePanMove}
-          onPanEnd={interaction.handlePanEnd}
-          isPanning={interaction.isPanningRef}
+          showHeatmap={showHeatmap}
+          readOnly={readOnly}
+          zoomRange={zoomRange}
+          personnelPeaks={personnelPeaks}
           onTaskClick={onTaskClick}
           onTaskDoubleClick={onTaskDoubleClick}
+          onTaskDragEnd={onTaskDragEnd}
+          onTooltipShow={handleTooltipShow}
+          onTooltipHide={handleTooltipHide}
         />
+
+        {/* Minimap */}
+        {showMinimap && (
+          <GanttMinimap
+            visible={showMinimap}
+            currentDay={currentDay}
+            activeTasks={activeMiniTasks}
+          />
+        )}
       </div>
 
-      {/* ─── Footer ─── */}
-      <div className="wxb-gantt-footer">
-        <span className="wxb-gantt-footer-text">
-          {taskCount} 个工序 · {groupCount} 个阶段 · 总时长 {totalDuration.toFixed(0)}h
-        </span>
-      </div>
+      {/* Tooltip overlay */}
+      <GanttTooltip
+        task={tooltipState.task}
+        x={tooltipState.x}
+        y={tooltipState.y}
+        visible={tooltipState.visible}
+      />
     </div>
   );
 };
+
+export default WxbGanttChart;

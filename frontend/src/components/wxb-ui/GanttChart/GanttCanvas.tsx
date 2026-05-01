@@ -1,12 +1,15 @@
 /**
- * WxbGanttChart — GanttCanvas Component
- * 3-layer Canvas container with resize handling
+ * WxbGanttChart v2 — Single Canvas Container + RAF Loop
  */
-import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { GanttTask, GanttDependency, GanttLink, FlatRow, ThemeColors, CanvasViewport } from './types';
-import { useGanttRenderer } from './useGanttRenderer';
-import { useGanttHitTest, HitTestResult } from './useGanttHitTest';
-import { GanttTooltip } from './GanttTooltip';
+import React, { useRef, useEffect, useCallback } from 'react';
+import type { GanttTask, GanttDependency, GanttLink, FlatRow } from './types';
+import type { GanttState } from './useGanttStore';
+import type { GanttAction } from './useGanttStore';
+import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT } from './constants';
+import { drawGrid, drawTimeAxis, drawBars, drawDependencies, drawLinks } from './useGanttRenderer';
+import { useGanttHitTest } from './useGanttHitTest';
+import { useGanttDrag } from './useGanttDrag';
+import { clamp } from './ganttUtils';
 
 interface GanttCanvasProps {
   tasks: GanttTask[];
@@ -14,295 +17,261 @@ interface GanttCanvasProps {
   taskRowMap: Map<string, number>;
   dependencies: GanttDependency[];
   links: GanttLink[];
-  theme: ThemeColors;
-  rowHeight: number;
+  state: GanttState;
+  stateRef: React.MutableRefObject<GanttState>;
+  dispatch: React.Dispatch<GanttAction>;
   startHour: number;
   endHour: number;
-  hourWidth: number;
-  scrollX: number;
-  scrollY: number;
   showGrid: boolean;
   showToday: boolean;
   showProgress: boolean;
-  todayHour: number;
-  onWheel: (e: React.WheelEvent) => void;
-  onPanStart: (e: React.MouseEvent) => void;
-  onPanMove: (e: React.MouseEvent) => void;
-  onPanEnd: (e: React.MouseEvent) => void;
-  isPanning: React.MutableRefObject<boolean>;
+  showHeatmap: boolean;
+  readOnly: boolean;
+  zoomRange: [number, number];
+  personnelPeaks?: Map<number, { peak: number; peakHour: number }>;
   onTaskClick?: (task: GanttTask) => void;
   onTaskDoubleClick?: (task: GanttTask) => void;
+  onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void;
+  onTooltipShow?: (task: GanttTask, x: number, y: number) => void;
+  onTooltipHide?: () => void;
 }
 
-export const GanttCanvas: React.FC<GanttCanvasProps> = ({
-  tasks,
-  flatRows,
-  taskRowMap,
-  dependencies,
-  links,
-  theme,
-  rowHeight,
-  startHour,
-  endHour,
-  hourWidth,
-  scrollX,
-  scrollY,
-  showGrid,
-  showToday,
-  showProgress,
-  todayHour,
-  onWheel,
-  onPanStart,
-  onPanMove,
-  onPanEnd,
-  isPanning,
-  onTaskClick,
-  onTaskDoubleClick,
+const GanttCanvas: React.FC<GanttCanvasProps> = ({
+  tasks, flatRows, taskRowMap, dependencies, links,
+  state, stateRef, dispatch,
+  startHour, endHour,
+  showGrid, showToday, showProgress, showHeatmap, readOnly, zoomRange,
+  personnelPeaks,
+  onTaskClick, onTaskDoubleClick, onTaskDragEnd,
+  onTooltipShow, onTooltipHide,
 }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const gridCanvasRef = useRef<HTMLCanvasElement>(null);
-  const barsCanvasRef = useRef<HTMLCanvasElement>(null);
-  const linesCanvasRef = useRef<HTMLCanvasElement>(null);
+  const mountedRef = useRef(true);
+  const rafId = useRef(0);
+  const lastDrawRef = useRef(0);
 
-  const [size, setSize] = useState({ width: 800, height: 400 });
-  const [hoveredTask, setHoveredTask] = useState<GanttTask | null>(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-
-  const { drawGridLayer, drawBarsLayer, drawLinesLayer } = useGanttRenderer(theme);
-  const { hitTest } = useGanttHitTest(tasks, taskRowMap, rowHeight, startHour, hourWidth);
-
-  // Debounce timer for lines layer
-  const linesTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isScrollingRef = useRef(false);
-  const prevScrollRef = useRef({ x: scrollX, y: scrollY });
-
-  // ─── Resize Observer ───
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setSize({ width: Math.round(width), height: Math.round(height) });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  // ─── Set canvas dimensions ───
-  useEffect(() => {
-    [gridCanvasRef, barsCanvasRef, linesCanvasRef].forEach(ref => {
-      const canvas = ref.current;
-      if (!canvas) return;
-      canvas.width = size.width * dpr;
-      canvas.height = size.height * dpr;
-      canvas.style.width = `${size.width}px`;
-      canvas.style.height = `${size.height}px`;
-    });
-  }, [size, dpr]);
-
-  // ─── Build viewport ───
-  const viewport: CanvasViewport = {
-    scrollX,
-    scrollY,
-    width: size.width,
-    height: size.height,
-    startRow: Math.max(0, Math.floor(scrollY / rowHeight) - 2),
-    endRow: Math.min(flatRows.length, Math.ceil((scrollY + size.height) / rowHeight) + 2),
-  };
-
-  const config = {
-    rowHeight,
+  const hourWidth = state.dayWidth / 24;
+  const { hitTest, rebuildIndex } = useGanttHitTest(tasks, taskRowMap, startHour, hourWidth);
+  const { startDrag } = useGanttDrag({
+    hourWidth,
     startHour,
     endHour,
-    hourWidth,
-    showGrid,
-    showToday,
-    showProgress,
-    todayHour,
-    dpr,
-  };
+    readOnly,
+    onDragEnd: onTaskDragEnd,
+  });
 
-  // ─── Draw Grid Layer ───
+  // Rebuild hit test index when data changes
+  useEffect(() => { rebuildIndex(); }, [tasks, taskRowMap, rebuildIndex]);
+
+  // Resize observer
   useEffect(() => {
-    const ctx = gridCanvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    drawGridLayer(ctx, viewport, config, flatRows.length);
-  }, [size, scrollX, scrollY, startHour, endHour, hourWidth, flatRows.length, showGrid, showToday, todayHour, dpr, theme]);
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        dispatch({ type: 'RESIZE', w: width, h: height });
+      }
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [dispatch]);
 
-  // ─── Draw Bars Layer ───
+  // RAF render loop
   useEffect(() => {
-    const ctx = barsCanvasRef.current?.getContext('2d');
-    if (!ctx) return;
-    drawBarsLayer(ctx, viewport, config, tasks, taskRowMap, flatRows, hoveredTask?.id || null);
-  }, [size, scrollX, scrollY, tasks, taskRowMap, flatRows, hoveredTask, hourWidth, startHour, showProgress, dpr, theme]);
+    mountedRef.current = true;
+    const tick = () => {
+      if (!mountedRef.current) return;
+      const s = stateRef.current;
+      if (s.dirty) {
+        dispatch({ type: 'MARK_CLEAN' });
+        const canvas = canvasRef.current;
+        if (!canvas) { rafId.current = requestAnimationFrame(tick); return; }
 
-  // ─── Draw Lines Layer (debounced during scroll) ───
+        const dpr = window.devicePixelRatio || 1;
+        const w = s.canvasW;
+        const h = s.canvasH;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        canvas.style.width = `${w}px`;
+        canvas.style.height = `${h}px`;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { rafId.current = requestAnimationFrame(tick); return; }
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, w, h);
+
+        const cfg = {
+          startHour, endHour, hourWidth: s.dayWidth / 24,
+          scrollX: s.scrollX, scrollY: s.scrollY,
+          canvasW: w, canvasH: h, rowHeight: ROW_HEIGHT,
+          showGrid, showToday, showProgress, showHeatmap,
+          hoveredTaskId: s.hoveredTaskId,
+          selectedTaskId: s.selectedTaskId,
+          expandedDay: s.expandedDay,
+          dpr,
+        };
+
+        drawGrid(ctx, cfg, flatRows);
+        drawTimeAxis(ctx, cfg, personnelPeaks);
+        drawBars(ctx, cfg, tasks, taskRowMap);
+        drawDependencies(ctx, cfg, tasks, taskRowMap, dependencies);
+        drawLinks(ctx, cfg, tasks, taskRowMap, links);
+      }
+      rafId.current = requestAnimationFrame(tick);
+    };
+    rafId.current = requestAnimationFrame(tick);
+    return () => {
+      mountedRef.current = false;
+      cancelAnimationFrame(rafId.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Mark dirty when data changes
   useEffect(() => {
-    const scrollChanged =
-      prevScrollRef.current.x !== scrollX || prevScrollRef.current.y !== scrollY;
-    prevScrollRef.current = { x: scrollX, y: scrollY };
+    dispatch({ type: 'MARK_DIRTY' });
+  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, dispatch]);
 
-    if (scrollChanged) {
-      isScrollingRef.current = true;
-      if (linesTimerRef.current) clearTimeout(linesTimerRef.current);
-      linesTimerRef.current = setTimeout(() => {
-        isScrollingRef.current = false;
-        const ctx = linesCanvasRef.current?.getContext('2d');
-        if (ctx) {
-          drawLinesLayer(ctx, viewport, config, tasks, taskRowMap, dependencies, links);
-        }
-      }, 150);
-    } else {
-      const ctx = linesCanvasRef.current?.getContext('2d');
-      if (ctx) {
-        drawLinesLayer(ctx, viewport, config, tasks, taskRowMap, dependencies, links);
+  // Wheel handler: scroll + zoom
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) {
+        // Zoom
+        const s = stateRef.current;
+        const delta = -e.deltaY * ZOOM_SENSITIVITY * s.dayWidth;
+        const newDW = clamp(s.dayWidth + delta, zoomRange[0], zoomRange[1]);
+        dispatch({ type: 'ZOOM', dayWidth: newDW, anchorX: e.offsetX });
+      } else {
+        dispatch({ type: 'SCROLL', dx: e.deltaX, dy: e.deltaY });
+      }
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [dispatch, stateRef, zoomRange]);
+
+  // Mouse handlers
+  const isPanning = useRef(false);
+  const panStart = useRef({ x: 0, y: 0, sx: 0, sy: 0 });
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const s = stateRef.current;
+    const hw = s.dayWidth / 24;
+
+    const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
+
+    if (hit && hit.task.draggable !== false && !readOnly && !hit.task.readOnly) {
+      const barX = (hit.task.start - startHour) * hw - s.scrollX;
+      const barW = (hit.task.end - hit.task.start) * hw;
+      if (hit.edge !== 'body') {
+        startDrag(e, hit.task, hit.edge, barX + rect.left, barW);
+      } else {
+        startDrag(e, hit.task, 'move', barX + rect.left, barW);
+      }
+      return;
+    }
+
+    // Start panning
+    isPanning.current = true;
+    panStart.current = { x: e.clientX, y: e.clientY, sx: s.scrollX, sy: s.scrollY };
+  }, [hitTest, startDrag, stateRef, startHour, showHeatmap, readOnly]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isPanning.current) {
+      const dx = panStart.current.x - e.clientX;
+      const dy = panStart.current.y - e.clientY;
+      dispatch({ type: 'SET_SCROLL', x: Math.max(0, panStart.current.sx + dx), y: Math.max(0, panStart.current.sy + dy) });
+      return;
+    }
+
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+    const s = stateRef.current;
+
+    const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
+    const newHover = hit?.taskId ?? null;
+    if (newHover !== s.hoveredTaskId) {
+      dispatch({ type: 'HOVER', taskId: newHover });
+      if (hit && onTooltipShow) {
+        onTooltipShow(hit.task, e.clientX, e.clientY);
+      } else if (!hit && onTooltipHide) {
+        onTooltipHide();
       }
     }
 
-    return () => {
-      if (linesTimerRef.current) clearTimeout(linesTimerRef.current);
-    };
-  }, [size, scrollX, scrollY, tasks, taskRowMap, dependencies, links, hourWidth, startHour, dpr, theme]);
-
-  // ─── Mouse handlers ───
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (isPanning.current) {
-        onPanMove(e);
-        setHoveredTask(null);
-        return;
+    // Cursor
+    const canvas = canvasRef.current;
+    if (canvas) {
+      if (hit?.edge === 'resize-start' || hit?.edge === 'resize-end') {
+        canvas.style.cursor = 'ew-resize';
+      } else if (hit) {
+        canvas.style.cursor = readOnly || hit.task.readOnly ? 'default' : 'move';
+      } else {
+        canvas.style.cursor = isPanning.current ? 'grabbing' : 'grab';
       }
+    }
+  }, [dispatch, hitTest, stateRef, showHeatmap, readOnly, onTooltipShow, onTooltipHide]);
 
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-
-      const result = hitTest(canvasX, canvasY, viewport);
-      setHoveredTask(result?.task || null);
-      setTooltipPos({ x: e.clientX, y: e.clientY });
-
-      // Cursor
-      const container = containerRef.current;
-      if (container) {
-        if (result?.edge) {
-          container.style.cursor = 'col-resize';
-        } else if (result?.task) {
-          container.style.cursor = result.task.draggable ? 'grab' : 'pointer';
-        } else {
-          container.style.cursor = isPanning.current ? 'grabbing' : 'default';
-        }
-      }
-    },
-    [hitTest, viewport, isPanning, onPanMove]
-  );
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      const result = hitTest(canvasX, canvasY, viewport);
-
-      if (!result) {
-        // Start panning
-        onPanStart(e);
-      }
-    },
-    [hitTest, viewport, onPanStart]
-  );
-
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      onPanEnd(e);
-    },
-    [onPanEnd]
-  );
-
-  const handleClick = useCallback(
-    (e: React.MouseEvent) => {
-      if (isPanning.current) return;
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      const result = hitTest(canvasX, canvasY, viewport);
-
-      if (result?.task && onTaskClick) {
-        onTaskClick(result.task);
-      }
-    },
-    [hitTest, viewport, onTaskClick, isPanning]
-  );
-
-  const handleDoubleClick = useCallback(
-    (e: React.MouseEvent) => {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      const result = hitTest(canvasX, canvasY, viewport);
-
-      if (result?.task && onTaskDoubleClick) {
-        onTaskDoubleClick(result.task);
-      }
-    },
-    [hitTest, viewport, onTaskDoubleClick]
-  );
-
-  const handleMouseLeave = useCallback(() => {
-    setHoveredTask(null);
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isPanning.current) {
+      isPanning.current = false;
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grab';
+      return;
+    }
   }, []);
 
-  return (
-    <div
-      ref={containerRef}
-      className="wxb-gantt-canvas-container"
-      style={{
-        flex: 1,
-        position: 'relative',
-        overflow: 'hidden',
-        minHeight: 0,
-      }}
-      onWheel={onWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-    >
-      {/* Layer 0: Grid */}
-      <canvas
-        ref={gridCanvasRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      />
-      {/* Layer 1: Bars */}
-      <canvas
-        ref={barsCanvasRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      />
-      {/* Layer 2: Lines */}
-      <canvas
-        ref={linesCanvasRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-      />
+  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onTaskClick) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const s = stateRef.current;
+    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
+    if (hit) {
+      dispatch({ type: 'SELECT', taskId: hit.taskId });
+      onTaskClick(hit.task);
+    }
+  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap]);
 
-      {/* DOM Overlay: Tooltip */}
-      <GanttTooltip
-        task={hoveredTask}
-        x={tooltipPos.x}
-        y={tooltipPos.y}
-        visible={!!hoveredTask && !isPanning.current}
+  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onTaskDoubleClick) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const s = stateRef.current;
+    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
+    if (hit) onTaskDoubleClick(hit.task);
+  }, [onTaskDoubleClick, hitTest, stateRef, showHeatmap]);
+
+  const handleMouseLeave = useCallback(() => {
+    isPanning.current = false;
+    dispatch({ type: 'HOVER', taskId: null });
+    onTooltipHide?.();
+  }, [dispatch, onTooltipHide]);
+
+  return (
+    <div ref={containerRef} className="wxb-gantt-canvas-container" style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <canvas
+        ref={canvasRef}
+        className="wxb-gantt-canvas"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onMouseLeave={handleMouseLeave}
+        style={{ display: 'block', cursor: 'grab' }}
       />
     </div>
   );
 };
+
+export default React.memo(GanttCanvas);

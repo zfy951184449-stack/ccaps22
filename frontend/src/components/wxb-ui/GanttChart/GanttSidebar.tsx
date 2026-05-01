@@ -1,156 +1,178 @@
 /**
- * WxbGanttChart — GanttSidebar Component
- * DOM-based tree sidebar for group/task labels
+ * WxbGanttChart v2 — Virtual-scrolling Sidebar
  */
-import React, { useCallback } from 'react';
-import { FlatRow } from './types';
+import React, { useRef, useEffect, useCallback } from 'react';
+import type { FlatRow } from './types';
+import type { GanttAction } from './useGanttStore';
+import { ROW_HEIGHT, HEADER_HEIGHT, HEATMAP_HEIGHT, THEME, FONT_SANS } from './constants';
 
 interface GanttSidebarProps {
   flatRows: FlatRow[];
-  rowHeight: number;
-  sidebarWidth: number;
   scrollY: number;
-  containerHeight: number;
-  onGroupToggle: (groupId: string) => void;
+  canvasH: number;
+  showHeatmap: boolean;
+  dispatch: React.Dispatch<GanttAction>;
+  sidebarWidth: number;
+  onGroupToggle?: (groupId: string, collapsed: boolean) => void;
 }
 
-export const GanttSidebar: React.FC<GanttSidebarProps> = ({
-  flatRows,
-  rowHeight,
-  sidebarWidth,
-  scrollY,
-  containerHeight,
-  onGroupToggle,
+const GanttSidebar: React.FC<GanttSidebarProps> = ({
+  flatRows, scrollY, canvasH, showHeatmap, dispatch, sidebarWidth, onGroupToggle,
 }) => {
-  const headerHeight = 48;
-  const visibleStart = Math.max(0, Math.floor(scrollY / rowHeight) - 2);
-  const visibleEnd = Math.min(flatRows.length, Math.ceil((scrollY + containerHeight) / rowHeight) + 2);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isSync = useRef(false);
+  const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+  const totalHeight = flatRows.length * ROW_HEIGHT;
 
-  const handleClick = useCallback(
-    (row: FlatRow) => {
-      if (row.type === 'group' && row.groupId) {
-        onGroupToggle(row.groupId);
-      }
-    },
-    [onGroupToggle]
-  );
+  // Sync scroll from canvas
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || isSync.current) return;
+    el.scrollTop = scrollY;
+  }, [scrollY]);
+
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    isSync.current = true;
+    dispatch({ type: 'SET_SCROLL', x: -1, y: el.scrollTop });
+    requestAnimationFrame(() => { isSync.current = false; });
+  }, [dispatch]);
+
+  // Override SET_SCROLL to not change x when x is -1
+  // This is a simple approach; in practice the reducer handles it
+
+  const handleToggle = useCallback((groupId: string, isExpanded: boolean) => {
+    dispatch({ type: 'TOGGLE_GROUP', groupId });
+    onGroupToggle?.(groupId, !isExpanded);
+  }, [dispatch, onGroupToggle]);
+
+  // Virtualization
+  const visibleStart = Math.floor(scrollY / ROW_HEIGHT);
+  const visibleCount = Math.ceil((canvasH - totalHeaderH) / ROW_HEIGHT);
+  const overscan = 5;
+  const renderStart = Math.max(0, visibleStart - overscan);
+  const renderEnd = Math.min(flatRows.length, visibleStart + visibleCount + overscan);
 
   return (
     <div
       className="wxb-gantt-sidebar"
       style={{
         width: sidebarWidth,
-        minWidth: sidebarWidth,
-        height: '100%',
-        borderRight: '1px solid var(--wx-border, #E4EAF1)',
+        flexShrink: 0,
+        borderRight: `1px solid ${THEME.border}`,
+        display: 'flex',
+        flexDirection: 'column',
         overflow: 'hidden',
-        position: 'relative',
-        background: '#FFFFFF',
       }}
     >
       {/* Header */}
       <div
         className="wxb-gantt-sidebar-header"
         style={{
-          height: headerHeight,
+          height: totalHeaderH,
+          background: THEME.surface2,
+          borderBottom: `1px solid ${THEME.border}`,
           display: 'flex',
           alignItems: 'center',
-          padding: '0 12px',
-          borderBottom: '1px solid var(--wx-border, #E4EAF1)',
-          background: 'var(--wx-surface-2, #F5F8FB)',
+          paddingLeft: 12,
+          font: `600 12px ${FONT_SANS}`,
+          color: THEME.ink,
+          flexShrink: 0,
         }}
       >
-        <span
-          style={{
-            font: '500 12px/1 var(--wx-font-sans, Inter, sans-serif)',
-            color: 'var(--wx-fg-3, #5A6B7E)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-          }}
-        >
-          结构
-        </span>
+        名称
       </div>
 
-      {/* Rows */}
+      {/* Scrollable row list */}
       <div
+        ref={containerRef}
+        onScroll={handleScroll}
         style={{
-          position: 'relative',
-          height: flatRows.length * rowHeight,
-          transform: `translateY(${-scrollY}px)`,
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
         }}
       >
-        {flatRows.slice(visibleStart, visibleEnd).map((row, idx) => {
-          const actualIdx = visibleStart + idx;
-          const y = actualIdx * rowHeight;
-          const indentPx = row.depth * 16 + 12;
+        <div style={{ height: totalHeight, position: 'relative' }}>
+          {flatRows.slice(renderStart, renderEnd).map((row, idx) => {
+            const i = renderStart + idx;
+            const top = i * ROW_HEIGHT;
+            const isGroup = row.type === 'group';
+            return (
+              <div
+                key={row.id}
+                className="wxb-gantt-sidebar-row"
+                style={{
+                  position: 'absolute',
+                  top,
+                  left: 0,
+                  right: 0,
+                  height: ROW_HEIGHT,
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingLeft: 8 + row.depth * 16,
+                  background: i % 2 === 0 ? THEME.surface1 : THEME.bg,
+                  cursor: isGroup ? 'pointer' : 'default',
+                  borderBottom: `1px solid ${THEME.divider}`,
+                  userSelect: 'none',
+                }}
+                onClick={() => isGroup && handleToggle(row.id, row.isExpanded)}
+              >
+                {/* Expand/collapse arrow */}
+                {row.hasChildren && (
+                  <span
+                    style={{
+                      width: 16,
+                      height: 16,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 10,
+                      color: THEME.fg3,
+                      marginRight: 4,
+                      transition: 'transform 0.15s',
+                      transform: row.isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    }}
+                  >
+                    ▶
+                  </span>
+                )}
+                {!row.hasChildren && <span style={{ width: 20 }} />}
 
-          return (
-            <div
-              key={row.id}
-              className={`wxb-gantt-sidebar-row ${row.type === 'group' ? 'wxb-gantt-sidebar-group' : ''}`}
-              style={{
-                position: 'absolute',
-                top: y,
-                left: 0,
-                right: 0,
-                height: rowHeight,
-                display: 'flex',
-                alignItems: 'center',
-                paddingLeft: indentPx,
-                cursor: row.type === 'group' ? 'pointer' : 'default',
-                userSelect: 'none',
-                borderLeft: row.type === 'task' ? `3px solid ${row.color || 'transparent'}` : 'none',
-              }}
-              onClick={() => handleClick(row)}
-            >
-              {/* Expand/Collapse icon */}
-              {row.type === 'group' && row.hasChildren && (
+                {/* Color dot */}
+                {row.color && (
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: row.color,
+                      marginRight: 6,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+
+                {/* Label */}
                 <span
-                  className="wxb-gantt-sidebar-arrow"
                   style={{
-                    display: 'inline-flex',
-                    width: 16,
-                    height: 16,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 4,
-                    fontSize: 10,
-                    color: 'var(--wx-fg-4, #8898A8)',
-                    transition: 'transform 180ms ease',
-                    transform: row.isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                    font: `${isGroup ? '500' : '400'} 12px ${FONT_SANS}`,
+                    color: isGroup ? THEME.ink : THEME.fg2,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  ▶
+                  {row.label}
                 </span>
-              )}
-
-              {/* Label */}
-              <span
-                style={{
-                  font:
-                    row.type === 'group'
-                      ? row.depth === 0
-                        ? '600 13px/1 var(--wx-font-sans, Inter, sans-serif)'
-                        : '500 13px/1 var(--wx-font-sans, Inter, sans-serif)'
-                      : '400 12px/1 var(--wx-font-sans, Inter, sans-serif)',
-                  color:
-                    row.type === 'group'
-                      ? row.depth === 0
-                        ? 'var(--wx-ink, #0F1B2D)'
-                        : 'var(--wx-fg-2, #3A4A5C)'
-                      : 'var(--wx-fg-3, #5A6B7E)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {row.label}
-              </span>
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 };
+
+export default React.memo(GanttSidebar);

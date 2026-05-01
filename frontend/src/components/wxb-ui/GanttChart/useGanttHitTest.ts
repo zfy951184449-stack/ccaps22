@@ -1,68 +1,77 @@
 /**
- * WxbGanttChart — useGanttHitTest Hook
- * Maps mouse coordinates to tasks on the canvas
+ * WxbGanttChart v2 — Hit Testing
+ * Given canvas coordinates, find which task (and edge) is under the cursor
  */
 import { useCallback, useRef } from 'react';
-import { GanttTask, CanvasViewport } from './types';
-import { xToTime } from './ganttUtils';
+import type { GanttTask, HitTestResult } from './types';
+import { ROW_HEIGHT, HEADER_HEIGHT, BAR_HEIGHT, STAGE_BAR_HEIGHT, HEATMAP_HEIGHT } from './constants';
 
-export interface HitTestResult {
-  task: GanttTask;
-  rowIndex: number;
-  /** Whether the hit is on the drag handle zone (left/right edge) */
-  edge: 'left' | 'right' | null;
-}
+const EDGE_THRESHOLD = 6; // px from edge to trigger resize
 
 export function useGanttHitTest(
   tasks: GanttTask[],
   taskRowMap: Map<string, number>,
-  rowHeight: number,
   startHour: number,
   hourWidth: number
 ) {
-  // Pre-built row -> tasks lookup for O(1) row access
+  // Task index by row for O(1) row lookup
   const rowTasksRef = useRef<Map<number, GanttTask[]>>(new Map());
 
-  // Rebuild index when data changes
+  // Rebuild index when dependencies change
   const rebuildIndex = useCallback(() => {
     const map = new Map<number, GanttTask[]>();
     for (const task of tasks) {
       const row = taskRowMap.get(task.id);
       if (row === undefined) continue;
-      const arr = map.get(row) || [];
-      arr.push(task);
-      map.set(row, arr);
+      if (!map.has(row)) map.set(row, []);
+      map.get(row)!.push(task);
     }
     rowTasksRef.current = map;
   }, [tasks, taskRowMap]);
 
-  // Call rebuild on dependency changes
-  rebuildIndex();
+  const hitTest = useCallback((
+    canvasX: number,
+    canvasY: number,
+    scrollX: number,
+    scrollY: number,
+    showHeatmap: boolean
+  ): HitTestResult | null => {
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+    const worldX = canvasX + scrollX;
+    const worldY = canvasY + scrollY - totalHeaderH;
 
-  const hitTest = useCallback(
-    (canvasX: number, canvasY: number, viewport: CanvasViewport): HitTestResult | null => {
-      const worldX = canvasX + viewport.scrollX;
-      const worldY = canvasY + viewport.scrollY;
-      const row = Math.floor(worldY / rowHeight);
+    if (worldY < 0) return null;
 
-      const rowTasks = rowTasksRef.current.get(row);
-      if (!rowTasks) return null;
+    const rowIndex = Math.floor(worldY / ROW_HEIGHT);
+    const rowTasks = rowTasksRef.current.get(rowIndex);
+    if (!rowTasks) return null;
 
-      const time = xToTime(worldX, startHour, hourWidth);
-      const edgeThreshold = 6 / hourWidth; // 6px in time units
+    for (const task of rowTasks) {
+      const barH = task.type === 'stage' ? STAGE_BAR_HEIGHT : BAR_HEIGHT;
+      const barTop = rowIndex * ROW_HEIGHT + (ROW_HEIGHT - barH) / 2;
+      const barBottom = barTop + barH;
 
-      for (const task of rowTasks) {
-        if (time >= task.start && time <= task.end) {
-          let edge: 'left' | 'right' | null = null;
-          if (time - task.start < edgeThreshold) edge = 'left';
-          else if (task.end - time < edgeThreshold) edge = 'right';
-          return { task, rowIndex: row, edge };
-        }
+      // Check Y bounds
+      if (worldY < barTop || worldY > barBottom) continue;
+
+      const taskX = (task.start - startHour) * hourWidth;
+      const taskW = Math.max((task.end - task.start) * hourWidth, 4);
+
+      // Check X bounds
+      if (worldX < taskX || worldX > taskX + taskW) continue;
+
+      // Determine edge
+      let edge: HitTestResult['edge'] = 'body';
+      if (task.type === 'timeWindow') {
+        if (Math.abs(worldX - taskX) < EDGE_THRESHOLD) edge = 'resize-start';
+        else if (Math.abs(worldX - (taskX + taskW)) < EDGE_THRESHOLD) edge = 'resize-end';
       }
-      return null;
-    },
-    [rowHeight, startHour, hourWidth]
-  );
 
-  return { hitTest };
+      return { taskId: task.id, task, edge, row: rowIndex };
+    }
+
+    return null;
+  }, [startHour, hourWidth]);
+
+  return { hitTest, rebuildIndex };
 }

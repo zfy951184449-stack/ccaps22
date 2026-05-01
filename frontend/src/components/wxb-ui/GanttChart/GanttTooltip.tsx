@@ -1,9 +1,10 @@
 /**
- * WxbGanttChart — GanttTooltip Component
- * Singleton DOM tooltip overlay for hover information
+ * WxbGanttChart v2 — Singleton Tooltip
  */
 import React from 'react';
-import { GanttTask } from './types';
+import type { GanttTask } from './types';
+import { THEME, FONT_SANS } from './constants';
+import { formatHour } from './ganttUtils';
 
 interface GanttTooltipProps {
   task: GanttTask | null;
@@ -12,19 +13,13 @@ interface GanttTooltipProps {
   visible: boolean;
 }
 
-export const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible }) => {
+const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible }) => {
   if (!visible || !task) return null;
 
-  const startDay = Math.floor(task.start / 24);
-  const startH = Math.floor(task.start % 24);
-  const startM = Math.round((task.start % 1) * 60);
-  const endDay = Math.floor(task.end / 24);
-  const endH = Math.floor(task.end % 24);
-  const endM = Math.round((task.end % 1) * 60);
   const duration = task.end - task.start;
-
-  const formatTime = (day: number, h: number, m: number) =>
-    `Day ${day} ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  const durationText = duration >= 24
+    ? `${(duration / 24).toFixed(1)} 天`
+    : `${duration.toFixed(1)} 小时`;
 
   return (
     <div
@@ -35,39 +30,59 @@ export const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible 
         top: y - 10,
         zIndex: 10000,
         pointerEvents: 'none',
-        transform: 'translateY(-100%)',
+        minWidth: 180,
+        background: THEME.bg,
+        border: `1px solid ${THEME.border}`,
+        borderRadius: 8,
+        boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+        overflow: 'hidden',
+        fontFamily: FONT_SANS,
       }}
     >
-      <div className="wxb-gantt-tooltip-accent" />
-      {task.tooltip || (
-        <>
-          <div className="wxb-gantt-tooltip-title">{task.label}</div>
-          <div className="wxb-gantt-tooltip-row">
-            <span className="wxb-gantt-tooltip-label">开始</span>
-            <span className="wxb-gantt-tooltip-value">{formatTime(startDay, startH, startM)}</span>
+      {/* Color top bar */}
+      <div style={{ height: 3, background: task.color || THEME.primary }} />
+
+      <div style={{ padding: '8px 12px' }}>
+        {/* Title */}
+        <div style={{ fontSize: 13, fontWeight: 600, color: THEME.ink, marginBottom: 6 }}>
+          {task.label}
+        </div>
+
+        <div style={{ fontSize: 12, color: THEME.fg2, lineHeight: 1.6 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: THEME.fg3 }}>开始</span>
+            <span>{formatHour(task.start)}</span>
           </div>
-          <div className="wxb-gantt-tooltip-row">
-            <span className="wxb-gantt-tooltip-label">结束</span>
-            <span className="wxb-gantt-tooltip-value">{formatTime(endDay, endH, endM)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: THEME.fg3 }}>结束</span>
+            <span>{formatHour(task.end)}</span>
           </div>
-          <div className="wxb-gantt-tooltip-row">
-            <span className="wxb-gantt-tooltip-label">时长</span>
-            <span className="wxb-gantt-tooltip-value">{duration.toFixed(1)} 小时</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: THEME.fg3 }}>时长</span>
+            <span>{durationText}</span>
           </div>
-          {task.status && (
-            <div className="wxb-gantt-tooltip-row">
-              <span className="wxb-gantt-tooltip-label">状态</span>
-              <span className="wxb-gantt-tooltip-value">{task.status}</span>
-            </div>
-          )}
           {task.progress !== undefined && (
-            <div className="wxb-gantt-tooltip-row">
-              <span className="wxb-gantt-tooltip-label">进度</span>
-              <span className="wxb-gantt-tooltip-value">{task.progress}%</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: THEME.fg3 }}>进度</span>
+              <span>{task.progress}%</span>
             </div>
           )}
-        </>
-      )}
+          {task.requiredPeople !== undefined && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: THEME.fg3 }}>人员</span>
+              <span>{task.assignedPeople ?? '—'}/{task.requiredPeople}</span>
+            </div>
+          )}
+          {task.status && (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: THEME.fg3 }}>状态</span>
+              <span>{task.status}</span>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
+
+export default React.memo(GanttTooltip);
