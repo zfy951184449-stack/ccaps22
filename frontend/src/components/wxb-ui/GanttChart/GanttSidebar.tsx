@@ -35,7 +35,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
     const el = containerRef.current;
     if (!el) return;
     isSync.current = true;
-    dispatch({ type: 'SET_SCROLL', x: -1, y: el.scrollTop });
+    dispatch({ type: 'SET_SCROLL', y: el.scrollTop });
     requestAnimationFrame(() => { isSync.current = false; });
   }, [dispatch]);
 

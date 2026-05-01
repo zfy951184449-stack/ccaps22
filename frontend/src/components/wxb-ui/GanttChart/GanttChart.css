@@ -55,6 +55,11 @@
   color: #fff;
 }
 
+.wxb-gantt-toolbar-btn:focus-visible {
+  outline: 2px solid var(--wx-blue-400, #5A93F0);
+  outline-offset: 1px;
+}
+
 .wxb-gantt-toolbar-label {
   font: 500 11px var(--wx-font-mono, "JetBrains Mono", monospace);
   color: var(--wx-fg-3, #5A6B7E);
@@ -73,7 +78,8 @@
 
 /* ===== Sidebar ===== */
 .wxb-gantt-sidebar {
-  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: var(--wx-fg-4, #8898A8) transparent;
 }
 
 .wxb-gantt-sidebar::-webkit-scrollbar {

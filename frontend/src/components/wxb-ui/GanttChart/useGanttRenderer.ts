@@ -31,6 +31,8 @@ interface DrawConfig {
   hoveredTaskId: string | null;
   selectedTaskId: string | null;
   expandedDay: number | null;
+  todayHour: number | null;
+  viewMode: string;
   dpr: number;
 }
 
@@ -98,11 +100,8 @@ export function drawGrid(
   }
 
   // Today marker
-  if (cfg.showToday) {
-    const now = new Date();
-    const todayHour = Math.floor(now.getTime() / 3600000); // approx
-    // Simple: draw at center if visible
-    const tx = hourToX(todayHour, startHour, hourWidth) - scrollX;
+  if (cfg.showToday && cfg.todayHour !== null && cfg.todayHour !== undefined) {
+    const tx = hourToX(cfg.todayHour, startHour, hourWidth) - scrollX;
     if (tx > 0 && tx < canvasW) {
       ctx.strokeStyle = THEME.blue500;
       ctx.lineWidth = 1.5;
@@ -137,37 +136,65 @@ export function drawTimeAxis(
   ctx.lineTo(canvasW, totalHeaderH);
   ctx.stroke();
 
-  // Day labels
-  for (let d = 0; d < totalDays; d++) {
-    const dayHour = (startDay + d) * 24;
-    const x = hourToX(dayHour, startHour, hourWidth) - scrollX;
-    const dayW = hourWidth * 24;
-    if (x + dayW < 0 || x > canvasW) continue;
+  // Adaptive day labels based on zoom level
+  const dayW = hourWidth * 24;
+  const showDayLabels = dayW > 30;  // hide individual day labels when too cramped
+  const showHourSubs = dayW > 80;   // hour sub-labels only when space allows
 
-    // Day label
-    ctx.fillStyle = THEME.ink;
-    ctx.font = `600 12px ${FONT_SANS}`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`Day ${startDay + d}`, x + dayW / 2, 18);
+  // Week-level labels for very small zoom
+  if (!showDayLabels) {
+    // Group days into weeks and draw week labels
+    const weekSize = 7;
+    for (let w = 0; w < Math.ceil(totalDays / weekSize); w++) {
+      const weekStartDay = startDay + w * weekSize;
+      const wx = hourToX(weekStartDay * 24, startHour, hourWidth) - scrollX;
+      const ww = dayW * weekSize;
+      if (wx + ww < 0 || wx > canvasW) continue;
 
-    // Hour sub-labels
-    if (dayW > 80) {
-      ctx.fillStyle = THEME.fg4;
-      ctx.font = `400 9px ${FONT_SANS}`;
-      for (const h of [0, 6, 12, 18]) {
-        const hx = x + h * hourWidth;
-        if (hx < 0 || hx > canvasW) continue;
-        ctx.fillText(`${h.toString().padStart(2, '0')}`, hx, 34);
-      }
+      ctx.fillStyle = THEME.ink;
+      ctx.font = `600 12px ${FONT_SANS}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`Day ${weekStartDay}-${weekStartDay + weekSize - 1}`, wx + ww / 2, 18);
+
+      // Week separator
+      ctx.strokeStyle = THEME.border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(wx, 0);
+      ctx.lineTo(wx, totalHeaderH);
+      ctx.stroke();
     }
+  } else {
+    for (let d = 0; d < totalDays; d++) {
+      const dayHour = (startDay + d) * 24;
+      const x = hourToX(dayHour, startHour, hourWidth) - scrollX;
+      if (x + dayW < 0 || x > canvasW) continue;
 
-    // Day separator in header
-    ctx.strokeStyle = THEME.border;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, totalHeaderH);
-    ctx.stroke();
+      // Day label
+      ctx.fillStyle = THEME.ink;
+      ctx.font = `600 12px ${FONT_SANS}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`Day ${startDay + d}`, x + dayW / 2, 18);
+
+      // Hour sub-labels
+      if (showHourSubs) {
+        ctx.fillStyle = THEME.fg4;
+        ctx.font = `400 9px ${FONT_SANS}`;
+        for (const h of [0, 6, 12, 18]) {
+          const hx = x + h * hourWidth;
+          if (hx < 0 || hx > canvasW) continue;
+          ctx.fillText(`${h.toString().padStart(2, '0')}`, hx, 34);
+        }
+      }
+
+      // Day separator in header
+      ctx.strokeStyle = THEME.border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, totalHeaderH);
+      ctx.stroke();
+    }
   }
 
   // Personnel heatmap bar

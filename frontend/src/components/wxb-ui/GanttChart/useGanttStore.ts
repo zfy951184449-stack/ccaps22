@@ -24,12 +24,12 @@ export interface GanttState {
 // ===== Actions =====
 export type GanttAction =
   | { type: 'SCROLL'; dx: number; dy: number }
-  | { type: 'SET_SCROLL'; x: number; y: number }
+  | { type: 'SET_SCROLL'; x?: number; y?: number }
   | { type: 'ZOOM'; dayWidth: number; anchorX?: number }
   | { type: 'SET_VIEW'; mode: ViewMode }
   | { type: 'TOGGLE_GROUP'; groupId: string }
-  | { type: 'EXPAND_ALL'; groupIds: string[] }
-  | { type: 'COLLAPSE_ALL' }
+  | { type: 'EXPAND_ALL' }
+  | { type: 'COLLAPSE_ALL'; groupIds: string[] }
   | { type: 'EXPAND_DAY'; day: number | null }
   | { type: 'HOVER'; taskId: string | null }
   | { type: 'SELECT'; taskId: string | null }
@@ -61,8 +61,12 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       if (newX === state.scrollX && newY === state.scrollY) return state;
       return { ...state, scrollX: newX, scrollY: newY, dirty: true };
     }
-    case 'SET_SCROLL':
-      return { ...state, scrollX: Math.max(0, action.x), scrollY: Math.max(0, action.y), dirty: true };
+    case 'SET_SCROLL': {
+      const newX = action.x !== undefined ? Math.max(0, action.x) : state.scrollX;
+      const newY = action.y !== undefined ? Math.max(0, action.y) : state.scrollY;
+      if (newX === state.scrollX && newY === state.scrollY) return state;
+      return { ...state, scrollX: newX, scrollY: newY, dirty: true };
+    }
     case 'ZOOM': {
       const clamped = Math.max(MIN_DAY_WIDTH, Math.min(MAX_DAY_WIDTH, action.dayWidth));
       if (clamped === state.dayWidth) return state;
@@ -77,8 +81,8 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       return { ...state, dayWidth: clamped, scrollX: newScrollX, dirty: true };
     }
     case 'SET_VIEW': {
-      const presets: Record<ViewMode, number> = { hour: 600, day: 120, week: 40, month: 16 };
-      return { ...state, viewMode: action.mode, dayWidth: presets[action.mode] ?? 120, dirty: true };
+      const presets: Record<ViewMode, number> = { hour: 600, day: 120, week: 60, month: 40 };
+      return { ...state, viewMode: action.mode, dayWidth: presets[action.mode] ?? 120, scrollX: 0, dirty: true };
     }
     case 'TOGGLE_GROUP': {
       const next = new Set(state.collapsedGroups);
@@ -87,13 +91,10 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       return { ...state, collapsedGroups: next, dirty: true };
     }
     case 'EXPAND_ALL': {
-      // Remove all from collapsed
       return { ...state, collapsedGroups: new Set(), dirty: true };
     }
     case 'COLLAPSE_ALL': {
-      const next = new Set<string>(action.type === 'COLLAPSE_ALL' ? [] : []);
-      // Caller should provide all group IDs; for simplicity collapse everything by clearing expansion
-      return { ...state, collapsedGroups: next, dirty: true };
+      return { ...state, collapsedGroups: new Set(action.groupIds), dirty: true };
     }
     case 'EXPAND_DAY':
       return { ...state, expandedDay: action.day, dirty: true };

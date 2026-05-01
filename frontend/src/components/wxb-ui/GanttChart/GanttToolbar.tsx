@@ -48,7 +48,7 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
     dispatch({ type: 'SET_SCROLL', x: 0, y: 0 });
   }, [dispatch]);
 
-  const zoomPercent = Math.round(((dayWidth - MIN_DAY_WIDTH) / (MAX_DAY_WIDTH - MIN_DAY_WIDTH)) * 100);
+  const zoomPercent = Math.max(0, Math.min(100, Math.round(((dayWidth - MIN_DAY_WIDTH) / (MAX_DAY_WIDTH - MIN_DAY_WIDTH)) * 100)));
 
   return (
     <div className="wxb-gantt-toolbar">

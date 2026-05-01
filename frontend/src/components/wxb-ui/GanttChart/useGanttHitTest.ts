@@ -2,7 +2,7 @@
  * WxbGanttChart v2 — Hit Testing
  * Given canvas coordinates, find which task (and edge) is under the cursor
  */
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { GanttTask, HitTestResult } from './types';
 import { ROW_HEIGHT, HEADER_HEIGHT, BAR_HEIGHT, STAGE_BAR_HEIGHT, HEATMAP_HEIGHT } from './constants';
 
@@ -14,11 +14,8 @@ export function useGanttHitTest(
   startHour: number,
   hourWidth: number
 ) {
-  // Task index by row for O(1) row lookup
-  const rowTasksRef = useRef<Map<number, GanttTask[]>>(new Map());
-
-  // Rebuild index when dependencies change
-  const rebuildIndex = useCallback(() => {
+  // Build row→tasks index via useMemo (auto-syncs with data changes)
+  const rowTasksMap = useMemo(() => {
     const map = new Map<number, GanttTask[]>();
     for (const task of tasks) {
       const row = taskRowMap.get(task.id);
@@ -26,7 +23,7 @@ export function useGanttHitTest(
       if (!map.has(row)) map.set(row, []);
       map.get(row)!.push(task);
     }
-    rowTasksRef.current = map;
+    return map;
   }, [tasks, taskRowMap]);
 
   const hitTest = useCallback((
@@ -43,7 +40,7 @@ export function useGanttHitTest(
     if (worldY < 0) return null;
 
     const rowIndex = Math.floor(worldY / ROW_HEIGHT);
-    const rowTasks = rowTasksRef.current.get(rowIndex);
+    const rowTasks = rowTasksMap.get(rowIndex);
     if (!rowTasks) return null;
 
     for (const task of rowTasks) {
@@ -71,7 +68,7 @@ export function useGanttHitTest(
     }
 
     return null;
-  }, [startHour, hourWidth]);
+  }, [startHour, hourWidth, rowTasksMap]);
 
-  return { hitTest, rebuildIndex };
+  return { hitTest };
 }

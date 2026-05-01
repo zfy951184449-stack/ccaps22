@@ -52,7 +52,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const lastDrawRef = useRef(0);
 
   const hourWidth = state.dayWidth / 24;
-  const { hitTest, rebuildIndex } = useGanttHitTest(tasks, taskRowMap, startHour, hourWidth);
+  const { hitTest } = useGanttHitTest(tasks, taskRowMap, startHour, hourWidth);
   const { startDrag } = useGanttDrag({
     hourWidth,
     startHour,
@@ -60,9 +60,6 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     readOnly,
     onDragEnd: onTaskDragEnd,
   });
-
-  // Rebuild hit test index when data changes
-  useEffect(() => { rebuildIndex(); }, [tasks, taskRowMap, rebuildIndex]);
 
   // Resize observer
   useEffect(() => {
@@ -110,6 +107,8 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           hoveredTaskId: s.hoveredTaskId,
           selectedTaskId: s.selectedTaskId,
           expandedDay: s.expandedDay,
+          todayHour: null as number | null,
+          viewMode: s.viewMode,
           dpr,
         };
 
