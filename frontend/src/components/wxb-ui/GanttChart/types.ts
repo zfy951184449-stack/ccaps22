@@ -169,6 +169,7 @@ export interface DragState {
   startMouseX: number;
   startMouseY: number;
   startLeft: number;
+  startTop: number;
   startWidth: number;
   startHour: number;
   endHour: number;

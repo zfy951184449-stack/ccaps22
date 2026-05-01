@@ -101,11 +101,9 @@ export function useGanttDrag({
       if (!state.isDragging) {
         if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
         state.isDragging = true;
-        // Create ghost at original position
-        const canvasEl = document.querySelector('.wxb-gantt-canvas') as HTMLElement;
-        if (!canvasEl) return;
+        // Create ghost at exact bar position
         const rect = new DOMRect(
-          e.clientX - dx, e.clientY - dy,
+          state.startLeft, state.startTop,
           state.startWidth, 24
         );
         createGhost(rect, '#1F6FEB');
@@ -193,7 +191,8 @@ export function useGanttDrag({
     task: GanttTask,
     type: DragState['type'],
     barLeft: number,
-    barWidth: number
+    barWidth: number,
+    barTop?: number
   ) => {
     if (readOnly || task.readOnly) return;
     e.preventDefault();
@@ -206,6 +205,7 @@ export function useGanttDrag({
       startMouseY: e.clientY,
       startLeft: barLeft,
       startWidth: barWidth,
+      startTop: barTop ?? e.clientY,
       startHour: task.start,
       endHour: task.end,
       isDragging: false,

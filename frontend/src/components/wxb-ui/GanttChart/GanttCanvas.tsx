@@ -5,7 +5,7 @@ import React, { useRef, useEffect, useCallback } from 'react';
 import type { GanttTask, GanttDependency, GanttLink, FlatRow } from './types';
 import type { GanttState } from './useGanttStore';
 import type { GanttAction } from './useGanttStore';
-import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT } from './constants';
+import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT, BAR_HEIGHT } from './constants';
 import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, drawLinks, clipBelowHeader } from './useGanttRenderer';
 import { useGanttHitTest } from './useGanttHitTest';
 import { useGanttDrag } from './useGanttDrag';
@@ -49,7 +49,20 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const rafId = useRef(0);
-  const lastDrawRef = useRef(0);
+
+  // ===== DATA REFS: mirror props into refs so RAF closure always reads latest =====
+  const dataRef = useRef({
+    tasks, flatRows, taskRowMap, dependencies, links,
+    startHour, endHour,
+    showGrid, showToday, showProgress, showHeatmap,
+    personnelPeaks,
+  });
+  dataRef.current = {
+    tasks, flatRows, taskRowMap, dependencies, links,
+    startHour, endHour,
+    showGrid, showToday, showProgress, showHeatmap,
+    personnelPeaks,
+  };
 
   const hourWidth = state.dayWidth / 24;
   const { hitTest } = useGanttHitTest(tasks, taskRowMap, startHour, hourWidth);
@@ -75,7 +88,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     return () => ro.disconnect();
   }, [dispatch]);
 
-  // RAF render loop
+  // RAF render loop — reads data from refs, never stale
   useEffect(() => {
     mountedRef.current = true;
     const tick = () => {
@@ -99,11 +112,14 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, w, h);
 
+        // Read latest data from ref
+        const d = dataRef.current;
+
         const cfg = {
-          startHour, endHour, hourWidth: s.dayWidth / 24,
+          startHour: d.startHour, endHour: d.endHour, hourWidth: s.dayWidth / 24,
           scrollX: s.scrollX, scrollY: s.scrollY,
           canvasW: w, canvasH: h, rowHeight: ROW_HEIGHT,
-          showGrid, showToday, showProgress, showHeatmap,
+          showGrid: d.showGrid, showToday: d.showToday, showProgress: d.showProgress, showHeatmap: d.showHeatmap,
           hoveredTaskId: s.hoveredTaskId,
           selectedTaskId: s.selectedTaskId,
           hoveredRow: s.hoveredRow,
@@ -115,17 +131,17 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         };
 
         // L0: Grid (row bg + hover highlight + grid lines)
-        drawGrid(ctx, cfg, flatRows);
+        drawGrid(ctx, cfg, d.flatRows);
 
         // L1: Time Axis Header (drawn on top of grid, below clip)
-        drawTimeAxis(ctx, cfg, personnelPeaks);
+        drawTimeAxis(ctx, cfg, d.personnelPeaks);
 
         // L2-L4: Bars, Dependencies, Links — clipped below header
         clipBelowHeader(ctx, cfg);
-        drawGroupBars(ctx, cfg, flatRows, tasks, taskRowMap);
-        drawBars(ctx, cfg, tasks, taskRowMap);
-        drawDependencies(ctx, cfg, tasks, taskRowMap, dependencies);
-        drawLinks(ctx, cfg, tasks, taskRowMap, links);
+        drawGroupBars(ctx, cfg, d.flatRows, d.tasks, d.taskRowMap);
+        drawBars(ctx, cfg, d.tasks, d.taskRowMap);
+        drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
+        drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links);
         ctx.restore();
       }
       rafId.current = requestAnimationFrame(tick);
@@ -183,16 +199,21 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const cy = e.clientY - rect.top;
     const s = stateRef.current;
     const hw = s.dayWidth / 24;
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
 
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
 
     if (hit && hit.task.draggable !== false && !readOnly && !hit.task.readOnly) {
       const barX = (hit.task.start - startHour) * hw - s.scrollX;
       const barW = (hit.task.end - hit.task.start) * hw;
+      // Compute the correct bar Y in viewport coordinates for ghost positioning
+      const barY = totalHeaderH + hit.row * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2 - s.scrollY;
+      const barScreenLeft = barX + rect.left;
+      const barScreenTop = barY + rect.top;
       if (hit.edge !== 'body') {
-        startDrag(e, hit.task, hit.edge, barX + rect.left, barW);
+        startDrag(e, hit.task, hit.edge, barScreenLeft, barW, barScreenTop);
       } else {
-        startDrag(e, hit.task, 'move', barX + rect.left, barW);
+        startDrag(e, hit.task, 'move', barScreenLeft, barW, barScreenTop);
       }
       return;
     }
@@ -246,7 +267,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     }
   }, [dispatch, hitTest, stateRef, showHeatmap, readOnly, onTooltipShow, onTooltipHide]);
 
-  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = useCallback(() => {
     if (isPanning.current) {
       isPanning.current = false;
       if (canvasRef.current) canvasRef.current.style.cursor = 'grab';

@@ -328,32 +328,56 @@ export function drawGroupBars(
 
     const y = totalHeaderH + r * rowHeight - scrollY;
     const color = row.color || STAGE_COLORS[row.depth % STAGE_COLORS.length];
-    const barH = 6;
-    const barY = y + rowHeight - barH - 2;
+    const barH = BAR_HEIGHT;
+    const barR = BAR_RADIUS;
+    const barY = y + (rowHeight - barH) / 2;
 
-    // Diamond end markers + bar line (classic Gantt group bar style)
-    ctx.fillStyle = hexToRgba(color, 0.7);
-    ctx.fillRect(x, barY, w, barH);
+    // Distinct group bar: gradient fill + dashed border (vs solid fill for leaf tasks)
+    const isTopLevel = row.depth === 0;
+    const fillAlpha = isTopLevel ? 0.18 : 0.12;
 
-    // Left diamond
-    const dSize = 5;
+    // Gradient fill
+    const grad = ctx.createLinearGradient(x, barY, x, barY + barH);
+    grad.addColorStop(0, hexToRgba(color, fillAlpha + 0.08));
+    grad.addColorStop(1, hexToRgba(color, fillAlpha));
+    ctx.fillStyle = grad;
+    roundRect(ctx, x, barY, w, barH, barR);
+    ctx.fill();
+
+    // Dashed border
+    ctx.strokeStyle = hexToRgba(color, 0.55);
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 3]);
+    roundRect(ctx, x, barY, w, barH, barR);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Down-pointing triangles at ends (group bracket markers)
+    const triSize = 5;
     ctx.fillStyle = color;
+    // Left bracket
     ctx.beginPath();
-    ctx.moveTo(x, barY + barH / 2);
-    ctx.lineTo(x + dSize, barY);
-    ctx.lineTo(x + dSize * 2, barY + barH / 2);
-    ctx.lineTo(x + dSize, barY + barH);
+    ctx.moveTo(x, barY + barH);
+    ctx.lineTo(x + triSize, barY + barH + triSize);
+    ctx.lineTo(x + triSize * 2, barY + barH);
+    ctx.closePath();
+    ctx.fill();
+    // Right bracket
+    ctx.beginPath();
+    ctx.moveTo(x + w - triSize * 2, barY + barH);
+    ctx.lineTo(x + w - triSize, barY + barH + triSize);
+    ctx.lineTo(x + w, barY + barH);
     ctx.closePath();
     ctx.fill();
 
-    // Right diamond
-    ctx.beginPath();
-    ctx.moveTo(x + w - dSize * 2, barY + barH / 2);
-    ctx.lineTo(x + w - dSize, barY);
-    ctx.lineTo(x + w, barY + barH / 2);
-    ctx.lineTo(x + w - dSize, barY + barH);
-    ctx.closePath();
-    ctx.fill();
+    // Group label inside bar
+    if (w > 50) {
+      ctx.fillStyle = color;
+      ctx.font = `600 10px ${FONT_SANS}`;
+      ctx.textAlign = 'left';
+      const label = truncateText(ctx, row.label, w - 16);
+      ctx.fillText(label, x + 8, barY + barH / 2 + 3.5);
+    }
   }
 }
 
