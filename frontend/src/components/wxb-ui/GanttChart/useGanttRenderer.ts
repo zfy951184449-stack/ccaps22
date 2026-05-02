@@ -213,6 +213,76 @@ export function drawTimeAxis(
       ctx.lineTo(wx, totalHeaderH);
       ctx.stroke();
     }
+  } else if (cfg.expandedDay !== null && cfg.expandedDay !== undefined) {
+    // ===== Expanded Day Mode: single-day detailed header =====
+    const expDay = cfg.expandedDay;
+    const dayHour = expDay * 24;
+    const x = hourToX(dayHour, startHour, hourWidth) - scrollX;
+    const endX = hourToX(dayHour + 24, startHour, hourWidth) - scrollX;
+
+    // Highlight the expanded day header with a subtle blue background
+    ctx.fillStyle = hexToRgba(THEME.blue100, 0.6);
+    ctx.fillRect(x, 0, endX - x, HEADER_HEIGHT);
+
+    // ◀ Back button (left side)
+    ctx.fillStyle = THEME.primary;
+    ctx.font = `500 11px ${FONT_SANS}`;
+    ctx.textAlign = 'left';
+    ctx.fillText('◀ 返回', x + 8, 18);
+
+    // Day label (center)
+    ctx.fillStyle = THEME.ink;
+    ctx.font = `700 14px ${FONT_SANS}`;
+    ctx.textAlign = 'center';
+    ctx.fillText(`Day ${expDay} (展开视图)`, x + (endX - x) / 2, 18);
+
+    // ◀ Prev / ▶ Next day arrows (to the sides of center label)
+    const centerX = x + (endX - x) / 2;
+    ctx.fillStyle = THEME.primary;
+    ctx.font = `600 14px ${FONT_SANS}`;
+    ctx.textAlign = 'center';
+    // Prev arrow
+    ctx.fillText('◂', centerX - 70, 18);
+    // Next arrow
+    ctx.fillText('▸', centerX + 70, 18);
+
+    // Draw all 24 hour labels + tick marks
+    ctx.fillStyle = THEME.fg3;
+    ctx.font = `500 10px ${FONT_SANS}`;
+    ctx.textAlign = 'center';
+    for (let h = 0; h < 24; h++) {
+      const hx = x + h * hourWidth;
+      if (hx < 0 || hx > canvasW) continue;
+      const isWork = h >= 9 && h < 17;
+      ctx.fillStyle = isWork ? THEME.primary : THEME.fg4;
+      ctx.fillText(`${h.toString().padStart(2, '0')}:00`, hx + hourWidth / 2, 36);
+      // Tick mark
+      ctx.strokeStyle = isWork ? hexToRgba(THEME.primary, 0.4) : THEME.border;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(hx, 40);
+      ctx.lineTo(hx, HEADER_HEIGHT);
+      ctx.stroke();
+    }
+
+    // Day separators (all other non-expanded days — dim them)
+    for (let d = 0; d < totalDays; d++) {
+      const dn = startDay + d;
+      if (dn === expDay) continue;
+      const dx = hourToX(dn * 24, startHour, hourWidth) - scrollX;
+      if (dx + dayW < 0 || dx > canvasW) continue;
+      ctx.fillStyle = THEME.fg4;
+      ctx.font = `500 11px ${FONT_SANS}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(`Day ${dn}`, dx + dayW / 2, 18);
+      // Dim separator
+      ctx.strokeStyle = THEME.border;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(dx, 0);
+      ctx.lineTo(dx, totalHeaderH);
+      ctx.stroke();
+    }
   } else {
     for (let d = 0; d < totalDays; d++) {
       const dayHour = (startDay + d) * 24;
@@ -559,6 +629,38 @@ export function drawBars(
         }
         const label = truncateText(ctx, labelText, w - 14);
         ctx.fillText(label, x + 8, y + barH / 2 + 4);
+      }
+
+      // Share group badges — rendered after label, right-aligned
+      if (task.shareGroups && task.shareGroups.length > 0 && w > 50) {
+        const badgeH = 14;
+        const badgeR = 7;
+        const badgeGap = 3;
+        let bx = x + w - 4; // start from right edge
+        ctx.font = `600 8px ${FONT_SANS}`;
+        ctx.textAlign = 'center';
+        // Draw badges right-to-left
+        for (let gi = task.shareGroups.length - 1; gi >= 0; gi--) {
+          const sg = task.shareGroups[gi];
+          const tw = ctx.measureText(sg.label).width;
+          const bw = tw + 10;
+          bx -= bw;
+          if (bx < x + 20) break; // don't overlap label
+          const by = y + (barH - badgeH) / 2;
+          // Badge background
+          ctx.fillStyle = hexToRgba(sg.color, 0.18);
+          roundRect(ctx, bx, by, bw, badgeH, badgeR);
+          ctx.fill();
+          // Badge border
+          ctx.strokeStyle = hexToRgba(sg.color, 0.5);
+          ctx.lineWidth = 1;
+          roundRect(ctx, bx, by, bw, badgeH, badgeR);
+          ctx.stroke();
+          // Badge text
+          ctx.fillStyle = sg.color;
+          ctx.fillText(sg.label, bx + bw / 2, by + badgeH / 2 + 3);
+          bx -= badgeGap;
+        }
       }
     }
   }

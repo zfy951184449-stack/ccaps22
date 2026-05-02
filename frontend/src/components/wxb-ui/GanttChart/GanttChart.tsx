@@ -39,6 +39,11 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   onTaskDragEnd,
   onGroupToggle,
   onViewModeChange,
+  // Business callbacks
+  onTaskEdit,
+  onTaskDelete,
+  onTaskDuplicate,
+  onContextAction,
   className,
   style,
 }) => {
@@ -89,16 +94,26 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   }, []);
 
   const handleCtxAction = useCallback((key: string, task: GanttTask | null) => {
-    // Built-in actions
+    // Built-in view actions
     if (key === 'expand-all') {
       dispatch({ type: 'EXPAND_ALL' });
     } else if (key === 'collapse-all') {
       const groupIds = groups.map(g => g.id);
       dispatch({ type: 'COLLAPSE_ALL', groupIds });
     }
-    // Forward to consumer
-    (onTaskClick as any)?.contextAction?.(key, task);
-  }, [dispatch, groups, onTaskClick]);
+    // Route to business callbacks
+    else if (key === 'edit' && task && onTaskEdit) {
+      onTaskEdit(task);
+    } else if (key === 'delete' && task && onTaskDelete) {
+      onTaskDelete(task);
+    } else if (key === 'duplicate' && task && onTaskDuplicate) {
+      onTaskDuplicate(task);
+    }
+    // Catch-all: forward to consumer's generic handler
+    if (onContextAction) {
+      onContextAction(key, task);
+    }
+  }, [dispatch, groups, onTaskEdit, onTaskDelete, onTaskDuplicate, onContextAction]);
 
   // Minimap: current viewport day + active tasks
   const currentDay = useMemo(() => {

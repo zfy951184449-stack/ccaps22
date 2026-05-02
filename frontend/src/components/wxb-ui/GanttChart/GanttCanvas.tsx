@@ -327,25 +327,76 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   }, []);
 
   const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!onTaskClick) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
     const s = stateRef.current;
-    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
+    const hw = s.dayWidth / 24;
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+
+    // Header click: handle expanded-day navigation buttons
+    if (cy < HEADER_HEIGHT && s.expandedDay !== null) {
+      const expDay = s.expandedDay;
+      const dayHour = expDay * 24;
+      const x = (dayHour - startHour) * hw - s.scrollX;
+      const endX = ((dayHour + 24) - startHour) * hw - s.scrollX;
+      const centerX = x + (endX - x) / 2;
+
+      // Back button: left area of expanded day header (x+0 to x+60)
+      if (cx >= x && cx <= x + 60 && cy < 24) {
+        dispatch({ type: 'EXPAND_DAY', day: null });
+        return;
+      }
+      // Prev arrow: centerX - 80 to centerX - 60
+      if (cx >= centerX - 80 && cx <= centerX - 60 && cy < 24) {
+        dispatch({ type: 'EXPAND_DAY', day: expDay - 1 });
+        return;
+      }
+      // Next arrow: centerX + 60 to centerX + 80
+      if (cx >= centerX + 60 && cx <= centerX + 80 && cy < 24) {
+        dispatch({ type: 'EXPAND_DAY', day: expDay + 1 });
+        return;
+      }
+    }
+
+    // Task click
+    const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
     if (hit) {
       dispatch({ type: 'SELECT', taskId: hit.taskId });
-      onTaskClick(hit.task);
+      if (onTaskClick) onTaskClick(hit.task);
     }
-  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap]);
+  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap, startHour]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!onTaskDoubleClick) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
     const s = stateRef.current;
-    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
-    if (hit) onTaskDoubleClick(hit.task);
-  }, [onTaskDoubleClick, hitTest, stateRef, showHeatmap]);
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+
+    // Check if double-click is in the header area (day label) for expand day
+    if (cy < totalHeaderH && cy < HEADER_HEIGHT) {
+      const hw = s.dayWidth / 24;
+      const worldX = cx + s.scrollX;
+      const dayHour = worldX / hw + startHour;
+      const dayNum = Math.floor(dayHour / 24);
+      // Toggle: if already expanded on this day, collapse; otherwise expand
+      if (s.expandedDay === dayNum) {
+        dispatch({ type: 'EXPAND_DAY', day: null });
+      } else {
+        dispatch({ type: 'EXPAND_DAY', day: dayNum });
+      }
+      return;
+    }
+
+    // Task double-click
+    const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
+    if (hit) {
+      if (onTaskDoubleClick) onTaskDoubleClick(hit.task);
+    }
+  }, [onTaskDoubleClick, hitTest, stateRef, showHeatmap, startHour, dispatch]);
 
   const handleMouseLeave = useCallback(() => {
     isPanning.current = false;

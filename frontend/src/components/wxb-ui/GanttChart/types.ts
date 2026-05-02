@@ -40,6 +40,8 @@ export interface GanttTask {
   tooltip?: React.ReactNode;
   /** Passthrough business data */
   data?: Record<string, unknown>;
+  /** Share group badges: array of { id, label, color } */
+  shareGroups?: Array<{ id: string; label: string; color: string }>;
 }
 
 export interface GanttGroup {
@@ -142,6 +144,15 @@ export interface WxbGanttChartProps {
   onGroupToggle?: (groupId: string, collapsed: boolean) => void;
   /** View mode change handler */
   onViewModeChange?: (mode: ViewMode) => void;
+  // ===== Business Callbacks (routed from context menu / double-click) =====
+  /** Task edit request (from right-click → "编辑" or double-click) */
+  onTaskEdit?: (task: GanttTask) => void;
+  /** Task delete request */
+  onTaskDelete?: (task: GanttTask) => void;
+  /** Task duplicate request */
+  onTaskDuplicate?: (task: GanttTask) => void;
+  /** Context menu action handler (catch-all for custom actions) */
+  onContextAction?: (action: string, task: GanttTask | null) => void;
   /** CSS class name */
   className?: string;
   /** Inline style */
@@ -183,6 +194,12 @@ export interface HitTestResult {
   task: GanttTask;
   edge: 'body' | 'resize-start' | 'resize-end';
   row: number;
+}
+
+/** Hit result for header area interactions */
+export interface HeaderHitResult {
+  type: 'day-label' | 'back-button' | 'prev-day' | 'next-day';
+  day: number;
 }
 
 export interface CanvasViewport {
