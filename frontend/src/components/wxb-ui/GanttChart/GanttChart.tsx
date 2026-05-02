@@ -1,6 +1,6 @@
 /**
- * WxbGanttChart v2 — Main Component
- * Assembles: Toolbar + Sidebar + Canvas + Tooltip + Minimap
+ * WxbGanttChart v2.1 — Main Component
+ * Assembles: Toolbar + Sidebar + Canvas + Tooltip + Minimap + ContextMenu + SelectionPanel
  */
 import React, { useRef, useMemo, useCallback, useState } from 'react';
 import type { WxbGanttChartProps, GanttTask } from './types';
@@ -13,7 +13,12 @@ import GanttSidebar from './GanttSidebar';
 import GanttCanvas from './GanttCanvas';
 import GanttTooltip from './GanttTooltip';
 import GanttMinimap from './GanttMinimap';
-import GanttContextMenu, { DEFAULT_TASK_MENU_ITEMS, DEFAULT_BG_MENU_ITEMS } from './GanttContextMenu';
+import GanttContextMenu, {
+  DEFAULT_TASK_MENU_ITEMS,
+  DEFAULT_GROUP_MENU_ITEMS,
+  DEFAULT_BG_MENU_ITEMS,
+} from './GanttContextMenu';
+import GanttSelectionPanel from './GanttSelectionPanel';
 import './GanttChart.css';
 
 const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
@@ -47,6 +52,11 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   onContextAction,
   onGroupDragEnd,
   onUndoCascade,
+  // Menu customization
+  taskMenuItems,
+  groupMenuItems,
+  backgroundMenuItems,
+  showSelectionPanel = true,
   className,
   style,
 }) => {
@@ -89,28 +99,61 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     setUndoToast(data);
   }, []);
 
-  // Context menu state
+  // ===== Context Menu State =====
   const [ctxMenu, setCtxMenu] = useState<{
-    visible: boolean; x: number; y: number; task: GanttTask | null;
-  }>({ visible: false, x: 0, y: 0, task: null });
+    visible: boolean;
+    x: number;
+    y: number;
+    task: GanttTask | null;
+    contextType: 'task' | 'group' | 'background';
+    groupId?: string;
+  }>({ visible: false, x: 0, y: 0, task: null, contextType: 'background' });
 
-  const handleContextMenu = useCallback((task: GanttTask | null, x: number, y: number) => {
-    setCtxMenu({ visible: true, x, y, task });
+  const handleContextMenu = useCallback((
+    task: GanttTask | null,
+    x: number,
+    y: number,
+    hitType?: 'task' | 'group',
+    groupId?: string
+  ) => {
+    let contextType: 'task' | 'group' | 'background';
+    if (hitType === 'group') contextType = 'group';
+    else if (task) contextType = 'task';
+    else contextType = 'background';
+
+    setCtxMenu({ visible: true, x, y, task, contextType, groupId });
   }, []);
 
   const handleCtxClose = useCallback(() => {
     setCtxMenu(prev => ({ ...prev, visible: false }));
   }, []);
 
+  // Dynamic menu items based on context
+  const activeMenuItems = useMemo(() => {
+    if (ctxMenu.contextType === 'group') return groupMenuItems || DEFAULT_GROUP_MENU_ITEMS;
+    if (ctxMenu.contextType === 'background') return backgroundMenuItems || DEFAULT_BG_MENU_ITEMS;
+    return taskMenuItems || DEFAULT_TASK_MENU_ITEMS;
+  }, [ctxMenu.contextType, taskMenuItems, groupMenuItems, backgroundMenuItems]);
+
   const handleCtxAction = useCallback((key: string, task: GanttTask | null) => {
-    // Built-in view actions
-    if (key === 'expand-all') {
+    // ===== Built-in view actions =====
+    if (key === 'expand-all' || key === 'expand-group') {
       dispatch({ type: 'EXPAND_ALL' });
-    } else if (key === 'collapse-all') {
+    } else if (key === 'collapse-all' || key === 'collapse-group') {
       const groupIds = groups.map(g => g.id);
       dispatch({ type: 'COLLAPSE_ALL', groupIds });
     }
-    // Route to business callbacks
+    // ===== Selection actions =====
+    else if (key === 'select-all') {
+      const allTaskIds = tasks.filter(t => !t.readOnly).map(t => t.id);
+      dispatch({ type: 'SELECT_ALL', taskIds: allTaskIds });
+    } else if (key === 'select-children' && ctxMenu.groupId) {
+      const childTaskIds = tasks.filter(t => t.groupId === ctxMenu.groupId).map(t => t.id);
+      dispatch({ type: 'SELECT_ALL', taskIds: childTaskIds });
+    } else if (key === 'clear-selection' || key === 'deselect-children') {
+      dispatch({ type: 'SELECT_CLEAR' });
+    }
+    // ===== Route to business callbacks =====
     else if (key === 'edit' && task && onTaskEdit) {
       onTaskEdit(task);
     } else if (key === 'delete' && task && onTaskDelete) {
@@ -122,7 +165,21 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     if (onContextAction) {
       onContextAction(key, task);
     }
-  }, [dispatch, groups, onTaskEdit, onTaskDelete, onTaskDuplicate, onContextAction]);
+  }, [dispatch, groups, tasks, ctxMenu.groupId, onTaskEdit, onTaskDelete, onTaskDuplicate, onContextAction]);
+
+  // ===== Selection Panel Handlers =====
+  const handleDeselectTask = useCallback((taskId: string) => {
+    dispatch({ type: 'SELECT_MULTI', taskId });
+  }, [dispatch]);
+
+  const handleDeselectAll = useCallback(() => {
+    dispatch({ type: 'SELECT_CLEAR' });
+  }, [dispatch]);
+
+  const handleSelectAllInGroup = useCallback((groupId: string) => {
+    const childTaskIds = tasks.filter(t => t.groupId === groupId).map(t => t.id);
+    dispatch({ type: 'SELECT_ALL', taskIds: childTaskIds });
+  }, [tasks, dispatch]);
 
   // Minimap: current viewport day + active tasks
   const currentDay = useMemo(() => {
@@ -219,6 +276,18 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onUndoToast={handleUndoToast}
         />
 
+        {/* Selection Panel (cart-style) */}
+        {showSelectionPanel && state.selectedTaskIds.size > 0 && (
+          <GanttSelectionPanel
+            selectedTaskIds={state.selectedTaskIds}
+            tasks={tasks}
+            groups={groups}
+            onDeselectTask={handleDeselectTask}
+            onDeselectAll={handleDeselectAll}
+            onSelectAllInGroup={handleSelectAllInGroup}
+          />
+        )}
+
         {/* Minimap */}
         {showMinimap && (
           <GanttMinimap
@@ -243,7 +312,9 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         x={ctxMenu.x}
         y={ctxMenu.y}
         task={ctxMenu.task}
-        items={ctxMenu.task ? DEFAULT_TASK_MENU_ITEMS : DEFAULT_BG_MENU_ITEMS}
+        items={activeMenuItems}
+        selectedCount={state.selectedTaskIds.size}
+        contextType={ctxMenu.contextType}
         onAction={handleCtxAction}
         onClose={handleCtxClose}
       />

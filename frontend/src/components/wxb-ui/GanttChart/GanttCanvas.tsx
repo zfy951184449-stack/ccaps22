@@ -37,7 +37,7 @@ interface GanttCanvasProps {
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   onTooltipShow?: (task: GanttTask, x: number, y: number) => void;
   onTooltipHide?: () => void;
-  onContextMenu?: (task: GanttTask | null, x: number, y: number) => void;
+  onContextMenu?: (task: GanttTask | null, x: number, y: number, hitType?: 'task' | 'group', groupId?: string) => void;
   onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
 }
 
@@ -464,7 +464,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     if (!rect) return;
     const s = stateRef.current;
     const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
-    onContextMenu(hit?.task ?? null, e.clientX, e.clientY);
+    onContextMenu(hit?.task ?? null, e.clientX, e.clientY, hit?.hitType, hit?.groupId);
   }, [onContextMenu, hitTest, stateRef, showHeatmap]);
 
   return (

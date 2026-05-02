@@ -1,5 +1,5 @@
 /**
- * WxbGanttChart v2 — Barrel Export
+ * WxbGanttChart v2.1 — Barrel Export
  */
 export { default as WxbGanttChart } from './GanttChart';
 export type {
@@ -11,3 +11,4 @@ export type {
   ViewMode,
 } from './types';
 export type { ContextMenuItem } from './GanttContextMenu';
+export { DEFAULT_TASK_MENU_ITEMS, DEFAULT_GROUP_MENU_ITEMS, DEFAULT_BG_MENU_ITEMS } from './GanttContextMenu';

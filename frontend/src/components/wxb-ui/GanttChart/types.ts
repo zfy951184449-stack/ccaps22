@@ -157,6 +157,15 @@ export interface WxbGanttChartProps {
   onTaskDuplicate?: (task: GanttTask) => void;
   /** Context menu action handler (catch-all for custom actions) */
   onContextAction?: (action: string, task: GanttTask | null) => void;
+  // ===== Context Menu Customization (consumer overrides) =====
+  /** Custom menu items for single-task right-click (overrides defaults) */
+  taskMenuItems?: import('./GanttContextMenu').ContextMenuItem[];
+  /** Custom menu items for group-row right-click (overrides defaults) */
+  groupMenuItems?: import('./GanttContextMenu').ContextMenuItem[];
+  /** Custom menu items for background right-click (overrides defaults) */
+  backgroundMenuItems?: import('./GanttContextMenu').ContextMenuItem[];
+  /** Show selection panel when tasks are selected (default: true) */
+  showSelectionPanel?: boolean;
   /** CSS class name */
   className?: string;
   /** Inline style */

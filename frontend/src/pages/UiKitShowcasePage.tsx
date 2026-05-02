@@ -563,7 +563,9 @@ const UiKitShowcasePage: React.FC = () => {
           <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
           Ctrl+Click → 多选 → 批量拖动
           <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
-          ESC → 取消拖动 · Ctrl+Z → 撤销
+          右键 → 上下文菜单（含共享组操作）
+          <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
+          ESC → 取消 · Ctrl+Z → 撤销
         </div>
 
         <WxbGanttChart
@@ -619,6 +621,21 @@ const UiKitShowcasePage: React.FC = () => {
               `🔗 级联移动 ${affectedTaskIds.length} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
               ...prev.slice(0, 9),
             ]);
+          }}
+          onTaskEdit={(task: { label: string }) => {
+            setDragLog((prev: string[]) => [`✏️ 编辑: ${task.label}`, ...prev.slice(0, 9)]);
+          }}
+          onTaskDelete={(task: { id: string; label: string }) => {
+            setGanttTasks(prev => prev.filter(t => t.id !== task.id));
+            setDragLog((prev: string[]) => [`🗑️ 删除: ${task.label}`, ...prev.slice(0, 9)]);
+          }}
+          onTaskDuplicate={(task) => {
+            const duration = task.end - task.start;
+            setGanttTasks(prev => [...prev, { ...prev.find(t => t.id === task.id)!, id: `${task.id}-dup-${Date.now()}`, label: `${task.label} (副本)`, start: task.end + 1, end: task.end + 1 + duration }]);
+            setDragLog((prev: string[]) => [`📋 复制: ${task.label}`, ...prev.slice(0, 9)]);
+          }}
+          onContextAction={(key: string, task: { label: string } | null) => {
+            setDragLog((prev: string[]) => [`🖱️ 菜单: ${key}${task ? ` → ${task.label}` : ''}`, ...prev.slice(0, 9)]);
           }}
         />
 
