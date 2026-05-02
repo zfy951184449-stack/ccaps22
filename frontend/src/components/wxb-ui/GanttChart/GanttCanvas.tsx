@@ -350,12 +350,12 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
       }
       // Prev arrow: centerX - 80 to centerX - 60
       if (cx >= centerX - 80 && cx <= centerX - 60 && cy < 24) {
-        dispatch({ type: 'EXPAND_DAY', day: expDay - 1 });
+        dispatch({ type: 'EXPAND_DAY', day: expDay - 1, startHour });
         return;
       }
       // Next arrow: centerX + 60 to centerX + 80
       if (cx >= centerX + 60 && cx <= centerX + 80 && cy < 24) {
-        dispatch({ type: 'EXPAND_DAY', day: expDay + 1 });
+        dispatch({ type: 'EXPAND_DAY', day: expDay + 1, startHour });
         return;
       }
     }
@@ -386,7 +386,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
       if (s.expandedDay === dayNum) {
         dispatch({ type: 'EXPAND_DAY', day: null });
       } else {
-        dispatch({ type: 'EXPAND_DAY', day: dayNum });
+        dispatch({ type: 'EXPAND_DAY', day: dayNum, startHour });
       }
       return;
     }

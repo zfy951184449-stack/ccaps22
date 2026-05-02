@@ -16,6 +16,10 @@ export interface GanttState {
   viewMode: ViewMode;
   collapsedGroups: Set<string>;
   expandedDay: number | null;
+  /** Saved dayWidth before expanding a day, for restore on collapse */
+  prevDayWidth: number | null;
+  /** Saved scrollX before expanding a day, for restore on collapse */
+  prevScrollX: number | null;
   hoveredTaskId: string | null;
   hoveredRow: number;         // -1 = none
   hoveredColX: number;        // canvas X of mouse, -1 = none
@@ -34,7 +38,7 @@ export type GanttAction =
   | { type: 'TOGGLE_GROUP'; groupId: string }
   | { type: 'EXPAND_ALL' }
   | { type: 'COLLAPSE_ALL'; groupIds: string[] }
-  | { type: 'EXPAND_DAY'; day: number | null }
+  | { type: 'EXPAND_DAY'; day: number | null; startHour?: number }
   | { type: 'HOVER'; taskId: string | null }
   | { type: 'HOVER_ROW'; row: number; colX: number }
   | { type: 'SELECT'; taskId: string | null }
@@ -54,6 +58,8 @@ function createInitialState(dayWidth?: number): GanttState {
     viewMode: 'day',
     collapsedGroups: new Set<string>(),
     expandedDay: null,
+    prevDayWidth: null,
+    prevScrollX: null,
     hoveredTaskId: null,
     hoveredRow: -1,
     hoveredColX: -1,
@@ -106,8 +112,39 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
     case 'COLLAPSE_ALL': {
       return { ...state, collapsedGroups: new Set(action.groupIds), scrollY: 0, dirty: true };
     }
-    case 'EXPAND_DAY':
-      return { ...state, expandedDay: action.day, dirty: true };
+    case 'EXPAND_DAY': {
+      if (action.day === null) {
+        // Collapse: restore pre-expand zoom/scroll
+        return {
+          ...state,
+          expandedDay: null,
+          dayWidth: state.prevDayWidth ?? state.dayWidth,
+          scrollX: state.prevScrollX ?? state.scrollX,
+          prevDayWidth: null,
+          prevScrollX: null,
+          dirty: true,
+        };
+      }
+      // Expand: zoom dayWidth so that 1 day fills ~90% of canvas viewport, scroll to center on that day
+      const sHour = action.startHour ?? 0;
+      const targetDayWidth = Math.max(MIN_DAY_WIDTH, Math.min(MAX_DAY_WIDTH, state.canvasW * 0.9));
+      const hourWidth = targetDayWidth / 24;
+      const dayStartHour = action.day * 24;
+      // scrollX so the expanded day starts ~5% from left edge
+      const targetScrollX = Math.max(0, (dayStartHour - sHour) * hourWidth - state.canvasW * 0.05);
+      // Only save prev state on first expand (not when navigating between days)
+      const prevDW = state.prevDayWidth ?? state.dayWidth;
+      const prevSX = state.prevScrollX ?? state.scrollX;
+      return {
+        ...state,
+        expandedDay: action.day,
+        dayWidth: targetDayWidth,
+        scrollX: targetScrollX,
+        prevDayWidth: prevDW,
+        prevScrollX: prevSX,
+        dirty: true,
+      };
+    }
     case 'HOVER':
       if (action.taskId === state.hoveredTaskId) return state;
       return { ...state, hoveredTaskId: action.taskId, dirty: true };
