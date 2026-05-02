@@ -139,7 +139,11 @@ export interface WxbGanttChartProps {
   /** Task double-click handler */
   onTaskDoubleClick?: (task: GanttTask) => void;
   /** Task drag end handler */
-  onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void;
+  onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
+  /** Cascade group drag end handler — consumer decides how to apply the offset */
+  onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
+  /** Undo cascade handler — restores tasks to pre-drag snapshots */
+  onUndoCascade?: (restorations: Array<{ taskId: string; start: number; end: number }>) => void;
   /** Group toggle handler */
   onGroupToggle?: (groupId: string, collapsed: boolean) => void;
   /** View mode change handler */
@@ -175,18 +179,28 @@ export interface FlatRow {
 }
 
 export interface DragState {
-  type: 'move' | 'resize-start' | 'resize-end';
-  taskId: string;
+  type: 'move' | 'group-move';
+  /** Primary dragged task/group ID */
+  primaryId: string;
+  /** All affected task IDs (for cascade / multi-select) */
+  affectedTaskIds: string[];
+  isDragging: boolean;
   startMouseX: number;
   startMouseY: number;
-  startLeft: number;
-  startTop: number;
-  startWidth: number;
-  startHour: number;
-  endHour: number;
-  isDragging: boolean;
-  windowMinX?: number;
-  windowMaxX?: number;
+  /** Original positions of all affected tasks */
+  originals: Map<string, { start: number; end: number; row: number }>;
+  /** Current drag offset in hours */
+  deltaHours: number;
+  /** Window constraint bounds (for single task move only) */
+  windowMinHour?: number;
+  windowMaxHour?: number;
+  /** Task visual info for ghost rendering */
+  taskColor: string;
+  taskLabel: string;
+  /** Cascade warning level based on offset magnitude */
+  warningLevel: 'normal' | 'warning' | 'danger';
+  /** Whether this is a group cascade drag */
+  isGroupDrag: boolean;
 }
 
 export interface HitTestResult {
@@ -194,6 +208,10 @@ export interface HitTestResult {
   task: GanttTask;
   edge: 'body' | 'resize-start' | 'resize-end';
   row: number;
+  /** Whether this hit is on a task bar or a group summary bar */
+  hitType: 'task' | 'group';
+  /** Group ID when hitType is 'group' */
+  groupId?: string;
 }
 
 /** Hit result for header area interactions */

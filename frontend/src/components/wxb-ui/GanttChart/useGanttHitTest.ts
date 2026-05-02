@@ -1,15 +1,17 @@
 /**
- * WxbGanttChart v2 — Hit Testing
- * Given canvas coordinates, find which task (and edge) is under the cursor
+ * WxbGanttChart v3.2 — Hit Testing
+ * Given canvas coordinates, find which task or group bar is under the cursor
  */
 import { useCallback, useMemo } from 'react';
-import type { GanttTask, HitTestResult } from './types';
+import type { GanttTask, GanttGroup, FlatRow, HitTestResult } from './types';
 import { ROW_HEIGHT, HEADER_HEIGHT, BAR_HEIGHT, STAGE_BAR_HEIGHT, HEATMAP_HEIGHT } from './constants';
 
 const EDGE_THRESHOLD = 6; // px from edge to trigger resize
 
 export function useGanttHitTest(
   tasks: GanttTask[],
+  groups: GanttGroup[],
+  flatRows: FlatRow[],
   taskRowMap: Map<string, number>,
   startHour: number,
   hourWidth: number
@@ -26,6 +28,41 @@ export function useGanttHitTest(
     return map;
   }, [tasks, taskRowMap]);
 
+  // Build group span map (min/max hours for each group from ALL tasks)
+  const groupSpanMap = useMemo(() => {
+    const spans = new Map<string, { min: number; max: number }>();
+    for (const task of tasks) {
+      if (!task.groupId) continue;
+      const span = spans.get(task.groupId);
+      if (span) {
+        if (task.start < span.min) span.min = task.start;
+        if (task.end > span.max) span.max = task.end;
+      } else {
+        spans.set(task.groupId, { min: task.start, max: task.end });
+      }
+    }
+    // Propagate up through parent groups
+    const groupParent = new Map<string, string>();
+    for (const g of groups) {
+      if (g.parentId) groupParent.set(g.id, g.parentId);
+    }
+    for (const [groupId, span] of Array.from(spans.entries())) {
+      let current = groupId;
+      while (groupParent.has(current)) {
+        const parentId = groupParent.get(current)!;
+        const parentSpan = spans.get(parentId);
+        if (parentSpan) {
+          if (span.min < parentSpan.min) parentSpan.min = span.min;
+          if (span.max > parentSpan.max) parentSpan.max = span.max;
+        } else {
+          spans.set(parentId, { min: span.min, max: span.max });
+        }
+        current = parentId;
+      }
+    }
+    return spans;
+  }, [tasks, groups]);
+
   const hitTest = useCallback((
     canvasX: number,
     canvasY: number,
@@ -40,35 +77,75 @@ export function useGanttHitTest(
     if (worldY < 0) return null;
 
     const rowIndex = Math.floor(worldY / ROW_HEIGHT);
+
+    // 1. Try to hit task bars first (higher priority)
     const rowTasks = rowTasksMap.get(rowIndex);
-    if (!rowTasks) return null;
+    if (rowTasks) {
+      for (const task of rowTasks) {
+        const barH = task.type === 'stage' ? STAGE_BAR_HEIGHT : BAR_HEIGHT;
+        const barTop = rowIndex * ROW_HEIGHT + (ROW_HEIGHT - barH) / 2;
+        const barBottom = barTop + barH;
 
-    for (const task of rowTasks) {
-      const barH = task.type === 'stage' ? STAGE_BAR_HEIGHT : BAR_HEIGHT;
-      const barTop = rowIndex * ROW_HEIGHT + (ROW_HEIGHT - barH) / 2;
-      const barBottom = barTop + barH;
+        // Check Y bounds
+        if (worldY < barTop || worldY > barBottom) continue;
 
-      // Check Y bounds
-      if (worldY < barTop || worldY > barBottom) continue;
+        const taskX = (task.start - startHour) * hourWidth;
+        const taskW = Math.max((task.end - task.start) * hourWidth, 4);
 
-      const taskX = (task.start - startHour) * hourWidth;
-      const taskW = Math.max((task.end - task.start) * hourWidth, 4);
+        // Check X bounds
+        if (worldX < taskX || worldX > taskX + taskW) continue;
 
-      // Check X bounds
-      if (worldX < taskX || worldX > taskX + taskW) continue;
+        // Determine edge
+        let edge: HitTestResult['edge'] = 'body';
+        if (task.type === 'timeWindow') {
+          if (Math.abs(worldX - taskX) < EDGE_THRESHOLD) edge = 'resize-start';
+          else if (Math.abs(worldX - (taskX + taskW)) < EDGE_THRESHOLD) edge = 'resize-end';
+        }
 
-      // Determine edge
-      let edge: HitTestResult['edge'] = 'body';
-      if (task.type === 'timeWindow') {
-        if (Math.abs(worldX - taskX) < EDGE_THRESHOLD) edge = 'resize-start';
-        else if (Math.abs(worldX - (taskX + taskW)) < EDGE_THRESHOLD) edge = 'resize-end';
+        return { taskId: task.id, task, edge, row: rowIndex, hitType: 'task' };
       }
+    }
 
-      return { taskId: task.id, task, edge, row: rowIndex };
+    // 2. Try to hit group bars (lower priority, only if no task hit)
+    if (rowIndex < flatRows.length) {
+      const flatRow = flatRows[rowIndex];
+      if (flatRow && flatRow.type === 'group') {
+        const span = groupSpanMap.get(flatRow.id);
+        if (span) {
+          const barH = BAR_HEIGHT;
+          const barTop = rowIndex * ROW_HEIGHT + (ROW_HEIGHT - barH) / 2;
+          const barBottom = barTop + barH;
+
+          if (worldY >= barTop && worldY <= barBottom) {
+            const groupX = (span.min - startHour) * hourWidth;
+            const groupW = Math.max((span.max - span.min) * hourWidth, 4);
+
+            if (worldX >= groupX && worldX <= groupX + groupW) {
+              // Create a synthetic "group task" for the hit result
+              const syntheticTask: GanttTask = {
+                id: flatRow.id,
+                label: flatRow.label,
+                start: span.min,
+                end: span.max,
+                color: flatRow.color,
+                draggable: true,
+              };
+              return {
+                taskId: flatRow.id,
+                task: syntheticTask,
+                edge: 'body',
+                row: rowIndex,
+                hitType: 'group',
+                groupId: flatRow.id,
+              };
+            }
+          }
+        }
+      }
     }
 
     return null;
-  }, [startHour, hourWidth, rowTasksMap]);
+  }, [startHour, hourWidth, rowTasksMap, groupSpanMap, flatRows]);
 
   return { hitTest };
 }

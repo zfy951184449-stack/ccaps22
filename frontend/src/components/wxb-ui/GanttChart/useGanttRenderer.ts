@@ -2,7 +2,7 @@
  * WxbGanttChart v2 — Canvas Rendering Engine
  * 5-layer drawing pipeline: Grid → TimeAxis → Bars → Dependencies → Links
  */
-import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme } from './types';
+import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme, DragState } from './types';
 import {
   THEME, ROW_HEIGHT, HEADER_HEIGHT, HEATMAP_HEIGHT,
   BAR_HEIGHT, STAGE_BAR_HEIGHT, BAR_RADIUS, STAGE_BAR_RADIUS,
@@ -29,7 +29,7 @@ export interface DrawConfig {
   showProgress: boolean;
   showHeatmap: boolean;
   hoveredTaskId: string | null;
-  selectedTaskId: string | null;
+  selectedTaskIds: Set<string>;
   hoveredRow: number;
   hoveredColX: number;
   expandedDay: number | null;
@@ -611,10 +611,10 @@ export function drawBars(
       }
 
       // Selected — wxb-blue-500 focus ring
-      if (task.id === cfg.selectedTaskId) {
-        ctx.strokeStyle = THEME.blue500;
+      if (cfg.selectedTaskIds.has(task.id)) {
+        ctx.strokeStyle = 'rgba(31, 111, 235, 0.6)';
         ctx.lineWidth = 2;
-        roundRect(ctx, x - 1, y - 1, w + 2, barH + 2, barR + 1);
+        roundRect(ctx, x - 2, y - 2, w + 4, barH + 4, barR + 2);
         ctx.stroke();
       }
 
@@ -824,6 +824,141 @@ export function drawLinks(
       ctx.lineTo(axCenter + arrDir2 * ARROW_SIZE, ayCenter + ARROW_SIZE / 2);
       ctx.closePath();
       ctx.fill();
+    }
+  }
+}
+
+// ===== L5: Drag Overlay =====
+
+const WARNING_COLORS: Record<DragState['warningLevel'], { fill: string; stroke: string; text: string }> = {
+  normal:  { fill: 'rgba(31, 111, 235, 0.2)',  stroke: 'rgba(31, 111, 235, 0.5)',  text: '#3A4A5C' },
+  warning: { fill: 'rgba(232, 181, 60, 0.25)', stroke: 'rgba(232, 181, 60, 0.6)',  text: '#9A6A00' },
+  danger:  { fill: 'rgba(214, 73, 58, 0.25)',  stroke: 'rgba(214, 73, 58, 0.6)',   text: '#B0352A' },
+};
+
+export function drawDragOverlay(
+  ctx: CanvasRenderingContext2D,
+  cfg: DrawConfig,
+  dragState: DragState | null,
+  tasks: GanttTask[],
+  taskRowMap: Map<string, number>
+): void {
+  if (!dragState || !dragState.isDragging) return;
+
+  const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight } = cfg;
+  const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
+  const colors = WARNING_COLORS[dragState.warningLevel];
+
+  // 1. Draw time window highlight (single task move only)
+  if (!dragState.isGroupDrag && dragState.windowMinHour !== undefined && dragState.windowMaxHour !== undefined) {
+    const winX = (dragState.windowMinHour - startHour) * hourWidth - scrollX;
+    const winW = (dragState.windowMaxHour - dragState.windowMinHour) * hourWidth;
+    const orig = dragState.originals.get(dragState.primaryId);
+    if (orig) {
+      const winY = totalHeaderH + orig.row * rowHeight - scrollY;
+      // Green highlight zone
+      ctx.fillStyle = 'rgba(46, 157, 110, 0.08)';
+      ctx.fillRect(winX, winY, winW, rowHeight);
+      // Green dashed boundary lines
+      ctx.strokeStyle = '#2E9D6E';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(winX, winY);
+      ctx.lineTo(winX, winY + rowHeight);
+      ctx.moveTo(winX + winW, winY);
+      ctx.lineTo(winX + winW, winY + rowHeight);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
+  // 2. For each affected task: draw original outline + ghost
+  for (const [taskId, orig] of Array.from(dragState.originals)) {
+    const barH = BAR_HEIGHT;
+    const barR = BAR_RADIUS;
+    const origX = (orig.start - startHour) * hourWidth - scrollX;
+    const origW = (orig.end - orig.start) * hourWidth;
+    const origY = totalHeaderH + orig.row * rowHeight + (rowHeight - barH) / 2 - scrollY;
+
+    // Skip if out of viewport
+    if (origY + barH < totalHeaderH || origY > canvasH) continue;
+
+    // Original position: dashed outline
+    ctx.strokeStyle = hexToRgba(dragState.taskColor, 0.3);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    roundRect(ctx, origX, origY, origW, barH, barR);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Ghost position: semi-transparent bar
+    const ghostX = origX + dragState.deltaHours * hourWidth;
+
+    // Ghost fill
+    ctx.fillStyle = colors.fill;
+    roundRect(ctx, ghostX, origY, origW, barH, barR);
+    ctx.fill();
+
+    // Ghost left accent
+    ctx.fillStyle = colors.stroke;
+    roundRect(ctx, ghostX, origY, 3, barH, [barR, 0, 0, barR]);
+    ctx.fill();
+
+    // Ghost border
+    ctx.strokeStyle = colors.stroke;
+    ctx.lineWidth = 1;
+    roundRect(ctx, ghostX, origY, origW, barH, barR);
+    ctx.stroke();
+
+    // Ghost label (only for primary)
+    if (taskId === dragState.primaryId && origW > 40) {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        ctx.fillStyle = colors.text;
+        ctx.font = `500 10px ${FONT_SANS}`;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        const label = truncateText(ctx, task.label, origW - 12);
+        ctx.fillText(label, ghostX + 8, origY + barH / 2);
+      }
+    }
+  }
+
+  // 3. Time tooltip near mouse position
+  // (We don't have mouse position in the render call, so show delta on the primary ghost)
+  if (dragState.isGroupDrag || dragState.affectedTaskIds.length > 1) {
+    const orig = dragState.originals.get(dragState.primaryId) || dragState.originals.values().next().value;
+    if (orig) {
+      const tooltipX = (orig.start + dragState.deltaHours - startHour) * hourWidth - scrollX;
+      const tooltipY = totalHeaderH + orig.row * rowHeight - scrollY - 4;
+      const sign = dragState.deltaHours >= 0 ? '+' : '';
+      const count = dragState.affectedTaskIds.length;
+
+      let text: string;
+      if (dragState.warningLevel === 'danger') {
+        text = `⚠ 大范围偏移！${sign}${dragState.deltaHours.toFixed(1)}h · ${count} 个任务`;
+      } else if (dragState.warningLevel === 'warning') {
+        text = `⚠ 将移动 ${count} 个任务 ${sign}${dragState.deltaHours.toFixed(1)}h`;
+      } else {
+        text = `移动 ${count} 个任务 ${sign}${dragState.deltaHours.toFixed(1)}h`;
+      }
+
+      ctx.font = `600 10px ${FONT_SANS}`;
+      const tw = ctx.measureText(text).width;
+      const px = 8, py = 3;
+      const bgColor = dragState.warningLevel === 'danger' ? 'rgba(214, 73, 58, 0.9)'
+                    : dragState.warningLevel === 'warning' ? 'rgba(154, 106, 0, 0.9)'
+                    : 'rgba(15, 27, 45, 0.88)';
+
+      roundRect(ctx, tooltipX, tooltipY - py * 2 - 12, tw + px * 2, 16 + py, 4);
+      ctx.fillStyle = bgColor;
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, tooltipX + px, tooltipY - 8);
     }
   }
 }

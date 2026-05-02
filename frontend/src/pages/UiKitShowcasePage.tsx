@@ -42,6 +42,23 @@ const UiKitShowcasePage: React.FC = () => {
   const [showDrawer, setShowDrawer] = useState(false);
   const [paginationPage, setPaginationPage] = useState(3);
 
+  // Gantt drag demo state
+  const [ganttTasks, setGanttTasks] = useState([
+    { id: 't1', label: '称量', groupId: 'g1-s1', start: 2, end: 10, color: '#5A93F0', progress: 100, windowStart: 0, windowEnd: 14, status: '已完成' },
+    { id: 't2', label: '溶解', groupId: 'g1-s1', start: 10, end: 18, color: '#5A93F0', progress: 80, windowStart: 8, windowEnd: 22 },
+    { id: 't3', label: '过滤', groupId: 'g1-s1', start: 20, end: 28, color: '#5A93F0', progress: 45, windowStart: 18, windowEnd: 32 },
+    { id: 't4', label: '接种', groupId: 'g1-s2', start: 30, end: 36, color: '#1F6FEB', progress: 30 },
+    { id: 't5', label: '培养', groupId: 'g1-s2', start: 36, end: 84, color: '#1F6FEB', progress: 10 },
+    { id: 't6', label: '收获', groupId: 'g1-s2', start: 84, end: 96, color: '#1F6FEB' },
+    { id: 't7', label: 'CIP清洗', groupId: 'g2-s1', start: 98, end: 106, color: '#2E9D6E', progress: 0, windowStart: 96, windowEnd: 110 },
+    { id: 't8', label: '灌装', groupId: 'g2-s1', start: 108, end: 120, color: '#2E9D6E' },
+    { id: 't9', label: '封口', groupId: 'g2-s1', start: 120, end: 130, color: '#2E9D6E' },
+    { id: 't10', label: '外观检测', groupId: 'g3', start: 132, end: 140, color: '#E8B53C' },
+    { id: 't11', label: '含量测定', groupId: 'g3', start: 140, end: 152, color: '#E8B53C' },
+    { id: 't12', label: '无菌检测', groupId: 'g3', start: 152, end: 168, color: '#E8B53C' },
+  ]);
+  const [dragLog, setDragLog] = useState<string[]>([]);
+
   return (
     <div style={{ padding: 24, fontFamily: 'var(--wx-font-sans)', background: '#F5F8FB', minHeight: '100vh' }}>
       <h1 className="wxb-h2" style={{ marginBottom: 24 }}>WuXi Biologics UI Kit Showcase</h1>
@@ -525,9 +542,32 @@ const UiKitShowcasePage: React.FC = () => {
 
       {/* ═══ Section 12: 高性能甘特图 ═══ */}
       <section style={{ marginTop: 32 }}>
-        <h4 className="wxb-h3" style={{ marginBottom: 16 }}>12. 高性能甘特图 GanttChart（Canvas 渲染）</h4>
+        <h4 className="wxb-h3" style={{ marginBottom: 16 }}>12. 高性能甘特图 GanttChart — 拖放系统演示</h4>
+
+        {/* Operation tips */}
+        <div style={{
+          padding: '10px 16px',
+          background: 'rgba(31, 111, 235, 0.06)',
+          borderRadius: 8,
+          marginBottom: 12,
+          fontSize: 12,
+          color: '#3A4A5C',
+          lineHeight: 1.8,
+          border: '1px solid rgba(31, 111, 235, 0.12)',
+        }}>
+          💡 <strong>操作提示</strong>
+          <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
+          拖动操作条 → 在绿色窗口内移动（15min 吸附）
+          <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
+          拖动 Stage/Template 条 → 级联移动子任务
+          <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
+          Ctrl+Click → 多选 → 批量拖动
+          <span style={{ margin: '0 8px', color: '#ccc' }}>|</span>
+          ESC → 取消拖动 · Ctrl+Z → 撤销
+        </div>
+
         <WxbGanttChart
-          style={{ height: 460 }}
+          style={{ height: 500 }}
           groups={[
             { id: 'g1', label: '上游工艺', color: '#1F6FEB' },
             { id: 'g1-s1', label: '配料', parentId: 'g1', color: '#5A93F0' },
@@ -536,20 +576,7 @@ const UiKitShowcasePage: React.FC = () => {
             { id: 'g2-s1', label: '灌装', parentId: 'g2', color: '#2E9D6E' },
             { id: 'g3', label: '质量检测', color: '#E8B53C' },
           ]}
-          tasks={[
-            { id: 't1', label: '称量', groupId: 'g1-s1', start: 2, end: 10, color: '#5A93F0', progress: 100, windowStart: 0, windowEnd: 14, status: '已完成' },
-            { id: 't2', label: '溶解', groupId: 'g1-s1', start: 10, end: 18, color: '#5A93F0', progress: 80, windowStart: 8, windowEnd: 22 },
-            { id: 't3', label: '过滤', groupId: 'g1-s1', start: 20, end: 28, color: '#5A93F0', progress: 45, windowStart: 18, windowEnd: 32 },
-            { id: 't4', label: '接种', groupId: 'g1-s2', start: 30, end: 36, color: '#1F6FEB', progress: 30 },
-            { id: 't5', label: '培养', groupId: 'g1-s2', start: 36, end: 84, color: '#1F6FEB', progress: 10 },
-            { id: 't6', label: '收获', groupId: 'g1-s2', start: 84, end: 96, color: '#1F6FEB' },
-            { id: 't7', label: 'CIP清洗', groupId: 'g2-s1', start: 98, end: 106, color: '#2E9D6E', progress: 0, windowStart: 96, windowEnd: 110 },
-            { id: 't8', label: '灌装', groupId: 'g2-s1', start: 108, end: 120, color: '#2E9D6E' },
-            { id: 't9', label: '封口', groupId: 'g2-s1', start: 120, end: 130, color: '#2E9D6E' },
-            { id: 't10', label: '外观检测', groupId: 'g3', start: 132, end: 140, color: '#E8B53C' },
-            { id: 't11', label: '含量测定', groupId: 'g3', start: 140, end: 152, color: '#E8B53C' },
-            { id: 't12', label: '无菌检测', groupId: 'g3', start: 152, end: 168, color: '#E8B53C' },
-          ]}
+          tasks={ganttTasks}
           dependencies={[
             { id: 'd1', from: 't1', to: 't2', type: 'FS', lag: 0 },
             { id: 'd2', from: 't2', to: 't3', type: 'FS', lag: 2 },
@@ -563,7 +590,55 @@ const UiKitShowcasePage: React.FC = () => {
             { id: 'l1', taskIds: ['t4', 't7'], label: '共享设备', color: '#722ed1', style: 'dashed' },
           ]}
           onTaskClick={(task: { label: string }) => console.log('Task clicked:', task.label)}
+          onTaskDragEnd={(taskId: string, newStart: number, newEnd: number) => {
+            const task = ganttTasks.find((t: { id: string }) => t.id === taskId);
+            if (!task) return;
+            // Window constraint validation
+            if (task.windowStart !== undefined && newStart < task.windowStart) {
+              setDragLog((prev: string[]) => [`❌ ${task.label}: 超出窗口边界！已回滚`, ...prev.slice(0, 9)]);
+              return false;
+            }
+            if (task.windowEnd !== undefined && newEnd > task.windowEnd) {
+              setDragLog((prev: string[]) => [`❌ ${task.label}: 超出窗口边界！已回滚`, ...prev.slice(0, 9)]);
+              return false;
+            }
+            setGanttTasks(prev => prev.map(t =>
+              t.id === taskId ? { ...t, start: newStart, end: newEnd } : t
+            ));
+            const fmtH = (h: number) => `${Math.floor(h / 24)}d ${(h % 24).toFixed(1)}h`;
+            setDragLog((prev: string[]) => [`✅ ${task.label}: ${fmtH(newStart)} → ${fmtH(newEnd)}`, ...prev.slice(0, 9)]);
+          }}
+          onGroupDragEnd={(groupId: string, deltaHours: number, affectedTaskIds: string[]) => {
+            setGanttTasks(prev => prev.map(t =>
+              affectedTaskIds.includes(t.id)
+                ? { ...t, start: t.start + deltaHours, end: t.end + deltaHours }
+                : t
+            ));
+            const sign = deltaHours > 0 ? '+' : '';
+            setDragLog((prev: string[]) => [
+              `🔗 级联移动 ${affectedTaskIds.length} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
+              ...prev.slice(0, 9),
+            ]);
+          }}
         />
+
+        {/* Drag log panel */}
+        {dragLog.length > 0 && (
+          <div style={{
+            marginTop: 12,
+            padding: '12px 16px',
+            background: '#FAFCFE',
+            borderRadius: 8,
+            border: '1px solid #E4EAF1',
+            fontSize: 12,
+            color: '#5A6B7E',
+          }}>
+            <div style={{ fontWeight: 600, marginBottom: 6, color: '#0F1B2D' }}>📋 拖放操作日志</div>
+            {dragLog.map((log: string, i: number) => (
+              <div key={i} style={{ padding: '2px 0', opacity: 1 - i * 0.08 }}>{log}</div>
+            ))}
+          </div>
+        )}
       </section>
 
     </div>

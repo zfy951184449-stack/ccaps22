@@ -15,11 +15,12 @@ interface GanttSidebarProps {
   showHeatmap: boolean;
   dispatch: React.Dispatch<GanttAction>;
   sidebarWidth: number;
+  selectedTaskIds: Set<string>;
   onGroupToggle?: (groupId: string, collapsed: boolean) => void;
 }
 
 const GanttSidebar: React.FC<GanttSidebarProps> = ({
-  flatRows, scrollY, hoveredRow, canvasH, showHeatmap, dispatch, sidebarWidth, onGroupToggle,
+  flatRows, scrollY, hoveredRow, canvasH, showHeatmap, dispatch, sidebarWidth, selectedTaskIds, onGroupToggle,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isSync = useRef(false);
@@ -107,8 +108,17 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
             const i = renderStart + idx;
             const top = i * ROW_HEIGHT;
             const isGroup = row.type === 'group';
-            const isHovered = i === hoveredRow;
-            return (
+                  const isSelected = row.taskId ? selectedTaskIds.has(row.taskId) : false;
+                  const isHovered = i === hoveredRow;
+                  let rowBg: string;
+                  if (isSelected) {
+                    rowBg = 'rgba(31, 111, 235, 0.08)';
+                  } else if (isHovered) {
+                    rowBg = hexToRgba('#E6F2FB', 0.45);
+                  } else {
+                    rowBg = i % 2 === 0 ? THEME.surface1 : THEME.bg;
+                  }
+                  return (
               <div
                 key={row.id}
                 className="wxb-gantt-sidebar-row"
@@ -121,11 +131,10 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   paddingLeft: 8 + row.depth * 16,
-                  background: isHovered
-                    ? hexToRgba('#E6F2FB', 0.45)
-                    : i % 2 === 0 ? THEME.surface1 : THEME.bg,
-                  cursor: isGroup ? 'pointer' : 'default',
+                  background: rowBg,
+                  cursor: isGroup ? 'grab' : 'default',
                   borderBottom: `1px solid ${THEME.divider}`,
+                  borderLeft: isSelected ? '2px solid rgba(31, 111, 235, 0.5)' : '2px solid transparent',
                   userSelect: 'none',
                   transition: 'background 0.1s ease',
                 }}
@@ -153,6 +162,22 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                   </span>
                 )}
                 {!row.hasChildren && <span style={{ width: 20 }} />}
+
+                {/* Drag handle for group rows */}
+                {isGroup && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: THEME.fg4,
+                      marginRight: 4,
+                      opacity: isHovered ? 0.8 : 0,
+                      transition: 'opacity 0.15s',
+                    }}
+                    title="拖拽移动"
+                  >
+                    ⠿
+                  </span>
+                )}
 
                 {/* Color dot */}
                 {row.color && (

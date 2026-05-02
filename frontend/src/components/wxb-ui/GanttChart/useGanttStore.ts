@@ -3,7 +3,7 @@
  * Single useReducer + ref mirror for RAF rendering
  */
 import { useReducer, useRef, Dispatch } from 'react';
-import type { ViewMode } from './types';
+import type { ViewMode, FlatRow } from './types';
 import { DEFAULT_DAY_WIDTH, MIN_DAY_WIDTH, MAX_DAY_WIDTH } from './constants';
 
 // ===== State =====
@@ -23,7 +23,8 @@ export interface GanttState {
   hoveredTaskId: string | null;
   hoveredRow: number;         // -1 = none
   hoveredColX: number;        // canvas X of mouse, -1 = none
-  selectedTaskId: string | null;
+  selectedTaskIds: Set<string>;
+  lastClickedTaskId: string | null;
   canvasW: number;
   canvasH: number;
   dirty: boolean;
@@ -42,6 +43,10 @@ export type GanttAction =
   | { type: 'HOVER'; taskId: string | null }
   | { type: 'HOVER_ROW'; row: number; colX: number }
   | { type: 'SELECT'; taskId: string | null }
+  | { type: 'SELECT_MULTI'; taskId: string }
+  | { type: 'SELECT_RANGE'; taskId: string; flatRows: FlatRow[] }
+  | { type: 'SELECT_ALL'; taskIds: string[] }
+  | { type: 'SELECT_CLEAR' }
   | { type: 'RESIZE'; w: number; h: number }
   | { type: 'SET_MAX_SCROLL_Y'; maxY: number }
   | { type: 'SET_MAX_SCROLL_X'; maxX: number }
@@ -63,7 +68,8 @@ function createInitialState(dayWidth?: number): GanttState {
     hoveredTaskId: null,
     hoveredRow: -1,
     hoveredColX: -1,
-    selectedTaskId: null,
+    selectedTaskIds: new Set<string>(),
+    lastClickedTaskId: null,
     canvasW: 800,
     canvasH: 400,
     dirty: true,
@@ -148,8 +154,45 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       if (action.row === state.hoveredRow && action.colX === state.hoveredColX) return state;
       return { ...state, hoveredRow: action.row, hoveredColX: action.colX, dirty: true };
     }
-    case 'SELECT':
-      return { ...state, selectedTaskId: action.taskId, dirty: true };
+    case 'SELECT': {
+      const next = new Set<string>();
+      if (action.taskId) next.add(action.taskId);
+      return { ...state, selectedTaskIds: next, lastClickedTaskId: action.taskId, dirty: true };
+    }
+    case 'SELECT_MULTI': {
+      const next = new Set(state.selectedTaskIds);
+      if (next.has(action.taskId)) next.delete(action.taskId);
+      else next.add(action.taskId);
+      return { ...state, selectedTaskIds: next, lastClickedTaskId: action.taskId, dirty: true };
+    }
+    case 'SELECT_RANGE': {
+      if (!state.lastClickedTaskId) {
+        const next = new Set<string>([action.taskId]);
+        return { ...state, selectedTaskIds: next, lastClickedTaskId: action.taskId, dirty: true };
+      }
+      // Find range of task rows between lastClicked and current
+      const rows = action.flatRows;
+      let startIdx = -1, endIdx = -1;
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].taskId === state.lastClickedTaskId) startIdx = i;
+        if (rows[i].taskId === action.taskId) endIdx = i;
+      }
+      if (startIdx === -1 || endIdx === -1) {
+        return { ...state, selectedTaskIds: new Set([action.taskId]), lastClickedTaskId: action.taskId, dirty: true };
+      }
+      const lo = Math.min(startIdx, endIdx);
+      const hi = Math.max(startIdx, endIdx);
+      const next = new Set(state.selectedTaskIds);
+      for (let i = lo; i <= hi; i++) {
+        if (rows[i].type === 'task' && rows[i].taskId) next.add(rows[i].taskId!);
+      }
+      return { ...state, selectedTaskIds: next, dirty: true };
+    }
+    case 'SELECT_ALL':
+      return { ...state, selectedTaskIds: new Set(action.taskIds), dirty: true };
+    case 'SELECT_CLEAR':
+      if (state.selectedTaskIds.size === 0) return state;
+      return { ...state, selectedTaskIds: new Set(), lastClickedTaskId: null, dirty: true };
     case 'RESIZE': {
       // When resized while in expanded day mode, update dayWidth to match new canvasW
       if (state.expandedDay !== null) {

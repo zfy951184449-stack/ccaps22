@@ -4,6 +4,7 @@
  */
 import React, { useRef, useMemo, useCallback, useState } from 'react';
 import type { WxbGanttChartProps, GanttTask } from './types';
+import type { UndoToastData } from './useGanttDrag';
 import { useGanttStore } from './useGanttStore';
 import { useGanttLayout } from './useGanttLayout';
 import { DEFAULT_DAY_WIDTH, MIN_DAY_WIDTH, MAX_DAY_WIDTH, SIDEBAR_WIDTH } from './constants';
@@ -44,6 +45,8 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   onTaskDelete,
   onTaskDuplicate,
   onContextAction,
+  onGroupDragEnd,
+  onUndoCascade,
   className,
   style,
 }) => {
@@ -78,6 +81,12 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   }, []);
   const handleTooltipHide = useCallback(() => {
     setTooltipState(prev => ({ ...prev, visible: false }));
+  }, []);
+
+  // Undo toast state (forwarded from GanttCanvas drag system)
+  const [undoToast, setUndoToast] = useState<UndoToastData | null>(null);
+  const handleUndoToast = useCallback((data: { message: string; onUndo: () => void } | null) => {
+    setUndoToast(data);
   }, []);
 
   // Context menu state
@@ -177,6 +186,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           showHeatmap={showHeatmap}
           dispatch={dispatch}
           sidebarWidth={sidebarWidth}
+          selectedTaskIds={state.selectedTaskIds}
           onGroupToggle={onGroupToggle}
         />
 
@@ -202,9 +212,11 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onTaskClick={onTaskClick}
           onTaskDoubleClick={onTaskDoubleClick}
           onTaskDragEnd={onTaskDragEnd}
+          onGroupDragEnd={onGroupDragEnd}
           onTooltipShow={handleTooltipShow}
           onTooltipHide={handleTooltipHide}
           onContextMenu={handleContextMenu}
+          onUndoToast={handleUndoToast}
         />
 
         {/* Minimap */}
@@ -235,6 +247,49 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         onAction={handleCtxAction}
         onClose={handleCtxClose}
       />
+
+      {/* Undo Toast — 3-second popup for cascade drag */}
+      {undoToast && (
+        <div style={{
+          position: 'absolute',
+          bottom: 16,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          padding: '10px 20px',
+          background: 'rgba(15, 27, 45, 0.92)',
+          color: '#fff',
+          borderRadius: 8,
+          fontSize: 13,
+          fontWeight: 500,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+          zIndex: 100,
+          backdropFilter: 'blur(8px)',
+          animation: 'fadeInUp 0.2s ease-out',
+        }}>
+          <span>{undoToast.message}</span>
+          <button
+            onClick={() => {
+              undoToast.onUndo();
+              setUndoToast(null);
+            }}
+            style={{
+              padding: '4px 12px',
+              background: 'rgba(31, 111, 235, 0.9)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            撤销
+          </button>
+        </div>
+      )}
     </div>
   );
 };

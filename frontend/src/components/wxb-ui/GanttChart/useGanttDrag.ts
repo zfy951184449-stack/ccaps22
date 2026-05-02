@@ -1,25 +1,90 @@
 /**
- * WxbGanttChart v2 — Drag System
- * Ported from ProcessTemplateGantt with RAF-optimized ghost rendering
+ * WxbGanttChart v3.2 — Drag System (Canvas-native)
+ *
+ * Architecture:
+ *   - NO DOM ghost elements — all rendering happens in Canvas RAF loop
+ *   - DragState is exposed to renderer for drawDragOverlay()
+ *   - Supports: single-task move, cascade group-move, multi-select move
+ *   - Window constraint clamping for single-task moves
+ *   - 3-tier warning system for cascade drags (normal/warning/danger)
+ *   - Async validation: onDragEnd can return false to trigger rollback
+ *   - ESC to cancel, Ctrl+Z to undo
  */
-import { useRef, useCallback, useEffect } from 'react';
-import type { GanttTask, DragState } from './types';
-import { SNAP_HOURS, DRAG_THRESHOLD, MAX_UNDO } from './constants';
-import { snapHour, formatHour, clamp } from './ganttUtils';
+import { useRef, useCallback, useEffect, useState } from 'react';
+import type { GanttTask, GanttGroup, DragState } from './types';
+import { SNAP_HOURS, MAX_UNDO } from './constants';
+import { snapHour, clamp } from './ganttUtils';
+
+// Drag threshold: px mouse movement before drag activates
+const TASK_DRAG_THRESHOLD = 5;
+const GROUP_DRAG_THRESHOLD = 12;  // Higher for groups to prevent accidental cascade
+
+// Edge auto-scroll zone
+const EDGE_ZONE = 40;
+const EDGE_SCROLL_SPEED = 0.5;
+
+// Warning thresholds (in hours)
+const WARNING_THRESHOLD = 1;
+const DANGER_THRESHOLD = 4;
 
 interface UndoEntry {
-  taskId: string;
-  type: DragState['type'];
-  oldStart: number;
-  oldEnd: number;
+  type: 'task' | 'group';
+  primaryId: string;
+  restorations: Array<{ taskId: string; start: number; end: number }>;
 }
 
-interface UseGanttDragProps {
+export interface UndoToastData {
+  message: string;
+  onUndo: () => void;
+}
+
+export interface UseGanttDragProps {
   hourWidth: number;
   startHour: number;
   endHour: number;
   readOnly?: boolean;
-  onDragEnd?: (taskId: string, newStart: number, newEnd: number) => void;
+  tasks: GanttTask[];
+  groups: GanttGroup[];
+  taskRowMap: Map<string, number>;
+  selectedTaskIds: Set<string>;
+  onDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
+  onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
+  onAutoScroll?: (dx: number) => void;
+  canvasWidth: number;
+}
+
+export interface UseGanttDragResult {
+  startDrag: (e: React.MouseEvent | MouseEvent, task: GanttTask, row: number) => void;
+  startGroupDrag: (e: React.MouseEvent | MouseEvent, groupId: string, row: number) => void;
+  dragState: DragState | null;
+  isDragging: boolean;
+  cancelDrag: () => void;
+  undoToast: UndoToastData | null;
+  dismissToast: () => void;
+}
+
+/**
+ * Find all descendant task IDs under a group (BFS through nested groups)
+ */
+function getDescendantTaskIds(
+  groupId: string,
+  groups: GanttGroup[],
+  tasks: GanttTask[]
+): string[] {
+  const descendantGroupIds = new Set<string>([groupId]);
+  const queue = [groupId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const g of groups) {
+      if (g.parentId === current && !descendantGroupIds.has(g.id)) {
+        descendantGroupIds.add(g.id);
+        queue.push(g.id);
+      }
+    }
+  }
+  return tasks
+    .filter(t => t.groupId && descendantGroupIds.has(t.groupId))
+    .map(t => t.id);
 }
 
 export function useGanttDrag({
@@ -27,88 +92,38 @@ export function useGanttDrag({
   startHour,
   endHour,
   readOnly,
+  tasks,
+  groups,
+  taskRowMap,
+  selectedTaskIds,
   onDragEnd,
-}: UseGanttDragProps) {
+  onGroupDragEnd,
+  onAutoScroll,
+  canvasWidth,
+}: UseGanttDragProps): UseGanttDragResult {
   const dragRef = useRef<DragState | null>(null);
-  const ghostRef = useRef<HTMLDivElement | null>(null);
-  const tooltipRef = useRef<HTMLDivElement | null>(null);
   const undoStack = useRef<UndoEntry[]>([]);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [undoToast, setUndoToast] = useState<UndoToastData | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafId = useRef(0);
 
-  const createGhost = useCallback((rect: DOMRect, color: string) => {
-    const ghost = document.createElement('div');
-    // WXB accent-bar ghost style: tinted fill + left accent + focus ring
-    ghost.style.cssText = `
-      position: fixed;
-      pointer-events: none;
-      z-index: 10000;
-      border-radius: 4px;
-      opacity: 0.92;
-      background: ${color}1A;
-      border: 1px solid ${color}4D;
-      border-left: 3px solid ${color};
-      box-shadow: 0 4px 16px rgba(0,0,0,0.15), 0 0 0 2px rgba(31,111,235,0.4);
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      left: ${rect.left}px;
-      top: ${rect.top}px;
-      transition: top 0.05s ease-out;
-    `;
-    // Label inside ghost
-    const label = document.createElement('span');
-    label.style.cssText = `
-      position: absolute;
-      left: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      font: 500 11px "Inter", "PingFang SC", system-ui, sans-serif;
-      color: #3A4A5C;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: calc(100% - 16px);
-    `;
-    ghost.appendChild(label);
-    document.body.appendChild(ghost);
-    ghostRef.current = ghost;
-    return ghost;
-  }, []);
-
-  const updateTooltip = useCallback((clientX: number, clientY: number, hour: number) => {
-    if (!tooltipRef.current) {
-      const el = document.createElement('div');
-      el.style.cssText = `
-        position: fixed;
-        background: rgba(15,27,45,0.92);
-        color: white;
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 500;
-        pointer-events: none;
-        z-index: 10001;
-        white-space: nowrap;
-        font-family: "Inter", "PingFang SC", system-ui, sans-serif;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        letter-spacing: 0.02em;
-      `;
-      document.body.appendChild(el);
-      tooltipRef.current = el;
-    }
-    tooltipRef.current.textContent = formatHour(hour);
-    tooltipRef.current.style.left = `${clientX + 15}px`;
-    tooltipRef.current.style.top = `${clientY - 30}px`;
-  }, []);
+  // Keep props in refs for event handlers
+  const propsRef = useRef({ hourWidth, startHour, endHour, tasks, groups, taskRowMap, selectedTaskIds, canvasWidth });
+  propsRef.current = { hourWidth, startHour, endHour, tasks, groups, taskRowMap, selectedTaskIds, canvasWidth };
 
   const cleanup = useCallback(() => {
-    ghostRef.current?.remove();
-    ghostRef.current = null;
-    tooltipRef.current?.remove();
-    tooltipRef.current = null;
     dragRef.current = null;
+    setDragState(null);
     cancelAnimationFrame(rafId.current);
   }, []);
 
+  const dismissToast = useCallback(() => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setUndoToast(null);
+  }, []);
+
+  // ===== Mouse Move Handler =====
   const handleMouseMove = useCallback((e: MouseEvent) => {
     const state = dragRef.current;
     if (!state) return;
@@ -116,64 +131,68 @@ export function useGanttDrag({
     cancelAnimationFrame(rafId.current);
     rafId.current = requestAnimationFrame(() => {
       if (!dragRef.current) return;
+      const { hourWidth: hw, startHour: sh, endHour: eh, canvasWidth: cw } = propsRef.current;
       const dx = e.clientX - state.startMouseX;
-      const dy = e.clientY - state.startMouseY;
 
       // Check threshold
       if (!state.isDragging) {
-        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
+        const threshold = state.isGroupDrag ? GROUP_DRAG_THRESHOLD : TASK_DRAG_THRESHOLD;
+        if (Math.abs(dx) < threshold) return;
         state.isDragging = true;
-        // Create ghost at exact bar position
-        const rect = new DOMRect(
-          state.startLeft, state.startTop,
-          state.startWidth, 24
-        );
-        createGhost(rect, '#1F6FEB');
       }
 
-      if (!ghostRef.current) return;
+      // Convert pixel delta to hour delta
+      const rawDeltaHours = dx / hw;
+      let deltaHours = snapHour(rawDeltaHours, SNAP_HOURS);
 
-      const dxHours = dx / hourWidth;
-      const snapW = SNAP_HOURS * hourWidth;
-
-      if (state.type === 'move') {
-        const newHour = snapHour(state.startHour + dxHours, SNAP_HOURS);
-        const duration = state.endHour - state.startHour;
-        const clampedHour = clamp(newHour, startHour, endHour - duration);
-        const pxDelta = (clampedHour - state.startHour) * hourWidth;
-        ghostRef.current.style.left = `${state.startLeft + pxDelta}px`;
-        // Keep ghost on original row (don't follow Y to prevent row-jump confusion)
-        updateTooltip(e.clientX, e.clientY, clampedHour);
-        // Update ghost label
-        const label = ghostRef.current.querySelector('span');
-        if (label) label.textContent = formatHour(clampedHour);
-      } else if (state.type === 'resize-end') {
-        const newWidth = Math.max(SNAP_HOURS * hourWidth, state.startWidth + dx);
-        const snappedW = Math.round(newWidth / snapW) * snapW;
-        ghostRef.current.style.width = `${Math.max(snapW, snappedW)}px`;
-        const newEndHour = state.startHour + snappedW / hourWidth;
-        updateTooltip(e.clientX, e.clientY, newEndHour);
-        const label = ghostRef.current.querySelector('span');
-        if (label) {
-          const dur = newEndHour - state.startHour;
-          label.textContent = `${dur.toFixed(1)}h`;
+      if (state.type === 'move' && !state.isGroupDrag && state.affectedTaskIds.length === 1) {
+        // Single task: clamp to window constraints
+        const orig = state.originals.get(state.primaryId)!;
+        const duration = orig.end - orig.start;
+        const winMin = state.windowMinHour ?? sh;
+        const winMax = state.windowMaxHour ?? eh;
+        const newStart = clamp(orig.start + deltaHours, winMin, winMax - duration);
+        deltaHours = newStart - orig.start;
+      } else {
+        // Cascade / multi-select: clamp so no child exceeds timeline bounds
+        let earliest = Infinity, latest = -Infinity;
+        for (const [, orig] of Array.from(state.originals)) {
+          if (orig.start < earliest) earliest = orig.start;
+          if (orig.end > latest) latest = orig.end;
         }
-      } else if (state.type === 'resize-start') {
-        const newLeft = state.startLeft + dx;
-        const newWidth = state.startWidth - dx;
-        if (newWidth < SNAP_HOURS * hourWidth) return;
-        const snappedLeft = Math.round(newLeft / snapW) * snapW;
-        ghostRef.current.style.left = `${snappedLeft}px`;
-        ghostRef.current.style.width = `${Math.max(snapW, state.startWidth - (snappedLeft - state.startLeft))}px`;
-        const newStartHour = state.startHour + (snappedLeft - state.startLeft) / hourWidth;
-        updateTooltip(e.clientX, e.clientY, newStartHour);
-        const label = ghostRef.current.querySelector('span');
-        if (label) label.textContent = formatHour(newStartHour);
+        const minDelta = sh - earliest;
+        const maxDelta = eh - latest;
+        deltaHours = clamp(deltaHours, minDelta, maxDelta);
+      }
+
+      // Update warning level for cascade
+      let warningLevel: DragState['warningLevel'] = 'normal';
+      if (state.isGroupDrag) {
+        const absDelta = Math.abs(deltaHours);
+        if (absDelta >= DANGER_THRESHOLD) warningLevel = 'danger';
+        else if (absDelta >= WARNING_THRESHOLD) warningLevel = 'warning';
+      }
+
+      state.deltaHours = deltaHours;
+      state.warningLevel = warningLevel;
+
+      // Sync to React state for Canvas rendering
+      setDragState({ ...state });
+
+      // Edge auto-scroll
+      if (onAutoScroll) {
+        const mouseLocalX = e.clientX; // approximate
+        if (mouseLocalX < EDGE_ZONE) {
+          onAutoScroll(-(EDGE_ZONE - mouseLocalX) * EDGE_SCROLL_SPEED);
+        } else if (mouseLocalX > window.innerWidth - EDGE_ZONE) {
+          onAutoScroll((mouseLocalX - window.innerWidth + EDGE_ZONE) * EDGE_SCROLL_SPEED);
+        }
       }
     });
-  }, [hourWidth, startHour, endHour, createGhost, updateTooltip]);
+  }, [onAutoScroll]);
 
-  const handleMouseUp = useCallback(() => {
+  // ===== Mouse Up Handler =====
+  const handleMouseUp = useCallback(async () => {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
 
@@ -183,94 +202,250 @@ export function useGanttDrag({
       return;
     }
 
-    // Calculate final position from ghost
-    const ghost = ghostRef.current;
-    if (ghost && onDragEnd) {
-      const ghostLeft = parseFloat(ghost.style.left);
-      const ghostWidth = parseFloat(ghost.style.width);
+    const deltaHours = state.deltaHours;
+    if (Math.abs(deltaHours) < 0.01) {
+      cleanup();
+      return;
+    }
 
-      let newStart = state.startHour;
-      let newEnd = state.endHour;
+    // Build restorations for undo
+    const restorations: UndoEntry['restorations'] = [];
+    for (const [taskId, orig] of Array.from(state.originals)) {
+      restorations.push({ taskId, start: orig.start, end: orig.end });
+    }
 
-      if (state.type === 'move') {
-        const pxDelta = ghostLeft - state.startLeft;
-        const hourDelta = pxDelta / hourWidth;
-        newStart = snapHour(state.startHour + hourDelta, SNAP_HOURS);
-        newEnd = newStart + (state.endHour - state.startHour);
-      } else if (state.type === 'resize-end') {
-        newEnd = snapHour(state.startHour + ghostWidth / hourWidth, SNAP_HOURS);
-      } else if (state.type === 'resize-start') {
-        const pxDelta = ghostLeft - state.startLeft;
-        newStart = snapHour(state.startHour + pxDelta / hourWidth, SNAP_HOURS);
+    // Push undo
+    undoStack.current.push({
+      type: state.isGroupDrag ? 'group' : 'task',
+      primaryId: state.primaryId,
+      restorations,
+    });
+    if (undoStack.current.length > MAX_UNDO) undoStack.current.shift();
+
+    if (state.isGroupDrag) {
+      // Cascade drag end
+      if (onGroupDragEnd) {
+        const result = await onGroupDragEnd(state.primaryId, deltaHours, state.affectedTaskIds);
+        if (result === false) {
+          // Rollback — consumer rejected
+          cleanup();
+          return;
+        }
       }
 
-      // Push undo
-      undoStack.current.push({
-        taskId: state.taskId,
-        type: state.type,
-        oldStart: state.startHour,
-        oldEnd: state.endHour,
-      });
-      if (undoStack.current.length > MAX_UNDO) undoStack.current.shift();
-
-      onDragEnd(state.taskId, newStart, newEnd);
+      // Show Undo Toast
+      const affectedCount = state.affectedTaskIds.length;
+      const label = state.taskLabel;
+      const sign = deltaHours > 0 ? '+' : '';
+      dismissToast();
+      const toastData: UndoToastData = {
+        message: `🔗 已移动 "${label}" 下 ${affectedCount} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
+        onUndo: () => {
+          // Restore from undo stack
+          const entry = undoStack.current.pop();
+          if (entry && onGroupDragEnd) {
+            onGroupDragEnd(state.primaryId, -deltaHours, state.affectedTaskIds);
+          }
+          dismissToast();
+        },
+      };
+      setUndoToast(toastData);
+      toastTimer.current = setTimeout(() => setUndoToast(null), 3000);
+    } else if (state.affectedTaskIds.length === 1) {
+      // Single task drag end
+      const orig = state.originals.get(state.primaryId)!;
+      const newStart = snapHour(orig.start + deltaHours, SNAP_HOURS);
+      const newEnd = newStart + (orig.end - orig.start);
+      if (onDragEnd) {
+        const result = await onDragEnd(state.primaryId, newStart, newEnd);
+        if (result === false) {
+          // Rollback animation would be here (future enhancement)
+          cleanup();
+          return;
+        }
+      }
+    } else {
+      // Multi-select drag end — fire for each task
+      if (onDragEnd) {
+        for (const taskId of state.affectedTaskIds) {
+          const orig = state.originals.get(taskId)!;
+          const newStart = snapHour(orig.start + deltaHours, SNAP_HOURS);
+          const newEnd = newStart + (orig.end - orig.start);
+          await onDragEnd(taskId, newStart, newEnd);
+        }
+      }
     }
 
     cleanup();
-  }, [hourWidth, onDragEnd, cleanup, handleMouseMove]);
+  }, [cleanup, handleMouseMove, onDragEnd, onGroupDragEnd, dismissToast]);
 
+  // ===== Start Single Task Drag =====
   const startDrag = useCallback((
     e: React.MouseEvent | MouseEvent,
     task: GanttTask,
-    type: DragState['type'],
-    barLeft: number,
-    barWidth: number,
-    barTop?: number
+    row: number
   ) => {
     if (readOnly || task.readOnly) return;
     e.preventDefault();
     e.stopPropagation();
 
-    dragRef.current = {
-      type,
-      taskId: task.id,
+    const { selectedTaskIds: selIds, taskRowMap: trm } = propsRef.current;
+
+    // Determine affected tasks (single or multi-select)
+    let affectedIds: string[];
+    if (selIds.size > 1 && selIds.has(task.id)) {
+      // Dragging one of the selected → move all selected
+      affectedIds = Array.from(selIds);
+    } else {
+      affectedIds = [task.id];
+    }
+
+    // Build originals map
+    const originals = new Map<string, { start: number; end: number; row: number }>();
+    const { tasks: allTasks } = propsRef.current;
+    for (const id of affectedIds) {
+      const t = allTasks.find(tt => tt.id === id);
+      if (t) {
+        originals.set(id, { start: t.start, end: t.end, row: trm.get(id) ?? 0 });
+      }
+    }
+
+    const newState: DragState = {
+      type: 'move',
+      primaryId: task.id,
+      affectedTaskIds: affectedIds,
+      isDragging: false,
       startMouseX: e.clientX,
       startMouseY: e.clientY,
-      startLeft: barLeft,
-      startWidth: barWidth,
-      startTop: barTop ?? e.clientY,
-      startHour: task.start,
-      endHour: task.end,
-      isDragging: false,
+      originals,
+      deltaHours: 0,
+      windowMinHour: task.windowStart,
+      windowMaxHour: task.windowEnd,
+      taskColor: task.color || '#1F6FEB',
+      taskLabel: task.label,
+      warningLevel: 'normal',
+      isGroupDrag: false,
     };
 
+    dragRef.current = newState;
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   }, [readOnly, handleMouseMove, handleMouseUp]);
 
-  // Ctrl+Z undo
+  // ===== Start Group Cascade Drag =====
+  const startGroupDrag = useCallback((
+    e: React.MouseEvent | MouseEvent,
+    groupId: string,
+    _row: number
+  ) => {
+    if (readOnly) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { tasks: allTasks, groups: allGroups, taskRowMap: trm } = propsRef.current;
+
+    // Find affected tasks via BFS
+    const affectedIds = getDescendantTaskIds(groupId, allGroups, allTasks);
+    if (affectedIds.length === 0) return;
+
+    // Build originals
+    const originals = new Map<string, { start: number; end: number; row: number }>();
+    for (const id of affectedIds) {
+      const t = allTasks.find(tt => tt.id === id);
+      if (t) {
+        originals.set(id, { start: t.start, end: t.end, row: trm.get(id) ?? 0 });
+      }
+    }
+
+    // Find group info
+    const group = allGroups.find(g => g.id === groupId);
+    const groupLabel = group?.label || groupId;
+    const groupColor = group?.color || '#1F6FEB';
+
+    const newState: DragState = {
+      type: 'group-move',
+      primaryId: groupId,
+      affectedTaskIds: affectedIds,
+      isDragging: false,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      originals,
+      deltaHours: 0,
+      taskColor: groupColor,
+      taskLabel: groupLabel,
+      warningLevel: 'normal',
+      isGroupDrag: true,
+    };
+
+    dragRef.current = newState;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [readOnly, handleMouseMove, handleMouseUp]);
+
+  // ===== Cancel Drag (ESC) =====
+  const cancelDrag = useCallback(() => {
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    cleanup();
+  }, [cleanup, handleMouseMove, handleMouseUp]);
+
+  // ===== ESC Key Handler =====
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && onDragEnd) {
-        const entry = undoStack.current.pop();
-        if (entry) {
-          e.preventDefault();
-          onDragEnd(entry.taskId, entry.oldStart, entry.oldEnd);
+      if (e.key === 'Escape' && dragRef.current) {
+        e.preventDefault();
+        cancelDrag();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [cancelDrag]);
+
+  // ===== Ctrl+Z Undo =====
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        const entry = undoStack.current[undoStack.current.length - 1];
+        if (!entry) return;
+        e.preventDefault();
+        undoStack.current.pop();
+
+        if (entry.type === 'task' && onDragEnd) {
+          for (const r of entry.restorations) {
+            onDragEnd(r.taskId, r.start, r.end);
+          }
+        } else if (entry.type === 'group' && onGroupDragEnd) {
+          // Calculate reverse delta from restorations
+          // Just fire the restorations via onDragEnd
+          if (onDragEnd) {
+            for (const r of entry.restorations) {
+              onDragEnd(r.taskId, r.start, r.end);
+            }
+          }
         }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onDragEnd]);
+  }, [onDragEnd, onGroupDragEnd]);
 
-  // Cleanup on unmount
+  // ===== Cleanup on unmount =====
   useEffect(() => {
     return () => {
       cleanup();
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, [cleanup, handleMouseMove, handleMouseUp]);
 
-  return { startDrag, isDragging: dragRef.current?.isDragging ?? false };
+  return {
+    startDrag,
+    startGroupDrag,
+    dragState,
+    isDragging: dragState?.isDragging ?? false,
+    cancelDrag,
+    undoToast,
+    dismissToast,
+  };
 }

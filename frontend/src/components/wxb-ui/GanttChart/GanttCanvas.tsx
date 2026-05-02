@@ -6,9 +6,10 @@ import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow } from 
 import type { GanttState } from './useGanttStore';
 import type { GanttAction } from './useGanttStore';
 import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT, BAR_HEIGHT } from './constants';
-import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, drawLinks, clipBelowHeader } from './useGanttRenderer';
+import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, drawLinks, drawDragOverlay, clipBelowHeader } from './useGanttRenderer';
 import { useGanttHitTest } from './useGanttHitTest';
 import { useGanttDrag } from './useGanttDrag';
+import type { UseGanttDragResult } from './useGanttDrag';
 import { clamp } from './ganttUtils';
 
 interface GanttCanvasProps {
@@ -32,10 +33,12 @@ interface GanttCanvasProps {
   personnelPeaks?: Map<number, { peak: number; peakHour: number }>;
   onTaskClick?: (task: GanttTask) => void;
   onTaskDoubleClick?: (task: GanttTask) => void;
-  onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void;
+  onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
+  onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   onTooltipShow?: (task: GanttTask, x: number, y: number) => void;
   onTooltipHide?: () => void;
   onContextMenu?: (task: GanttTask | null, x: number, y: number) => void;
+  onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
 }
 
 const GanttCanvas: React.FC<GanttCanvasProps> = ({
@@ -44,8 +47,8 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   startHour, endHour,
   showGrid, showToday, showProgress, showHeatmap, readOnly, zoomRange,
   personnelPeaks,
-  onTaskClick, onTaskDoubleClick, onTaskDragEnd,
-  onTooltipShow, onTooltipHide, onContextMenu,
+  onTaskClick, onTaskDoubleClick, onTaskDragEnd, onGroupDragEnd,
+  onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,14 +115,42 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const effectiveEndHour = state.expandedDay !== null ? (state.expandedDay + 1) * 24 : endHour;
 
   const hourWidth = state.dayWidth / 24;
-  const { hitTest } = useGanttHitTest(tasks, taskRowMap, effectiveStartHour, hourWidth);
-  const { startDrag } = useGanttDrag({
+  const { hitTest } = useGanttHitTest(tasks, groups, flatRows, taskRowMap, effectiveStartHour, hourWidth);
+
+  const onAutoScroll = useCallback((dx: number) => {
+    dispatch({ type: 'SCROLL', dx, dy: 0 });
+  }, [dispatch]);
+
+  const {
+    startDrag, startGroupDrag, dragState, isDragging, cancelDrag,
+    undoToast, dismissToast,
+  }: UseGanttDragResult = useGanttDrag({
     hourWidth,
     startHour: effectiveStartHour,
     endHour: effectiveEndHour,
     readOnly,
+    tasks,
+    groups,
+    taskRowMap,
+    selectedTaskIds: state.selectedTaskIds,
     onDragEnd: onTaskDragEnd,
+    onGroupDragEnd,
+    onAutoScroll,
+    canvasWidth: state.canvasW,
   });
+
+  // Mirror dragState into a ref so RAF loop can read latest value
+  const dragStateRef = useRef(dragState);
+  dragStateRef.current = dragState;
+  // Mark canvas dirty when drag state changes
+  useEffect(() => {
+    if (dragState) dispatch({ type: 'MARK_DIRTY' });
+  }, [dragState, dispatch]);
+
+  // Forward undo toast to parent
+  useEffect(() => {
+    if (onUndoToast) onUndoToast(undoToast);
+  }, [undoToast, onUndoToast]);
 
   // Resize observer
   useEffect(() => {
@@ -178,7 +209,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           canvasW: w, canvasH: h, rowHeight: ROW_HEIGHT,
           showGrid: d.showGrid, showToday: d.showToday, showProgress: d.showProgress, showHeatmap: d.showHeatmap,
           hoveredTaskId: s.hoveredTaskId,
-          selectedTaskId: s.selectedTaskId,
+          selectedTaskIds: s.selectedTaskIds,
           hoveredRow: s.hoveredRow,
           hoveredColX: s.hoveredColX,
           expandedDay: s.expandedDay,
@@ -199,6 +230,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         drawBars(ctx, cfg, d.tasks, d.taskRowMap);
         drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
         drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links);
+
+        // L5: Drag overlay (ghost bars, window highlight, warning badges)
+        drawDragOverlay(ctx, cfg, dragStateRef.current, d.tasks, d.taskRowMap);
+
         ctx.restore();
       }
       rafId.current = requestAnimationFrame(tick);
@@ -263,32 +298,27 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const s = stateRef.current;
-    const hw = s.dayWidth / 24;
     const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
-    // Use effective startHour for expanded day mode
-    const effStart = s.expandedDay !== null ? s.expandedDay * 24 : startHour;
 
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
 
-    if (hit && hit.task.draggable !== false && !readOnly && !hit.task.readOnly) {
-      const barX = (hit.task.start - effStart) * hw - s.scrollX;
-      const barW = (hit.task.end - hit.task.start) * hw;
-      // Compute the correct bar Y in viewport coordinates for ghost positioning
-      const barY = totalHeaderH + hit.row * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2 - s.scrollY;
-      const barScreenLeft = barX + rect.left;
-      const barScreenTop = barY + rect.top;
-      if (hit.edge !== 'body') {
-        startDrag(e, hit.task, hit.edge, barScreenLeft, barW, barScreenTop);
-      } else {
-        startDrag(e, hit.task, 'move', barScreenLeft, barW, barScreenTop);
+    if (hit && !readOnly) {
+      if (hit.hitType === 'group') {
+        // Group bar drag → cascade
+        startGroupDrag(e, hit.groupId!, hit.row);
+        return;
       }
-      return;
+
+      if (hit.hitType === 'task' && hit.task.draggable !== false && !hit.task.readOnly) {
+        startDrag(e, hit.task, hit.row);
+        return;
+      }
     }
 
     // Start panning
     isPanning.current = true;
     panStart.current = { x: e.clientX, y: e.clientY, sx: s.scrollX, sy: s.scrollY };
-  }, [hitTest, startDrag, stateRef, startHour, showHeatmap, readOnly]);
+  }, [hitTest, startDrag, startGroupDrag, stateRef, showHeatmap, readOnly]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (isPanning.current) {
@@ -326,6 +356,8 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     if (canvas) {
       if (hit?.edge === 'resize-start' || hit?.edge === 'resize-end') {
         canvas.style.cursor = 'ew-resize';
+      } else if (hit?.hitType === 'group') {
+        canvas.style.cursor = 'grab';
       } else if (hit) {
         canvas.style.cursor = readOnly || hit.task.readOnly ? 'default' : 'move';
       } else {
@@ -371,13 +403,21 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
       }
     }
 
-    // Task click
+    // Task click — with multi-select support
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
-    if (hit) {
-      dispatch({ type: 'SELECT', taskId: hit.taskId });
+    if (hit && hit.hitType === 'task') {
+      if (e.ctrlKey || e.metaKey) {
+        dispatch({ type: 'SELECT_MULTI', taskId: hit.taskId });
+      } else if (e.shiftKey) {
+        dispatch({ type: 'SELECT_RANGE', taskId: hit.taskId, flatRows });
+      } else {
+        dispatch({ type: 'SELECT', taskId: hit.taskId });
+      }
       if (onTaskClick) onTaskClick(hit.task);
+    } else if (!hit) {
+      dispatch({ type: 'SELECT_CLEAR' });
     }
-  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap]);
+  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap, flatRows]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
