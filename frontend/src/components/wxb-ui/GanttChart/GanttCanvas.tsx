@@ -107,12 +107,16 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     personnelPeaks,
   };
 
+  // In expanded day mode, override startHour/endHour for hit detection and drag
+  const effectiveStartHour = state.expandedDay !== null ? state.expandedDay * 24 : startHour;
+  const effectiveEndHour = state.expandedDay !== null ? (state.expandedDay + 1) * 24 : endHour;
+
   const hourWidth = state.dayWidth / 24;
-  const { hitTest } = useGanttHitTest(tasks, taskRowMap, startHour, hourWidth);
+  const { hitTest } = useGanttHitTest(tasks, taskRowMap, effectiveStartHour, hourWidth);
   const { startDrag } = useGanttDrag({
     hourWidth,
-    startHour,
-    endHour,
+    startHour: effectiveStartHour,
+    endHour: effectiveEndHour,
     readOnly,
     onDragEnd: onTaskDragEnd,
   });
@@ -158,9 +162,19 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         // Read latest data from ref
         const d = dataRef.current;
 
+        // In expanded day mode, override time range to single day (V4 strategy)
+        let effectiveStartHour = d.startHour;
+        let effectiveEndHour = d.endHour;
+        let effectiveScrollX = s.scrollX;
+        if (s.expandedDay !== null) {
+          effectiveStartHour = s.expandedDay * 24;
+          effectiveEndHour = (s.expandedDay + 1) * 24;
+          effectiveScrollX = 0;  // no horizontal scroll in single-day mode
+        }
+
         const cfg = {
-          startHour: d.startHour, endHour: d.endHour, hourWidth: s.dayWidth / 24,
-          scrollX: s.scrollX, scrollY: s.scrollY,
+          startHour: effectiveStartHour, endHour: effectiveEndHour, hourWidth: s.dayWidth / 24,
+          scrollX: effectiveScrollX, scrollY: s.scrollY,
           canvasW: w, canvasH: h, rowHeight: ROW_HEIGHT,
           showGrid: d.showGrid, showToday: d.showToday, showProgress: d.showProgress, showHeatmap: d.showHeatmap,
           hoveredTaskId: s.hoveredTaskId,
@@ -251,11 +265,13 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const s = stateRef.current;
     const hw = s.dayWidth / 24;
     const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+    // Use effective startHour for expanded day mode
+    const effStart = s.expandedDay !== null ? s.expandedDay * 24 : startHour;
 
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
 
     if (hit && hit.task.draggable !== false && !readOnly && !hit.task.readOnly) {
-      const barX = (hit.task.start - startHour) * hw - s.scrollX;
+      const barX = (hit.task.start - effStart) * hw - s.scrollX;
       const barW = (hit.task.end - hit.task.start) * hw;
       // Compute the correct bar Y in viewport coordinates for ghost positioning
       const barY = totalHeaderH + hit.row * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2 - s.scrollY;
@@ -332,30 +348,25 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const s = stateRef.current;
-    const hw = s.dayWidth / 24;
-    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
 
     // Header click: handle expanded-day navigation buttons
+    // In expanded day mode, entire canvas = 1 day (x=0, width=canvasW)
     if (cy < HEADER_HEIGHT && s.expandedDay !== null) {
-      const expDay = s.expandedDay;
-      const dayHour = expDay * 24;
-      const x = (dayHour - startHour) * hw - s.scrollX;
-      const endX = ((dayHour + 24) - startHour) * hw - s.scrollX;
-      const centerX = x + (endX - x) / 2;
+      const centerX = s.canvasW / 2;
 
-      // Back button: left area of expanded day header (x+0 to x+60)
-      if (cx >= x && cx <= x + 60 && cy < 24) {
+      // Back button: left area (0 to 60)
+      if (cx <= 60 && cy < 24) {
         dispatch({ type: 'EXPAND_DAY', day: null });
         return;
       }
       // Prev arrow: centerX - 80 to centerX - 60
       if (cx >= centerX - 80 && cx <= centerX - 60 && cy < 24) {
-        dispatch({ type: 'EXPAND_DAY', day: expDay - 1, startHour });
+        dispatch({ type: 'EXPAND_DAY', day: s.expandedDay - 1 });
         return;
       }
       // Next arrow: centerX + 60 to centerX + 80
       if (cx >= centerX + 60 && cx <= centerX + 80 && cy < 24) {
-        dispatch({ type: 'EXPAND_DAY', day: expDay + 1, startHour });
+        dispatch({ type: 'EXPAND_DAY', day: s.expandedDay + 1 });
         return;
       }
     }
@@ -366,7 +377,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
       dispatch({ type: 'SELECT', taskId: hit.taskId });
       if (onTaskClick) onTaskClick(hit.task);
     }
-  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap, startHour]);
+  }, [onTaskClick, hitTest, stateRef, dispatch, showHeatmap]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -374,19 +385,19 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const s = stateRef.current;
-    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
 
-    // Check if double-click is in the header area (day label) for expand day
-    if (cy < totalHeaderH && cy < HEADER_HEIGHT) {
-      const hw = s.dayWidth / 24;
-      const worldX = cx + s.scrollX;
-      const dayHour = worldX / hw + startHour;
-      const dayNum = Math.floor(dayHour / 24);
-      // Toggle: if already expanded on this day, collapse; otherwise expand
-      if (s.expandedDay === dayNum) {
+    // Double-click on header area: expand/collapse day
+    if (cy < HEADER_HEIGHT) {
+      if (s.expandedDay !== null) {
+        // Already expanded — double-click header collapses
         dispatch({ type: 'EXPAND_DAY', day: null });
       } else {
-        dispatch({ type: 'EXPAND_DAY', day: dayNum, startHour });
+        // Not expanded — compute which day was clicked
+        const hw = s.dayWidth / 24;
+        const worldX = cx + s.scrollX;
+        const dayHour = worldX / hw + startHour;
+        const dayNum = Math.floor(dayHour / 24);
+        dispatch({ type: 'EXPAND_DAY', day: dayNum });
       }
       return;
     }

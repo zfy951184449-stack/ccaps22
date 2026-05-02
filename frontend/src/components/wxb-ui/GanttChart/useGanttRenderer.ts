@@ -214,74 +214,74 @@ export function drawTimeAxis(
       ctx.stroke();
     }
   } else if (cfg.expandedDay !== null && cfg.expandedDay !== undefined) {
-    // ===== Expanded Day Mode: single-day detailed header =====
+    // ===== Expanded Day Mode (V4 style): entire canvas = 1 day =====
+    // startHour/endHour are already overridden to day*24 ~ (day+1)*24
+    // dayWidth = canvasW, hourWidth = canvasW/24
     const expDay = cfg.expandedDay;
-    const dayHour = expDay * 24;
-    const x = hourToX(dayHour, startHour, hourWidth) - scrollX;
-    const endX = hourToX(dayHour + 24, startHour, hourWidth) - scrollX;
 
-    // Highlight the expanded day header with a subtle blue background
-    ctx.fillStyle = hexToRgba(THEME.blue100, 0.6);
-    ctx.fillRect(x, 0, endX - x, HEADER_HEIGHT);
+    // Row 1: Day info bar with navigation controls
+    ctx.fillStyle = hexToRgba(THEME.blue100, 0.5);
+    ctx.fillRect(0, 0, canvasW, 24);
 
-    // ◀ Back button (left side)
+    // ◀ Back button (left)
     ctx.fillStyle = THEME.primary;
-    ctx.font = `500 11px ${FONT_SANS}`;
+    ctx.font = `500 12px ${FONT_SANS}`;
     ctx.textAlign = 'left';
-    ctx.fillText('◀ 返回', x + 8, 18);
+    ctx.fillText('◀ 返回总览', 8, 16);
+
+    // ◂ Prev arrow
+    const centerX = canvasW / 2;
+    ctx.fillStyle = THEME.primary;
+    ctx.font = `600 16px ${FONT_SANS}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('◂', centerX - 80, 16);
 
     // Day label (center)
     ctx.fillStyle = THEME.ink;
     ctx.font = `700 14px ${FONT_SANS}`;
     ctx.textAlign = 'center';
-    ctx.fillText(`Day ${expDay} (展开视图)`, x + (endX - x) / 2, 18);
+    ctx.fillText(`Day ${expDay}`, centerX, 16);
 
-    // ◀ Prev / ▶ Next day arrows (to the sides of center label)
-    const centerX = x + (endX - x) / 2;
+    // ▸ Next arrow
     ctx.fillStyle = THEME.primary;
-    ctx.font = `600 14px ${FONT_SANS}`;
+    ctx.font = `600 16px ${FONT_SANS}`;
     ctx.textAlign = 'center';
-    // Prev arrow
-    ctx.fillText('◂', centerX - 70, 18);
-    // Next arrow
-    ctx.fillText('▸', centerX + 70, 18);
+    ctx.fillText('▸', centerX + 80, 16);
 
-    // Draw all 24 hour labels + tick marks
-    ctx.fillStyle = THEME.fg3;
-    ctx.font = `500 10px ${FONT_SANS}`;
-    ctx.textAlign = 'center';
+    // Row 2: 24 hour cells filling entire canvas width
+    ctx.fillStyle = THEME.surface2;
+    ctx.fillRect(0, 24, canvasW, HEADER_HEIGHT - 24);
+
+    const cellW = canvasW / 24;
     for (let h = 0; h < 24; h++) {
-      const hx = x + h * hourWidth;
-      if (hx < 0 || hx > canvasW) continue;
+      const hx = h * cellW;
       const isWork = h >= 9 && h < 17;
-      ctx.fillStyle = isWork ? THEME.primary : THEME.fg4;
-      ctx.fillText(`${h.toString().padStart(2, '0')}:00`, hx + hourWidth / 2, 36);
-      // Tick mark
-      ctx.strokeStyle = isWork ? hexToRgba(THEME.primary, 0.4) : THEME.border;
-      ctx.lineWidth = 0.5;
-      ctx.beginPath();
-      ctx.moveTo(hx, 40);
-      ctx.lineTo(hx, HEADER_HEIGHT);
-      ctx.stroke();
-    }
+      const isOvertime = h >= 17 && h < 21;
 
-    // Day separators (all other non-expanded days — dim them)
-    for (let d = 0; d < totalDays; d++) {
-      const dn = startDay + d;
-      if (dn === expDay) continue;
-      const dx = hourToX(dn * 24, startHour, hourWidth) - scrollX;
-      if (dx + dayW < 0 || dx > canvasW) continue;
-      ctx.fillStyle = THEME.fg4;
-      ctx.font = `500 11px ${FONT_SANS}`;
+      // Hour cell background for work shifts
+      if (isWork) {
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.05)';
+        ctx.fillRect(hx, 24, cellW, HEADER_HEIGHT - 24);
+      } else if (isOvertime) {
+        ctx.fillStyle = 'rgba(251, 191, 36, 0.06)';
+        ctx.fillRect(hx, 24, cellW, HEADER_HEIGHT - 24);
+      }
+
+      // Hour label
+      ctx.fillStyle = isWork ? THEME.primary : THEME.fg4;
+      ctx.font = `500 ${cellW > 40 ? 11 : 9}px ${FONT_SANS}`;
       ctx.textAlign = 'center';
-      ctx.fillText(`Day ${dn}`, dx + dayW / 2, 18);
-      // Dim separator
-      ctx.strokeStyle = THEME.border;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(dx, 0);
-      ctx.lineTo(dx, totalHeaderH);
-      ctx.stroke();
+      ctx.fillText(`${h.toString().padStart(2, '0')}:00`, hx + cellW / 2, 40);
+
+      // Cell separator
+      if (h > 0) {
+        ctx.strokeStyle = isWork || (h >= 9 && h <= 17) ? hexToRgba(THEME.primary, 0.2) : THEME.border;
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(hx, 24);
+        ctx.lineTo(hx, HEADER_HEIGHT);
+        ctx.stroke();
+      }
     }
   } else {
     for (let d = 0; d < totalDays; d++) {

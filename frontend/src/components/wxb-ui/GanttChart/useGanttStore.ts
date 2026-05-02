@@ -38,7 +38,7 @@ export type GanttAction =
   | { type: 'TOGGLE_GROUP'; groupId: string }
   | { type: 'EXPAND_ALL' }
   | { type: 'COLLAPSE_ALL'; groupIds: string[] }
-  | { type: 'EXPAND_DAY'; day: number | null; startHour?: number }
+  | { type: 'EXPAND_DAY'; day: number | null }
   | { type: 'HOVER'; taskId: string | null }
   | { type: 'HOVER_ROW'; row: number; colX: number }
   | { type: 'SELECT'; taskId: string | null }
@@ -89,6 +89,8 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       return { ...state, scrollX: newX, scrollY: newY, dirty: true };
     }
     case 'ZOOM': {
+      // Block zoom in expanded day mode (dayWidth is locked to canvasW)
+      if (state.expandedDay !== null) return state;
       const clamped = Math.max(MIN_DAY_WIDTH, Math.min(MAX_DAY_WIDTH, action.dayWidth));
       if (clamped === state.dayWidth) return state;
       const newScrollX = clampScroll(state.scrollX * (clamped / state.dayWidth), state.maxScrollX);
@@ -102,7 +104,6 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       const next = new Set(state.collapsedGroups);
       if (next.has(action.groupId)) next.delete(action.groupId);
       else next.add(action.groupId);
-      // Clamp scrollY since row count may decrease
       const newScrollY = clampScroll(state.scrollY, state.maxScrollY);
       return { ...state, collapsedGroups: next, scrollY: newScrollY, dirty: true };
     }
@@ -125,21 +126,16 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
           dirty: true,
         };
       }
-      // Expand: zoom dayWidth so that 1 day fills ~90% of canvas viewport, scroll to center on that day
-      const sHour = action.startHour ?? 0;
-      const targetDayWidth = Math.max(MIN_DAY_WIDTH, Math.min(MAX_DAY_WIDTH, state.canvasW * 0.9));
-      const hourWidth = targetDayWidth / 24;
-      const dayStartHour = action.day * 24;
-      // scrollX so the expanded day starts ~5% from left edge
-      const targetScrollX = Math.max(0, (dayStartHour - sHour) * hourWidth - state.canvasW * 0.05);
-      // Only save prev state on first expand (not when navigating between days)
+      // Expand: set dayWidth = canvasW so 1 day fills entire viewport.
+      // scrollX = 0, the render loop will override startHour/endHour.
       const prevDW = state.prevDayWidth ?? state.dayWidth;
       const prevSX = state.prevScrollX ?? state.scrollX;
       return {
         ...state,
         expandedDay: action.day,
-        dayWidth: targetDayWidth,
-        scrollX: targetScrollX,
+        dayWidth: state.canvasW,  // 1 day = full viewport width
+        scrollX: 0,               // no horizontal scroll in single-day mode
+        maxScrollX: 0,             // lock horizontal scroll
         prevDayWidth: prevDW,
         prevScrollX: prevSX,
         dirty: true,
@@ -154,12 +150,19 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
     }
     case 'SELECT':
       return { ...state, selectedTaskId: action.taskId, dirty: true };
-    case 'RESIZE':
+    case 'RESIZE': {
+      // When resized while in expanded day mode, update dayWidth to match new canvasW
+      if (state.expandedDay !== null) {
+        return { ...state, canvasW: action.w, canvasH: action.h, dayWidth: action.w, maxScrollX: 0, dirty: true };
+      }
       return { ...state, canvasW: action.w, canvasH: action.h, dirty: true };
+    }
     case 'SET_MAX_SCROLL_Y':
       if (action.maxY === state.maxScrollY) return state;
       return { ...state, maxScrollY: action.maxY };
     case 'SET_MAX_SCROLL_X':
+      // In expanded day mode, always keep maxScrollX = 0
+      if (state.expandedDay !== null) return state;
       if (action.maxX === state.maxScrollX) return state;
       return { ...state, maxScrollX: action.maxX };
     case 'MARK_DIRTY':
