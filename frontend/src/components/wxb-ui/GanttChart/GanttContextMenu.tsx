@@ -1,25 +1,49 @@
 /**
  * WxbGanttChart v2.1 — Context Menu
- * WXB enterprise-style dropdown context menu for task operations
+ * Enterprise-grade context menu aligned with WXB design system.
  *
- * Features:
- *   - Multi-select batch awareness (selectedCount)
- *   - Optional sub-menus (children)
- *   - Keyboard shortcut hints
- *   - batchLabel with {n} placeholder
- *   - 3 context types: task / group / background
+ * - Uses CSS classes (.wxb-gantt-ctx-*) instead of inline styles
+ * - Uses inline SVG icons instead of emoji (project policy)
+ * - Multi-select batch awareness (selectedCount)
+ * - Optional sub-menus with overflow detection
+ * - Keyboard shortcut hints in monospace
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { GanttTask } from './types';
-import { THEME, FONT_SANS } from './constants';
+
+// ===== Inline SVG Icon Helpers (16×16 stroke icons) =====
+const S = { viewBox: '0 0 24 24', width: 16, height: 16, fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+const Icons = {
+  edit:      <svg {...S}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  copy:      <svg {...S}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>,
+  forward:   <svg {...S}><path d="M13 17l5-5-5-5M6 17l5-5-5-5"/></svg>,
+  backward:  <svg {...S}><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>,
+  link:      <svg {...S}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>,
+  linkPlus:  <svg {...S}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/><path d="M12 17v4M10 19h4"/></svg>,
+  linkMinus: <svg {...S}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/><path d="M10 19h4"/></svg>,
+  highlight: <svg {...S}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>,
+  lock:      <svg {...S}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
+  unlock:    <svg {...S}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>,
+  check:     <svg {...S}><polyline points="20 6 9 17 4 12"/></svg>,
+  x:         <svg {...S}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  trash:     <svg {...S}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>,
+  plus:      <svg {...S}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  paste:     <svg {...S}><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>,
+  zoomFit:   <svg {...S}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6M11 8v6"/></svg>,
+  folderOpen:<svg {...S}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
+  folderClose:<svg {...S}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M2 10h20"/></svg>,
+  cascade:   <svg {...S}><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>,
+  selectAll: <svg {...S}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>,
+} as const;
 
 export interface ContextMenuItem {
   /** Unique action key */
   key: string;
   /** Display label */
   label: string;
-  /** Icon (emoji or text) */
-  icon?: string;
+  /** Icon — React node (SVG element). Use Icons.xxx from this module. */
+  icon?: React.ReactNode;
   /** Whether this item is disabled */
   disabled?: boolean;
   /** Danger action (red text) */
@@ -35,22 +59,14 @@ export interface ContextMenuItem {
 }
 
 export interface GanttContextMenuProps {
-  /** Whether the menu is visible */
   visible: boolean;
-  /** Screen position */
   x: number;
   y: number;
-  /** The task that was right-clicked (null = background click) */
   task: GanttTask | null;
-  /** Menu items */
   items: ContextMenuItem[];
-  /** Number of currently selected tasks */
   selectedCount: number;
-  /** Context type: what was right-clicked */
   contextType: 'task' | 'group' | 'background';
-  /** Callback when an item is clicked */
   onAction: (key: string, task: GanttTask | null) => void;
-  /** Close handler */
   onClose: () => void;
 }
 
@@ -60,8 +76,9 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
   const [openSubKey, setOpenSubKey] = useState<string | null>(null);
+  const [subDirection, setSubDirection] = useState<'left' | 'right'>('right');
 
-  // Adjust position to avoid overflow
+  // Adjust position to avoid viewport overflow
   useEffect(() => {
     if (!visible || !menuRef.current) return;
     const rect = menuRef.current.getBoundingClientRect();
@@ -73,9 +90,10 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
     if (nx < 8) nx = 8;
     if (ny < 8) ny = 8;
     setAdjustedPos({ x: nx, y: ny });
+    // Determine sub-menu direction based on available space
+    setSubDirection(nx + rect.width + 160 > vw ? 'left' : 'right');
   }, [visible, x, y]);
 
-  // Reset sub-menu on open
   useEffect(() => {
     if (visible) setOpenSubKey(null);
   }, [visible]);
@@ -84,14 +102,11 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
   useEffect(() => {
     if (!visible) return;
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onClose();
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
     };
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    // Delay to avoid immediate close from the triggering right-click
     const timer = setTimeout(() => {
       document.addEventListener('mousedown', handleClick);
       document.addEventListener('keydown', handleKey);
@@ -111,7 +126,6 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
 
   const isBatchMode = selectedCount > 1;
 
-  /** Resolve display label: batch mode with {n} replacement */
   const resolveLabel = (item: ContextMenuItem): string => {
     if (isBatchMode && item.batchLabel) {
       return item.batchLabel.replace('{n}', String(selectedCount));
@@ -119,7 +133,6 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
     return item.label;
   };
 
-  /** Header text */
   const headerText = (() => {
     if (contextType === 'group' && task) return task.label;
     if (isBatchMode) return `已选中 ${selectedCount} 个任务`;
@@ -129,46 +142,14 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
 
   if (!visible) return null;
 
+  const itemClass = (item: ContextMenuItem) =>
+    `wxb-gantt-ctx-item${item.disabled ? ' disabled' : ''}${item.danger ? ' danger' : ''}`;
+
   return (
-    <div
-      ref={menuRef}
-      style={{
-        position: 'fixed',
-        left: adjustedPos.x,
-        top: adjustedPos.y,
-        zIndex: 10002,
-        minWidth: 200,
-        background: THEME.bg,
-        border: `1px solid ${THEME.border}`,
-        borderRadius: 6,
-        boxShadow: '0 6px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
-        padding: '4px 0',
-        fontFamily: FONT_SANS,
-        animation: 'wxb-ctx-fadein 0.12s ease-out',
-      }}
-    >
+    <div ref={menuRef} className="wxb-gantt-ctx" style={{ left: adjustedPos.x, top: adjustedPos.y }}>
       {/* Header */}
       {headerText && (
-        <div
-          style={{
-            padding: '6px 12px 4px',
-            fontSize: 11,
-            fontWeight: 600,
-            color: isBatchMode ? THEME.blue500 : THEME.fg3,
-            borderBottom: `1px solid ${THEME.divider}`,
-            marginBottom: 4,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            letterSpacing: '0.02em',
-            textTransform: isBatchMode ? 'none' : 'uppercase',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-          }}
-        >
-          {isBatchMode && <span style={{ fontSize: 13 }}>☑</span>}
-          {contextType === 'group' && !isBatchMode && <span style={{ fontSize: 13 }}>📂</span>}
+        <div className={`wxb-gantt-ctx-header${isBatchMode ? ' batch' : ''}`}>
           {headerText}
         </div>
       )}
@@ -177,188 +158,83 @@ const GanttContextMenu: React.FC<GanttContextMenuProps> = ({
       {items.map((item) => (
         <React.Fragment key={item.key}>
           {item.children && item.children.length > 0 ? (
-            /* Sub-menu trigger */
             <div
               style={{ position: 'relative' }}
               onMouseEnter={() => setOpenSubKey(item.key)}
               onMouseLeave={() => setOpenSubKey(null)}
             >
-              <div
-                role="menuitem"
-                style={{
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  color: item.disabled ? THEME.fg4 : THEME.ink,
-                  cursor: item.disabled ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  opacity: item.disabled ? 0.5 : 1,
-                  background: openSubKey === item.key ? THEME.surface1 : 'transparent',
-                  transition: 'background 0.1s',
-                }}
-              >
-                {item.icon && (
-                  <span style={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>
-                    {item.icon}
-                  </span>
-                )}
-                <span style={{ flex: 1 }}>{resolveLabel(item)}</span>
-                <span style={{ fontSize: 10, color: THEME.fg4 }}>▶</span>
+              <div className={itemClass(item)}>
+                {item.icon && <span className="wxb-gantt-ctx-icon">{item.icon}</span>}
+                <span className="wxb-gantt-ctx-label">{resolveLabel(item)}</span>
+                <span className="wxb-gantt-ctx-sub-arrow">▸</span>
               </div>
-
-              {/* Sub-menu panel */}
               {openSubKey === item.key && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    left: '100%',
-                    top: -4,
-                    minWidth: 160,
-                    background: THEME.bg,
-                    border: `1px solid ${THEME.border}`,
-                    borderRadius: 6,
-                    boxShadow: '0 6px 24px rgba(0,0,0,0.12)',
-                    padding: '4px 0',
-                    zIndex: 10003,
-                    animation: 'wxb-ctx-fadein 0.1s ease-out',
-                  }}
-                >
+                <div className={`wxb-gantt-ctx-sub ${subDirection}`}>
                   {item.children.map(child => (
-                    <div
-                      key={child.key}
-                      role="menuitem"
-                      tabIndex={child.disabled ? -1 : 0}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: 12,
-                        color: child.disabled ? THEME.fg4 : child.danger ? THEME.danger : THEME.ink,
-                        cursor: child.disabled ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        opacity: child.disabled ? 0.5 : 1,
-                        transition: 'background 0.1s',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!child.disabled) (e.currentTarget as HTMLDivElement).style.background = THEME.surface1;
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-                      }}
-                      onClick={() => handleItemClick(child.key, child.disabled)}
-                    >
-                      {child.icon && (
-                        <span style={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>
-                          {child.icon}
-                        </span>
-                      )}
-                      <span style={{ flex: 1 }}>{child.label}</span>
-                      {child.shortcut && (
-                        <span style={{ fontSize: 10, color: THEME.fg4, letterSpacing: '0.02em' }}>
-                          {child.shortcut}
-                        </span>
-                      )}
+                    <div key={child.key} className={itemClass(child)} onClick={() => handleItemClick(child.key, child.disabled)}>
+                      {child.icon && <span className="wxb-gantt-ctx-icon">{child.icon}</span>}
+                      <span className="wxb-gantt-ctx-label">{child.label}</span>
+                      {child.shortcut && <span className="wxb-gantt-ctx-shortcut">{child.shortcut}</span>}
                     </div>
                   ))}
                 </div>
               )}
             </div>
           ) : (
-            /* Regular menu item */
-            <div
-              role="menuitem"
-              tabIndex={item.disabled ? -1 : 0}
-              style={{
-                padding: '6px 12px',
-                fontSize: 12,
-                color: item.disabled ? THEME.fg4 : item.danger ? THEME.danger : THEME.ink,
-                cursor: item.disabled ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                opacity: item.disabled ? 0.5 : 1,
-                transition: 'background 0.1s',
-              }}
-              onMouseEnter={(e) => {
-                if (!item.disabled) (e.currentTarget as HTMLDivElement).style.background = THEME.surface1;
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-              }}
-              onClick={() => handleItemClick(item.key, item.disabled)}
-            >
-              {item.icon && (
-                <span style={{ fontSize: 14, width: 18, textAlign: 'center', flexShrink: 0 }}>
-                  {item.icon}
-                </span>
-              )}
-              <span style={{ flex: 1 }}>{resolveLabel(item)}</span>
-              {item.shortcut && (
-                <span style={{ fontSize: 10, color: THEME.fg4, letterSpacing: '0.02em' }}>
-                  {item.shortcut}
-                </span>
-              )}
+            <div className={itemClass(item)} onClick={() => handleItemClick(item.key, item.disabled)}>
+              {item.icon && <span className="wxb-gantt-ctx-icon">{item.icon}</span>}
+              <span className="wxb-gantt-ctx-label">{resolveLabel(item)}</span>
+              {item.shortcut && <span className="wxb-gantt-ctx-shortcut">{item.shortcut}</span>}
             </div>
           )}
-          {item.divider && (
-            <div style={{ height: 1, background: THEME.divider, margin: '4px 0' }} />
-          )}
+          {item.divider && <div className="wxb-gantt-ctx-divider" />}
         </React.Fragment>
       ))}
-
-      {/* Inline animation keyframes */}
-      <style>{`
-        @keyframes wxb-ctx-fadein {
-          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
     </div>
   );
 };
 
-// ===== Default Menu Presets =====
+// ===== Default Menu Presets (no emoji — all SVG icons) =====
 
-/** Single task menu */
+/** Single task menu (generic — consumer can override via taskMenuItems prop) */
 export const DEFAULT_TASK_MENU_ITEMS: ContextMenuItem[] = [
-  { key: 'edit', label: '编辑任务', batchLabel: '批量编辑', icon: '✏️', shortcut: '⏎' },
-  { key: 'duplicate', label: '复制任务', batchLabel: '批量复制', icon: '📋' },
-  { key: 'split', label: '拆分任务', icon: '✂️', divider: true },
-  { key: 'move-earlier', label: '提前排程', batchLabel: '批量提前', icon: '⏪' },
-  { key: 'move-later', label: '延后排程', batchLabel: '批量延后', icon: '⏩', divider: true },
-  { key: 'share-group', label: '共享组', icon: '🔗', children: [
-    { key: 'share-create', label: '创建共享组', icon: '➕' },
-    { key: 'share-add', label: '加入共享组', icon: '📎' },
-    { key: 'share-remove', label: '移出共享组', icon: '🚫' },
-    { key: 'share-highlight', label: '高亮共享组', icon: '🔦' },
+  { key: 'edit', label: '编辑任务', batchLabel: '批量编辑', icon: Icons.edit, shortcut: '⏎' },
+  { key: 'duplicate', label: '复制任务', batchLabel: '批量复制', icon: Icons.copy, divider: true },
+  { key: 'move-earlier', label: '提前排程', batchLabel: '批量提前', icon: Icons.backward },
+  { key: 'move-later', label: '延后排程', batchLabel: '批量延后', icon: Icons.forward, divider: true },
+  { key: 'share-group', label: '共享组', icon: Icons.link, children: [
+    { key: 'share-create', label: '创建共享组', icon: Icons.linkPlus },
+    { key: 'share-add', label: '加入共享组', icon: Icons.link },
+    { key: 'share-remove', label: '移出共享组', icon: Icons.linkMinus },
+    { key: 'share-highlight', label: '高亮共享组', icon: Icons.highlight },
   ], divider: true },
-  { key: 'lock', label: '锁定时间', batchLabel: '批量锁定', icon: '🔒' },
-  { key: 'unlock', label: '解锁时间', batchLabel: '批量解锁', icon: '🔓', divider: true },
-  { key: 'select-all', label: '全选同组', icon: '✅', shortcut: 'Ctrl+A' },
-  { key: 'clear-selection', label: '清除选择', icon: '❎', shortcut: 'Esc', divider: true },
-  { key: 'delete', label: '删除任务', batchLabel: '删除 {n} 个任务', icon: '🗑️', danger: true, shortcut: 'Del' },
+  { key: 'lock', label: '锁定时间', batchLabel: '批量锁定', icon: Icons.lock },
+  { key: 'unlock', label: '解锁时间', batchLabel: '批量解锁', icon: Icons.unlock, divider: true },
+  { key: 'select-all', label: '全选同组', icon: Icons.selectAll, shortcut: 'Ctrl+A' },
+  { key: 'clear-selection', label: '清除选择', icon: Icons.x, shortcut: 'Esc', divider: true },
+  { key: 'delete', label: '删除任务', batchLabel: '删除 {n} 个任务', icon: Icons.trash, danger: true, shortcut: 'Del' },
 ];
 
 /** Group row menu */
 export const DEFAULT_GROUP_MENU_ITEMS: ContextMenuItem[] = [
-  { key: 'expand-group', label: '展开所有子组', icon: '📂' },
-  { key: 'collapse-group', label: '折叠所有子组', icon: '📁', divider: true },
-  { key: 'select-children', label: '选中所有子任务', icon: '✅' },
-  { key: 'deselect-children', label: '取消选中子任务', icon: '❎', divider: true },
-  { key: 'cascade-later', label: '级联延后排程', icon: '⏩' },
-  { key: 'cascade-earlier', label: '级联提前排程', icon: '⏪' },
+  { key: 'expand-group', label: '展开所有子组', icon: Icons.folderOpen },
+  { key: 'collapse-group', label: '折叠所有子组', icon: Icons.folderClose, divider: true },
+  { key: 'select-children', label: '选中所有子任务', icon: Icons.selectAll },
+  { key: 'deselect-children', label: '取消选中子任务', icon: Icons.x, divider: true },
+  { key: 'cascade-later', label: '级联延后排程', icon: Icons.forward },
+  { key: 'cascade-earlier', label: '级联提前排程', icon: Icons.backward },
 ];
 
 /** Background (no target) menu */
 export const DEFAULT_BG_MENU_ITEMS: ContextMenuItem[] = [
-  { key: 'add-task', label: '新建任务', icon: '➕' },
-  { key: 'paste', label: '粘贴任务', icon: '📋', divider: true },
-  { key: 'zoom-fit', label: '适配视图', icon: '🔍' },
-  { key: 'expand-all', label: '全部展开', icon: '📂' },
-  { key: 'collapse-all', label: '全部折叠', icon: '📁', divider: true },
-  { key: 'select-all', label: '全选', icon: '✅', shortcut: 'Ctrl+A' },
-  { key: 'clear-selection', label: '清除选择', icon: '❎', shortcut: 'Esc' },
+  { key: 'add-task', label: '新建任务', icon: Icons.plus },
+  { key: 'paste', label: '粘贴任务', icon: Icons.paste, divider: true },
+  { key: 'zoom-fit', label: '适配视图', icon: Icons.zoomFit },
+  { key: 'expand-all', label: '全部展开', icon: Icons.folderOpen },
+  { key: 'collapse-all', label: '全部折叠', icon: Icons.folderClose, divider: true },
+  { key: 'select-all', label: '全选', icon: Icons.selectAll, shortcut: 'Ctrl+A' },
+  { key: 'clear-selection', label: '清除选择', icon: Icons.x, shortcut: 'Esc' },
 ];
 
+export { Icons as CtxIcons };
 export default React.memo(GanttContextMenu);

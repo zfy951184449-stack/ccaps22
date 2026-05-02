@@ -47,6 +47,7 @@ export type GanttAction =
   | { type: 'SELECT_RANGE'; taskId: string; flatRows: FlatRow[] }
   | { type: 'SELECT_ALL'; taskIds: string[] }
   | { type: 'SELECT_CLEAR' }
+  | { type: 'SELECT_REMOVE'; taskId: string }
   | { type: 'RESIZE'; w: number; h: number }
   | { type: 'SET_MAX_SCROLL_Y'; maxY: number }
   | { type: 'SET_MAX_SCROLL_X'; maxX: number }
@@ -193,6 +194,12 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
     case 'SELECT_CLEAR':
       if (state.selectedTaskIds.size === 0) return state;
       return { ...state, selectedTaskIds: new Set(), lastClickedTaskId: null, dirty: true };
+    case 'SELECT_REMOVE': {
+      if (!state.selectedTaskIds.has(action.taskId)) return state;
+      const next = new Set(state.selectedTaskIds);
+      next.delete(action.taskId);
+      return { ...state, selectedTaskIds: next, dirty: true };
+    }
     case 'RESIZE': {
       // When resized while in expanded day mode, update dayWidth to match new canvasW
       if (state.expandedDay !== null) {

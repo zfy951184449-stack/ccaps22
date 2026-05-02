@@ -135,20 +135,47 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     return taskMenuItems || DEFAULT_TASK_MENU_ITEMS;
   }, [ctxMenu.contextType, taskMenuItems, groupMenuItems, backgroundMenuItems]);
 
+  // Helper: collect all descendant group IDs (recursive) for a given root groupId
+  const collectDescendantGroupIds = useCallback((rootId: string): Set<string> => {
+    const result = new Set<string>([rootId]);
+    const queue = [rootId];
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      for (const g of groups) {
+        if (g.parentId === current && !result.has(g.id)) {
+          result.add(g.id);
+          queue.push(g.id);
+        }
+      }
+    }
+    return result;
+  }, [groups]);
+
   const handleCtxAction = useCallback((key: string, task: GanttTask | null) => {
     // ===== Built-in view actions =====
-    if (key === 'expand-all' || key === 'expand-group') {
+    if (key === 'expand-all') {
       dispatch({ type: 'EXPAND_ALL' });
-    } else if (key === 'collapse-all' || key === 'collapse-group') {
+    } else if (key === 'expand-group' && ctxMenu.groupId) {
+      // Expand only this group and its descendants (not global)
+      const descendantIds = collectDescendantGroupIds(ctxMenu.groupId);
+      for (const gid of Array.from(descendantIds)) {
+        dispatch({ type: 'TOGGLE_GROUP', groupId: gid });
+      }
+    } else if (key === 'collapse-all') {
       const groupIds = groups.map(g => g.id);
       dispatch({ type: 'COLLAPSE_ALL', groupIds });
+    } else if (key === 'collapse-group' && ctxMenu.groupId) {
+      const descendantIds = collectDescendantGroupIds(ctxMenu.groupId);
+      dispatch({ type: 'COLLAPSE_ALL', groupIds: Array.from(descendantIds) });
     }
     // ===== Selection actions =====
     else if (key === 'select-all') {
       const allTaskIds = tasks.filter(t => !t.readOnly).map(t => t.id);
       dispatch({ type: 'SELECT_ALL', taskIds: allTaskIds });
     } else if (key === 'select-children' && ctxMenu.groupId) {
-      const childTaskIds = tasks.filter(t => t.groupId === ctxMenu.groupId).map(t => t.id);
+      // Recursively collect all tasks under this group and its descendants
+      const descendantIds = collectDescendantGroupIds(ctxMenu.groupId);
+      const childTaskIds = tasks.filter(t => t.groupId && descendantIds.has(t.groupId)).map(t => t.id);
       dispatch({ type: 'SELECT_ALL', taskIds: childTaskIds });
     } else if (key === 'clear-selection' || key === 'deselect-children') {
       dispatch({ type: 'SELECT_CLEAR' });
@@ -165,11 +192,11 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     if (onContextAction) {
       onContextAction(key, task);
     }
-  }, [dispatch, groups, tasks, ctxMenu.groupId, onTaskEdit, onTaskDelete, onTaskDuplicate, onContextAction]);
+  }, [dispatch, groups, tasks, ctxMenu.groupId, collectDescendantGroupIds, onTaskEdit, onTaskDelete, onTaskDuplicate, onContextAction]);
 
   // ===== Selection Panel Handlers =====
   const handleDeselectTask = useCallback((taskId: string) => {
-    dispatch({ type: 'SELECT_MULTI', taskId });
+    dispatch({ type: 'SELECT_REMOVE', taskId });
   }, [dispatch]);
 
   const handleDeselectAll = useCallback(() => {
@@ -177,9 +204,11 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   }, [dispatch]);
 
   const handleSelectAllInGroup = useCallback((groupId: string) => {
-    const childTaskIds = tasks.filter(t => t.groupId === groupId).map(t => t.id);
+    // Recursively select all tasks under this group and descendants
+    const descendantIds = collectDescendantGroupIds(groupId);
+    const childTaskIds = tasks.filter(t => t.groupId && descendantIds.has(t.groupId)).map(t => t.id);
     dispatch({ type: 'SELECT_ALL', taskIds: childTaskIds });
-  }, [tasks, dispatch]);
+  }, [tasks, dispatch, collectDescendantGroupIds]);
 
   // Minimap: current viewport day + active tasks
   const currentDay = useMemo(() => {

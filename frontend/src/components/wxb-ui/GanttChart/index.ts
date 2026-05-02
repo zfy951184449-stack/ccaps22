@@ -11,4 +11,4 @@ export type {
   ViewMode,
 } from './types';
 export type { ContextMenuItem } from './GanttContextMenu';
-export { DEFAULT_TASK_MENU_ITEMS, DEFAULT_GROUP_MENU_ITEMS, DEFAULT_BG_MENU_ITEMS } from './GanttContextMenu';
+export { DEFAULT_TASK_MENU_ITEMS, DEFAULT_GROUP_MENU_ITEMS, DEFAULT_BG_MENU_ITEMS, CtxIcons } from './GanttContextMenu';

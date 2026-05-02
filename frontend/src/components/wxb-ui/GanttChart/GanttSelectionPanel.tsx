@@ -1,11 +1,10 @@
 /**
  * WxbGanttChart v2.1 — Selection Panel
- * Floating "shopping cart" style panel showing selected tasks
- * Appears when selectedTaskIds.size >= 1
+ * Floating "shopping cart" style panel showing selected tasks.
+ * Uses CSS classes (.wxb-gantt-sel-*) aligned with wxb-theme.css.
  */
 import React, { useMemo } from 'react';
 import type { GanttTask, GanttGroup } from './types';
-import { THEME, FONT_SANS } from './constants';
 
 export interface GanttSelectionPanelProps {
   selectedTaskIds: Set<string>;
@@ -24,22 +23,28 @@ interface GroupedSelection {
 }
 
 const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
-  selectedTaskIds,
-  tasks,
-  groups,
-  onDeselectTask,
-  onDeselectAll,
+  selectedTaskIds, tasks, groups, onDeselectTask, onDeselectAll, onSelectAllInGroup,
 }) => {
+  // Pre-build task index for O(1) lookup instead of O(N) per selected task
+  const taskMap = useMemo(() => {
+    const map = new Map<string, GanttTask>();
+    for (const t of tasks) map.set(t.id, t);
+    return map;
+  }, [tasks]);
+
+  const groupMap = useMemo(() => {
+    const map = new Map<string, GanttGroup>();
+    for (const g of groups) map.set(g.id, g);
+    return map;
+  }, [groups]);
+
   // Group selected tasks by their groupId
   const groupedSelections = useMemo((): GroupedSelection[] => {
-    const groupMap = new Map<string, GanttGroup>();
-    for (const g of groups) groupMap.set(g.id, g);
-
     const buckets = new Map<string, GroupedSelection>();
     const UNGROUPED = '__ungrouped__';
 
     for (const taskId of Array.from(selectedTaskIds)) {
-      const task = tasks.find(t => t.id === taskId);
+      const task = taskMap.get(taskId);
       if (!task) continue;
 
       const gid = task.groupId || UNGROUPED;
@@ -48,75 +53,25 @@ const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
         buckets.set(gid, {
           groupId: gid,
           groupLabel: group?.label || '未分组',
-          groupColor: group?.color || THEME.fg3,
+          groupColor: group?.color || '#5A6B7E',
           tasks: [],
         });
       }
-      buckets.get(gid)!.tasks.push({
-        id: task.id,
-        label: task.label,
-        color: task.color,
-      });
+      buckets.get(gid)!.tasks.push({ id: task.id, label: task.label, color: task.color });
     }
     return Array.from(buckets.values());
-  }, [selectedTaskIds, tasks, groups]);
+  }, [selectedTaskIds, taskMap, groupMap]);
 
   if (selectedTaskIds.size === 0) return null;
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        right: 12,
-        top: 48,
-        width: 240,
-        maxHeight: 320,
-        overflowY: 'auto',
-        background: THEME.bg,
-        border: `1px solid ${THEME.border}`,
-        borderRadius: 8,
-        boxShadow: '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.05)',
-        fontFamily: FONT_SANS,
-        zIndex: 80,
-        animation: 'wxb-panel-slidein 0.18s ease-out',
-      }}
-    >
+    <div className="wxb-gantt-sel">
       {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '8px 12px',
-          borderBottom: `1px solid ${THEME.divider}`,
-          background: THEME.surface1,
-          borderRadius: '8px 8px 0 0',
-        }}
-      >
-        <span style={{ fontSize: 12, fontWeight: 600, color: THEME.ink }}>
-          ☑ 已选中 {selectedTaskIds.size} 个任务
+      <div className="wxb-gantt-sel-header">
+        <span className="wxb-gantt-sel-title">
+          已选中 {selectedTaskIds.size} 个任务
         </span>
-        <button
-          onClick={onDeselectAll}
-          style={{
-            padding: '2px 8px',
-            fontSize: 10,
-            color: THEME.fg3,
-            background: 'transparent',
-            border: `1px solid ${THEME.border}`,
-            borderRadius: 4,
-            cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = THEME.surface2;
-            (e.currentTarget as HTMLButtonElement).style.color = THEME.danger;
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-            (e.currentTarget as HTMLButtonElement).style.color = THEME.fg3;
-          }}
-        >
+        <button className="wxb-gantt-sel-clear" onClick={onDeselectAll}>
           清空
         </button>
       </div>
@@ -125,112 +80,34 @@ const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
       <div style={{ padding: '4px 0' }}>
         {groupedSelections.map(group => (
           <div key={group.groupId}>
-            {/* Group label */}
-            <div
-              style={{
-                padding: '4px 12px 2px',
-                fontSize: 10,
-                fontWeight: 600,
-                color: group.groupColor,
-                letterSpacing: '0.03em',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: '50%',
-                  background: group.groupColor,
-                  flexShrink: 0,
-                }}
-              />
+            {/* Group label with "select all" action */}
+            <div className="wxb-gantt-sel-group-label" style={{ color: group.groupColor }}>
+              <span className="wxb-gantt-sel-dot" style={{ background: group.groupColor }} />
               {group.groupLabel}
-              <span style={{ color: THEME.fg4, fontWeight: 400 }}>({group.tasks.length})</span>
+              <span className="count">({group.tasks.length})</span>
+              {/* Select all in this group */}
+              {group.groupId !== '__ungrouped__' && (
+                <span
+                  style={{ marginLeft: 'auto', cursor: 'pointer', fontSize: 10, color: '#8898A8' }}
+                  onClick={() => onSelectAllInGroup(group.groupId)}
+                  title="全选此组"
+                >
+                  全选
+                </span>
+              )}
             </div>
 
             {/* Task items */}
             {group.tasks.map(task => (
-              <div
-                key={task.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '3px 12px 3px 22px',
-                  fontSize: 11,
-                  color: THEME.fg2,
-                  gap: 6,
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background = THEME.surface1;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-                }}
-              >
-                {/* Color dot */}
-                <span
-                  style={{
-                    width: 4,
-                    height: 4,
-                    borderRadius: '50%',
-                    background: task.color || group.groupColor,
-                    flexShrink: 0,
-                  }}
-                />
-                {/* Label */}
-                <span
-                  style={{
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {task.label}
-                </span>
-                {/* Remove button */}
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeselectTask(task.id);
-                  }}
-                  style={{
-                    fontSize: 12,
-                    cursor: 'pointer',
-                    color: THEME.fg4,
-                    padding: '0 2px',
-                    borderRadius: 2,
-                    lineHeight: 1,
-                    transition: 'color 0.1s',
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLSpanElement).style.color = THEME.danger;
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLSpanElement).style.color = THEME.fg4;
-                  }}
-                  title="取消选中"
-                >
-                  ×
-                </span>
+              <div key={task.id} className="wxb-gantt-sel-task">
+                <span className="wxb-gantt-sel-dot" style={{ width: 4, height: 4, background: task.color || group.groupColor }} />
+                <span className="wxb-gantt-sel-task-label">{task.label}</span>
+                <span className="wxb-gantt-sel-remove" onClick={() => onDeselectTask(task.id)} title="取消选中">×</span>
               </div>
             ))}
           </div>
         ))}
       </div>
-
-      {/* Inline animation */}
-      <style>{`
-        @keyframes wxb-panel-slidein {
-          from { opacity: 0; transform: translateX(12px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-      `}</style>
     </div>
   );
 };
