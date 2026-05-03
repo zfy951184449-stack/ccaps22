@@ -60,6 +60,7 @@ const navGroups: NavGroup[] = [
     children: [
       { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
       { key: 'process-templates-v2', icon: <ProjectOutlined />, label: '工艺模版 V2', path: '/process-templates-v2' },
+      { key: 'process-templates-v3', icon: <ProjectOutlined />, label: '工艺模版 V3', path: '/process-templates-v3' },
       { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
     ],
   },
@@ -74,6 +75,13 @@ const navGroups: NavGroup[] = [
       { key: 'solver-v4', icon: <RocketOutlined />, label: 'V4 自动排班', path: '/solver-v4' },
       { key: 'shift-definitions', icon: <ScheduleOutlined />, label: '班次定义', path: '/shift-definitions' },
     ],
+  },
+  {
+    key: 'ui-kit',
+    label: 'UI 组件库',
+    subtitle: 'Design System',
+    path: '/ui-kit',
+    icon: <RocketOutlined />,
   },
 ];
 

@@ -19,6 +19,8 @@ const BatchManagementV4Page = lazy(() => import('./pages/BatchManagementV4Page')
 const PersonnelSchedulingPage = lazy(() => import('./pages/PersonnelSchedulingPage'));
 const SolverV4Page = lazy(() => import('./pages/SolverV4Page'));
 const ShiftDefinitionsPage = lazy(() => import('./pages/ShiftDefinitionsPage'));
+const UiKitShowcasePage = lazy(() => import('./pages/UiKitShowcasePage'));
+const ProcessTemplatesV3Page = lazy(() => import('./pages/ProcessTemplatesV3Page'));
 
 const mvpRedirects: Record<string, string> = {
   '/operations': '/operation-types',
@@ -100,6 +102,9 @@ const AppLayout: React.FC = () => (
             <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
             <Route path="/solver-v4" element={<SolverV4Page />} />
             <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
+            <Route path="/process-templates-v3" element={<ProcessTemplatesV3Page />} />
+            <Route path="/process-templates-v3/:templateId" element={<ProcessTemplatesV3Page />} />
+            <Route path="/ui-kit" element={<UiKitShowcasePage />} />
             {Object.entries(mvpRedirects).map(([path, target]) => (
               <Route
                 key={path}
