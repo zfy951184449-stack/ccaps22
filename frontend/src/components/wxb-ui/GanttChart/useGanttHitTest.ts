@@ -95,9 +95,9 @@ export function useGanttHitTest(
         // Check X bounds
         if (worldX < taskX || worldX > taskX + taskW) continue;
 
-        // Determine edge
+        // Determine edge (resize enabled for timeWindow or resizable tasks)
         let edge: HitTestResult['edge'] = 'body';
-        if (task.type === 'timeWindow') {
+        if (task.type === 'timeWindow' || task.resizable) {
           if (Math.abs(worldX - taskX) < EDGE_THRESHOLD) edge = 'resize-start';
           else if (Math.abs(worldX - (taskX + taskW)) < EDGE_THRESHOLD) edge = 'resize-end';
         }

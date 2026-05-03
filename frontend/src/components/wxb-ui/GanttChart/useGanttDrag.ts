@@ -4,7 +4,7 @@
  * Architecture:
  *   - NO DOM ghost elements — all rendering happens in Canvas RAF loop
  *   - DragState is exposed to renderer for drawDragOverlay()
- *   - Supports: single-task move, cascade group-move, multi-select move
+ *   - Supports: single-task move, cascade group-move, multi-select move, edge resize
  *   - Window constraint clamping for single-task moves
  *   - 3-tier warning system for cascade drags (normal/warning/danger)
  *   - Async validation: onDragEnd can return false to trigger rollback
@@ -48,6 +48,7 @@ export interface UseGanttDragProps {
   taskRowMap: Map<string, number>;
   selectedTaskIds: Set<string>;
   onDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
+  onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   onAutoScroll?: (dx: number) => void;
   canvasWidth: number;
@@ -56,6 +57,7 @@ export interface UseGanttDragProps {
 export interface UseGanttDragResult {
   startDrag: (e: React.MouseEvent | MouseEvent, task: GanttTask, row: number) => void;
   startGroupDrag: (e: React.MouseEvent | MouseEvent, groupId: string, row: number) => void;
+  startResize: (e: React.MouseEvent | MouseEvent, task: GanttTask, row: number, edge: 'resize-start' | 'resize-end') => void;
   dragState: DragState | null;
   isDragging: boolean;
   cancelDrag: () => void;
@@ -97,6 +99,7 @@ export function useGanttDrag({
   taskRowMap,
   selectedTaskIds,
   onDragEnd,
+  onTaskResizeEnd,
   onGroupDragEnd,
   onAutoScroll,
   canvasWidth,
@@ -163,6 +166,24 @@ export function useGanttDrag({
         const minDelta = sh - earliest;
         const maxDelta = eh - latest;
         deltaHours = clamp(deltaHours, minDelta, maxDelta);
+      }
+
+      // Resize mode: adjust start or end independently
+      if (state.type === 'resize-start' || state.type === 'resize-end') {
+        const orig = state.originals.get(state.primaryId)!;
+        const minDuration = SNAP_HOURS; // 15-min minimum
+
+        if (state.type === 'resize-start') {
+          // Drag left edge: change start, end stays
+          let newStart = snapHour(orig.start + rawDeltaHours, SNAP_HOURS);
+          newStart = clamp(newStart, sh, orig.end - minDuration);
+          deltaHours = newStart - orig.start;
+        } else {
+          // Drag right edge: start stays, change end
+          let newEnd = snapHour(orig.end + rawDeltaHours, SNAP_HOURS);
+          newEnd = clamp(newEnd, orig.start + minDuration, eh);
+          deltaHours = newEnd - orig.end;
+        }
       }
 
       // Update warning level for cascade
@@ -251,6 +272,24 @@ export function useGanttDrag({
       };
       setUndoToast(toastData);
       toastTimer.current = setTimeout(() => setUndoToast(null), 3000);
+    } else if (state.type === 'resize-start' || state.type === 'resize-end') {
+      // Resize end — compute new start/end based on resize direction
+      const orig = state.originals.get(state.primaryId)!;
+      let newStart = orig.start, newEnd = orig.end;
+      if (state.type === 'resize-start') {
+        newStart = snapHour(orig.start + deltaHours, SNAP_HOURS);
+      } else {
+        newEnd = snapHour(orig.end + deltaHours, SNAP_HOURS);
+      }
+      // Prefer onTaskResizeEnd, fallback to onDragEnd
+      const handler = onTaskResizeEnd || onDragEnd;
+      if (handler) {
+        const result = await handler(state.primaryId, newStart, newEnd);
+        if (result === false) {
+          cleanup();
+          return;
+        }
+      }
     } else if (state.affectedTaskIds.length === 1) {
       // Single task drag end
       const orig = state.originals.get(state.primaryId)!;
@@ -277,7 +316,7 @@ export function useGanttDrag({
     }
 
     cleanup();
-  }, [cleanup, handleMouseMove, onDragEnd, onGroupDragEnd, dismissToast]);
+  }, [cleanup, handleMouseMove, onDragEnd, onTaskResizeEnd, onGroupDragEnd, dismissToast]);
 
   // ===== Start Single Task Drag =====
   const startDrag = useCallback((
@@ -382,6 +421,40 @@ export function useGanttDrag({
     document.addEventListener('mouseup', handleMouseUp);
   }, [readOnly, handleMouseMove, handleMouseUp]);
 
+  // ===== Start Resize Drag =====
+  const startResize = useCallback((
+    e: React.MouseEvent | MouseEvent,
+    task: GanttTask,
+    row: number,
+    edge: 'resize-start' | 'resize-end'
+  ) => {
+    if (readOnly || task.readOnly) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const originals = new Map<string, { start: number; end: number; row: number }>();
+    originals.set(task.id, { start: task.start, end: task.end, row });
+
+    const newState: DragState = {
+      type: edge,
+      primaryId: task.id,
+      affectedTaskIds: [task.id],
+      isDragging: false,
+      startMouseX: e.clientX,
+      startMouseY: e.clientY,
+      originals,
+      deltaHours: 0,
+      taskColor: task.color || '#1F6FEB',
+      taskLabel: task.label,
+      warningLevel: 'normal',
+      isGroupDrag: false,
+    };
+
+    dragRef.current = newState;
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [readOnly, handleMouseMove, handleMouseUp]);
+
   // ===== Cancel Drag (ESC) =====
   const cancelDrag = useCallback(() => {
     document.removeEventListener('mousemove', handleMouseMove);
@@ -442,6 +515,7 @@ export function useGanttDrag({
   return {
     startDrag,
     startGroupDrag,
+    startResize,
     dragState,
     isDragging: dragState?.isDragging ?? false,
     cancelDrag,

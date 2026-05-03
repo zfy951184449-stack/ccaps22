@@ -846,6 +846,86 @@ export function drawDragOverlay(
   if (!dragState || !dragState.isDragging) return;
 
   const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight } = cfg;
+
+  // ===== Resize mode: specialized ghost rendering =====
+  if (dragState.type === 'resize-start' || dragState.type === 'resize-end') {
+    const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
+    const orig = dragState.originals.get(dragState.primaryId);
+    if (!orig) return;
+
+    const barH = BAR_HEIGHT, barR = BAR_RADIUS;
+    const origX = (orig.start - startHour) * hourWidth - scrollX;
+    const origW = (orig.end - orig.start) * hourWidth;
+    const y = totalHeaderH + orig.row * rowHeight + (rowHeight - barH) / 2 - scrollY;
+
+    // Skip if out of viewport
+    if (y + barH < totalHeaderH || y > canvasH) return;
+
+    // Original position: dashed outline
+    ctx.strokeStyle = hexToRgba(dragState.taskColor, 0.3);
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    roundRect(ctx, origX, y, origW, barH, barR);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Ghost: stretched/shrunk based on resize direction
+    let ghostX = origX, ghostW = origW;
+    if (dragState.type === 'resize-start') {
+      ghostX = origX + dragState.deltaHours * hourWidth;
+      ghostW = origW - dragState.deltaHours * hourWidth;
+    } else {
+      ghostW = origW + dragState.deltaHours * hourWidth;
+    }
+
+    // Minimum visual width
+    ghostW = Math.max(ghostW, 4);
+
+    const colors = WARNING_COLORS[dragState.warningLevel];
+
+    // Ghost fill
+    ctx.fillStyle = colors.fill;
+    roundRect(ctx, ghostX, y, ghostW, barH, barR);
+    ctx.fill();
+
+    // Ghost border
+    ctx.strokeStyle = colors.stroke;
+    ctx.lineWidth = 1;
+    roundRect(ctx, ghostX, y, ghostW, barH, barR);
+    ctx.stroke();
+
+    // Highlight the active resize edge (thick green line)
+    const edgeX = dragState.type === 'resize-start' ? ghostX : ghostX + ghostW;
+    ctx.strokeStyle = '#2E9D6E';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(edgeX, y - 4);
+    ctx.lineTo(edgeX, y + barH + 4);
+    ctx.stroke();
+
+    // Delta label above the ghost
+    if (Math.abs(dragState.deltaHours) > 0.01) {
+      const sign = dragState.deltaHours > 0 ? '+' : '';
+      const text = `${sign}${dragState.deltaHours.toFixed(1)}h`;
+      ctx.font = `600 10px ${FONT_SANS}`;
+      const tw = ctx.measureText(text).width;
+      const labelX = edgeX - tw / 2;
+      const labelY = y - 10;
+
+      // Badge background
+      roundRect(ctx, labelX - 4, labelY - 7, tw + 8, 14, 3);
+      ctx.fillStyle = 'rgba(15, 27, 45, 0.85)';
+      ctx.fill();
+
+      // Badge text
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, labelX, labelY);
+    }
+
+    return; // Don't draw move overlay when resizing
+  }
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const colors = WARNING_COLORS[dragState.warningLevel];
 

@@ -43,6 +43,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   onTaskClick,
   onTaskDoubleClick,
   onTaskDragEnd,
+  onTaskResizeEnd,
   onGroupToggle,
   onViewModeChange,
   // Business callbacks
@@ -298,6 +299,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onTaskClick={onTaskClick}
           onTaskDoubleClick={onTaskDoubleClick}
           onTaskDragEnd={onTaskDragEnd}
+          onTaskResizeEnd={onTaskResizeEnd}
           onGroupDragEnd={onGroupDragEnd}
           onTooltipShow={handleTooltipShow}
           onTooltipHide={handleTooltipHide}

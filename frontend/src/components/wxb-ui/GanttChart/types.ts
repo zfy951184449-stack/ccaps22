@@ -36,6 +36,8 @@ export interface GanttTask {
   conflictType?: 'CYCLE' | 'WINDOW' | 'OVERLAP';
   /** Whether this task is read-only (no drag) */
   readOnly?: boolean;
+  /** Whether this task supports edge-resize (default: true for type==='timeWindow') */
+  resizable?: boolean;
   /** Custom tooltip content */
   tooltip?: React.ReactNode;
   /** Passthrough business data */
@@ -140,6 +142,9 @@ export interface WxbGanttChartProps {
   onTaskDoubleClick?: (task: GanttTask) => void;
   /** Task drag end handler */
   onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
+  /** Task resize end handler (for edge-drag on timeWindow bars).
+   *  If not provided, falls back to onTaskDragEnd. */
+  onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   /** Cascade group drag end handler — consumer decides how to apply the offset */
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   /** Undo cascade handler — restores tasks to pre-drag snapshots */
@@ -188,7 +193,7 @@ export interface FlatRow {
 }
 
 export interface DragState {
-  type: 'move' | 'group-move';
+  type: 'move' | 'group-move' | 'resize-start' | 'resize-end';
   /** Primary dragged task/group ID */
   primaryId: string;
   /** All affected task IDs (for cascade / multi-select) */

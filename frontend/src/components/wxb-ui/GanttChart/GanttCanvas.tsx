@@ -34,6 +34,7 @@ interface GanttCanvasProps {
   onTaskClick?: (task: GanttTask) => void;
   onTaskDoubleClick?: (task: GanttTask) => void;
   onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
+  onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   onTooltipShow?: (task: GanttTask, x: number, y: number) => void;
   onTooltipHide?: () => void;
@@ -47,7 +48,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   startHour, endHour,
   showGrid, showToday, showProgress, showHeatmap, readOnly, zoomRange,
   personnelPeaks,
-  onTaskClick, onTaskDoubleClick, onTaskDragEnd, onGroupDragEnd,
+  onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
   onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -122,7 +123,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   }, [dispatch]);
 
   const {
-    startDrag, startGroupDrag, dragState, isDragging, cancelDrag,
+    startDrag, startGroupDrag, startResize, dragState, isDragging, cancelDrag,
     undoToast, dismissToast,
   }: UseGanttDragResult = useGanttDrag({
     hourWidth,
@@ -134,6 +135,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     taskRowMap,
     selectedTaskIds: state.selectedTaskIds,
     onDragEnd: onTaskDragEnd,
+    onTaskResizeEnd,
     onGroupDragEnd,
     onAutoScroll,
     canvasWidth: state.canvasW,
@@ -303,6 +305,12 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
 
     if (hit && !readOnly) {
+      // Resize edge detected — route to resize handler
+      if ((hit.edge === 'resize-start' || hit.edge === 'resize-end') && hit.hitType === 'task') {
+        startResize(e, hit.task, hit.row, hit.edge);
+        return;
+      }
+
       if (hit.hitType === 'group') {
         // Group bar drag → cascade
         startGroupDrag(e, hit.groupId!, hit.row);
