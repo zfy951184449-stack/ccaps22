@@ -171,6 +171,8 @@ export interface WxbGanttChartProps {
   backgroundMenuItems?: import('./GanttContextMenu').ContextMenuItem[];
   /** Show selection panel when tasks are selected (default: true) */
   showSelectionPanel?: boolean;
+  /** Highlighted link IDs for share group emphasis */
+  highlightedLinkIds?: string[];
   /** CSS class name */
   className?: string;
   /** Inline style */

@@ -40,6 +40,7 @@ interface GanttCanvasProps {
   onTooltipHide?: () => void;
   onContextMenu?: (task: GanttTask | null, x: number, y: number, hitType?: 'task' | 'group', groupId?: string) => void;
   onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
+  highlightedLinkIds?: string[];
 }
 
 const GanttCanvas: React.FC<GanttCanvasProps> = ({
@@ -50,6 +51,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   personnelPeaks,
   onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
   onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
+  highlightedLinkIds,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -231,7 +233,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         drawGroupBars(ctx, cfg, d.flatRows, d.groups, d.tasks, d.taskRowMap);
         drawBars(ctx, cfg, d.tasks, d.taskRowMap);
         drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
-        drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links);
+        drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links, highlightedLinkIds);
 
         // L5: Drag overlay (ghost bars, window highlight, warning badges)
         drawDragOverlay(ctx, cfg, dragStateRef.current, d.tasks, d.taskRowMap);

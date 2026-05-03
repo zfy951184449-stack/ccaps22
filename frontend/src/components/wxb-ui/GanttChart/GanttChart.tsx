@@ -58,6 +58,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   groupMenuItems,
   backgroundMenuItems,
   showSelectionPanel = true,
+  highlightedLinkIds,
   className,
   style,
 }) => {
@@ -305,6 +306,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onTooltipHide={handleTooltipHide}
           onContextMenu={handleContextMenu}
           onUndoToast={handleUndoToast}
+          highlightedLinkIds={highlightedLinkIds}
         />
 
         {/* Selection Panel (cart-style) */}

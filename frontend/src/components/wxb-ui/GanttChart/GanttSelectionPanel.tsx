@@ -13,6 +13,8 @@ export interface GanttSelectionPanelProps {
   onDeselectTask: (taskId: string) => void;
   onDeselectAll: () => void;
   onSelectAllInGroup: (groupId: string) => void;
+  /** Callback to create a share group from the currently selected tasks */
+  onCreateShareGroup?: (selectedTaskIds: string[]) => void;
 }
 
 interface GroupedSelection {
@@ -24,6 +26,7 @@ interface GroupedSelection {
 
 const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
   selectedTaskIds, tasks, groups, onDeselectTask, onDeselectAll, onSelectAllInGroup,
+  onCreateShareGroup,
 }) => {
   // Pre-build task index for O(1) lookup instead of O(N) per selected task
   const taskMap = useMemo(() => {
@@ -108,6 +111,36 @@ const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Share group creation button */}
+      {onCreateShareGroup && selectedTaskIds.size >= 2 && (
+        <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <button
+            className="wxb-gantt-sel-share-btn"
+            onClick={() => onCreateShareGroup(Array.from(selectedTaskIds))}
+            style={{
+              width: '100%',
+              padding: '6px 10px',
+              background: 'linear-gradient(135deg, rgba(24,144,255,0.15), rgba(24,144,255,0.08))',
+              border: '1px solid rgba(24,144,255,0.3)',
+              borderRadius: 6,
+              color: '#5ba8f5',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => { (e.target as HTMLElement).style.background = 'rgba(24,144,255,0.25)'; }}
+            onMouseLeave={e => { (e.target as HTMLElement).style.background = 'linear-gradient(135deg, rgba(24,144,255,0.15), rgba(24,144,255,0.08))'; }}
+          >
+            🔗 从选中项创建共享组 ({selectedTaskIds.size})
+          </button>
+        </div>
+      )}
     </div>
   );
 };

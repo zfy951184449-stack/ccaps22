@@ -767,16 +767,25 @@ export function drawLinks(
   cfg: DrawConfig,
   tasks: GanttTask[],
   taskRowMap: Map<string, number>,
-  links: GanttLink[]
+  links: GanttLink[],
+  highlightedLinkIds?: string[]
 ): void {
   if (links.length === 0) return;
   const { startHour, hourWidth, scrollX, scrollY, rowHeight } = cfg;
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const taskMap = new Map(tasks.map(t => [t.id, t]));
+  const hasHighlight = highlightedLinkIds && highlightedLinkIds.length > 0;
 
   for (const link of links) {
     if (link.taskIds.length < 2) continue;
     const color = link.color || SHARE_COLORS[link.shareMode || 'SAME_TEAM'] || SHARE_COLORS.SAME_TEAM;
+
+    // Highlight logic: emphasized vs dimmed
+    const isHighlighted = hasHighlight && highlightedLinkIds!.includes(link.id);
+    const opacity = hasHighlight ? (isHighlighted ? 1.0 : 0.12) : 0.85;
+    const lineWidth = isHighlighted ? 4.5 : 3;
+
+    ctx.globalAlpha = opacity;
 
     // Draw lines between consecutive pairs
     for (let i = 0; i < link.taskIds.length - 1; i++) {
@@ -793,7 +802,7 @@ export function drawLinks(
       const byCenter = totalHeaderH + rB * rowHeight + rowHeight / 2 - scrollY;
 
       ctx.strokeStyle = color;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = lineWidth;
       ctx.setLineDash([6, 4]);
       ctx.lineCap = 'round';
 
@@ -826,6 +835,9 @@ export function drawLinks(
       ctx.fill();
     }
   }
+
+  // Reset global alpha
+  ctx.globalAlpha = 1.0;
 }
 
 // ===== L5: Drag Overlay =====
