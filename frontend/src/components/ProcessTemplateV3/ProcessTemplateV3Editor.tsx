@@ -144,7 +144,10 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
   // ---- Gantt adapter (memo-ized transforms) ----
   const tasks = useMemo(
-    () => toGanttTasks(ganttData.timeBlocks, ganttData.ganttNodes, { shareGroups: shareService.shareGroups }),
+    () => toGanttTasks(ganttData.timeBlocks, ganttData.ganttNodes, {
+      shareGroups: shareService.shareGroups,
+      mergeTimeWindows: true,
+    }),
     [ganttData.timeBlocks, ganttData.ganttNodes, shareService.shareGroups],
   );
 

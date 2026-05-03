@@ -36,6 +36,13 @@ export interface ToGanttTasksOptions {
   conflictMap?: Record<number, string>;
   /** All share groups (to attach badges to operations) */
   shareGroups?: ShareGroup[];
+  /**
+   * When true, timeWindow blocks are NOT emitted as separate GanttTask rows.
+   * Instead, window data is only surfaced via windowStart/windowEnd on the
+   * operation task and rendered as an inline background layer.
+   * Default: false (backward compat — legacy charts still get separate rows).
+   */
+  mergeTimeWindows?: boolean;
 }
 
 /**
@@ -74,7 +81,12 @@ export function toGanttTasks(
     const isReadOnly = options?.readOnlyOperations?.has(block.node_id) ?? false;
 
     if (block.isTimeWindow) {
-      // Time window → resizable bar
+      // When mergeTimeWindows is enabled, skip standalone timeWindow rows.
+      // The window data is already attached to the operation task via
+      // windowStart/windowEnd (computed from windowMap below).
+      if (options?.mergeTimeWindows) continue;
+
+      // Time window → resizable bar (legacy mode)
       tasks.push({
         id: block.id,                // 'window_operation_123'
         label: block.title,

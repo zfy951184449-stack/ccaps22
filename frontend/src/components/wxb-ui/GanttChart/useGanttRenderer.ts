@@ -544,6 +544,29 @@ export function drawBars(
       }
     } else {
       // ===== WXB Operation Bar: Left-accent + tinted fill =====
+
+      // --- Window background layer (semi-transparent, behind operation) ---
+      if (task.windowStart !== undefined && task.windowEnd !== undefined
+        && (task.windowStart !== task.start || task.windowEnd !== task.end)) {
+        const wx = hourToX(task.windowStart, startHour, hourWidth) - scrollX;
+        const ww = Math.max((task.windowEnd - task.windowStart) * hourWidth, 4);
+
+        // 1. Solid tinted fill (10% opacity)
+        ctx.fillStyle = hexToRgba(color, 0.07);
+        roundRect(ctx, wx, y, ww, barH, barR);
+        ctx.fill();
+
+        // 2. Dashed border (20% opacity)
+        ctx.save();
+        ctx.strokeStyle = hexToRgba(color, 0.22);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        roundRect(ctx, wx, y, ww, barH, barR);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
       // Background fill — tinted, not solid
       ctx.fillStyle = hexToRgba(color, 0.14);
       roundRect(ctx, x, y, w, barH, barR);
