@@ -175,15 +175,47 @@ export function useV3EditorActions({
       const opData = node.data as StageOperation | undefined;
       if (!opData) return false;
 
+      // Convert absolute hours → relative fields
+      // newStart is absolute hours (e.g. Day 2 at 9:00 = 57)
+      // API expects: operation_day (relative to stage), recommended_time (0-23.9)
+      //
+      // We need the stage's start_day to compute relative operation_day.
+      // The stage start_day can be found from the parent node or from opData.
+      // Since opData stores operation_day relative to stage, and
+      // node.start_day was computed as stageStartDay + opData.operation_day + dayOffset,
+      // we can derive stageStartDay from the original absolute position.
+      const originalAbsoluteDay = node.start_day ?? 0;
+      const originalOpDay = opData.operation_day ?? 0;
+      const originalDayOffset = opData.recommended_day_offset ?? 0;
+      const stageStartDay = originalAbsoluteDay - originalOpDay - originalDayOffset;
+
+      const newAbsoluteDay = Math.floor(newStart / 24);
+      const newRecommendedTime = newStart - newAbsoluteDay * 24; // 0-24 range
+      const newOperationDay = Math.max(0, newAbsoluteDay - stageStartDay);
+      const newDayOffset = newAbsoluteDay - stageStartDay - newOperationDay;
+
+      // Compute window fields relative to the new position
+      const duration = newEnd - newStart;
+      const windowPadding = 2; // hours of padding around operation
+      const windowStartAbsolute = newStart - windowPadding;
+      const windowEndAbsolute = newStart + Math.max(duration, windowPadding);
+      const windowStartDay = Math.floor(windowStartAbsolute / 24);
+      const windowEndDay = Math.floor(windowEndAbsolute / 24);
+
+      const toHourValue = (v: number) => {
+        const rem = v % 24;
+        return rem < 0 ? rem + 24 : rem;
+      };
+
       try {
         await processTemplateV2Api.updateStageOperation(scheduleId, {
-          operationDay: opData.operation_day,
-          recommendedTime: newStart,
-          recommendedDayOffset: 0,
-          windowStartTime: newStart,
-          windowStartDayOffset: 0,
-          windowEndTime: newEnd,
-          windowEndDayOffset: 0,
+          operationDay: newOperationDay,
+          recommendedTime: newRecommendedTime,
+          recommendedDayOffset: newDayOffset,
+          windowStartTime: toHourValue(windowStartAbsolute),
+          windowStartDayOffset: windowStartDay - stageStartDay - newOperationDay,
+          windowEndTime: toHourValue(windowEndAbsolute),
+          windowEndDayOffset: windowEndDay - stageStartDay - newOperationDay,
         });
         await refreshData();
         return true;
