@@ -176,6 +176,12 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     }
   }, []);
 
+  // Derive share highlight Set for sidebar cross-highlight
+  const shareHighlightTaskIds = useMemo(() => {
+    if (!shareHoverState) return undefined;
+    return new Set(shareHoverState.tasks.map(t => t.id));
+  }, [shareHoverState]);
+
   // ===== Context Menu State =====
   const [ctxMenu, setCtxMenu] = useState<{
     visible: boolean;
@@ -353,6 +359,8 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           sidebarWidth={sidebarWidth}
           selectedTaskIds={state.selectedTaskIds}
           onGroupToggle={onGroupToggle}
+          shareHighlightTaskIds={shareHighlightTaskIds}
+          shareHighlightColor={shareHoverState?.color}
         />
 
         <GanttCanvas

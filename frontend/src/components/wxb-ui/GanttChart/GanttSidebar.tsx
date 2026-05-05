@@ -17,10 +17,15 @@ interface GanttSidebarProps {
   sidebarWidth: number;
   selectedTaskIds: Set<string>;
   onGroupToggle?: (groupId: string, collapsed: boolean) => void;
+  /** Task IDs in the hovered share component (for cross-highlight) */
+  shareHighlightTaskIds?: Set<string>;
+  /** Color of the hovered share component */
+  shareHighlightColor?: string;
 }
 
 const GanttSidebar: React.FC<GanttSidebarProps> = ({
   flatRows, scrollY, hoveredRow, canvasH, showHeatmap, dispatch, sidebarWidth, selectedTaskIds, onGroupToggle,
+  shareHighlightTaskIds, shareHighlightColor,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isSync = useRef(false);
@@ -110,13 +115,25 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
             const isGroup = row.type === 'group';
                   const isSelected = row.taskId ? selectedTaskIds.has(row.taskId) : false;
                   const isHovered = i === hoveredRow;
+                  const isShareHighlighted = row.taskId ? (shareHighlightTaskIds?.has(row.taskId) ?? false) : false;
                   let rowBg: string;
                   if (isSelected) {
                     rowBg = 'rgba(31, 111, 235, 0.08)';
+                  } else if (isShareHighlighted && shareHighlightColor) {
+                    rowBg = hexToRgba(shareHighlightColor, 0.10);
                   } else if (isHovered) {
                     rowBg = hexToRgba('#E6F2FB', 0.45);
                   } else {
                     rowBg = i % 2 === 0 ? THEME.surface1 : THEME.bg;
+                  }
+                  // Left border: selected > share-highlight > transparent
+                  let leftBorder: string;
+                  if (isSelected) {
+                    leftBorder = '2px solid rgba(31, 111, 235, 0.5)';
+                  } else if (isShareHighlighted && shareHighlightColor) {
+                    leftBorder = `2px solid ${hexToRgba(shareHighlightColor, 0.7)}`;
+                  } else {
+                    leftBorder = '2px solid transparent';
                   }
                   return (
               <div
@@ -134,7 +151,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                   background: rowBg,
                   cursor: isGroup ? 'grab' : 'default',
                   borderBottom: `1px solid ${THEME.divider}`,
-                  borderLeft: isSelected ? '2px solid rgba(31, 111, 235, 0.5)' : '2px solid transparent',
+                  borderLeft: leftBorder,
                   userSelect: 'none',
                   transition: 'background 0.1s ease',
                 }}
