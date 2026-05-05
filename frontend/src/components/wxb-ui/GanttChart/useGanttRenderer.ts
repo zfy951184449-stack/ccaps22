@@ -660,9 +660,19 @@ export function drawBars(
         ctx.fillText(label, x + 8, y + barH / 2 + 4);
       }
 
-      // Share component dot indicator — right-upper-corner colored dot
+      // Share component visual markers — left-side vertical bar + right-upper dot
       const shareColor = cfg.shareColorMap?.get(task.id);
       if (shareColor && w > 40) {
+        // Left vertical color bar (3px wide, inset right of type accent)
+        const barInset = 2;
+        const sBarX = x + 5; // right of 3px type accent + 2px gap
+        const sBarY = y + barInset;
+        const sBarH = barH - barInset * 2;
+        ctx.fillStyle = hexToRgba(shareColor, 0.85);
+        roundRect(ctx, sBarX, sBarY, 3, sBarH, 1.5);
+        ctx.fill();
+
+        // Right-upper corner dot
         const dotR = 3;
         const dotX = x + w - 6;
         const dotY = y + 5;
@@ -670,7 +680,6 @@ export function drawBars(
         ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
         ctx.fillStyle = shareColor;
         ctx.fill();
-        // Subtle border for contrast
         ctx.strokeStyle = hexToRgba(shareColor, 0.5);
         ctx.lineWidth = 1;
         ctx.stroke();
