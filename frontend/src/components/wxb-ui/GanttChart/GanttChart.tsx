@@ -55,6 +55,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   onUndoCascade,
   // Menu customization
   taskMenuItems,
+  taskMenuBuilder,
   groupMenuItems,
   backgroundMenuItems,
   showSelectionPanel = true,
@@ -134,8 +135,10 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   const activeMenuItems = useMemo(() => {
     if (ctxMenu.contextType === 'group') return groupMenuItems || DEFAULT_GROUP_MENU_ITEMS;
     if (ctxMenu.contextType === 'background') return backgroundMenuItems || DEFAULT_BG_MENU_ITEMS;
+    // Dynamic per-task menu builder takes priority
+    if (taskMenuBuilder && ctxMenu.task) return taskMenuBuilder(ctxMenu.task);
     return taskMenuItems || DEFAULT_TASK_MENU_ITEMS;
-  }, [ctxMenu.contextType, taskMenuItems, groupMenuItems, backgroundMenuItems]);
+  }, [ctxMenu.contextType, ctxMenu.task, taskMenuItems, taskMenuBuilder, groupMenuItems, backgroundMenuItems]);
 
   // Helper: collect all descendant group IDs (recursive) for a given root groupId
   const collectDescendantGroupIds = useCallback((rootId: string): Set<string> => {

@@ -165,6 +165,8 @@ export interface WxbGanttChartProps {
   // ===== Context Menu Customization (consumer overrides) =====
   /** Custom menu items for single-task right-click (overrides defaults) */
   taskMenuItems?: import('./GanttContextMenu').ContextMenuItem[];
+  /** Dynamic per-task menu builder (takes priority over taskMenuItems when provided) */
+  taskMenuBuilder?: (task: GanttTask) => import('./GanttContextMenu').ContextMenuItem[];
   /** Custom menu items for group-row right-click (overrides defaults) */
   groupMenuItems?: import('./GanttContextMenu').ContextMenuItem[];
   /** Custom menu items for background right-click (overrides defaults) */

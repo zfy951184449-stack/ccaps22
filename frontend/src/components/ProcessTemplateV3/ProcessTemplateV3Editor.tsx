@@ -247,13 +247,6 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     );
   }
 
-  // Static menu for the chart (dynamic per-task is handled via onContextAction)
-  const staticTaskMenu: ContextMenuItem[] = [
-    { key: 'edit', label: '编辑操作' },
-    { key: 'delete', label: '删除操作', danger: true },
-    { key: 'divider-share', label: '—', divider: true },
-    { key: 'share-new', label: '新建共享组' },
-  ];
 
   // ---- Main render ----
   return (
@@ -287,7 +280,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           dependencies={dependencies}
           links={links}
           highlightedLinkIds={shareService.highlightedLinkIds}
-          taskMenuItems={staticTaskMenu}
+          taskMenuBuilder={buildTaskMenu}
           onTaskDragEnd={actions.handleDragEnd}
           onTaskResizeEnd={actions.handleResizeEnd}
           onTaskEdit={handleTaskEdit}
