@@ -7,6 +7,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WxbButton, WxbCard, WxbTag } from '../wxb-ui';
+import { WxbSwitch } from '../wxb-ui';
 
 export interface V3EditorHeaderProps {
   templateCode: string;
@@ -14,6 +15,8 @@ export interface V3EditorHeaderProps {
   teamName: string | null;
   totalDays: number;
   loading?: boolean;
+  showTimeWindows: boolean;
+  onToggleTimeWindows: (checked: boolean) => void;
   onAutoSchedule: () => void;
 }
 
@@ -23,6 +26,8 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
   teamName,
   totalDays,
   loading,
+  showTimeWindows,
+  onToggleTimeWindows,
   onAutoSchedule,
 }) => {
   const navigate = useNavigate();
@@ -90,7 +95,29 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
+          {/* Time window toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--wx-fg-3, #5A6B7E)', whiteSpace: 'nowrap' }}>
+              时间窗口
+            </span>
+            <WxbSwitch
+              checked={showTimeWindows}
+              onChange={onToggleTimeWindows}
+              size="sm"
+            />
+          </div>
+
+          {/* Separator */}
+          <div
+            style={{
+              width: 1,
+              height: 20,
+              background: 'var(--wx-border, #E4EAF1)',
+              flexShrink: 0,
+            }}
+          />
+
           <WxbButton
             variant="secondary"
             size="sm"

@@ -77,6 +77,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // ---- Template metadata ----
   const [template, setTemplate] = useState<ProcessTemplate | null>(null);
   const [templateLoading, setTemplateLoading] = useState(true);
+  const [showTimeWindows, setShowTimeWindows] = useState(false); // default off
 
   useEffect(() => {
     let cancelled = false;
@@ -143,13 +144,23 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   });
 
   // ---- Gantt adapter (memo-ized transforms) ----
-  const tasks = useMemo(
+  const rawTasks = useMemo(
     () => toGanttTasks(ganttData.timeBlocks, ganttData.ganttNodes, {
       shareGroups: shareService.shareGroups,
       mergeTimeWindows: true,
     }),
     [ganttData.timeBlocks, ganttData.ganttNodes, shareService.shareGroups],
   );
+
+  // Strip window data when toggle is off
+  const tasks = useMemo(() => {
+    if (showTimeWindows) return rawTasks;
+    return rawTasks.map(t =>
+      t.windowStart !== undefined || t.windowEnd !== undefined
+        ? { ...t, windowStart: undefined, windowEnd: undefined }
+        : t
+    );
+  }, [rawTasks, showTimeWindows]);
 
   const groups = useMemo(
     () => toGanttGroups(ganttData.ganttNodes),
@@ -263,6 +274,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         teamName={template.team_name ?? null}
         totalDays={template.total_days}
         loading={actions.loading}
+        showTimeWindows={showTimeWindows}
+        onToggleTimeWindows={setShowTimeWindows}
         onAutoSchedule={actions.handleAutoSchedule}
       />
 
