@@ -242,59 +242,28 @@ export function useShareGroupService({
   // ===== Build Dynamic Context Menu =====
   const buildShareMenuItems = useCallback(
     (task: GanttTask): ContextMenuItem[] => {
-      // Extract scheduleId from task metadata (stored in task.data)
       const scheduleId = (task as any).data?.scheduleId ?? (task as any).data?.id;
       const items: ContextMenuItem[] = [];
 
       // 1. New share group
       items.push({ key: 'share-new', label: '新建共享组' });
 
-      // Categorize groups by whether this task belongs to them
-      const myGroups: ShareGroup[] = [];
-      const otherGroups: ShareGroup[] = [];
-
-      for (const g of shareGroups) {
-        const isMember = g.members?.some((m) => m.schedule_id === scheduleId);
-        if (isMember) {
-          myGroups.push(g);
-        } else {
-          otherGroups.push(g);
-        }
-      }
-
-      // 2. Join existing groups (only groups this task is NOT in)
-      if (otherGroups.length > 0) {
-        items.push({ key: 'share-divider-join', label: '—', divider: true });
-        for (const g of otherGroups) {
-          items.push({
-            key: `share-join-${g.id}`,
-            label: `加入: ${g.group_name}`,
-          });
-        }
-      }
-
-      // 3. Highlight / Remove (only groups this task IS in)
+      // 2. Unlink from all groups (simplified — replaces per-group join/highlight/remove)
+      const myGroups = shareGroups.filter(g =>
+        g.members?.some(m => m.schedule_id === scheduleId)
+      );
       if (myGroups.length > 0) {
-        items.push({ key: 'share-divider-my', label: '—', divider: true });
-        for (const g of myGroups) {
-          const isCurrentlyHighlighted = highlightedGroupId === g.id;
-          items.push({
-            key: `share-highlight-${g.id}`,
-            label: isCurrentlyHighlighted
-              ? `取消高亮: ${g.group_name}`
-              : `高亮: ${g.group_name}`,
-          });
-          items.push({
-            key: `share-remove-${g.id}`,
-            label: `移出: ${g.group_name}`,
-            danger: true,
-          });
-        }
+        items.push({ key: 'share-divider-unlink', label: '—', divider: true });
+        items.push({
+          key: 'share-unlink',
+          label: `断开共享 (${myGroups.length})`,
+          danger: true,
+        });
       }
 
       return items;
     },
-    [shareGroups, highlightedGroupId]
+    [shareGroups]
   );
 
   // ===== Handle Menu Actions =====
@@ -379,6 +348,27 @@ export function useShareGroupService({
         }
         return;
       }
+
+      // share-unlink → remove task from ALL groups
+      if (actionKey === 'share-unlink') {
+        const scheduleIds = resolveScheduleIds();
+        try {
+          for (const sid of scheduleIds) {
+            const myGroups = shareGroups.filter(g =>
+              g.members?.some(m => m.schedule_id === sid)
+            );
+            for (const g of myGroups) {
+              await removeFromGroup(sid, g.id);
+            }
+          }
+          onMessage('success', '已断开所有共享');
+          await fetchGroups();
+          onDataChange?.();
+        } catch {
+          onMessage('error', '断开共享失败');
+        }
+        return;
+      }
     },
     [
       openCreateModal,
@@ -388,6 +378,7 @@ export function useShareGroupService({
       fetchGroups,
       onDataChange,
       onMessage,
+      shareGroups,
     ]
   );
 

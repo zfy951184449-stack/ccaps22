@@ -36,6 +36,12 @@ export interface DrawConfig {
   todayHour: number | null;
   viewMode: string;
   dpr: number;
+  /** Task IDs in the same share-group transitive component as hovered task */
+  hoveredShareTaskIds?: Set<string>;
+  /** Color of the hovered share component */
+  hoveredShareColor?: string;
+  /** Per-task share component color map: taskId → color */
+  shareColorMap?: Map<string, string>;
 }
 
 /** Clip rendering to below-header area. Must call ctx.restore() after. */
@@ -654,36 +660,37 @@ export function drawBars(
         ctx.fillText(label, x + 8, y + barH / 2 + 4);
       }
 
-      // Share group badges — rendered after label, right-aligned
-      if (task.shareGroups && task.shareGroups.length > 0 && w > 50) {
-        const badgeH = 14;
-        const badgeR = 7;
-        const badgeGap = 3;
-        let bx = x + w - 4; // start from right edge
-        ctx.font = `600 8px ${FONT_SANS}`;
-        ctx.textAlign = 'center';
-        // Draw badges right-to-left
-        for (let gi = task.shareGroups.length - 1; gi >= 0; gi--) {
-          const sg = task.shareGroups[gi];
-          const tw = ctx.measureText(sg.label).width;
-          const bw = tw + 10;
-          bx -= bw;
-          if (bx < x + 20) break; // don't overlap label
-          const by = y + (barH - badgeH) / 2;
-          // Badge background
-          ctx.fillStyle = hexToRgba(sg.color, 0.18);
-          roundRect(ctx, bx, by, bw, badgeH, badgeR);
-          ctx.fill();
-          // Badge border
-          ctx.strokeStyle = hexToRgba(sg.color, 0.5);
-          ctx.lineWidth = 1;
-          roundRect(ctx, bx, by, bw, badgeH, badgeR);
-          ctx.stroke();
-          // Badge text
-          ctx.fillStyle = sg.color;
-          ctx.fillText(sg.label, bx + bw / 2, by + badgeH / 2 + 3);
-          bx -= badgeGap;
-        }
+      // Share component dot indicator — right-upper-corner colored dot
+      const shareColor = cfg.shareColorMap?.get(task.id);
+      if (shareColor && w > 40) {
+        const dotR = 3;
+        const dotX = x + w - 6;
+        const dotY = y + 5;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = shareColor;
+        ctx.fill();
+        // Subtle border for contrast
+        ctx.strokeStyle = hexToRgba(shareColor, 0.5);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      // Glow border for hover-linked share component peers
+      if (
+        cfg.hoveredShareTaskIds?.has(task.id) &&
+        task.id !== cfg.hoveredTaskId &&
+        cfg.hoveredShareColor
+      ) {
+        const glowColor = cfg.hoveredShareColor;
+        ctx.save();
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = hexToRgba(glowColor, 0.55);
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, x - 1, y - 1, w + 2, barH + 2, barR + 1);
+        ctx.stroke();
+        ctx.restore();
       }
     }
   }

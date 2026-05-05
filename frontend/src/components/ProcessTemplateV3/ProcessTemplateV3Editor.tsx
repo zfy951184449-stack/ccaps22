@@ -7,6 +7,7 @@
 
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { message } from 'antd';
+import axios from 'axios';
 import { WxbGanttChart } from '../wxb-ui';
 import { WxbSkeleton, WxbEmpty } from '../wxb-ui';
 import { WxbCard } from '../wxb-ui';
@@ -228,6 +229,40 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     [shareService],
   );
 
+  // ---- One-click link from SelectionPanel ----
+  const handleQuickLink = useCallback(
+    async (selectedTaskIds: string[]) => {
+      const scheduleIds = selectedTaskIds
+        .map(id => parseInt(id.replace(/\D/g, ''), 10))
+        .filter(Number.isFinite);
+      if (scheduleIds.length < 2) {
+        message.warning('至少选择 2 个操作才能创建共享组');
+        return;
+      }
+
+      // Auto-name: first 2 operation names + count
+      const allOps = collectOperations(ganttData.ganttNodes);
+      const names = scheduleIds.slice(0, 2)
+        .map(sid => allOps.find(op => op.scheduleId === sid)?.operationName)
+        .filter(Boolean);
+      const autoName = names.join(' + ') + (scheduleIds.length > 2 ? ` +${scheduleIds.length - 2}` : '');
+
+      try {
+        await axios.post(`/api/share-groups/template/${templateId}`, {
+          group_name: autoName || '共享组',
+          share_mode: 'SAME_TEAM',
+          member_ids: scheduleIds,
+        });
+        message.success('已链接为共享');
+        await shareService.refresh();
+        await ganttData.refreshData();
+      } catch (err: any) {
+        message.error(err?.response?.data?.error || '创建共享组失败');
+      }
+    },
+    [templateId, ganttData, shareService],
+  );
+
   // ---- Loading / error states ----
   if (templateLoading) {
     return (
@@ -287,6 +322,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onTaskDelete={handleTaskDelete}
           onContextAction={handleContextAction}
           showSelectionPanel
+          onCreateShareGroup={handleQuickLink}
           enableFullscreen
           style={{ width: '100%', height: '100%' }}
         />

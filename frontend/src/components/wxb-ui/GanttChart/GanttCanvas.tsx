@@ -41,6 +41,10 @@ interface GanttCanvasProps {
   onContextMenu?: (task: GanttTask | null, x: number, y: number, hitType?: 'task' | 'group', groupId?: string) => void;
   onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
   highlightedLinkIds?: string[];
+  /** Per-task share-component color map from Union-Find */
+  shareColorMap?: Map<string, { peers: Set<string>; color: string }>;
+  /** Callback when share-group hover triggers (debounced) */
+  onShareHover?: (tasks: Array<{ id: string; label: string; color?: string; isHovered: boolean }> | null, color: string) => void;
 }
 
 const GanttCanvas: React.FC<GanttCanvasProps> = ({
@@ -52,6 +56,8 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
   onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
   highlightedLinkIds,
+  shareColorMap,
+  onShareHover,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,6 +118,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     showGrid, showToday, showProgress, showHeatmap,
     personnelPeaks,
   };
+
+  // Share-hover debounce state
+  const shareHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoveredShareRef = useRef<{ taskIds: Set<string>; color: string } | null>(null);
 
   // In expanded day mode, override startHour/endHour for hit detection and drag
   const effectiveStartHour = state.expandedDay !== null ? state.expandedDay * 24 : startHour;
@@ -220,6 +230,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           todayHour: null as number | null,
           viewMode: s.viewMode,
           dpr,
+          // Share-group visual fields
+          hoveredShareTaskIds: hoveredShareRef.current?.taskIds,
+          hoveredShareColor: hoveredShareRef.current?.color,
+          shareColorMap: shareColorMap ? new Map(Array.from(shareColorMap.entries()).map(([k, v]) => [k, v.color])) : undefined,
         };
 
         // L0: Grid (row bg + hover highlight + grid lines)
@@ -358,6 +372,38 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         onTooltipShow(hit.task, e.clientX, e.clientY);
       } else if (!hit && onTooltipHide) {
         onTooltipHide();
+      }
+
+      // Share-group hover debounce (150ms)
+      if (shareHoverTimerRef.current) {
+        clearTimeout(shareHoverTimerRef.current);
+        shareHoverTimerRef.current = null;
+      }
+
+      if (!newHover || !shareColorMap?.has(newHover)) {
+        // Clear immediately when leaving share task
+        if (hoveredShareRef.current) {
+          hoveredShareRef.current = null;
+          dispatch({ type: 'MARK_DIRTY' });
+          onShareHover?.(null, '');
+        }
+      } else {
+        // Debounce: activate after 150ms
+        shareHoverTimerRef.current = setTimeout(() => {
+          const info = shareColorMap.get(newHover);
+          if (!info) return;
+          hoveredShareRef.current = { taskIds: info.peers, color: info.color };
+          dispatch({ type: 'MARK_DIRTY' });
+          // Build task list for panel
+          const d = dataRef.current;
+          const panelTasks = Array.from(info.peers)
+            .map(id => {
+              const t = d.tasks.find(task => task.id === id);
+              return t ? { id: t.id, label: t.label, color: t.color, isHovered: t.id === newHover } : null;
+            })
+            .filter(Boolean) as Array<{ id: string; label: string; color?: string; isHovered: boolean }>;
+          onShareHover?.(panelTasks, info.color);
+        }, 150);
       }
     }
 

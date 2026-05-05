@@ -175,6 +175,8 @@ export interface WxbGanttChartProps {
   showSelectionPanel?: boolean;
   /** Highlighted link IDs for share group emphasis */
   highlightedLinkIds?: string[];
+  /** Create share group from selection panel (one-click link) */
+  onCreateShareGroup?: (selectedTaskIds: string[]) => void;
   /** CSS class name */
   className?: string;
   /** Inline style */

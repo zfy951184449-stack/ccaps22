@@ -19,7 +19,60 @@ import GanttContextMenu, {
   DEFAULT_BG_MENU_ITEMS,
 } from './GanttContextMenu';
 import GanttSelectionPanel from './GanttSelectionPanel';
+import GanttSharePanel from './GanttSharePanel';
+import type { ShareHoverTask } from './GanttSharePanel';
+import type { GanttLink } from './types';
 import './GanttChart.css';
+
+// Palette for share-group transitive components
+const SHARE_PALETTE = ['#1890FF', '#52C41A', '#FA8C16', '#722ED1', '#EB2F96', '#13C2C2'];
+
+/** Union-Find to compute transitive closure of share group links */
+function buildShareColorMap(
+  links: GanttLink[]
+): Map<string, { peers: Set<string>; color: string }> {
+  if (!links || links.length === 0) return new Map();
+
+  // Union-Find
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    if (!parent.has(x)) parent.set(x, x);
+    if (parent.get(x) !== x) parent.set(x, find(parent.get(x)!));
+    return parent.get(x)!;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a), rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const link of links) {
+    if (link.taskIds.length < 2) continue;
+    for (let i = 1; i < link.taskIds.length; i++) {
+      union(link.taskIds[0], link.taskIds[i]);
+    }
+  }
+
+  // Build components
+  const components = new Map<string, Set<string>>();
+  Array.from(parent.keys()).forEach(id => {
+    const root = find(id);
+    if (!components.has(root)) components.set(root, new Set());
+    components.get(root)!.add(id);
+  });
+
+  // Assign colors and build result
+  const result = new Map<string, { peers: Set<string>; color: string }>();
+  let colorIdx = 0;
+  Array.from(components.values()).forEach(members => {
+    if (members.size < 2) return; // solo tasks don't need coloring
+    const color = SHARE_PALETTE[colorIdx % SHARE_PALETTE.length];
+    colorIdx++;
+    Array.from(members).forEach(id => {
+      result.set(id, { peers: members, color });
+    });
+  });
+  return result;
+}
 
 const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   tasks,
@@ -60,6 +113,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   backgroundMenuItems,
   showSelectionPanel = true,
   highlightedLinkIds,
+  onCreateShareGroup,
   className,
   style,
 }) => {
@@ -100,6 +154,26 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   const [undoToast, setUndoToast] = useState<UndoToastData | null>(null);
   const handleUndoToast = useCallback((data: { message: string; onUndo: () => void } | null) => {
     setUndoToast(data);
+  }, []);
+
+  // ===== Share Color Map (Union-Find transitive closure) =====
+  const shareColorMap = useMemo(() => buildShareColorMap(links), [links]);
+
+  // Share hover panel state
+  const [shareHoverState, setShareHoverState] = useState<{
+    tasks: ShareHoverTask[];
+    color: string;
+  } | null>(null);
+
+  const handleShareHover = useCallback((
+    tasks: ShareHoverTask[] | null,
+    color: string
+  ) => {
+    if (!tasks || tasks.length === 0) {
+      setShareHoverState(null);
+    } else {
+      setShareHoverState({ tasks, color });
+    }
   }, []);
 
   // ===== Context Menu State =====
@@ -310,6 +384,8 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onContextMenu={handleContextMenu}
           onUndoToast={handleUndoToast}
           highlightedLinkIds={highlightedLinkIds}
+          shareColorMap={shareColorMap}
+          onShareHover={handleShareHover}
         />
 
         {/* Selection Panel (cart-style) */}
@@ -321,6 +397,16 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
             onDeselectTask={handleDeselectTask}
             onDeselectAll={handleDeselectAll}
             onSelectAllInGroup={handleSelectAllInGroup}
+            onCreateShareGroup={onCreateShareGroup}
+          />
+        )}
+
+        {/* Share Hover Panel */}
+        {shareHoverState && (
+          <GanttSharePanel
+            tasks={shareHoverState.tasks}
+            componentColor={shareHoverState.color}
+            selectionPanelVisible={showSelectionPanel && state.selectedTaskIds.size > 0}
           />
         )}
 
