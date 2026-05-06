@@ -1,0 +1,460 @@
+/* ── Equipment Management Page ─────────────────────────── */
+.equip-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: calc(100vh - 140px);
+}
+
+/* ── Page Header ─────────────────────────────────────── */
+.equip-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0 0 20px 0;
+  border-bottom: 1px solid var(--wx-gray-100, #f0f0f0);
+}
+
+.equip-page-title-area {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.equip-page-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--wx-gray-900, #111827);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.equip-page-breadcrumb {
+  font-size: 13px;
+  color: var(--wx-gray-400, #9ca3af);
+}
+
+.equip-page-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Toolbar ─────────────────────────────────────────── */
+.equip-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  flex-wrap: wrap;
+}
+
+.equip-toolbar .wxb-search-input {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+.equip-toolbar-spacer {
+  flex: 1;
+}
+
+.equip-view-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--wx-gray-50, #f9fafb);
+  border-radius: 8px;
+  padding: 2px;
+  border: 1px solid var(--wx-gray-200, #e5e7eb);
+}
+
+.equip-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--wx-gray-400, #9ca3af);
+  transition: all 0.2s ease;
+}
+
+.equip-view-btn:hover {
+  color: var(--wx-gray-600, #4b5563);
+  background: var(--wx-gray-100, #f3f4f6);
+}
+
+.equip-view-btn.is-active {
+  background: var(--wx-white, #fff);
+  color: var(--wx-blue-600, #2563eb);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Card View ───────────────────────────────────────── */
+.equip-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 4px 0;
+}
+
+.equip-room-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.equip-room-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.equip-room-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--wx-gray-500, #6b7280);
+  flex-shrink: 0;
+}
+
+.equip-room-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--wx-gray-700, #374151);
+}
+
+.equip-room-count {
+  font-size: 12px;
+  color: var(--wx-gray-400, #9ca3af);
+  background: var(--wx-gray-50, #f9fafb);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.equip-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+/* ── Equipment Card ──────────────────────────────────── */
+.equip-card {
+  position: relative;
+  background: var(--wx-white, #fff);
+  border: 1px solid var(--wx-gray-150, #e8eaed);
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.equip-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 10px 10px 0 0;
+}
+
+.equip-card[data-system="SUS"]::before {
+  background: var(--wx-green-500, #22c55e);
+}
+
+.equip-card[data-system="SS"]::before {
+  background: var(--wx-blue-500, #3b82f6);
+}
+
+.equip-card[data-system=""]::before {
+  background: var(--wx-gray-300, #d1d5db);
+}
+
+.equip-card:hover {
+  border-color: var(--wx-blue-200, #bfdbfe);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+  transform: translateY(-1px);
+}
+
+.equip-card.is-selected {
+  border-color: var(--wx-blue-400, #60a5fa);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12), 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+
+.equip-card.is-inactive {
+  opacity: 0.55;
+}
+
+.equip-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.equip-card-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--wx-gray-50, #f9fafb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--wx-gray-500, #6b7280);
+}
+
+.equip-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.equip-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--wx-gray-800, #1f2937);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.equip-card-code {
+  font-size: 11px;
+  color: var(--wx-gray-400, #9ca3af);
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.equip-card-more {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--wx-gray-400, #9ca3af);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.equip-card:hover .equip-card-more {
+  opacity: 1;
+}
+
+.equip-card-more:hover {
+  background: var(--wx-gray-100, #f3f4f6);
+  color: var(--wx-gray-600, #4b5563);
+}
+
+.equip-card-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.equip-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid var(--wx-gray-100, #f0f0f0);
+}
+
+.equip-card-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--wx-gray-500, #6b7280);
+}
+
+.equip-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.equip-status-dot.is-active {
+  background: var(--wx-green-500, #22c55e);
+}
+
+.equip-status-dot.is-inactive {
+  background: var(--wx-gray-300, #d1d5db);
+}
+
+.equip-card-bindings {
+  font-size: 12px;
+  color: var(--wx-blue-500, #3b82f6);
+  font-weight: 500;
+}
+
+/* ── Table View ──────────────────────────────────────── */
+.equip-table-content {
+  padding: 4px 0;
+}
+
+.equip-batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--wx-blue-50, #eff6ff);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--wx-blue-700, #1d4ed8);
+  font-weight: 500;
+}
+
+.equip-batch-bar .wxb-btn {
+  font-size: 12px;
+}
+
+/* ── Detail Drawer ───────────────────────────────────── */
+.equip-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.equip-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.equip-detail-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--wx-gray-900, #111827);
+}
+
+.equip-detail-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: 500;
+}
+
+.equip-detail-status.is-active {
+  color: var(--wx-green-700, #15803d);
+  background: var(--wx-green-50, #f0fdf4);
+}
+
+.equip-detail-status.is-inactive {
+  color: var(--wx-gray-500, #6b7280);
+  background: var(--wx-gray-100, #f3f4f6);
+}
+
+.equip-detail-code {
+  font-size: 12px;
+  color: var(--wx-gray-400, #9ca3af);
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+}
+
+.equip-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.equip-detail-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.equip-detail-kpi-grid .wxb-kpi-card {
+  padding: 12px 14px;
+}
+
+.equip-detail-kpi-grid .wxb-kpi-title {
+  font-size: 11px;
+}
+
+.equip-detail-kpi-grid .wxb-kpi-value {
+  font-size: 22px;
+}
+
+/* ── Edit Modal ──────────────────────────────────────── */
+.equip-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.equip-edit-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* ── Empty State ─────────────────────────────────────── */
+.equip-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 20px;
+  color: var(--wx-gray-400, #9ca3af);
+}
+
+.equip-empty-icon {
+  width: 56px;
+  height: 56px;
+  color: var(--wx-gray-300, #d1d5db);
+  margin-bottom: 12px;
+}
+
+.equip-empty-text {
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+/* ── No-select text for detail drawer ────────────────── */
+.equip-detail-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+  color: var(--wx-gray-400, #9ca3af);
+  font-size: 14px;
+}
+
+/* ── Responsive ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  .equip-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .equip-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .equip-toolbar .wxb-search-input {
+    width: 100%;
+  }
+}
