@@ -1,0 +1,98 @@
+/**
+ * Equipment Binding UI — CSS
+ *
+ * Used by ProcessTemplateV3Editor:
+ * - .wxb-equip-bind-dropdown: Selection panel equipment popup
+ * - .wxb-equip-bind-option: Individual equipment option
+ * - .wxb-equip-bind-hint: Context hint in create modal
+ */
+
+/* ---- Dropdown Menu (from selection panel) ---- */
+
+.wxb-equip-bind-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--wxb-color-bg-elevated, #1a2332);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px 0;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+.wxb-equip-bind-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--wxb-color-text-primary, #e0e0e0);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.15s ease;
+}
+
+.wxb-equip-bind-option:last-child {
+  border-bottom: none;
+}
+
+.wxb-equip-bind-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.wxb-equip-bind-name {
+  font-weight: 500;
+}
+
+.wxb-equip-bind-meta {
+  margin-left: 4px;
+  color: var(--wxb-color-text-secondary, #8898a8);
+  font-size: 11px;
+}
+
+.wxb-equip-bind-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 2px 0;
+}
+
+.wxb-equip-bind-create {
+  color: var(--wxb-color-info, #4fc3f7) !important;
+  font-weight: 500;
+}
+
+/* ---- Context hint in create modal ---- */
+
+.wxb-equip-bind-hint {
+  padding: 10px 14px;
+  background: rgba(79, 195, 247, 0.08);
+  border: 1px solid rgba(79, 195, 247, 0.2);
+  border-radius: 8px;
+  color: var(--wxb-color-info, #4fc3f7);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---- Scrollbar for dropdown ---- */
+
+.wxb-equip-bind-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.wxb-equip-bind-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wxb-equip-bind-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.wxb-equip-bind-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}

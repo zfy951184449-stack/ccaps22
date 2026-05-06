@@ -11,6 +11,10 @@ import axios from 'axios';
 import { WxbGanttChart } from '../wxb-ui';
 import { WxbSkeleton, WxbEmpty } from '../wxb-ui';
 import { WxbCard } from '../wxb-ui';
+import { WxbModal } from '../wxb-ui';
+import { WxbInput } from '../wxb-ui';
+import { WxbSelect } from '../wxb-ui';
+import { WxbButton } from '../wxb-ui';
 import type { GanttTask, YAxisMode } from '../wxb-ui/GanttChart/types';
 import type { ContextMenuItem } from '../wxb-ui/GanttChart/GanttContextMenu';
 import { processTemplateV2Api } from '../../services';
@@ -27,6 +31,7 @@ import {
 import { useV3EditorActions } from './useV3EditorActions';
 import { useResourceView } from './useResourceView';
 import V3EditorHeader from './V3EditorHeader';
+import './EquipmentBinding.css';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -513,42 +518,32 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onCreateShareGroup={handleQuickLink}
           selectionPanelExtraActions={(
             <div ref={bindDropdownRef} style={{ position: 'relative', width: '100%' }}>
-              <button
-                className="wxb-gantt-sel-share-btn"
+              <WxbButton
+                variant="primary"
+                size="sm"
                 onClick={() => setBindDropdownOpen(v => !v)}
-                style={{ width: '100%', padding: '6px 10px', cursor: 'pointer',
-                  background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 100%)',
-                  border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
-                  color: '#e0e0e0', fontSize: 12, textAlign: 'center' }}
+                style={{ width: '100%' }}
               >
-                🔗 绑定到设备 ▾
-              </button>
+                🔗 绑定到设备 {bindDropdownOpen ? '▴' : '▾'}
+              </WxbButton>
               {bindDropdownOpen && (
-                <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0,
-                  marginBottom: 4, background: '#1a2332', border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: 6, padding: '4px 0', maxHeight: 240, overflowY: 'auto',
-                  boxShadow: '0 -4px 20px rgba(0,0,0,0.4)', zIndex: 1000 }}>
+                <div className="wxb-equip-bind-dropdown">
                   {equipmentNodes.map(node => (
                     <div key={node.id}
-                      onClick={() => void handleBatchBind(node.id)}
-                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12,
-                        color: '#e0e0e0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                      {node.nodeName}
+                      className="wxb-equip-bind-option"
+                      onClick={() => void handleBatchBind(node.id)}>
+                      <span className="wxb-equip-bind-name">{node.nodeName}</span>
                       {(node.equipmentSystemType || node.equipmentClass) &&
-                        <span style={{ marginLeft: 6, color: '#8898a8', fontSize: 11 }}>
+                        <span className="wxb-equip-bind-meta">
                           ({[node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ')})
                         </span>
                       }
                     </div>
                   ))}
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '2px 0' }} />
+                  <div className="wxb-equip-bind-divider" />
                   <div
-                    onClick={() => { setShowCreateEquipModal(true); setBindDropdownOpen(false); setPendingBindTask(null); }}
-                    style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: '#4fc3f7' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    className="wxb-equip-bind-option wxb-equip-bind-create"
+                    onClick={() => { setShowCreateEquipModal(true); setBindDropdownOpen(false); setPendingBindTask(null); }}>
                     + 新建设备...
                   </div>
                 </div>
@@ -571,75 +566,54 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         onSubmit={shareService.submitModal}
       />
 
-      {/* Create Equipment Modal */}
-      {showCreateEquipModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex',
-          alignItems: 'center', justifyContent: 'center' }}
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowCreateEquipModal(false); setPendingBindTask(null); } }}>
-          <div style={{ background: '#1a2332', borderRadius: 12, padding: 24, width: 400,
-            border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-            <h3 style={{ color: '#e0e0e0', margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>
-              新建设备
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={{ color: '#8898a8', fontSize: 12, display: 'block', marginBottom: 4 }}>设备名称 *</label>
-                <input
-                  value={newEquipName}
-                  onChange={e => setNewEquipName(e.target.value)}
-                  placeholder="例如: BR-201"
-                  style={{ width: '100%', padding: '8px 12px', background: '#0f1923',
-                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
-                    color: '#e0e0e0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ color: '#8898a8', fontSize: 12, display: 'block', marginBottom: 4 }}>材质系统</label>
-                  <select
-                    value={newEquipSystemType}
-                    onChange={e => setNewEquipSystemType(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', background: '#0f1923',
-                      border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
-                      color: '#e0e0e0', fontSize: 13, outline: 'none' }}>
-                    <option value="SUS">SUS (一次性)</option>
-                    <option value="SS">SS (不锈钢)</option>
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ color: '#8898a8', fontSize: 12, display: 'block', marginBottom: 4 }}>设备类别</label>
-                  <input
-                    value={newEquipClass}
-                    onChange={e => setNewEquipClass(e.target.value)}
-                    placeholder="例如: REACTOR"
-                    style={{ width: '100%', padding: '8px 12px', background: '#0f1923',
-                      border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
-                      color: '#e0e0e0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-              </div>
+      {/* Create Equipment Modal — Wxb Design System */}
+      <WxbModal
+        open={showCreateEquipModal}
+        title="新建设备"
+        okText={pendingBindTask ? '创建并绑定' : '创建设备'}
+        cancelText="取消"
+        onOk={() => void handleCreateEquipment()}
+        onCancel={() => { setShowCreateEquipModal(false); setPendingBindTask(null); }}
+        width={440}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <WxbInput
+            label="设备名称"
+            value={newEquipName}
+            onChange={e => setNewEquipName(e.target.value)}
+            placeholder="例如: BR-201"
+            error={!newEquipName.trim() ? undefined : undefined}
+          />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <WxbSelect
+                label="材质系统"
+                value={newEquipSystemType}
+                onChange={(val) => setNewEquipSystemType(val as string)}
+                options={[
+                  { label: 'SUS (一次性)', value: 'SUS' },
+                  { label: 'SS (不锈钢)', value: 'SS' },
+                ]}
+                style={{ width: '100%' }}
+              />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
-              <button
-                onClick={() => { setShowCreateEquipModal(false); setPendingBindTask(null); }}
-                style={{ padding: '8px 16px', background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
-                  color: '#8898a8', fontSize: 13, cursor: 'pointer' }}>
-                取消
-              </button>
-              <button
-                onClick={() => void handleCreateEquipment()}
-                style={{ padding: '8px 16px',
-                  background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 100%)',
-                  border: 'none', borderRadius: 6,
-                  color: '#e0e0e0', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-                {pendingBindTask ? '创建并绑定' : '创建设备'}
-              </button>
+            <div style={{ flex: 1 }}>
+              <WxbInput
+                label="设备类别"
+                value={newEquipClass}
+                onChange={e => setNewEquipClass(e.target.value)}
+                placeholder="例如: REACTOR"
+              />
             </div>
           </div>
+          {pendingBindTask && (
+            <div className="wxb-equip-bind-hint">
+              💡 创建后将自动绑定到操作「{pendingBindTask.label}」
+            </div>
+          )}
         </div>
-      )}
+      </WxbModal>
     </div>
   );
 };
