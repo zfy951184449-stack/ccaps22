@@ -185,7 +185,7 @@ function buildStageEquipmentGroups(
         : null;
 
       const equipLabel = isUnbound
-        ? '⚠️ 未绑定设备'
+        ? '[未绑定] 设备'
         : (equipInfo?.name ?? equipGroupId);
 
       // Create the equipment group under the stage
@@ -266,7 +266,7 @@ function buildEquipmentGroups(
       : null;
 
     const equipLabel = isUnbound
-      ? `⚠️ 未绑定设备 (${eqTasks.length})`
+      ? `[未绑定] 设备 (${eqTasks.length})`
       : (equipInfo?.name ?? equipKey);
 
     groups.push({

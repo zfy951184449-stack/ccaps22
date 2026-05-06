@@ -260,7 +260,7 @@ export function useGanttDrag({
       const sign = deltaHours > 0 ? '+' : '';
       dismissToast();
       const toastData: UndoToastData = {
-        message: `🔗 已移动 "${label}" 下 ${affectedCount} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
+        message: `已移动 "${label}" 下 ${affectedCount} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
         onUndo: () => {
           // Restore from undo stack
           const entry = undoStack.current.pop();

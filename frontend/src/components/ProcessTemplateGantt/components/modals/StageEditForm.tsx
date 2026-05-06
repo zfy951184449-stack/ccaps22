@@ -61,7 +61,7 @@ export const StageEditForm: React.FC<StageEditFormProps> = () => {
                 border: '1px solid #d6e4ff',
                 marginBottom: '16px'
             }}>
-                <Text strong style={{ color: '#1890ff' }}>💡 时间锚定说明：</Text>
+                <Text strong style={{ color: '#1890ff' }}>时间锚定说明：</Text>
                 <div style={{ marginTop: '8px', color: '#1f1f1f', fontSize: '12px' }}>
                     • 阶段原点：定义该阶段Day0在模板总轴上的位置<br />
                     • 操作定位：阶段内操作相对于阶段Day0进行定位<br />

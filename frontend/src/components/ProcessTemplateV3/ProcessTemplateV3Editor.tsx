@@ -329,7 +329,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           key: `bind-equip-${node.id}`,
           label: equipLabel(node),
           icon: currentBinding?.resourceNodeId === node.id
-            ? React.createElement('span', { style: { color: '#52c41a', fontWeight: 'bold' } }, '✓')
+            ? React.createElement('span', { style: { color: '#52c41a', fontWeight: 'bold', fontSize: 12 } }, '✔')
             : undefined,
         })),
         { key: 'div-unbind', label: '—', divider: true },
@@ -524,7 +524,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
                 onClick={() => setBindDropdownOpen(v => !v)}
                 style={{ width: '100%' }}
               >
-                🔗 绑定到设备 {bindDropdownOpen ? '▴' : '▾'}
+                绑定到设备 {bindDropdownOpen ? '▲' : '▼'}
               </WxbButton>
               {bindDropdownOpen && (
                 <div className="wxb-equip-bind-dropdown">
@@ -609,7 +609,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           </div>
           {pendingBindTask && (
             <div className="wxb-equip-bind-hint">
-              💡 创建后将自动绑定到操作「{pendingBindTask.label}」
+              提示：创建后将自动绑定到操作「{pendingBindTask.label}」
             </div>
           )}
         </div>

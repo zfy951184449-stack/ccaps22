@@ -1068,9 +1068,9 @@ export function drawDragOverlay(
 
       let text: string;
       if (dragState.warningLevel === 'danger') {
-        text = `⚠ 大范围偏移！${sign}${dragState.deltaHours.toFixed(1)}h · ${count} 个任务`;
+        text = `[!] 大范围偏移！${sign}${dragState.deltaHours.toFixed(1)}h · ${count} 个任务`;
       } else if (dragState.warningLevel === 'warning') {
-        text = `⚠ 将移动 ${count} 个任务 ${sign}${dragState.deltaHours.toFixed(1)}h`;
+        text = `将移动 ${count} 个任务 ${sign}${dragState.deltaHours.toFixed(1)}h`;
       } else {
         text = `移动 ${count} 个任务 ${sign}${dragState.deltaHours.toFixed(1)}h`;
       }

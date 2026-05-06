@@ -1,16 +1,19 @@
 /**
  * WxbShareGroupModal — 共享组创建/编辑弹窗
  *
- * Wxb 设计体系版本（替代旧版 Antd ShareGroupModal）
+ * Wxb 设计体系版本（使用 WxbModal + WxbInput + WxbButton + WxbSearchInput）
  *
  * 核心改进：
  * - 预填充已选成员（从多选快建时跳过左栏选择）
- * - 原生 HTML + CSS Variables
- * - 入场/退场动画
+ * - 使用 wxb-ui 标准组件（白色主题）
  * - 按阶段分组的双栏选择
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { WxbModal } from '../../wxb-ui/Modal/WxbModal';
+import { WxbInput } from '../../wxb-ui/Input/Input';
+import { WxbButton } from '../../wxb-ui/Button/Button';
+import { WxbSearchInput } from '../../wxb-ui/SearchInput/SearchInput';
 import type { ShareGroup } from '../types';
 import type { ShareMode } from '../useShareGroupService';
 
@@ -36,7 +39,8 @@ const ModeCard: React.FC<{
   onClick: () => void;
 }> = ({ mode, selected, onClick }) => {
   const isSame = mode === 'SAME_TEAM';
-  const color = isSame ? '#1890ff' : '#faad14';
+  const color = isSame ? 'var(--wx-blue-600, #1F6FEB)' : 'var(--wx-warning, #E8B53C)';
+  const bgActive = isSame ? 'var(--wx-blue-50, #E8F4FD)' : '#FFF8E6';
 
   return (
     <div
@@ -47,28 +51,28 @@ const ModeCard: React.FC<{
         alignItems: 'center',
         gap: 12,
         padding: '12px 16px',
-        border: `1.5px solid ${selected ? color : 'rgba(255,255,255,0.1)'}`,
+        border: `1.5px solid ${selected ? color : 'var(--wx-border, #E4EAF1)'}`,
         borderRadius: 8,
         cursor: 'pointer',
-        background: selected
-          ? `${color}15`
-          : 'rgba(255,255,255,0.02)',
+        background: selected ? bgActive : 'var(--wx-surface-0, #FFFFFF)',
         transition: 'all 0.25s ease',
       }}
     >
-      <div style={{ fontSize: 22, color: selected ? color : '#8898A8' }}>
-        {isSame ? '👥' : '↔️'}
+      <div style={{ fontSize: 22, color: selected ? color : 'var(--wx-fg-3, #5A6B7E)' }}>
+        {isSame
+          ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 16l-4-4 4-4"/><path d="M17 8l4 4-4 4"/><line x1="3" y1="12" x2="21" y2="12"/></svg>}
       </div>
       <div>
-        <div style={{ fontWeight: 600, fontSize: 13, color: '#E2E8F0' }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--wx-ink, #0F1B2D)' }}>
           {isSame ? '同组执行' : '不同人员'}
         </div>
-        <div style={{ fontSize: 11, color: '#8898A8', marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: 'var(--wx-fg-3, #5A6B7E)', marginTop: 2 }}>
           {isSame ? '组内操作由同一批人员完成' : '组内操作必须由不同人员完成'}
         </div>
       </div>
       {selected && (
-        <div style={{ marginLeft: 'auto', color, fontSize: 14 }}>✓</div>
+        <div style={{ marginLeft: 'auto', color, fontSize: 14, fontWeight: 700 }}>✔</div>
       )}
     </div>
   );
@@ -172,504 +176,358 @@ const WxbShareGroupModal: React.FC<WxbShareGroupModalProps> = ({
     }
   }, [groupName, shareMode, selectedIds, onSubmit]);
 
-  if (!visible) return null;
+  const canSubmit = selectedIds.length >= 2 && groupName.trim().length > 0;
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.55)',
-        backdropFilter: 'blur(4px)',
-        animation: 'wxb-modal-bg-in 0.2s ease',
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
+    <WxbModal
+      open={visible}
+      title={isEditMode ? '编辑共享组' : '创建共享组'}
+      onCancel={onCancel}
+      onOk={handleSubmit}
+      okText={submitting ? '提交中...' : isEditMode ? '更新共享组' : '创建共享组'}
+      cancelText="取消"
+      confirmLoading={submitting}
+      width={showLeftPanel ? 780 : 520}
+      destroyOnClose
+      centered
+      maskClosable={false}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--wx-fg-3, #5A6B7E)' }}>
+            {selectedIds.length < 2
+              ? '至少需要选择 2 个操作'
+              : `已选 ${selectedIds.length} 个操作`}
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <WxbButton variant="ghost" onClick={onCancel}>
+              取消
+            </WxbButton>
+            <WxbButton
+              variant="primary"
+              onClick={handleSubmit}
+              disabled={!canSubmit || submitting}
+            >
+              {submitting ? '提交中...' : isEditMode ? '更新共享组' : '创建共享组'}
+            </WxbButton>
+          </div>
+        </div>
+      }
     >
+      {/* Group Name */}
+      <div style={{ marginBottom: 16 }}>
+        <WxbInput
+          label="共享组名称"
+          value={groupName}
+          onChange={(e) => setGroupName(e.target.value)}
+          maxLength={50}
+          placeholder="例如：接种-培养连续作业"
+          error={!groupName.trim() ? '请输入共享组名称' : false}
+        />
+      </div>
+
+      {/* Share Mode Cards */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+        <ModeCard
+          mode="SAME_TEAM"
+          selected={shareMode === 'SAME_TEAM'}
+          onClick={() => setShareMode('SAME_TEAM')}
+        />
+        <ModeCard
+          mode="DIFFERENT"
+          selected={shareMode === 'DIFFERENT'}
+          onClick={() => setShareMode('DIFFERENT')}
+        />
+      </div>
+
+      {/* Separator */}
       <div
         style={{
-          width: showLeftPanel ? 780 : 520,
-          maxHeight: '85vh',
-          background: '#1A2332',
-          borderRadius: 12,
-          border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+          height: 1,
+          background: 'var(--wx-border, #E4EAF1)',
+          margin: '0 0 16px 0',
+        }}
+      />
+
+      {/* Dual-column / Single-column selector */}
+      <div
+        style={{
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          animation: 'wxb-modal-in 0.25s ease',
-          transition: 'width 0.3s ease',
+          gap: 16,
+          height: showLeftPanel ? 320 : 'auto',
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid rgba(255,255,255,0.06)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#E2E8F0' }}>
-            {isEditMode ? '编辑共享组' : '创建共享组'}
-          </span>
-          <span
-            onClick={onCancel}
-            style={{
-              cursor: 'pointer',
-              color: '#8898A8',
-              fontSize: 18,
-              lineHeight: 1,
-              padding: '2px 6px',
-              borderRadius: 4,
-            }}
-          >
-            ×
-          </span>
-        </div>
-
-        {/* Body */}
-        <div style={{ padding: '16px 20px', flex: 1, overflowY: 'auto' }}>
-          {/* Group Name */}
-          <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 12,
-                color: '#8898A8',
-                marginBottom: 6,
-                fontWeight: 500,
-              }}
-            >
-              共享组名称 *
-            </label>
-            <input
-              type="text"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
-              maxLength={50}
-              placeholder="例如：接种-培养连续作业"
-              style={{
-                width: '100%',
-                padding: '8px 12px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.12)',
-                borderRadius: 6,
-                color: '#E2E8F0',
-                fontSize: 13,
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          {/* Share Mode Cards */}
-          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-            <ModeCard
-              mode="SAME_TEAM"
-              selected={shareMode === 'SAME_TEAM'}
-              onClick={() => setShareMode('SAME_TEAM')}
-            />
-            <ModeCard
-              mode="DIFFERENT"
-              selected={shareMode === 'DIFFERENT'}
-              onClick={() => setShareMode('DIFFERENT')}
-            />
-          </div>
-
-          {/* Separator */}
+        {/* Left Panel: Available operations */}
+        {showLeftPanel && (
           <div
             style={{
-              height: 1,
-              background: 'rgba(255,255,255,0.06)',
-              margin: '0 0 16px 0',
-            }}
-          />
-
-          {/* Dual-column / Single-column selector */}
-          <div
-            style={{
+              flex: 1,
+              border: '1px solid var(--wx-border, #E4EAF1)',
+              borderRadius: 8,
               display: 'flex',
-              gap: 16,
-              height: showLeftPanel ? 320 : 'auto',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
-            {/* Left Panel: Available operations */}
-            {showLeftPanel && (
-              <div
-                style={{
-                  flex: 1,
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: 8,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    borderBottom: '1px solid rgba(255,255,255,0.06)',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                  }}
-                >
-                  <span
-                    style={{ fontSize: 12, fontWeight: 600, color: '#8898A8' }}
-                  >
-                    待选操作
-                  </span>
-                  <input
-                    type="text"
-                    value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    placeholder="搜索..."
-                    style={{
-                      width: 100,
-                      padding: '3px 8px',
-                      background: 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 4,
-                      color: '#CBD5E0',
-                      fontSize: 11,
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-                <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-                  {Object.keys(groupedOperations).length === 0 ? (
-                    <div
-                      style={{
-                        padding: 24,
-                        textAlign: 'center',
-                        color: '#5A6B7E',
-                        fontSize: 12,
-                      }}
-                    >
-                      无待选操作
-                    </div>
-                  ) : (
-                    Object.entries(groupedOperations).map(([stageName, ops]) => (
-                      <div key={stageName} style={{ marginBottom: 8 }}>
-                        <div
-                          style={{
-                            background: 'rgba(255,255,255,0.04)',
-                            padding: '3px 8px',
-                            borderRadius: 4,
-                            fontSize: 11,
-                            color: '#6B7FA0',
-                            fontWeight: 600,
-                            marginBottom: 2,
-                          }}
-                        >
-                          {stageName}
-                        </div>
-                        {ops.map((op) => (
-                          <div
-                            key={op.scheduleId}
-                            onClick={() => handleAdd(op.scheduleId)}
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '6px 8px',
-                              borderBottom: '1px solid rgba(255,255,255,0.03)',
-                              cursor: 'pointer',
-                              borderRadius: 4,
-                              transition: 'background 0.15s',
-                            }}
-                            onMouseEnter={(e) => {
-                              (e.currentTarget as HTMLElement).style.background =
-                                'rgba(24,144,255,0.08)';
-                            }}
-                            onMouseLeave={(e) => {
-                              (e.currentTarget as HTMLElement).style.background =
-                                'transparent';
-                            }}
-                          >
-                            <div>
-                              <div
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: 500,
-                                  color: '#CBD5E0',
-                                }}
-                              >
-                                {op.operationName}
-                              </div>
-                              <div style={{ fontSize: 10, color: '#5A6B7E' }}>
-                                {op.requiredPeople} 人
-                              </div>
-                            </div>
-                            <span
-                              style={{
-                                fontSize: 14,
-                                color: '#4A90D9',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              +
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Right Panel: Selected members */}
             <div
               style={{
-                flex: 1,
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: 8,
+                padding: '8px 12px',
+                borderBottom: '1px solid var(--wx-border, #E4EAF1)',
                 display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
+                justifyContent: 'space-between',
+                alignItems: 'center',
               }}
             >
-              <div
-                style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
+              <span
+                style={{ fontSize: 12, fontWeight: 600, color: 'var(--wx-fg-3, #5A6B7E)' }}
               >
-                <span
-                  style={{ fontSize: 12, fontWeight: 600, color: '#8898A8' }}
-                >
-                  已选成员{' '}
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      background: 'rgba(24,144,255,0.2)',
-                      color: '#5ba8f5',
-                      borderRadius: 10,
-                      padding: '0 7px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      marginLeft: 4,
-                    }}
-                  >
-                    {selectedIds.length}
-                  </span>
-                </span>
-                {selectedIds.length > 0 && (
-                  <span
-                    onClick={() => setSelectedIds([])}
-                    style={{
-                      fontSize: 11,
-                      color: '#e25555',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    清空
-                  </span>
-                )}
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
-                {selectedOperations.length === 0 ? (
-                  <div
-                    style={{
-                      padding: 24,
-                      textAlign: 'center',
-                      color: '#5A6B7E',
-                      fontSize: 12,
-                    }}
-                  >
-                    {showLeftPanel
-                      ? '请从左侧选择操作'
-                      : '暂无选中成员'}
-                  </div>
-                ) : (
-                  selectedOperations.map((op, index) => (
-                    <div
-                      key={op.scheduleId}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '6px 8px',
-                        background: 'rgba(82,196,26,0.06)',
-                        border: '1px solid rgba(82,196,26,0.15)',
-                        borderRadius: 6,
-                        marginBottom: 6,
-                        animation: 'wxb-fade-in 0.2s ease',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: '50%',
-                          background: 'rgba(82,196,26,0.15)',
-                          color: '#52c41a',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: 10,
-                          fontWeight: 700,
-                          marginRight: 8,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {index + 1}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 500,
-                            color: '#CBD5E0',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
-                        >
-                          {op.operationName}
-                        </div>
-                        <div style={{ fontSize: 10, color: '#5A6B7E' }}>
-                          {op.stageName} · {op.requiredPeople} 人
-                        </div>
-                      </div>
-                      <span
-                        onClick={() => handleRemove(op.scheduleId)}
-                        style={{
-                          cursor: 'pointer',
-                          color: '#e25555',
-                          fontSize: 14,
-                          padding: '0 4px',
-                          flexShrink: 0,
-                        }}
-                      >
-                        ×
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Toggle "add more" button when left panel is hidden */}
-              {!showLeftPanel && (
+                待选操作
+              </span>
+              <WxbSearchInput
+                value={searchKeyword}
+                onChange={(v) => setSearchKeyword(v)}
+                placeholder="搜索..."
+                style={{ width: 120 }}
+              />
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+              {Object.keys(groupedOperations).length === 0 ? (
                 <div
                   style={{
-                    padding: '6px 12px',
-                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                    padding: 24,
+                    textAlign: 'center',
+                    color: 'var(--wx-fg-3, #5A6B7E)',
+                    fontSize: 12,
                   }}
                 >
-                  <button
-                    onClick={() => setShowLeftPanel(true)}
-                    style={{
-                      width: '100%',
-                      padding: '5px 0',
-                      background: 'transparent',
-                      border: '1px dashed rgba(255,255,255,0.12)',
-                      borderRadius: 6,
-                      color: '#5ba8f5',
-                      fontSize: 11,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    + 添加更多成员
-                  </button>
+                  无待选操作
                 </div>
+              ) : (
+                Object.entries(groupedOperations).map(([stageName, ops]) => (
+                  <div key={stageName} style={{ marginBottom: 8 }}>
+                    <div
+                      style={{
+                        background: 'var(--wx-surface-1, #F7F9FB)',
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        color: 'var(--wx-fg-3, #5A6B7E)',
+                        fontWeight: 600,
+                        marginBottom: 2,
+                      }}
+                    >
+                      {stageName}
+                    </div>
+                    {ops.map((op) => (
+                      <div
+                        key={op.scheduleId}
+                        onClick={() => handleAdd(op.scheduleId)}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '6px 8px',
+                          borderBottom: '1px solid var(--wx-border-subtle, #F0F3F7)',
+                          cursor: 'pointer',
+                          borderRadius: 4,
+                          transition: 'background 0.15s',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background =
+                            'var(--wx-blue-50, #E8F4FD)';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background =
+                            'transparent';
+                        }}
+                      >
+                        <div>
+                          <div
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: 'var(--wx-ink, #0F1B2D)',
+                            }}
+                          >
+                            {op.operationName}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--wx-fg-3, #5A6B7E)' }}>
+                            {op.requiredPeople} 人
+                          </div>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            color: 'var(--wx-blue-600, #1F6FEB)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          +
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))
               )}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Footer */}
+        {/* Right Panel: Selected members */}
         <div
           style={{
-            padding: '12px 20px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            flex: 1,
+            border: '1px solid var(--wx-border, #E4EAF1)',
+            borderRadius: 8,
             display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
+            flexDirection: 'column',
+            overflow: 'hidden',
           }}
         >
-          <span style={{ fontSize: 11, color: '#5A6B7E' }}>
-            {selectedIds.length < 2
-              ? '⚠ 至少需要选择 2 个操作'
-              : `✓ 已选 ${selectedIds.length} 个操作`}
-          </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={onCancel}
-              style={{
-                padding: '6px 16px',
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 6,
-                color: '#8898A8',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
+          <div
+            style={{
+              padding: '8px 12px',
+              borderBottom: '1px solid var(--wx-border, #E4EAF1)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <span
+              style={{ fontSize: 12, fontWeight: 600, color: 'var(--wx-fg-3, #5A6B7E)' }}
             >
-              取消
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={
-                selectedIds.length < 2 || !groupName.trim() || submitting
-              }
-              style={{
-                padding: '6px 20px',
-                background:
-                  selectedIds.length >= 2 && groupName.trim()
-                    ? 'linear-gradient(135deg, #1890ff, #096dd9)'
-                    : 'rgba(255,255,255,0.05)',
-                border: 'none',
-                borderRadius: 6,
-                color:
-                  selectedIds.length >= 2 && groupName.trim()
-                    ? '#fff'
-                    : '#5A6B7E',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor:
-                  selectedIds.length >= 2 && groupName.trim()
-                    ? 'pointer'
-                    : 'not-allowed',
-                opacity: submitting ? 0.6 : 1,
-              }}
-            >
-              {submitting
-                ? '提交中...'
-                : isEditMode
-                ? '更新共享组'
-                : '创建共享组'}
-            </button>
+              已选成员{' '}
+              <span
+                style={{
+                  display: 'inline-block',
+                  background: 'var(--wx-blue-50, #E8F4FD)',
+                  color: 'var(--wx-blue-600, #1F6FEB)',
+                  borderRadius: 10,
+                  padding: '0 7px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  marginLeft: 4,
+                }}
+              >
+                {selectedIds.length}
+              </span>
+            </span>
+            {selectedIds.length > 0 && (
+              <span
+                onClick={() => setSelectedIds([])}
+                style={{
+                  fontSize: 11,
+                  color: 'var(--wx-danger, #D6493A)',
+                  cursor: 'pointer',
+                }}
+              >
+                清空
+              </span>
+            )}
           </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '4px 8px' }}>
+            {selectedOperations.length === 0 ? (
+              <div
+                style={{
+                  padding: 24,
+                  textAlign: 'center',
+                  color: 'var(--wx-fg-3, #5A6B7E)',
+                  fontSize: 12,
+                }}
+              >
+                {showLeftPanel
+                  ? '请从左侧选择操作'
+                  : '暂无选中成员'}
+              </div>
+            ) : (
+              selectedOperations.map((op, index) => (
+                <div
+                  key={op.scheduleId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '6px 8px',
+                    background: '#F0FFF4',
+                    border: '1px solid #C6F6D5',
+                    borderRadius: 6,
+                    marginBottom: 6,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: '#C6F6D5',
+                      color: '#38A169',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      marginRight: 8,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {index + 1}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: 'var(--wx-ink, #0F1B2D)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {op.operationName}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--wx-fg-3, #5A6B7E)' }}>
+                      {op.stageName} · {op.requiredPeople} 人
+                    </div>
+                  </div>
+                  <span
+                    onClick={() => handleRemove(op.scheduleId)}
+                    style={{
+                      cursor: 'pointer',
+                      color: 'var(--wx-danger, #D6493A)',
+                      fontSize: 14,
+                      padding: '0 4px',
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Toggle "add more" button when left panel is hidden */}
+          {!showLeftPanel && (
+            <div
+              style={{
+                padding: '6px 12px',
+                borderTop: '1px solid var(--wx-border, #E4EAF1)',
+              }}
+            >
+              <WxbButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowLeftPanel(true)}
+                style={{
+                  width: '100%',
+                  border: '1px dashed var(--wx-border, #E4EAF1)',
+                }}
+              >
+                + 添加更多成员
+              </WxbButton>
+            </div>
+          )}
         </div>
       </div>
-
-      {/* CSS Animations */}
-      <style>{`
-        @keyframes wxb-modal-bg-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes wxb-modal-in {
-          from { opacity: 0; transform: scale(0.95) translateY(10px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes wxb-fade-in {
-          from { opacity: 0; transform: translateX(-8px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-      `}</style>
-    </div>
+    </WxbModal>
   );
 };
 

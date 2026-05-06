@@ -139,7 +139,7 @@ const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
             onMouseEnter={e => { (e.target as HTMLElement).style.background = 'rgba(24,144,255,0.25)'; }}
             onMouseLeave={e => { (e.target as HTMLElement).style.background = 'linear-gradient(135deg, rgba(24,144,255,0.15), rgba(24,144,255,0.08))'; }}
           >
-            🔗 从选中项创建共享组 ({selectedTaskIds.size})
+            从选中项创建共享组 ({selectedTaskIds.size})
           </button>
         </div>
       )}
