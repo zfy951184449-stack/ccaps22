@@ -27,6 +27,9 @@ import {
   WxbModal,
   WxbFormField,
   WxbDropdown,
+  WxbInput,
+  WxbTextarea,
+  WxbCheckbox,
 } from '../wxb-ui';
 import type { WxbTabItem } from '../wxb-ui/Tabs/Tabs';
 
@@ -305,13 +308,9 @@ const ProcessTemplateV3List: React.FC = () => {
           复制
         </WxbButton>
         <div style={{ flex: 1 }} />
-        <input
-          type="radio"
-          name="v3-select"
+        <WxbCheckbox
           checked={selectedId === t.id}
           onChange={() => setSelectedId(t.id)}
-          onClick={(e) => e.stopPropagation()}
-          style={{ accentColor: 'var(--wx-blue-500, #1F6FEB)' }}
         />
       </div>
     </WxbCard>
@@ -326,10 +325,9 @@ const ProcessTemplateV3List: React.FC = () => {
       onClick={() => goEditor(t)}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
-        <input
-          type="radio" name="v3-select-compact" checked={selectedId === t.id}
-          onChange={() => setSelectedId(t.id)} onClick={(e) => e.stopPropagation()}
-          style={{ accentColor: 'var(--wx-blue-500, #1F6FEB)' }}
+        <WxbCheckbox
+          checked={selectedId === t.id}
+          onChange={() => setSelectedId(t.id)}
         />
         <WxbTag color="blue">{t.template_code}</WxbTag>
         <span style={{ fontWeight: 600, color: 'var(--wx-ink, #0F1B2D)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -459,15 +457,13 @@ const ProcessTemplateV3List: React.FC = () => {
         onCancel={() => { setCreateOpen(false); setCreateName(''); setCreateTeamId(null); setCreateDesc(''); }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <WxbFormField label="模板名称" required>
-            <input
-              className="wxb-input"
-              placeholder="输入模板名称"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              style={{ width: '100%' }}
-            />
-          </WxbFormField>
+          <WxbInput
+            label="模板名称"
+            placeholder="输入模板名称"
+            value={createName}
+            onChange={(e) => setCreateName(e.target.value)}
+            style={{ width: '100%' }}
+          />
           <WxbFormField label="所属团队">
             <WxbSelect
               value={createTeamId ?? undefined}
@@ -478,16 +474,14 @@ const ProcessTemplateV3List: React.FC = () => {
               options={teams.map((t) => ({ value: t.id, label: t.unit_name }))}
             />
           </WxbFormField>
-          <WxbFormField label="描述">
-            <textarea
-              className="wxb-textarea"
-              placeholder="可选描述"
-              value={createDesc}
-              onChange={(e) => setCreateDesc(e.target.value)}
-              rows={3}
-              style={{ width: '100%' }}
-            />
-          </WxbFormField>
+          <WxbTextarea
+            label="描述"
+            placeholder="可选描述"
+            value={createDesc}
+            onChange={(e) => setCreateDesc(e.target.value)}
+            rows={3}
+            style={{ width: '100%' }}
+          />
         </div>
       </WxbModal>
 

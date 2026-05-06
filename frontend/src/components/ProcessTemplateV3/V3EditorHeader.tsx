@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { WxbButton, WxbCard, WxbTag } from '../wxb-ui';
+import { WxbButton, WxbCard, WxbTag, WxbSegmented } from '../wxb-ui';
 import { WxbSwitch } from '../wxb-ui';
 import type { YAxisMode } from '../wxb-ui/GanttChart/types';
 
@@ -110,39 +110,15 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
         {/* Actions */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
           {/* Y-axis mode toggle */}
-          <div
-            style={{
-              display: 'inline-flex',
-              borderRadius: 6,
-              border: '1px solid var(--wx-border, #E4EAF1)',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}
-          >
-            {Y_AXIS_OPTIONS.map(opt => (
-              <button
-                key={opt.mode}
-                onClick={() => onYAxisModeChange(opt.mode)}
-                style={{
-                  padding: '4px 10px',
-                  fontSize: 12,
-                  fontWeight: yAxisMode === opt.mode ? 600 : 400,
-                  border: 'none',
-                  cursor: 'pointer',
-                  background: yAxisMode === opt.mode
-                    ? 'var(--wx-blue-50, #E8F4FD)'
-                    : 'transparent',
-                  color: yAxisMode === opt.mode
-                    ? 'var(--wx-blue-600, #1F6FEB)'
-                    : 'var(--wx-fg-3, #5A6B7E)',
-                  borderRight: '1px solid var(--wx-border, #E4EAF1)',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <WxbSegmented
+            size="sm"
+            value={yAxisMode}
+            onChange={(v) => onYAxisModeChange(v as YAxisMode)}
+            options={Y_AXIS_OPTIONS.map(opt => ({
+              label: opt.label,
+              value: opt.mode,
+            }))}
+          />
 
           {/* Separator */}
           <div

@@ -5,16 +5,10 @@
  * useShareGroupService、useV3EditorActions。
  */
 
-import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { message } from 'antd';
 import axios from 'axios';
-import { WxbGanttChart } from '../wxb-ui';
-import { WxbSkeleton, WxbEmpty } from '../wxb-ui';
-import { WxbCard } from '../wxb-ui';
-import { WxbModal } from '../wxb-ui';
-import { WxbInput } from '../wxb-ui';
-import { WxbSelect } from '../wxb-ui';
-import { WxbButton } from '../wxb-ui';
+import { WxbGanttChart, WxbSkeleton, WxbEmpty, WxbCard, WxbModal, WxbInput, WxbSelect, WxbButton } from '../wxb-ui';
 import type { GanttTask, YAxisMode } from '../wxb-ui/GanttChart/types';
 import type { ContextMenuItem } from '../wxb-ui/GanttChart/GanttContextMenu';
 import { processTemplateV2Api } from '../../services';
@@ -96,8 +90,6 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [newEquipSystemType, setNewEquipSystemType] = useState<string>('SUS');
   const [newEquipClass, setNewEquipClass] = useState('');
   const [pendingBindTask, setPendingBindTask] = useState<GanttTask | null>(null);
-  const [bindDropdownOpen, setBindDropdownOpen] = useState(false);
-  const bindDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -148,16 +140,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
   useEffect(() => { void refreshEquipmentNodes(); }, [refreshEquipmentNodes]);
 
-  // ---- Close bind dropdown on outside click ----
-  useEffect(() => {
-    if (!bindDropdownOpen) return;
-    const close = (e: MouseEvent) => {
-      if (bindDropdownRef.current && !bindDropdownRef.current.contains(e.target as Node))
-        setBindDropdownOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [bindDropdownOpen]);
+
 
   // ---- Gantt data (stages → nodes → timeBlocks) ----
   const ganttData = useGanttData(
@@ -329,7 +312,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           key: `bind-equip-${node.id}`,
           label: equipLabel(node),
           icon: currentBinding?.resourceNodeId === node.id
-            ? React.createElement('span', { style: { color: '#52c41a', fontWeight: 'bold', fontSize: 12 } }, '✔')
+            ? React.createElement('svg', { width: 12, height: 12, viewBox: '0 0 12 12', style: { color: 'var(--wx-green-600, #2E9D6E)' } },
+                React.createElement('path', { d: 'M2.5 6l2.5 2.5 4.5-5', fill: 'none', stroke: 'currentColor', strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round' }))
             : undefined,
         })),
         { key: 'div-unbind', label: '—', divider: true },
@@ -396,7 +380,6 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       await processTemplateV2Api.batchUpdateBindings(scheduleIds, nodeId, 'PRIMARY');
       const name = equipmentNodes.find(n => n.id === nodeId)?.nodeName || '';
       message.success(`已绑定 ${scheduleIds.length} 个操作到 ${name}`);
-      setBindDropdownOpen(false);
       await resourceView.refreshBindings();
     } catch (err: any) {
       message.error(err?.response?.data?.error || '批量绑定失败');
@@ -411,7 +394,6 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     try {
       await processTemplateV2Api.batchUpdateBindings(scheduleIds, null, 'PRIMARY');
       message.success(`已解除 ${scheduleIds.length} 个操作的设备绑定`);
-      setBindDropdownOpen(false);
       await resourceView.refreshBindings();
     } catch (err: any) {
       message.error('解除绑定失败');
@@ -517,37 +499,38 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           showSelectionPanel
           onCreateShareGroup={handleQuickLink}
           selectionPanelExtraActions={(
-            <div ref={bindDropdownRef} style={{ position: 'relative', width: '100%' }}>
-              <WxbButton
-                variant="primary"
-                size="sm"
-                onClick={() => setBindDropdownOpen(v => !v)}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+              <WxbSelect
+                placeholder="选择设备绑定"
+                showSearch
+                value={undefined}
+                onChange={(val) => {
+                  if (val != null) void handleBatchBind(val as number);
+                }}
+                options={equipmentNodes.map(node => ({
+                  value: node.id,
+                  label: `${node.nodeName}${node.equipmentSystemType ? ` (${[node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ')})` : ''}`,
+                }))}
                 style={{ width: '100%' }}
-              >
-                绑定到设备 {bindDropdownOpen ? '▲' : '▼'}
-              </WxbButton>
-              {bindDropdownOpen && (
-                <div className="wxb-equip-bind-dropdown">
-                  {equipmentNodes.map(node => (
-                    <div key={node.id}
-                      className="wxb-equip-bind-option"
-                      onClick={() => void handleBatchBind(node.id)}>
-                      <span className="wxb-equip-bind-name">{node.nodeName}</span>
-                      {(node.equipmentSystemType || node.equipmentClass) &&
-                        <span className="wxb-equip-bind-meta">
-                          ({[node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ')})
-                        </span>
-                      }
-                    </div>
-                  ))}
-                  <div className="wxb-equip-bind-divider" />
-                  <div
-                    className="wxb-equip-bind-option wxb-equip-bind-create"
-                    onClick={() => { setShowCreateEquipModal(true); setBindDropdownOpen(false); setPendingBindTask(null); }}>
-                    + 新建设备...
-                  </div>
-                </div>
-              )}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <WxbButton
+                  variant="ghost"
+                  size="sm"
+                  style={{ flex: 1 }}
+                  onClick={() => void handleBatchUnbind([])}
+                >
+                  解除绑定
+                </WxbButton>
+                <WxbButton
+                  variant="ghost"
+                  size="sm"
+                  style={{ flex: 1 }}
+                  onClick={() => { setShowCreateEquipModal(true); setPendingBindTask(null); }}
+                >
+                  + 新建设备
+                </WxbButton>
+              </div>
             </div>
           )}
           enableFullscreen

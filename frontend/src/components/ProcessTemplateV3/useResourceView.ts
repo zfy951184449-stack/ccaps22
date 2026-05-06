@@ -57,6 +57,8 @@ export interface UseResourceViewResult {
 // Stage color palette (extended for ≥6 stages)
 // ---------------------------------------------------------------------------
 
+// Data visualization palette for stage coloring — intentionally hardcoded hex values
+// as these are chart-specific colors, not theme-dependent UI elements.
 const STAGE_COLOR_PALETTE = [
   '#0B3D7F', '#2E9D6E', '#3AA8C1', '#E8B53C', '#D6493A',
   '#7C4DFF', '#00BFA5', '#F57C00', '#C62828', '#283593',
@@ -194,7 +196,7 @@ function buildStageEquipmentGroups(
         id: fullEquipGroupId,
         label: equipLabel,
         parentId: `res-stage-${stage.id}`,
-        color: isUnbound ? '#8898A8' : stageColor,
+        color: isUnbound ? 'var(--wx-fg-4, #8898A8)' : stageColor,
       });
 
       // Overlap split
@@ -272,7 +274,7 @@ function buildEquipmentGroups(
     groups.push({
       id: `res-${equipKey}`,
       label: equipLabel,
-      color: isUnbound ? '#8898A8' : '#0B3D7F',
+      color: isUnbound ? 'var(--wx-fg-4, #8898A8)' : 'var(--wx-blue-800, #0B3D7F)',
     });
 
     // Overlap split
@@ -289,7 +291,7 @@ function buildEquipmentGroups(
           id: layerGroupId,
           label: '',
           parentId: `res-${equipKey}`,
-          color: '#0B3D7F',
+          color: 'var(--wx-blue-800, #0B3D7F)',
         });
       }
 
