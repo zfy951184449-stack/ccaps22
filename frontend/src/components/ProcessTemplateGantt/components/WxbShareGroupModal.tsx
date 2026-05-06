@@ -1,17 +1,14 @@
 /**
  * WxbShareGroupModal — 共享组创建/编辑弹窗
  *
- * Wxb 设计体系版本（使用 WxbModal + WxbInput + WxbButton + WxbSearchInput）
- *
- * 核心改进：
- * - 预填充已选成员（从多选快建时跳过左栏选择）
- * - 使用 wxb-ui 标准组件（白色主题）
- * - 按阶段分组的双栏选择
+ * 体验优化版本：
+ * - 无命名输入框（group_name 由 service 层自动生成）
+ * - share_mode 默认折叠到"高级选项"，默认 SAME_TEAM
+ * - 后端自动合并重叠组（前端无需关心）
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { WxbModal } from '../../wxb-ui/Modal/WxbModal';
-import { WxbInput } from '../../wxb-ui/Input/Input';
 import { WxbButton } from '../../wxb-ui/Button/Button';
 import { WxbSearchInput } from '../../wxb-ui/SearchInput/SearchInput';
 import type { ShareGroup } from '../types';
@@ -29,7 +26,7 @@ interface WxbShareGroupModalProps {
   }>;
   preSelectedIds: number[];
   onCancel: () => void;
-  onSubmit: (name: string, mode: ShareMode, memberIds: number[]) => Promise<void>;
+  onSubmit: (mode: ShareMode, memberIds: number[]) => Promise<void>;
 }
 
 // ===== Mode Card Component =====
@@ -72,7 +69,9 @@ const ModeCard: React.FC<{
         </div>
       </div>
       {selected && (
-        <div style={{ marginLeft: 'auto', color, fontSize: 14, fontWeight: 700 }}>✔</div>
+        <div style={{ marginLeft: 'auto', color, fontSize: 14, fontWeight: 700 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
       )}
     </div>
   );
@@ -81,7 +80,6 @@ const ModeCard: React.FC<{
 // ===== Main Component =====
 const WxbShareGroupModal: React.FC<WxbShareGroupModalProps> = ({
   visible,
-  templateId,
   group,
   operations,
   preSelectedIds,
@@ -91,11 +89,11 @@ const WxbShareGroupModal: React.FC<WxbShareGroupModalProps> = ({
   const isEditMode = !!group;
 
   // State
-  const [groupName, setGroupName] = useState('');
   const [shareMode, setShareMode] = useState<ShareMode>('SAME_TEAM');
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [showLeftPanel, setShowLeftPanel] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Initialize on open
@@ -104,27 +102,25 @@ const WxbShareGroupModal: React.FC<WxbShareGroupModalProps> = ({
 
     if (group) {
       // Edit mode
-      setGroupName(group.group_name);
       setShareMode(group.share_mode);
       setSelectedIds(group.members?.map((m) => m.schedule_id) || []);
       setShowLeftPanel(true);
+      // Show advanced if mode is not default
+      setShowAdvanced(group.share_mode !== 'SAME_TEAM');
     } else {
       // Create mode
       setShareMode('SAME_TEAM');
       setSelectedIds(preSelectedIds);
       setSearchKeyword('');
+      setShowAdvanced(false);
 
-      // Auto-generate name
       if (preSelectedIds.length > 0) {
-        const firstOp = operations.find((op) => op.scheduleId === preSelectedIds[0]);
-        setGroupName(firstOp ? `${firstOp.operationName}-共享组` : '新建共享组');
         setShowLeftPanel(false); // Hide left panel when pre-selected
       } else {
-        setGroupName('新建共享组');
         setShowLeftPanel(true);
       }
     }
-  }, [visible, group, preSelectedIds, operations]);
+  }, [visible, group, preSelectedIds]);
 
   // Grouped operations for left panel (excluding already selected)
   const groupedOperations = useMemo(() => {
@@ -165,18 +161,17 @@ const WxbShareGroupModal: React.FC<WxbShareGroupModalProps> = ({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!groupName.trim()) return;
     if (selectedIds.length < 2) return;
 
     setSubmitting(true);
     try {
-      await onSubmit(groupName.trim(), shareMode, selectedIds);
+      await onSubmit(shareMode, selectedIds);
     } finally {
       setSubmitting(false);
     }
-  }, [groupName, shareMode, selectedIds, onSubmit]);
+  }, [shareMode, selectedIds, onSubmit]);
 
-  const canSubmit = selectedIds.length >= 2 && groupName.trim().length > 0;
+  const canSubmit = selectedIds.length >= 2;
 
   return (
     <WxbModal
@@ -213,30 +208,64 @@ const WxbShareGroupModal: React.FC<WxbShareGroupModalProps> = ({
         </div>
       }
     >
-      {/* Group Name */}
+      {/* Advanced: Share Mode (collapsed by default) */}
       <div style={{ marginBottom: 16 }}>
-        <WxbInput
-          label="共享组名称"
-          value={groupName}
-          onChange={(e) => setGroupName(e.target.value)}
-          maxLength={50}
-          placeholder="例如：接种-培养连续作业"
-          error={!groupName.trim() ? '请输入共享组名称' : false}
-        />
-      </div>
-
-      {/* Share Mode Cards */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
-        <ModeCard
-          mode="SAME_TEAM"
-          selected={shareMode === 'SAME_TEAM'}
-          onClick={() => setShareMode('SAME_TEAM')}
-        />
-        <ModeCard
-          mode="DIFFERENT"
-          selected={shareMode === 'DIFFERENT'}
-          onClick={() => setShareMode('DIFFERENT')}
-        />
+        <div
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer',
+            fontSize: 12,
+            color: 'var(--wx-fg-3, #5A6B7E)',
+            userSelect: 'none',
+          }}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            style={{
+              transform: showAdvanced ? 'rotate(90deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s',
+            }}
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+          高级选项
+          {shareMode !== 'SAME_TEAM' && (
+            <span
+              style={{
+                fontSize: 10,
+                background: '#FFF8E6',
+                color: 'var(--wx-warning, #E8B53C)',
+                padding: '1px 6px',
+                borderRadius: 4,
+                fontWeight: 600,
+              }}
+            >
+              不同人员
+            </span>
+          )}
+        </div>
+        {showAdvanced && (
+          <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
+            <ModeCard
+              mode="SAME_TEAM"
+              selected={shareMode === 'SAME_TEAM'}
+              onClick={() => setShareMode('SAME_TEAM')}
+            />
+            <ModeCard
+              mode="DIFFERENT"
+              selected={shareMode === 'DIFFERENT'}
+              onClick={() => setShareMode('DIFFERENT')}
+            />
+          </div>
+        )}
       </div>
 
       {/* Separator */}

@@ -57,7 +57,6 @@ export interface UseShareGroupServiceResult {
   openEditModal: (group: ShareGroup) => void;
   closeModal: () => void;
   submitModal: (
-    name: string,
     mode: ShareMode,
     memberIds: number[]
   ) => Promise<void>;
@@ -156,15 +155,21 @@ export function useShareGroupService({
   }, []);
 
   const submitModal = useCallback(
-    async (name: string, mode: ShareMode, memberIds: number[]) => {
+    async (mode: ShareMode, memberIds: number[]) => {
       if (memberIds.length < 2) {
         onMessage('warning', '共享组至少需要包含 2 个操作');
         return;
       }
 
+      // Auto-generate group_name: first 2 operation names + count
+      const names = memberIds.slice(0, 2)
+        .map(sid => operations.find(op => op.scheduleId === sid)?.operationName)
+        .filter(Boolean);
+      const autoName = names.join(' + ') + (memberIds.length > 2 ? ` +${memberIds.length - 2}` : '') || '共享组';
+
       try {
         const payload = {
-          group_name: name,
+          group_name: autoName,
           share_mode: mode,
           member_ids: memberIds,
         };
@@ -173,8 +178,11 @@ export function useShareGroupService({
           await axios.put(`${API}/${modalState.editingGroup.id}`, payload);
           onMessage('success', '共享组已更新');
         } else {
-          await axios.post(`${API}/template/${templateId}`, payload);
-          onMessage('success', '共享组已创建');
+          const { data } = await axios.post(`${API}/template/${templateId}`, payload);
+          const mergedCount = data?.merged_groups || 0;
+          onMessage('success', mergedCount > 0
+            ? `共享组已创建并合并了 ${mergedCount} 个重叠组`
+            : '共享组已创建');
         }
 
         closeModal();
@@ -185,7 +193,7 @@ export function useShareGroupService({
         onMessage('error', msg);
       }
     },
-    [modalState, templateId, closeModal, fetchGroups, onDataChange, onMessage]
+    [modalState, templateId, operations, closeModal, fetchGroups, onDataChange, onMessage]
   );
 
   // ===== Single-item API Actions =====

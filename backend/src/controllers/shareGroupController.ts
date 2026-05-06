@@ -90,46 +90,103 @@ export const getShareGroup = async (req: Request, res: Response) => {
 };
 
 /**
- * 创建共享组
+ * 创建共享组（含传递性自动合并）
+ *
+ * 当新组的 member_ids 中存在已属于其他组的成员时，
+ * 自动将所有关联组合并为一个超集组（Union-Find 语义）。
+ *
+ * 示例：G1={A,B}, 新建 G2={B,C} → 合并为 {A,B,C}
  */
 export const createShareGroup = async (req: Request, res: Response) => {
+    const connection = await pool.getConnection();
+
     try {
+        await connection.beginTransaction();
+
         const { templateId } = req.params;
         const { group_name, share_mode, member_ids } = req.body;
 
-        if (!group_name || !member_ids || member_ids.length < 2) {
+        if (!member_ids || !Array.isArray(member_ids) || member_ids.length < 2) {
+            connection.release();
             return res.status(400).json({
-                error: 'group_name is required and at least 2 members must be selected'
+                error: 'At least 2 members must be selected'
             });
         }
 
-        // 生成唯一的 group_code
+        // 1. 查找 member_ids 中已属于其他组的归属关系
+        const memberPlaceholders = member_ids.map(() => '?').join(',');
+        const [existingMemberships] = await connection.execute<RowDataPacket[]>(`
+            SELECT DISTINCT psgm.group_id
+            FROM personnel_share_group_members psgm
+            WHERE psgm.schedule_id IN (${memberPlaceholders})
+              AND psgm.group_id IN (
+                SELECT id FROM personnel_share_groups WHERE template_id = ?
+              )
+        `, [...member_ids, templateId]);
+
+        const overlappingGroupIds = existingMemberships.map((m: any) => m.group_id);
+        let finalMemberIds = [...member_ids];
+
+        if (overlappingGroupIds.length > 0) {
+            // 2. 获取所有被合并组的全部成员（超集）
+            const groupPlaceholders = overlappingGroupIds.map(() => '?').join(',');
+            const [allExistingMembers] = await connection.execute<RowDataPacket[]>(`
+                SELECT DISTINCT schedule_id
+                FROM personnel_share_group_members
+                WHERE group_id IN (${groupPlaceholders})
+            `, overlappingGroupIds);
+
+            // 3. 合并：新组 = 新 member_ids ∪ 所有旧组成员
+            const mergedSet = new Set<number>(member_ids);
+            for (const row of allExistingMembers) {
+                mergedSet.add(row.schedule_id);
+            }
+            finalMemberIds = Array.from(mergedSet);
+
+            // 4. 删除旧组（CASCADE 自动删除其成员）
+            await connection.execute(`
+                DELETE FROM personnel_share_groups
+                WHERE id IN (${groupPlaceholders})
+            `, overlappingGroupIds);
+        }
+
+        // 5. 自动生成名称（如果前端未提供）
+        const finalGroupName = group_name || `共享组-${Date.now()}`;
         const groupCode = `SG_${Date.now()}`;
 
-        // 创建共享组
-        const [result] = await pool.execute<any>(`
+        // 6. 创建合并后的新组
+        const [result] = await connection.execute<any>(`
             INSERT INTO personnel_share_groups (template_id, group_code, group_name, share_mode)
             VALUES (?, ?, ?, ?)
-        `, [templateId, groupCode, group_name, share_mode || 'SAME_TEAM']);
+        `, [templateId, groupCode, finalGroupName, share_mode || 'SAME_TEAM']);
 
         const groupId = result.insertId;
 
-        // 添加成员
-        for (const scheduleId of member_ids) {
-            await pool.execute(`
+        // 7. 添加所有成员
+        for (const scheduleId of finalMemberIds) {
+            await connection.execute(`
                 INSERT INTO personnel_share_group_members (group_id, schedule_id)
                 VALUES (?, ?)
             `, [groupId, scheduleId]);
         }
 
+        await connection.commit();
+
         res.status(201).json({
             id: groupId,
             group_code: groupCode,
-            message: 'Share group created successfully'
+            merged_groups: overlappingGroupIds.length,
+            total_members: finalMemberIds.length,
+            message: overlappingGroupIds.length > 0
+                ? `共享组已创建并合并了 ${overlappingGroupIds.length} 个重叠组`
+                : 'Share group created successfully'
         });
     } catch (error) {
+        await connection.rollback();
         console.error('Error creating share group:', error);
         res.status(500).json({ error: 'Failed to create share group' });
+    } finally {
+        connection.release();
     }
 };
 
