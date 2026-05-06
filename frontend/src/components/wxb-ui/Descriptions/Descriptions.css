@@ -1,0 +1,8 @@
+.wxb-desc-title { font: 600 var(--wx-fs-16, 16px)/1.3 var(--wx-font-sans); color: var(--wx-ink, #0F1B2D); margin-bottom: 12px; }
+.wxb-desc-grid { display: grid; gap: 0; }
+.wxb-desc-item { padding: 10px 0; border-bottom: 1px solid var(--wx-divider, #EEF2F7); display: flex; flex-direction: column; gap: 2px; }
+.wxb-desc-label { font: 400 var(--wx-fs-12, 12px)/1.3 var(--wx-font-sans); color: var(--wx-fg-4, #8898A8); text-transform: uppercase; letter-spacing: 0.04em; }
+.wxb-desc-value { font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans); color: var(--wx-fg-1, #0F1B2D); }
+.wxb-desc-bordered .wxb-desc-grid { border: 1px solid var(--wx-border, #E4EAF1); border-radius: 8px; overflow: hidden; }
+.wxb-desc-bordered .wxb-desc-item { padding: 10px 16px; border-bottom: 1px solid var(--wx-border, #E4EAF1); }
+.wxb-desc-bordered .wxb-desc-item:nth-child(even) { background: var(--wx-surface-1, #FAFCFE); }

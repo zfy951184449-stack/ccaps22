@@ -1,0 +1,33 @@
+.wxb-btn {
+  font: 500 14px/1 var(--wx-font-sans, Inter, sans-serif);
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background 180ms cubic-bezier(.2,0,0,1), border-color 180ms, color 180ms;
+  box-sizing: border-box;
+}
+
+/* Sizes */
+.wxb-btn-sm { height: 28px; padding: 0 12px; font-size: 13px; }
+.wxb-btn-md { height: 36px; padding: 0 16px; font-size: 14px; }
+.wxb-btn-lg { height: 44px; padding: 0 20px; font-size: 15px; }
+
+/* Variants */
+.wxb-btn-primary { background: var(--wx-blue-700); color: #fff; border: 1px solid var(--wx-blue-700); }
+.wxb-btn-primary:hover:not(:disabled) { background: var(--wx-blue-800); border-color: var(--wx-blue-800); }
+.wxb-btn-primary:active:not(:disabled) { background: var(--wx-blue-900); border-color: var(--wx-blue-900); }
+
+.wxb-btn-secondary { background: #fff; color: var(--wx-blue-700); border: 1px solid var(--wx-blue-700); }
+.wxb-btn-secondary:hover:not(:disabled) { background: var(--wx-blue-100); }
+
+.wxb-btn-ghost { background: transparent; color: var(--wx-blue-500); border: 1px solid transparent; }
+.wxb-btn-ghost:hover:not(:disabled) { background: var(--wx-blue-100); }
+
+.wxb-btn-danger { background: var(--wx-red-500); color: #fff; border: 1px solid var(--wx-red-500); }
+.wxb-btn-danger:hover:not(:disabled) { background: var(--wx-red-700); border-color: var(--wx-red-700); }
+
+/* Disabled */
+.wxb-btn:disabled { background: var(--wx-surface-2); color: var(--wx-fg-4); border: 1px solid var(--wx-border); cursor: not-allowed; }

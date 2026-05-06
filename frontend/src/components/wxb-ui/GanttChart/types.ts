@@ -99,6 +99,9 @@ export interface GanttLink {
 
 export type ViewMode = 'hour' | 'day' | 'week' | 'month';
 
+/** Y-axis grouping mode for resource Gantt view */
+export type YAxisMode = 'operation' | 'stage-equipment' | 'equipment';
+
 export interface WxbGanttChartProps {
   /** Task data */
   tasks: GanttTask[];
@@ -177,6 +180,8 @@ export interface WxbGanttChartProps {
   highlightedLinkIds?: string[];
   /** Create share group from selection panel (one-click link) */
   onCreateShareGroup?: (selectedTaskIds: string[]) => void;
+  /** Extra actions injected into the selection panel by the consumer */
+  selectionPanelExtraActions?: React.ReactNode;
   /** CSS class name */
   className?: string;
   /** Inline style */
@@ -196,6 +201,10 @@ export interface FlatRow {
   taskId?: string;
   color?: string;
   groupType?: 'batch' | 'stage' | 'template';
+  /** Whether this row is a sub-row created by overlap splitting (Sidebar shows connector, not label) */
+  isSubRow?: boolean;
+  /** Equipment type label for equipment rows in resource view */
+  equipmentType?: string;
 }
 
 export interface DragState {

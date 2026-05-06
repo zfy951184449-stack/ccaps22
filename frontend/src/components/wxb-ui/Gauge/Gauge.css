@@ -1,0 +1,4 @@
+.wxb-gauge { display: inline-flex; flex-direction: column; align-items: center; }
+.wxb-gauge-title { font: 600 var(--wx-fs-14, 14px)/1.3 var(--wx-font-sans); color: var(--wx-fg-1, #0F1B2D); margin-bottom: 4px; }
+.wxb-gauge-val { font: 700 22px/1 var(--wx-font-sans); fill: var(--wx-fg-1, #0F1B2D); }
+.wxb-gauge-lbl { font: 400 11px/1 var(--wx-font-sans); fill: var(--wx-fg-4, #8898A8); }

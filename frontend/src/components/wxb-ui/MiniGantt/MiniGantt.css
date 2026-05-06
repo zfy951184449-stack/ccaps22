@@ -1,0 +1,4 @@
+.wxb-mini-gantt { padding: 8px 0; }
+.wxb-gantt-title { font: 600 var(--wx-fs-14, 14px)/1.3 var(--wx-font-sans); color: var(--wx-fg-1, #0F1B2D); margin-bottom: 8px; }
+.wxb-gantt-tick { font: 400 9px/1 var(--wx-font-mono); fill: var(--wx-fg-4, #8898A8); }
+.wxb-gantt-label { font: 400 11px/1 var(--wx-font-sans); fill: var(--wx-fg-2, #3A4A5C); }

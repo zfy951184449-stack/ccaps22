@@ -1,0 +1,17 @@
+.wxb-divider {
+  display: flex; align-items: center; width: 100%;
+  margin: 16px 0; color: var(--wx-fg-4, #8898A8);
+  font: 400 var(--wx-fs-12, 12px)/1 var(--wx-font-sans);
+}
+.wxb-divider::before, .wxb-divider::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--wx-border, #E4EAF1);
+}
+.wxb-divider:not(.wxb-divider-with-text)::after { display: none; }
+.wxb-divider:not(.wxb-divider-with-text)::before { flex: 1; }
+.wxb-divider-text { padding: 0 12px; white-space: nowrap; }
+.wxb-divider-v {
+  display: inline-block; width: 1px; height: 1em;
+  margin: 0 8px; vertical-align: middle;
+  background: var(--wx-border, #E4EAF1);
+}

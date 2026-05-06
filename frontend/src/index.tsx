@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import './styles/wxb-theme.css';
 import './styles/injectFluentStyles';
 import './styles/fluentTableStyles';
 

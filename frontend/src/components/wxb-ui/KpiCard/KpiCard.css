@@ -1,0 +1,47 @@
+.wxb-kpi-card {
+  background: #fff;
+  border: 1px solid var(--wx-border, #E4EAF1);
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: var(--wx-sh-1, 0 1px 2px rgba(15, 27, 45, 0.04));
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.wxb-kpi-title {
+  font: 500 11px/1 var(--wx-font-sans, Inter, sans-serif);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--wx-fg-3, #5A6B7E);
+  margin-bottom: 6px;
+}
+
+.wxb-kpi-value-container {
+  display: flex;
+  align-items: baseline;
+}
+
+.wxb-kpi-value {
+  font: 600 28px/1 var(--wx-font-sans, Inter, sans-serif);
+  color: var(--wx-ink, #0F1B2D);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.wxb-kpi-unit {
+  font: 500 13px/1 var(--wx-font-sans, Inter, sans-serif);
+  color: var(--wx-fg-3, #5A6B7E);
+  margin-left: 3px;
+}
+
+.wxb-kpi-trend {
+  font: 500 11.5px/1 var(--wx-font-sans, Inter, sans-serif);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wxb-kpi-trend.trend-up { color: var(--wx-green-700, #1F7A53); }
+.wxb-kpi-trend.trend-down { color: var(--wx-red-700, #A2342A); }
+.wxb-kpi-trend.trend-neutral { color: var(--wx-fg-3, #5A6B7E); }

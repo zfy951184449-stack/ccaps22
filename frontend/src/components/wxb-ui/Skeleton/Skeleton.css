@@ -1,0 +1,13 @@
+.wxb-skeleton { display: flex; gap: 16px; }
+.wxb-skeleton-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--wx-surface-3, #EDF1F6); flex-shrink: 0; }
+.wxb-skeleton-content { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.wxb-skeleton-title { height: 18px; width: 40%; border-radius: 4px; background: var(--wx-surface-3, #EDF1F6); }
+.wxb-skeleton-line { height: 14px; border-radius: 4px; background: var(--wx-surface-3, #EDF1F6); }
+.wxb-skeleton-active .wxb-skeleton-avatar,
+.wxb-skeleton-active .wxb-skeleton-title,
+.wxb-skeleton-active .wxb-skeleton-line {
+  background: linear-gradient(90deg, var(--wx-surface-3, #EDF1F6) 25%, var(--wx-surface-2, #F5F8FB) 37%, var(--wx-surface-3, #EDF1F6) 63%);
+  background-size: 400% 100%;
+  animation: wxb-shimmer 1.4s ease infinite;
+}
+@keyframes wxb-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }

@@ -1,0 +1,4 @@
+.wxb-dropdown .ant-dropdown-menu { border-radius: 8px; box-shadow: var(--wx-sh-2, 0 4px 16px rgba(15,27,45,0.10)); padding: 4px; }
+.wxb-dropdown .ant-dropdown-menu-item { border-radius: 4px; font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans); padding: 6px 12px; }
+.wxb-dropdown .ant-dropdown-menu-item:hover { background: var(--wx-surface-2, #F5F8FB); }
+.wxb-dropdown .ant-dropdown-menu-item-danger { color: var(--wx-red-500, #D6493A); }

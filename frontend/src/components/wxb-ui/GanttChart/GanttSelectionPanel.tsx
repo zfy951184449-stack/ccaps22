@@ -15,6 +15,8 @@ export interface GanttSelectionPanelProps {
   onSelectAllInGroup: (groupId: string) => void;
   /** Callback to create a share group from the currently selected tasks */
   onCreateShareGroup?: (selectedTaskIds: string[]) => void;
+  /** Extra action buttons injected by consumer (e.g., equipment binding) */
+  extraActions?: React.ReactNode;
 }
 
 interface GroupedSelection {
@@ -26,7 +28,7 @@ interface GroupedSelection {
 
 const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
   selectedTaskIds, tasks, groups, onDeselectTask, onDeselectAll, onSelectAllInGroup,
-  onCreateShareGroup,
+  onCreateShareGroup, extraActions,
 }) => {
   // Pre-build task index for O(1) lookup instead of O(N) per selected task
   const taskMap = useMemo(() => {
@@ -139,6 +141,11 @@ const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
           >
             🔗 从选中项创建共享组 ({selectedTaskIds.size})
           </button>
+        </div>
+      )}
+      {extraActions && (
+        <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          {extraActions}
         </div>
       )}
     </div>

@@ -1,17 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Button,
-  Card,
   Form,
   Input,
   InputNumber,
   Modal,
   Space,
-  Switch,
   Table,
-  Tag,
   TimePicker,
-  Typography,
   message,
   Select,
 } from 'antd';
@@ -24,8 +19,7 @@ import {
 import dayjs, { Dayjs } from 'dayjs';
 import { ShiftDefinition, ShiftDefinitionCategory } from '../types';
 import { shiftDefinitionApi } from '../services/api';
-
-const { Title, Paragraph, Text } = Typography;
+import { WxbCard, WxbButton, WxbBadge, WxbTableWrapper, WxbModal, WxbInput, WxbSwitch } from './wxb-ui';
 
 type FormValues = {
   shift_code: string;
@@ -62,6 +56,7 @@ const ShiftDefinitionManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<ShiftDefinition | null>(null);
+  const [deactivateRecord, setDeactivateRecord] = useState<ShiftDefinition | null>(null);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [form] = Form.useForm<FormValues>();
 
@@ -157,21 +152,21 @@ const ShiftDefinitionManagement: React.FC = () => {
     }
   };
 
-  const handleDeactivate = async (record: ShiftDefinition) => {
-    Modal.confirm({
-      title: `确认要停用班次【${record.shift_name}】吗？`,
-      icon: <StopOutlined />,
-      onOk: async () => {
-        try {
-          await shiftDefinitionApi.remove(record.id!);
-          message.success('班次定义已停用');
-          await fetchData();
-        } catch (error: any) {
-          console.error('Failed to deactivate shift definition', error);
-          message.error(error?.response?.data?.error ?? '停用失败');
-        }
-      },
-    });
+  const handleDeactivate = (record: ShiftDefinition) => {
+    setDeactivateRecord(record);
+  };
+
+  const confirmDeactivate = async () => {
+    if (!deactivateRecord?.id) return;
+    try {
+      await shiftDefinitionApi.remove(deactivateRecord.id);
+      message.success('班次定义已停用');
+      setDeactivateRecord(null);
+      await fetchData();
+    } catch (error: any) {
+      console.error('Failed to deactivate shift definition', error);
+      message.error(error?.response?.data?.error ?? '停用失败');
+    }
   };
 
   const handleToggleActive = async (record: ShiftDefinition, value: boolean) => {
@@ -202,19 +197,21 @@ const ShiftDefinitionManagement: React.FC = () => {
         dataIndex: 'category',
         key: 'category',
         render: (value: ShiftDefinitionCategory) => (
-          <Tag color={value === 'STANDARD' ? 'blue' : value === 'SPECIAL' ? 'purple' : 'orange'}>
-            {categoryLabels[value] ?? value}
-          </Tag>
+          <WxbBadge 
+            status={value === 'STANDARD' ? 'info' : value === 'SPECIAL' ? 'neutral' : 'warning'} 
+            label={categoryLabels[value] ?? value} 
+            variant="outline"
+          />
         ),
       },
       {
         title: '时间',
         key: 'time_window',
         render: (_: any, record: ShiftDefinition) => (
-          <span>
-            {record.start_time} ~ {record.end_time}
-            {record.is_cross_day && <Tag color="magenta" style={{ marginLeft: 8 }}>跨日</Tag>}
-            {record.is_night_shift && <Tag color="geekblue" style={{ marginLeft: 8 }}>夜班</Tag>}
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>{record.start_time} ~ {record.end_time}</span>
+            {record.is_cross_day && <WxbBadge status="error" label="跨日" variant="bar" />}
+            {record.is_night_shift && <WxbBadge status="info" label="夜班" variant="bar" />}
           </span>
         ),
       },
@@ -235,7 +232,7 @@ const ShiftDefinitionManagement: React.FC = () => {
         dataIndex: 'is_active',
         key: 'is_active',
         render: (value: boolean) => (
-          <Tag color={value ? 'green' : 'default'}>{value ? '启用' : '停用'}</Tag>
+          <WxbBadge status={value ? 'success' : 'neutral'} label={value ? '启用' : '停用'} variant="bar" />
         ),
       },
       {
@@ -243,27 +240,20 @@ const ShiftDefinitionManagement: React.FC = () => {
         key: 'actions',
         render: (_: any, record: ShiftDefinition) => (
           <Space>
-            <Button
-              type="link"
-              icon={<EditOutlined />}
+            <WxbButton
+              variant="ghost"
+              size="sm"
               onClick={() => openEditModal(record)}
             >
-              编辑
-            </Button>
-            <Switch
-              checked={record.is_active}
-              onChange={(value) => handleToggleActive(record, value)}
-              checkedChildren="启用"
-              unCheckedChildren="停用"
-            />
-            <Button
-              type="link"
-              danger
-              onClick={() => handleDeactivate(record)}
-              disabled={!record.is_active}
+              <EditOutlined style={{ marginRight: 4 }} />编辑
+            </WxbButton>
+            <WxbButton
+              variant={record.is_active ? 'danger' : 'primary'}
+              size="sm"
+              onClick={() => record.is_active ? handleDeactivate(record) : handleToggleActive(record, true)}
             >
-              停用
-            </Button>
+              {record.is_active ? '停用' : '启用'}
+            </WxbButton>
           </Space>
         ),
       },
@@ -272,41 +262,43 @@ const ShiftDefinitionManagement: React.FC = () => {
   );
 
   return (
-    <Space direction="vertical" size="large" style={{ width: '100%' }}>
-      <Card>
-        <Title level={4}>班次定义管理</Title>
-        <Paragraph type="secondary">
+    <div className="dashboard-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <WxbCard>
+        <h2 className="wxb-h4" style={{ marginBottom: 8 }}>班次定义管理</h2>
+        <p className="wxb-body" style={{ color: 'var(--wxb-color-text-secondary)', marginBottom: 24 }}>
           在此维护班次的时间、类别与工时设置，用于人员基础班表和生产排班的班次引用。班次编码需保持全局唯一，推荐遵循
-          <Text strong> DAY / LONGDAY / NIGHT / REST </Text>
+          <strong> DAY / LONGDAY / NIGHT / REST </strong>
           等规范。
-        </Paragraph>
+        </p>
         <Space wrap>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-            新增班次
-          </Button>
-          <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>
-            刷新
-          </Button>
-          <Switch
+          <WxbButton variant="primary" onClick={openCreateModal}>
+            <PlusOutlined style={{ marginRight: 8 }} />新增班次
+          </WxbButton>
+          <WxbButton variant="secondary" onClick={fetchData} disabled={loading}>
+            <ReloadOutlined style={{ marginRight: 8 }} />{loading ? '刷新中' : '刷新'}
+          </WxbButton>
+          <WxbSwitch
             checked={includeInactive}
             onChange={setIncludeInactive}
             checkedChildren="含停用"
             unCheckedChildren="仅启用"
           />
         </Space>
-      </Card>
+      </WxbCard>
 
-      <Card>
-        <Table
-          rowKey="id"
-          loading={loading}
-          columns={columns}
-          dataSource={data}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
+      <WxbCard>
+        <WxbTableWrapper>
+          <Table
+            rowKey="id"
+            loading={loading}
+            columns={columns}
+            dataSource={data}
+            pagination={{ pageSize: 10 }}
+          />
+        </WxbTableWrapper>
+      </WxbCard>
 
-      <Modal
+      <WxbModal
         title={editing ? `编辑班次：${editing.shift_name}` : '新增班次定义'}
         open={modalVisible}
         onCancel={() => {
@@ -336,7 +328,7 @@ const ShiftDefinitionManagement: React.FC = () => {
             label="班次编码"
             rules={[{ required: true, message: '请输入班次编码' }]}
           >
-            <Input placeholder="例如 DAY、NIGHT" disabled={Boolean(editing)} />
+            <WxbInput placeholder="例如 DAY、NIGHT" disabled={Boolean(editing)} />
           </Form.Item>
 
           <Form.Item
@@ -344,7 +336,7 @@ const ShiftDefinitionManagement: React.FC = () => {
             label="班次名称"
             rules={[{ required: true, message: '请输入班次名称' }]}
           >
-            <Input placeholder="例如 日班、夜班" />
+            <WxbInput placeholder="例如 日班、夜班" />
           </Form.Item>
 
           <Form.Item
@@ -380,10 +372,10 @@ const ShiftDefinitionManagement: React.FC = () => {
 
           <Space size="large">
             <Form.Item name="is_cross_day" label="跨日班次" valuePropName="checked">
-              <Switch />
+              <WxbSwitch />
             </Form.Item>
             <Form.Item name="is_night_shift" label="夜班" valuePropName="checked" tooltip="标记为夜班后，求解器会应用夜班休息约束">
-              <Switch />
+              <WxbSwitch />
             </Form.Item>
           </Space>
 
@@ -408,11 +400,26 @@ const ShiftDefinitionManagement: React.FC = () => {
           </Form.Item>
 
           <Form.Item name="is_active" label="启用状态" valuePropName="checked">
-            <Switch checkedChildren="启用" unCheckedChildren="停用" />
+            <WxbSwitch checkedChildren="启用" unCheckedChildren="停用" />
           </Form.Item>
         </Form>
-      </Modal>
-    </Space>
+      </WxbModal>
+
+      {/* 停用确认弹窗 */}
+      <WxbModal
+        title="确认停用"
+        open={!!deactivateRecord}
+        onCancel={() => setDeactivateRecord(null)}
+        onOk={confirmDeactivate}
+        okText="确认停用"
+        okVariant="danger"
+        width={400}
+      >
+        <p className="wxb-body" style={{ margin: '16px 0' }}>
+          确认要停用班次 <strong>【{deactivateRecord?.shift_name}】</strong> 吗？
+        </p>
+      </WxbModal>
+    </div>
   );
 };
 

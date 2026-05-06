@@ -612,7 +612,7 @@ export function drawBars(
         const cColors: Record<string, string> = {
           CYCLE: THEME.danger,
           WINDOW: THEME.warning,
-          OVERLAP: THEME.blue500,
+          OVERLAP: THEME.danger,
         };
         const cColor = cColors[task.conflictType] || THEME.danger;
         ctx.strokeStyle = cColor;

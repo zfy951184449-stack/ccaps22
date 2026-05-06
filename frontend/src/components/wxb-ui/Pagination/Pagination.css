@@ -1,0 +1,11 @@
+.wxb-pagination { display: flex; align-items: center; gap: 4px; }
+.wxb-page-btn {
+  min-width: 32px; height: 32px; padding: 0 6px; border-radius: 4px;
+  border: 1px solid var(--wx-border, #E4EAF1); background: #fff;
+  font: 400 var(--wx-fs-14, 14px)/1 var(--wx-font-sans); color: var(--wx-fg-2, #3A4A5C);
+  cursor: pointer; transition: all 180ms;
+}
+.wxb-page-btn:hover:not(:disabled):not(.is-active) { border-color: var(--wx-blue-500, #1F6FEB); color: var(--wx-blue-500, #1F6FEB); }
+.wxb-page-btn.is-active { background: var(--wx-blue-700, #0B3D7F); border-color: var(--wx-blue-700, #0B3D7F); color: #fff; }
+.wxb-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.wxb-page-dots { padding: 0 4px; color: var(--wx-fg-4, #8898A8); letter-spacing: 1px; }

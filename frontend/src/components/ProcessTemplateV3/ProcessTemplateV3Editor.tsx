@@ -5,13 +5,13 @@
  * useShareGroupService、useV3EditorActions。
  */
 
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { message } from 'antd';
 import axios from 'axios';
 import { WxbGanttChart } from '../wxb-ui';
 import { WxbSkeleton, WxbEmpty } from '../wxb-ui';
 import { WxbCard } from '../wxb-ui';
-import type { GanttTask } from '../wxb-ui/GanttChart/types';
+import type { GanttTask, YAxisMode } from '../wxb-ui/GanttChart/types';
 import type { ContextMenuItem } from '../wxb-ui/GanttChart/GanttContextMenu';
 import { processTemplateV2Api } from '../../services';
 import type { ProcessTemplate, GanttNode, StageOperation } from '../ProcessTemplateGantt/types';
@@ -25,6 +25,7 @@ import {
   toGanttLinks,
 } from '../ProcessTemplateGantt/ganttAdapter';
 import { useV3EditorActions } from './useV3EditorActions';
+import { useResourceView } from './useResourceView';
 import V3EditorHeader from './V3EditorHeader';
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,19 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [template, setTemplate] = useState<ProcessTemplate | null>(null);
   const [templateLoading, setTemplateLoading] = useState(true);
   const [showTimeWindows, setShowTimeWindows] = useState(false); // default off
+  const [yAxisMode, setYAxisMode] = useState<YAxisMode>('operation');
+
+  // ---- Equipment binding state ----
+  const [equipmentNodes, setEquipmentNodes] = useState<Array<{
+    id: number; nodeName: string; equipmentSystemType: string | null; equipmentClass: string | null;
+  }>>([]);
+  const [showCreateEquipModal, setShowCreateEquipModal] = useState(false);
+  const [newEquipName, setNewEquipName] = useState('');
+  const [newEquipSystemType, setNewEquipSystemType] = useState<string>('SUS');
+  const [newEquipClass, setNewEquipClass] = useState('');
+  const [pendingBindTask, setPendingBindTask] = useState<GanttTask | null>(null);
+  const [bindDropdownOpen, setBindDropdownOpen] = useState(false);
+  const bindDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,6 +124,35 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     void load();
     return () => { cancelled = true; };
   }, [templateId]);
+
+  // ---- Load equipment node list ----
+  const refreshEquipmentNodes = useCallback(async () => {
+    try {
+      const all = await processTemplateV2Api.listResourceNodes();
+      setEquipmentNodes(
+        all.filter((n: any) => n.nodeClass === 'EQUIPMENT_UNIT' && n.isActive)
+          .map((n: any) => ({
+            id: n.id, nodeName: n.nodeName,
+            equipmentSystemType: n.equipmentSystemType, equipmentClass: n.equipmentClass,
+          })),
+      );
+    } catch (err) {
+      console.error('Failed to load equipment nodes:', err);
+    }
+  }, []);
+
+  useEffect(() => { void refreshEquipmentNodes(); }, [refreshEquipmentNodes]);
+
+  // ---- Close bind dropdown on outside click ----
+  useEffect(() => {
+    if (!bindDropdownOpen) return;
+    const close = (e: MouseEvent) => {
+      if (bindDropdownRef.current && !bindDropdownRef.current.contains(e.target as Node))
+        setBindDropdownOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [bindDropdownOpen]);
 
   // ---- Gantt data (stages → nodes → timeBlocks) ----
   const ganttData = useGanttData(
@@ -178,6 +221,18 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     [shareService.shareGroups],
   );
 
+  // ---- Resource view (equipment-centric grouping) ----
+  const resourceView = useResourceView(
+    templateId, ganttData.ganttNodes, tasks, groups, yAxisMode,
+  );
+
+  // Select data source based on yAxisMode
+  const finalTasks = yAxisMode === 'operation' ? tasks : resourceView.resourceTasks;
+  const finalGroups = yAxisMode === 'operation' ? groups : resourceView.resourceGroups;
+
+  // In resource view, only show dependencies for hovered task (otherwise too dense)
+  const finalDependencies = yAxisMode === 'operation' ? dependencies : [];
+
   // ---- Callbacks ----
   const handleTaskEdit = useCallback((task: GanttTask) => {
     // For now, log and show info — full inspector panel is a future enhancement
@@ -192,8 +247,41 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   );
 
   const handleContextAction = useCallback(
-    (action: string, task: GanttTask | null) => {
+    async (action: string, task: GanttTask | null) => {
       if (!task) return;
+
+      // ---- Equipment binding actions ----
+      if (action.startsWith('bind-equip-')) {
+        const nodeId = Number(action.replace('bind-equip-', ''));
+        const scheduleId = task.data?.scheduleId as number | undefined;
+        if (!scheduleId) return;
+        try {
+          await processTemplateV2Api.batchUpdateBindings([scheduleId], nodeId, 'PRIMARY');
+          const equipName = equipmentNodes.find(n => n.id === nodeId)?.nodeName || '';
+          message.success(`已绑定到 ${equipName}`);
+          await resourceView.refreshBindings();
+        } catch (err: any) {
+          message.error(err?.response?.data?.error || '绑定失败');
+        }
+        return;
+      }
+      if (action === 'unbind-equip') {
+        const scheduleId = task.data?.scheduleId as number | undefined;
+        if (!scheduleId) return;
+        try {
+          await processTemplateV2Api.batchUpdateBindings([scheduleId], null, 'PRIMARY');
+          message.success('已解除设备绑定');
+          await resourceView.refreshBindings();
+        } catch (err: any) {
+          message.error('解除绑定失败');
+        }
+        return;
+      }
+      if (action === 'create-equip') {
+        setShowCreateEquipModal(true);
+        setPendingBindTask(task);
+        return;
+      }
 
       // Route share-* actions to share service
       if (action.startsWith('share-')) {
@@ -212,21 +300,49 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           break;
       }
     },
-    [shareService, handleTaskEdit, handleTaskDelete],
+    [shareService, handleTaskEdit, handleTaskDelete, equipmentNodes, resourceView],
   );
 
-  // ---- Build final task menu including share sub-items ----
+  // ---- Build final task menu including share sub-items + equipment ----
   const buildTaskMenu = useCallback(
     (task: GanttTask): ContextMenuItem[] => {
+      const scheduleId = task.data?.scheduleId as number | undefined;
+      const currentBinding = scheduleId
+        ? resourceView.getBindingForSchedule(scheduleId)
+        : null;
+
+      const equipLabel = (n: typeof equipmentNodes[0]) => {
+        const parts = [n.nodeName];
+        if (n.equipmentSystemType || n.equipmentClass) {
+          parts.push(`(${[n.equipmentSystemType, n.equipmentClass].filter(Boolean).join(' · ')})`)
+        }
+        return parts.join(' ');
+      };
+
+      const bindChildren: ContextMenuItem[] = [
+        ...equipmentNodes.map(node => ({
+          key: `bind-equip-${node.id}`,
+          label: equipLabel(node),
+          icon: currentBinding?.resourceNodeId === node.id
+            ? React.createElement('span', { style: { color: '#52c41a', fontWeight: 'bold' } }, '✓')
+            : undefined,
+        })),
+        { key: 'div-unbind', label: '—', divider: true },
+        { key: 'unbind-equip', label: '解除绑定', danger: true, disabled: !currentBinding },
+        { key: 'div-create', label: '—', divider: true },
+        { key: 'create-equip', label: '+ 新建设备...' },
+      ];
+
       const baseItems: ContextMenuItem[] = [
         { key: 'edit', label: '编辑操作' },
+        { key: 'bind-equipment', label: currentBinding ? `设备: ${currentBinding.name}` : '绑定设备', children: bindChildren },
         { key: 'delete', label: '删除操作', danger: true },
         { key: 'divider-share', label: '—', divider: true },
       ];
       const shareItems = shareService.buildShareMenuItems(task);
       return [...baseItems, ...shareItems];
     },
-    [shareService],
+    [shareService, equipmentNodes, resourceView],
   );
 
   // ---- One-click link from SelectionPanel ----
@@ -262,6 +378,77 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     },
     [templateId, ganttData, shareService],
   );
+
+  // ---- Batch bind from selection panel ----
+  const handleBatchBind = useCallback(async (nodeId: number) => {
+    const scheduleIds = Array.from(document.querySelectorAll('[data-selected-task-id]'))
+      .map(el => parseInt(el.getAttribute('data-selected-task-id') || '', 10))
+      .filter(Number.isFinite);
+    // Fallback: use the gantt internal selection if the above approach fails
+    // This will be populated via the selectionPanelExtraActions render
+    if (!scheduleIds.length) return;
+    try {
+      await processTemplateV2Api.batchUpdateBindings(scheduleIds, nodeId, 'PRIMARY');
+      const name = equipmentNodes.find(n => n.id === nodeId)?.nodeName || '';
+      message.success(`已绑定 ${scheduleIds.length} 个操作到 ${name}`);
+      setBindDropdownOpen(false);
+      await resourceView.refreshBindings();
+    } catch (err: any) {
+      message.error(err?.response?.data?.error || '批量绑定失败');
+    }
+  }, [equipmentNodes, resourceView]);
+
+  const handleBatchUnbind = useCallback(async (taskIds: string[]) => {
+    const scheduleIds = taskIds
+      .map(id => parseInt(id.replace(/\D/g, ''), 10))
+      .filter(Number.isFinite);
+    if (!scheduleIds.length) return;
+    try {
+      await processTemplateV2Api.batchUpdateBindings(scheduleIds, null, 'PRIMARY');
+      message.success(`已解除 ${scheduleIds.length} 个操作的设备绑定`);
+      setBindDropdownOpen(false);
+      await resourceView.refreshBindings();
+    } catch (err: any) {
+      message.error('解除绑定失败');
+    }
+  }, [resourceView]);
+
+  // ---- Create equipment handler ----
+  const handleCreateEquipment = useCallback(async () => {
+    if (!newEquipName.trim()) { message.warning('请输入设备名称'); return; }
+    try {
+      // Find the first ROOM node as parent (fallback to ID 11)
+      const allNodes = await processTemplateV2Api.listResourceNodes();
+      const firstRoom = allNodes.find((n: any) => n.nodeClass === 'ROOM' && n.nodeSubtype === 'MAIN_PROCESS');
+      const parentId = firstRoom ? (firstRoom as any).id : 11;
+
+      const newId = await processTemplateV2Api.createResourceNode({
+        nodeName: newEquipName.trim(),
+        nodeClass: 'EQUIPMENT_UNIT',
+        parentId,
+        equipmentSystemType: newEquipSystemType as any,
+        equipmentClass: newEquipClass || undefined,
+        nodeScope: 'DEPARTMENT',
+        departmentCode: 'USP',
+      } as any);
+      await refreshEquipmentNodes();
+
+      if (pendingBindTask) {
+        const sid = pendingBindTask.data?.scheduleId as number | undefined;
+        if (sid) {
+          await processTemplateV2Api.batchUpdateBindings([sid], newId, 'PRIMARY');
+          await resourceView.refreshBindings();
+          message.success(`已创建设备 ${newEquipName} 并绑定`);
+        }
+      } else {
+        message.success(`设备 ${newEquipName} 已创建`);
+      }
+      setShowCreateEquipModal(false);
+      setNewEquipName(''); setNewEquipClass(''); setPendingBindTask(null);
+    } catch (err: any) {
+      message.error(err?.response?.data?.error || '创建设备失败');
+    }
+  }, [newEquipName, newEquipSystemType, newEquipClass, pendingBindTask, resourceView, refreshEquipmentNodes]);
 
   // ---- Loading / error states ----
   if (templateLoading) {
@@ -305,14 +492,15 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         showTimeWindows={showTimeWindows}
         onToggleTimeWindows={setShowTimeWindows}
         onAutoSchedule={actions.handleAutoSchedule}
+        yAxisMode={yAxisMode}
+        onYAxisModeChange={setYAxisMode}
       />
 
-      {/* Gantt Chart — fills remaining space */}
       <div style={{ flex: 1, minHeight: 0 }}>
         <WxbGanttChart
-          tasks={tasks}
-          groups={groups}
-          dependencies={dependencies}
+          tasks={finalTasks}
+          groups={finalGroups}
+          dependencies={finalDependencies}
           links={links}
           highlightedLinkIds={shareService.highlightedLinkIds}
           taskMenuBuilder={buildTaskMenu}
@@ -323,6 +511,50 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onContextAction={handleContextAction}
           showSelectionPanel
           onCreateShareGroup={handleQuickLink}
+          selectionPanelExtraActions={(
+            <div ref={bindDropdownRef} style={{ position: 'relative', width: '100%' }}>
+              <button
+                className="wxb-gantt-sel-share-btn"
+                onClick={() => setBindDropdownOpen(v => !v)}
+                style={{ width: '100%', padding: '6px 10px', cursor: 'pointer',
+                  background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 100%)',
+                  border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4,
+                  color: '#e0e0e0', fontSize: 12, textAlign: 'center' }}
+              >
+                🔗 绑定到设备 ▾
+              </button>
+              {bindDropdownOpen && (
+                <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0,
+                  marginBottom: 4, background: '#1a2332', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: 6, padding: '4px 0', maxHeight: 240, overflowY: 'auto',
+                  boxShadow: '0 -4px 20px rgba(0,0,0,0.4)', zIndex: 1000 }}>
+                  {equipmentNodes.map(node => (
+                    <div key={node.id}
+                      onClick={() => void handleBatchBind(node.id)}
+                      style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12,
+                        color: '#e0e0e0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                      {node.nodeName}
+                      {(node.equipmentSystemType || node.equipmentClass) &&
+                        <span style={{ marginLeft: 6, color: '#8898a8', fontSize: 11 }}>
+                          ({[node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ')})
+                        </span>
+                      }
+                    </div>
+                  ))}
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', margin: '2px 0' }} />
+                  <div
+                    onClick={() => { setShowCreateEquipModal(true); setBindDropdownOpen(false); setPendingBindTask(null); }}
+                    style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 12, color: '#4fc3f7' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                    + 新建设备...
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           enableFullscreen
           style={{ width: '100%', height: '100%' }}
         />
@@ -338,6 +570,76 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         onCancel={shareService.closeModal}
         onSubmit={shareService.submitModal}
       />
+
+      {/* Create Equipment Modal */}
+      {showCreateEquipModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex',
+          alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowCreateEquipModal(false); setPendingBindTask(null); } }}>
+          <div style={{ background: '#1a2332', borderRadius: 12, padding: 24, width: 400,
+            border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ color: '#e0e0e0', margin: '0 0 16px', fontSize: 16, fontWeight: 600 }}>
+              新建设备
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ color: '#8898a8', fontSize: 12, display: 'block', marginBottom: 4 }}>设备名称 *</label>
+                <input
+                  value={newEquipName}
+                  onChange={e => setNewEquipName(e.target.value)}
+                  placeholder="例如: BR-201"
+                  style={{ width: '100%', padding: '8px 12px', background: '#0f1923',
+                    border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
+                    color: '#e0e0e0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: '#8898a8', fontSize: 12, display: 'block', marginBottom: 4 }}>材质系统</label>
+                  <select
+                    value={newEquipSystemType}
+                    onChange={e => setNewEquipSystemType(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', background: '#0f1923',
+                      border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
+                      color: '#e0e0e0', fontSize: 13, outline: 'none' }}>
+                    <option value="SUS">SUS (一次性)</option>
+                    <option value="SS">SS (不锈钢)</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ color: '#8898a8', fontSize: 12, display: 'block', marginBottom: 4 }}>设备类别</label>
+                  <input
+                    value={newEquipClass}
+                    onChange={e => setNewEquipClass(e.target.value)}
+                    placeholder="例如: REACTOR"
+                    style={{ width: '100%', padding: '8px 12px', background: '#0f1923',
+                      border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6,
+                      color: '#e0e0e0', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+              <button
+                onClick={() => { setShowCreateEquipModal(false); setPendingBindTask(null); }}
+                style={{ padding: '8px 16px', background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6,
+                  color: '#8898a8', fontSize: 13, cursor: 'pointer' }}>
+                取消
+              </button>
+              <button
+                onClick={() => void handleCreateEquipment()}
+                style={{ padding: '8px 16px',
+                  background: 'linear-gradient(135deg, #0d47a1 0%, #1565c0 100%)',
+                  border: 'none', borderRadius: 6,
+                  color: '#e0e0e0', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+                {pendingBindTask ? '创建并绑定' : '创建设备'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

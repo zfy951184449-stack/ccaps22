@@ -1,0 +1,48 @@
+.wxb-modal .ant-modal-content {
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  padding: 32px;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.wxb-modal .ant-modal-header {
+  margin-bottom: 24px;
+  background: transparent;
+  border-bottom: none;
+}
+
+.wxb-modal .wxb-modal-close-icon {
+  font-size: 20px;
+  font-weight: 200;
+  color: var(--wxb-color-text-secondary);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.02);
+}
+
+.wxb-modal .wxb-modal-close-icon:hover {
+  color: var(--wxb-color-text-primary);
+  background: rgba(0,0,0,0.06);
+}
+
+.wxb-modal .ant-modal-close {
+  top: 24px;
+  inset-inline-end: 24px;
+}
+
+.wxb-modal .ant-modal-footer {
+  border-top: none;
+  margin-top: 32px;
+  padding: 0;
+}
+
+.wxb-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}

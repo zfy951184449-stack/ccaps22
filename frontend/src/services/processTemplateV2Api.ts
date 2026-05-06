@@ -658,6 +658,39 @@ export const processTemplateV2Api = {
     });
     return response.data;
   },
+  /**
+   * List all resource bindings for a template in one bulk call.
+   * Used by the resource Gantt view to map operations → equipment.
+   */
+  listBindingsByTemplate: async (templateId: number): Promise<Array<{
+    template_schedule_id: number;
+    resource_node_id: number;
+    binding_mode: string;
+    binding_role: string;
+    node_name: string;
+    node_class: string;
+    equipment_system_type: string | null;
+    equipment_class: string | null;
+  }>> => {
+    const response = await client.get(`/template-stage-operations/template/${templateId}/bindings`);
+    return response.data ?? [];
+  },
+  /**
+   * Batch update resource bindings for multiple schedule IDs.
+   * Pass resourceNodeId=null to unbind.
+   */
+  batchUpdateBindings: async (
+    scheduleIds: number[],
+    resourceNodeId: number | null,
+    bindingRole: 'PRIMARY' | 'AUXILIARY' = 'PRIMARY',
+  ): Promise<{ success: number; failed: number; total: number; errors?: string[] }> => {
+    const response = await client.put('/template-stage-operations/batch-binding', {
+      schedule_ids: scheduleIds,
+      resource_node_id: resourceNodeId,
+      binding_role: bindingRole,
+    });
+    return response.data;
+  },
   updateTemplateStageOperationResources: async (scheduleId: number, requirements: ResourceRequirementRule[]) => {
     const response = await client.put(`/template-stage-operations/${scheduleId}/resources`, {
       requirements: requirements.map((rule) => ({

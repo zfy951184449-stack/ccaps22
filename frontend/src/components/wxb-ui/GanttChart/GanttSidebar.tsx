@@ -149,79 +149,125 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                   alignItems: 'center',
                   paddingLeft: 8 + row.depth * 16,
                   background: rowBg,
-                  cursor: isGroup ? 'grab' : 'default',
+                  cursor: isGroup && !row.isSubRow ? 'grab' : 'default',
                   borderBottom: `1px solid ${THEME.divider}`,
                   borderLeft: leftBorder,
                   userSelect: 'none',
                   transition: 'background 0.1s ease',
                 }}
-                onClick={() => isGroup && handleToggle(row.id, row.isExpanded)}
+                onClick={() => isGroup && !row.isSubRow && handleToggle(row.id, row.isExpanded)}
                 onMouseEnter={() => handleRowMouseEnter(i)}
                 onMouseLeave={handleRowMouseLeave}
               >
-                {/* Expand/collapse arrow */}
-                {row.hasChildren && (
+                {/* Sub-row: vertical connector line instead of content */}
+                {row.isSubRow ? (
                   <span
                     style={{
-                      width: 16,
-                      height: 16,
                       display: 'inline-flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 10,
-                      color: THEME.fg3,
-                      marginRight: 4,
-                      transition: 'transform 0.15s',
-                      transform: row.isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                    }}
-                  >
-                    ▶
-                  </span>
-                )}
-                {!row.hasChildren && <span style={{ width: 20 }} />}
-
-                {/* Drag handle for group rows */}
-                {isGroup && (
-                  <span
-                    style={{
-                      fontSize: 10,
+                      gap: 4,
                       color: THEME.fg4,
-                      marginRight: 4,
-                      opacity: isHovered ? 0.8 : 0,
-                      transition: 'opacity 0.15s',
+                      fontSize: 11,
+                      fontStyle: 'italic',
+                      opacity: 0.6,
                     }}
-                    title="拖拽移动"
                   >
-                    ⠿
+                    <span
+                      style={{
+                        width: 1,
+                        height: ROW_HEIGHT - 8,
+                        background: THEME.fg4,
+                        marginRight: 6,
+                        flexShrink: 0,
+                      }}
+                    />
+                    ┊
                   </span>
-                )}
+                ) : (
+                  <>
+                    {/* Expand/collapse arrow */}
+                    {row.hasChildren && (
+                      <span
+                        style={{
+                          width: 16,
+                          height: 16,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10,
+                          color: THEME.fg3,
+                          marginRight: 4,
+                          transition: 'transform 0.15s',
+                          transform: row.isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                        }}
+                      >
+                        ▶
+                      </span>
+                    )}
+                    {!row.hasChildren && <span style={{ width: 20 }} />}
 
-                {/* Color dot */}
-                {row.color && (
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: row.color,
-                      marginRight: 6,
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
+                    {/* Drag handle for group rows */}
+                    {isGroup && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: THEME.fg4,
+                          marginRight: 4,
+                          opacity: isHovered ? 0.8 : 0,
+                          transition: 'opacity 0.15s',
+                        }}
+                        title="拖拽移动"
+                      >
+                        ⠿
+                      </span>
+                    )}
 
-                {/* Label */}
-                <span
-                  style={{
-                    font: `${isGroup ? '500' : '400'} 12px ${FONT_SANS}`,
-                    color: isGroup ? THEME.ink : THEME.fg2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {row.label}
-                </span>
+                    {/* Color dot */}
+                    {row.color && (
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: row.color,
+                          marginRight: 6,
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+
+                    {/* Equipment type badge */}
+                    {row.equipmentType && (
+                      <span
+                        style={{
+                          fontSize: 9,
+                          padding: '1px 4px',
+                          borderRadius: 3,
+                          background: 'rgba(11, 61, 127, 0.08)',
+                          color: '#0B3D7F',
+                          marginRight: 4,
+                          flexShrink: 0,
+                          fontWeight: 500,
+                        }}
+                      >
+                        {row.equipmentType}
+                      </span>
+                    )}
+
+                    {/* Label */}
+                    <span
+                      style={{
+                        font: `${isGroup ? '500' : '400'} 12px ${FONT_SANS}`,
+                        color: isGroup ? THEME.ink : THEME.fg2,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.label}
+                    </span>
+                  </>
+                )}
               </div>
             );
           })}

@@ -1,0 +1,5 @@
+.wxb-spinner { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wxb-spinner-svg { animation: wxb-spin 1s linear infinite; }
+.wxb-spinner-arc { transform-origin: center; }
+.wxb-spinner-tip { font: 400 var(--wx-fs-13, 13px)/1.3 var(--wx-font-sans); color: var(--wx-fg-3, #5A6B7E); }
+@keyframes wxb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

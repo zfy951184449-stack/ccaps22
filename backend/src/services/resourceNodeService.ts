@@ -64,11 +64,14 @@ export interface ResourceNodeRelationRecord {
   target: ResourceNodeRecord;
 }
 
+export type BindingRole = 'PRIMARY' | 'AUXILIARY';
+
 export interface TemplateScheduleBindingRecord {
   id: number;
   template_schedule_id: number;
   resource_node_id: number;
   binding_mode: 'DEFAULT';
+  binding_role: BindingRole;
   node: ResourceNodeRecord | null;
   status: TemplateBindingStatus;
   reason: string | null;
@@ -1013,6 +1016,7 @@ export const listTemplateScheduleBindings = async (
         b.template_schedule_id,
         b.resource_node_id,
         b.binding_mode,
+        b.binding_role,
         rn.node_code,
         rn.node_name,
         rn.node_class,
@@ -1036,7 +1040,8 @@ export const listTemplateScheduleBindings = async (
      FROM template_stage_operation_resource_bindings b
      LEFT JOIN resource_nodes rn ON rn.id = b.resource_node_id
      LEFT JOIN resources r ON r.id = rn.bound_resource_id
-     WHERE b.template_schedule_id IN (${placeholders})`,
+     WHERE b.template_schedule_id IN (${placeholders})
+       AND b.binding_role = 'PRIMARY'`,
     scheduleIds,
   );
 
@@ -1047,6 +1052,7 @@ export const listTemplateScheduleBindings = async (
       template_schedule_id: Number(row.template_schedule_id),
       resource_node_id: Number(row.resource_node_id),
       binding_mode: 'DEFAULT',
+      binding_role: (row.binding_role as BindingRole) || 'PRIMARY',
       node,
       status: node ? 'BOUND' : 'INVALID_NODE',
       reason: node ? null : 'Resource node not found',
@@ -1136,11 +1142,13 @@ export const upsertTemplateScheduleBinding = async (
   scheduleId: number,
   resourceNodeId: number | null,
   executor: SqlExecutor = pool,
+  bindingRole: BindingRole = 'PRIMARY',
 ): Promise<TemplateScheduleBindingRecord | null> => {
   if (!resourceNodeId) {
+    // Unbind: delete matching role
     await executor.execute(
-      'DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ?',
-      [scheduleId],
+      'DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ? AND binding_role = ?',
+      [scheduleId, bindingRole],
     );
     return null;
   }
@@ -1150,26 +1158,21 @@ export const upsertTemplateScheduleBinding = async (
     throw new Error(evaluation.reason ?? 'Resource node binding is invalid');
   }
 
-  const [existingRows] = await executor.execute<RowDataPacket[]>(
-    'SELECT id FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ?',
-    [scheduleId],
-  );
-
-  if (existingRows.length) {
+  // For PRIMARY: enforce exactly one primary binding by deleting the old one first
+  if (bindingRole === 'PRIMARY') {
     await executor.execute(
-      `UPDATE template_stage_operation_resource_bindings
-       SET resource_node_id = ?, binding_mode = 'DEFAULT'
-       WHERE template_schedule_id = ?`,
-      [resourceNodeId, scheduleId],
-    );
-  } else {
-    await executor.execute(
-      `INSERT INTO template_stage_operation_resource_bindings
-       (template_schedule_id, resource_node_id, binding_mode)
-       VALUES (?, ?, 'DEFAULT')`,
-      [scheduleId, resourceNodeId],
+      'DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ? AND binding_role = ?',
+      [scheduleId, 'PRIMARY'],
     );
   }
+
+  await executor.execute(
+    `INSERT INTO template_stage_operation_resource_bindings
+     (template_schedule_id, resource_node_id, binding_mode, binding_role)
+     VALUES (?, ?, 'DEFAULT', ?)
+     ON DUPLICATE KEY UPDATE binding_role = VALUES(binding_role)`,
+    [scheduleId, resourceNodeId, bindingRole],
+  );
 
   const bindingMap = await listTemplateScheduleBindings([scheduleId], executor);
   const record = bindingMap.get(scheduleId);
@@ -1195,7 +1198,7 @@ export const copyTemplateScheduleBindings = async (
 
   const placeholders = sourceScheduleIds.map(() => '?').join(', ');
   const [rows] = await executor.execute<RowDataPacket[]>(
-    `SELECT template_schedule_id, resource_node_id
+    `SELECT template_schedule_id, resource_node_id, binding_role
      FROM template_stage_operation_resource_bindings
      WHERE template_schedule_id IN (${placeholders})`,
     sourceScheduleIds,
@@ -1209,9 +1212,9 @@ export const copyTemplateScheduleBindings = async (
 
     await executor.execute(
       `INSERT INTO template_stage_operation_resource_bindings
-       (template_schedule_id, resource_node_id, binding_mode)
-       VALUES (?, ?, 'DEFAULT')`,
-      [targetScheduleId, Number(row.resource_node_id)],
+       (template_schedule_id, resource_node_id, binding_mode, binding_role)
+       VALUES (?, ?, 'DEFAULT', ?)`,
+      [targetScheduleId, Number(row.resource_node_id), row.binding_role || 'PRIMARY'],
     );
   }
 };

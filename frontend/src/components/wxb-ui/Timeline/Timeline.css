@@ -1,0 +1,15 @@
+.wxb-timeline { display: flex; flex-direction: column; }
+.wxb-timeline-item { display: flex; position: relative; padding-bottom: 20px; }
+.wxb-timeline-item:last-child { padding-bottom: 0; }
+.wxb-timeline-item:last-child .wxb-tl-tail { display: none; }
+.wxb-tl-tail { position: absolute; left: 5px; top: 14px; bottom: 0; width: 1px; background: var(--wx-border, #E4EAF1); }
+.wxb-tl-dot { width: 12px; height: 12px; flex-shrink: 0; margin-right: 12px; margin-top: 4px; display: flex; align-items: center; justify-content: center; }
+.wxb-tl-dot-inner { width: 10px; height: 10px; border-radius: 50%; border: 2px solid currentColor; }
+.wxb-tl-blue .wxb-tl-dot { color: var(--wx-blue-500, #1F6FEB); }
+.wxb-tl-green .wxb-tl-dot { color: var(--wx-green-500, #2E9D6E); }
+.wxb-tl-amber .wxb-tl-dot { color: var(--wx-amber-500, #E8B53C); }
+.wxb-tl-red .wxb-tl-dot { color: var(--wx-red-500, #D6493A); }
+.wxb-tl-neutral .wxb-tl-dot { color: var(--wx-fg-4, #8898A8); }
+.wxb-tl-content { flex: 1; }
+.wxb-tl-label { font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans); color: var(--wx-fg-1, #0F1B2D); }
+.wxb-tl-time { font: 400 var(--wx-fs-12, 12px)/1.3 var(--wx-font-mono); color: var(--wx-fg-4, #8898A8); margin-top: 2px; }

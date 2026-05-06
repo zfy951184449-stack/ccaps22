@@ -114,6 +114,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   showSelectionPanel = true,
   highlightedLinkIds,
   onCreateShareGroup,
+  selectionPanelExtraActions,
   className,
   style,
 }) => {
@@ -406,6 +407,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
             onDeselectAll={handleDeselectAll}
             onSelectAllInGroup={handleSelectAllInGroup}
             onCreateShareGroup={onCreateShareGroup}
+            extraActions={selectionPanelExtraActions}
           />
         )}
 

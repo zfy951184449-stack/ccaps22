@@ -1,0 +1,5 @@
+.wxb-breadcrumb { display: flex; align-items: center; gap: 0; font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans); }
+.wxb-breadcrumb-sep { margin: 0 8px; color: var(--wx-fg-4, #8898A8); }
+.wxb-breadcrumb-link { color: var(--wx-blue-500, #1F6FEB); text-decoration: none; }
+.wxb-breadcrumb-link:hover { text-decoration: underline; }
+.wxb-breadcrumb-current { color: var(--wx-fg-2, #3A4A5C); }

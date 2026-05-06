@@ -1,0 +1,12 @@
+.wxb-slider { display: flex; align-items: center; gap: 12px; }
+.wxb-slider.is-disabled { opacity: 0.5; pointer-events: none; }
+.wxb-slider-track-wrap { flex: 1; position: relative; height: 20px; display: flex; align-items: center; }
+.wxb-slider-track { width: 100%; height: 4px; border-radius: 2px; background: var(--wx-surface-3, #EDF1F6); overflow: hidden; }
+.wxb-slider-fill { height: 100%; background: var(--wx-blue-700, #0B3D7F); border-radius: 2px; transition: width 60ms; }
+.wxb-slider-input {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.wxb-slider-input::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; }
+.wxb-slider-value { font: 500 var(--wx-fs-13, 13px)/1 var(--wx-font-mono); color: var(--wx-fg-2, #3A4A5C); min-width: 28px; text-align: right; }

@@ -1,0 +1,4 @@
+.wxb-drawer .ant-drawer-header { border-bottom: 1px solid var(--wx-border, #E4EAF1); padding: 16px 24px; }
+.wxb-drawer .ant-drawer-title { font: 600 var(--wx-fs-16, 16px)/1.3 var(--wx-font-sans); color: var(--wx-ink, #0F1B2D); }
+.wxb-drawer .ant-drawer-body { padding: 24px; font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans); }
+.wxb-drawer .ant-drawer-footer { border-top: 1px solid var(--wx-border, #E4EAF1); padding: 12px 24px; }

@@ -1,0 +1,6 @@
+.wxb-tooltip .ant-tooltip-inner {
+  background: var(--wx-ink, #0F1B2D); border-radius: 4px;
+  font: 400 var(--wx-fs-13, 13px)/1.4 var(--wx-font-sans);
+  padding: 6px 10px; box-shadow: 0 2px 8px rgba(15,27,45,0.16);
+}
+.wxb-tooltip .ant-tooltip-arrow::before { background: var(--wx-ink, #0F1B2D); }

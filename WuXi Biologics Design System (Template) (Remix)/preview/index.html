@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WuXi Biologics Design System - Gallery</title>
+    <style>
+        :root {
+            --wxb-blue: #0B3D7F;
+            --wxb-blue-hover: #0A3470;
+            --wxb-bg: #F5F8FB;
+            --wxb-border: #E4EAF1;
+            --wxb-text-main: #1C2B39;
+            --wxb-text-muted: #6A7B8C;
+        }
+        
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--wxb-bg);
+            color: var(--wxb-text-main);
+        }
+
+        /* 顶部导航，代替左侧导航避免冲突 */
+        .top-navbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: #ffffff;
+            border-bottom: 1px solid var(--wxb-border);
+            display: flex;
+            align-items: center;
+            padding: 0 32px;
+            height: 64px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .top-navbar h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            margin-right: 48px;
+            color: var(--wxb-blue);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--wxb-text-muted);
+            font-weight: 500;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--wxb-blue);
+        }
+
+        .main-content {
+            padding: 40px 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .category-section {
+            margin-bottom: 64px;
+        }
+
+        .category-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--wxb-border);
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+            align-items: start;
+        }
+        
+        /* 针对大尺寸组件使用更宽的列 */
+        .grid-container.wide {
+            grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+        }
+        
+        .grid-container.full {
+            grid-template-columns: 1fr;
+        }
+
+        wxb-preview {
+            display: block;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid var(--wxb-border);
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        
+        wxb-preview:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+    </style>
+</head>
+<body>
+
+    <nav class="top-navbar">
+        <h1>WuXi Biologics Design System</h1>
+        <div class="nav-links">
+            <a href="#brand">Brand & Logos</a>
+            <a href="#colors">Colors</a>
+            <a href="#typography">Typography</a>
+            <a href="#spacing">Spacing</a>
+            <a href="#components">Components</a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+
+        <!-- Brand -->
+        <section id="brand" class="category-section">
+            <h2 class="category-title">Brand & Logos</h2>
+            <div class="grid-container wide">
+                <wxb-preview src="brand-logo.html"></wxb-preview>
+                <wxb-preview src="brand-motifs.html"></wxb-preview>
+                <wxb-preview src="brand-icons.html"></wxb-preview>
+            </div>
+        </section>
+
+        <!-- Colors -->
+        <section id="colors" class="category-section">
+            <h2 class="category-title">Colors</h2>
+            <div class="grid-container">
+                <wxb-preview src="colors-blue-scale.html"></wxb-preview>
+                <wxb-preview src="colors-semantic.html"></wxb-preview>
+                <wxb-preview src="colors-status.html"></wxb-preview>
+                <wxb-preview src="colors-neutrals.html"></wxb-preview>
+                <wxb-preview src="colors-accents.html"></wxb-preview>
+            </div>
+        </section>
+
+        <!-- Typography -->
+        <section id="typography" class="category-section">
+            <h2 class="category-title">Typography</h2>
+            <div class="grid-container">
+                <wxb-preview src="type-display.html"></wxb-preview>
+                <wxb-preview src="type-body.html"></wxb-preview>
+                <wxb-preview src="type-metrics.html"></wxb-preview>
+            </div>
+        </section>
+
+        <!-- Spacing -->
+        <section id="spacing" class="category-section">
+            <h2 class="category-title">Spacing & Geometry</h2>
+            <div class="grid-container">
+                <wxb-preview src="spacing-scale.html"></wxb-preview>
+                <wxb-preview src="spacing-radii.html"></wxb-preview>
+                <wxb-preview src="spacing-elevation.html"></wxb-preview>
+            </div>
+        </section>
+
+        <!-- Components -->
+        <section id="components" class="category-section">
+            <h2 class="category-title">Components</h2>
+            <div class="grid-container wide">
+                <wxb-preview src="components-buttons.html"></wxb-preview>
+                <wxb-preview src="components-alerts.html"></wxb-preview>
+                <wxb-preview src="components-badges.html"></wxb-preview>
+                <wxb-preview src="components-inputs.html"></wxb-preview>
+                <wxb-preview src="components-stepper.html"></wxb-preview>
+                <wxb-preview src="components-kpi.html"></wxb-preview>
+                <wxb-preview src="components-cards.html"></wxb-preview>
+            </div>
+            
+            <div class="grid-container full" style="margin-top: 24px;">
+                <wxb-preview src="components-table.html"></wxb-preview>
+                <wxb-preview src="components-chart.html"></wxb-preview>
+                <wxb-preview src="components-sidenav.html"></wxb-preview>
+                <wxb-preview src="components-topnav.html"></wxb-preview>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        class WxbPreview extends HTMLElement {
+            constructor() {
+                super();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            async connectedCallback() {
+                const src = this.getAttribute('src');
+                if (!src) return;
+                
+                try {
+                    // Fetch the original HTML component
+                    const response = await fetch(src);
+                    const html = await response.text();
+                    
+                    // Parse it
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    
+                    // Extract styles and body content
+                    const styles = doc.querySelectorAll('style, link[rel="stylesheet"]');
+                    const bodyContent = doc.body.innerHTML;
+                    
+                    // Create a wrapper
+                    const wrapper = document.createElement('div');
+                    wrapper.style.padding = '0';
+                    wrapper.style.width = '100%';
+                    wrapper.style.height = '100%';
+                    wrapper.style.boxSizing = 'border-box';
+                    
+                    // Inject _card.css if the component requires it but missing
+                    const hasCardCss = Array.from(styles).some(s => s.tagName === 'LINK' && s.href.includes('_card.css'));
+                    if (!hasCardCss && src.includes('components-')) {
+                        const link = document.createElement('link');
+                        link.rel = 'stylesheet';
+                        link.href = '_card.css';
+                        this.shadowRoot.appendChild(link);
+                    }
+                    
+                    // Append extracted styles
+                    styles.forEach(style => {
+                        // Fix relative paths for link tags
+                        if (style.tagName === 'LINK') {
+                            const newLink = document.createElement('link');
+                            newLink.rel = 'stylesheet';
+                            newLink.href = style.getAttribute('href'); // Use original relative href
+                            this.shadowRoot.appendChild(newLink);
+                        } else {
+                            this.shadowRoot.appendChild(style.cloneNode(true));
+                        }
+                    });
+                    
+                    // Custom style to override any margin set by body
+                    const resetStyle = document.createElement('style');
+                    resetStyle.textContent = `
+                        .card { margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+                    `;
+                    this.shadowRoot.appendChild(resetStyle);
+                    
+                    // Append body content
+                    wrapper.innerHTML = bodyContent;
+                    this.shadowRoot.appendChild(wrapper);
+                    
+                } catch (error) {
+                    console.error('Error loading preview for ' + src, error);
+                    this.shadowRoot.innerHTML = `<div style="padding: 24px; color: red;">Failed to load ${src}</div>`;
+                }
+            }
+        }
+
+        customElements.define('wxb-preview', WxbPreview);
+        
+        // Smooth scrolling for navigation
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            });
+        });
+    </script>
+</body>
+</html>

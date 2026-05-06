@@ -1,0 +1,52 @@
+.wxb-table-wrapper {
+  border: 1px solid var(--wx-border, #E4EAF1);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--wx-sh-1, 0 1px 2px rgba(15,27,45,.04));
+}
+
+.wxb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 400 13px/1.4 var(--wx-font-sans, Inter, sans-serif);
+}
+
+.wxb-table thead th {
+  text-align: left;
+  font: 500 11.5px/1.2 var(--wx-font-sans, Inter, sans-serif);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wx-fg-3, #5A6B7E);
+  background: var(--wx-surface-2, #F5F8FB);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--wx-border, #E4EAF1);
+}
+
+.wxb-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--wx-border-3, #EEF2F7);
+  color: var(--wx-fg-2, #3A4A5C);
+  vertical-align: middle;
+}
+
+.wxb-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.wxb-table tbody tr:hover td {
+  background: var(--wx-surface-1, #FAFCFE);
+}
+
+.wxb-table .num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--wx-font-mono, 'JetBrains Mono', monospace);
+  font-size: 12.5px;
+  color: var(--wx-ink, #0F1B2D);
+}
+
+.wxb-table .mono-cell {
+  font-family: var(--wx-font-mono, 'JetBrains Mono', monospace);
+  font-size: 12.5px;
+  color: var(--wx-blue-800, #0B3D7F);
+}

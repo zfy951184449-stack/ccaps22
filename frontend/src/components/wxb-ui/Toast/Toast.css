@@ -1,0 +1,4 @@
+.wxb-toast .ant-message-notice-content {
+  border-radius: 8px; box-shadow: var(--wx-sh-2, 0 4px 16px rgba(15,27,45,0.10));
+  font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans); padding: 10px 16px;
+}

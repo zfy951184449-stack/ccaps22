@@ -1,19 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   Table,
-  Button,
   Space,
-  Modal,
   Form,
   Input,
   InputNumber,
   message,
-  Popconfirm,
-  Card,
   Row,
   Col,
   Statistic,
-  Tag,
   Typography,
   Slider,
   Select,
@@ -32,6 +27,7 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import OperationQualificationModal from './OperationQualificationModal';
+import { WxbCard, WxbButton, WxbBadge, WxbTableWrapper, WxbModal, WxbInput } from './wxb-ui';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -98,6 +94,7 @@ const OperationTable: React.FC = () => {
   const [qualifiedPersonnelMap, setQualifiedPersonnelMap] = useState<{ [key: number]: number[] }>({});
   const [teams, setTeams] = useState<Team[]>([]);
   const [activeTeamId, setActiveTeamId] = useState<string>('all');
+  const [deleteRecord, setDeleteRecord] = useState<Operation | null>(null);
 
   // 获取操作列表
   const fetchOperations = async () => {
@@ -206,10 +203,12 @@ const OperationTable: React.FC = () => {
   };
 
   // 删除操作
-  const handleDelete = async (id: number) => {
+  const confirmDelete = async () => {
+    if (!deleteRecord) return;
     try {
-      await axios.delete(`/api/operations/${id}`);
+      await axios.delete(`/api/operations/${deleteRecord.id}`);
       message.success('操作删除成功');
+      setDeleteRecord(null);
       fetchOperations();
       fetchStatistics();
     } catch (error: any) {
@@ -370,9 +369,11 @@ const OperationTable: React.FC = () => {
       key: 'qualification_count',
       width: 100,
       render: (count: number) => (
-        <Tag color={count > 0 ? 'blue' : 'default'}>
-          {count || 0} 项
-        </Tag>
+        <WxbBadge 
+          variant={count > 0 ? 'outline' : 'code'} 
+          status={count > 0 ? 'info' : 'neutral'} 
+          label={`${count || 0} 项`} 
+        />
       ),
     },
     {
@@ -388,9 +389,13 @@ const OperationTable: React.FC = () => {
           <Space size={4}>
             {positions.map((count, idx) => (
               <Tooltip key={idx} title={`位置${idx + 1}: ${count}人合格`}>
-                <Tag color={count > 0 ? 'green' : 'red'}>
-                  P{idx + 1}: {count}
-                </Tag>
+                <div>
+                  <WxbBadge 
+                    variant={count > 0 ? 'code' : 'outline'} 
+                    status={count > 0 ? 'success' : 'error'} 
+                    label={`P${idx + 1}: ${count}`} 
+                  />
+                </div>
               </Tooltip>
             ))}
           </Space>
@@ -403,88 +408,75 @@ const OperationTable: React.FC = () => {
       width: 200,
       render: (_: any, record: Operation) => (
         <Space size="small">
-          <Tooltip title="资质要求">
-            <Button
-              type="link"
-              icon={<SettingOutlined />}
-              onClick={() => showQualificationModal(record)}
-            >
-              资质
-            </Button>
-          </Tooltip>
-          <Tooltip title="编辑">
-            <Button
-              type="link"
-              icon={<EditOutlined />}
-              onClick={() => showModal(record)}
-            />
-          </Tooltip>
-          <Tooltip title="删除">
-            <Popconfirm
-              title="确定要删除这个操作吗？"
-              description={record.qualification_count && record.qualification_count > 0
-                ? "该操作有关联的资质要求，无法删除"
-                : "删除后无法恢复"}
-              onConfirm={() => handleDelete(record.id)}
-              okText="确定"
-              cancelText="取消"
-              disabled={record.qualification_count !== undefined && record.qualification_count > 0}
-            >
-              <Button
-                type="link"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={record.qualification_count !== undefined && record.qualification_count > 0}
-              />
-            </Popconfirm>
-          </Tooltip>
+          <WxbButton
+            variant="ghost"
+            size="sm"
+            onClick={() => showQualificationModal(record)}
+          >
+            <SettingOutlined style={{ marginRight: 4 }} />资质
+          </WxbButton>
+          <WxbButton
+            variant="ghost"
+            size="sm"
+            onClick={() => showModal(record)}
+          >
+            <EditOutlined style={{ marginRight: 4 }} />编辑
+          </WxbButton>
+          <WxbButton
+            variant="danger"
+            size="sm"
+            onClick={() => setDeleteRecord(record)}
+            disabled={record.qualification_count !== undefined && record.qualification_count > 0}
+          >
+            删除
+          </WxbButton>
         </Space>
       ),
     },
   ];
 
   return (
-    <div>
+    <div className="dashboard-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* 统计卡片 */}
       {statistics && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16}>
           <Col span={6}>
-            <Card>
+            <WxbCard>
               <Statistic
                 title="总操作数"
                 value={statistics.summary.total_operations}
                 prefix={<InfoCircleOutlined />}
               />
-            </Card>
+            </WxbCard>
           </Col>
           <Col span={6}>
-            <Card>
+            <WxbCard>
               <Statistic
                 title="平均耗时"
                 value={Number(statistics.summary.avg_time || 0).toFixed(1)}
                 suffix="小时"
                 prefix={<ClockCircleOutlined />}
               />
-            </Card>
+            </WxbCard>
           </Col>
           <Col span={6}>
-            <Card>
+            <WxbCard>
               <Statistic
                 title="耗时范围"
                 value={`${statistics.summary.min_time || 0} - ${statistics.summary.max_time || 0}`}
                 suffix="小时"
               />
-            </Card>
+            </WxbCard>
           </Col>
           <Col span={6}>
-            <Card>
+            <WxbCard>
               <Statistic
                 title="平均人数"
                 value={Number(statistics.summary.avg_people || 1).toFixed(1)}
                 suffix="人"
                 prefix={<TeamOutlined />}
               />
-            </Card>
+            </WxbCard>
           </Col>
         </Row>
       )}
@@ -498,15 +490,13 @@ const OperationTable: React.FC = () => {
       />
 
       {/* 筛选控制栏 */}
-      <Card style={{ marginBottom: 16 }}>
+      <WxbCard>
         <Row gutter={16} align="middle">
           <Col span={6}>
-            <Input
+            <WxbInput
               placeholder="搜索操作名称或编码"
-              prefix={<SearchOutlined />}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              allowClear
+              onChange={(e: any) => setSearchText(e.target.value)}
             />
           </Col>
           <Col span={6}>
@@ -539,28 +529,32 @@ const OperationTable: React.FC = () => {
             </div>
           </Col>
           <Col span={4}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => showModal()}>
-              新增操作
-            </Button>
+            <WxbButton variant="primary" onClick={() => showModal()}>
+              <PlusOutlined style={{ marginRight: 8 }} />新增操作
+            </WxbButton>
           </Col>
         </Row>
-      </Card>
+      </WxbCard>
 
       {/* 数据表格 */}
-      <Table
-        columns={columns}
-        dataSource={filteredOperations}
-        rowKey="id"
-        loading={loading}
-        pagination={{
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
-        }}
-      />
+      <WxbCard>
+        <WxbTableWrapper>
+          <Table
+            columns={columns}
+            dataSource={filteredOperations}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+            }}
+          />
+        </WxbTableWrapper>
+      </WxbCard>
 
       {/* 新增/编辑弹窗 */}
-      <Modal
+      <WxbModal
         title={editingOperation ? '编辑操作' : '新增操作'}
         open={modalVisible}
         onOk={handleSave}
@@ -588,7 +582,7 @@ const OperationTable: React.FC = () => {
 
           {editingOperation && (
             <Form.Item label="操作编码">
-              <Input value={editingOperation.operation_code} disabled />
+              <WxbInput value={editingOperation.operation_code} disabled />
             </Form.Item>
           )}
 
@@ -597,7 +591,7 @@ const OperationTable: React.FC = () => {
             label="操作名称"
             rules={[{ required: true, message: '请输入操作名称' }]}
           >
-            <Input placeholder="请输入操作名称" />
+            <WxbInput placeholder="请输入操作名称" />
           </Form.Item>
 
           <Form.Item
@@ -659,7 +653,7 @@ const OperationTable: React.FC = () => {
             />
           </Form.Item>
         </Form>
-      </Modal>
+      </WxbModal>
 
       {/* 资质要求设置弹窗 */}
       {selectedOperation && (
@@ -676,6 +670,21 @@ const OperationTable: React.FC = () => {
           }}
         />
       )}
+
+      {/* 确认删除弹窗 */}
+      <WxbModal
+        title="确认删除"
+        open={!!deleteRecord}
+        onCancel={() => setDeleteRecord(null)}
+        onOk={confirmDelete}
+        okText="确定删除"
+        okVariant="danger"
+        width={400}
+      >
+        <p className="wxb-body" style={{ margin: '16px 0' }}>
+          确定要删除操作 <strong>【{deleteRecord?.operation_name}】</strong> 吗？删除后无法恢复。
+        </p>
+      </WxbModal>
     </div>
   );
 };

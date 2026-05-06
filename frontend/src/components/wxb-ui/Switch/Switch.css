@@ -1,0 +1,144 @@
+/* ═══════════════════════════════════════════════════
+   WxbSwitch — Matches wxb-ui design tokens
+   - Uses --wx-blue-700 as active accent (same as WxbButton primary)
+   - Uses --wx-border / --wx-surface-2 for inactive (same as WxbInput)
+   - 4px border-radius on handle (same as WxbButton)
+   - 180ms cubic-bezier transition (same as WxbButton)
+   - Focus ring: --wx-sh-focus (same as WxbInput)
+   ═══════════════════════════════════════════════════ */
+
+/* ── Track (button shell) ── */
+.wxb-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--wx-border, #E4EAF1);
+  border-radius: 100px;
+  cursor: pointer;
+  padding: 0;
+  background: var(--wx-surface-2, #F5F8FB);
+  transition: background 180ms cubic-bezier(.2,0,0,1),
+              border-color 180ms cubic-bezier(.2,0,0,1),
+              box-shadow 180ms;
+  outline: none;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* ── Sizes ── */
+.wxb-switch-md {
+  min-width: 44px;
+  height: 22px;
+}
+.wxb-switch-sm {
+  min-width: 34px;
+  height: 18px;
+}
+
+/* ── Handle (sliding knob) ── */
+.wxb-switch-handle {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,.18);
+  transition: left 180ms cubic-bezier(.2,0,0,1),
+              width 120ms cubic-bezier(.2,0,0,1);
+  pointer-events: none;
+}
+.wxb-switch-md .wxb-switch-handle {
+  width: 16px;
+  height: 16px;
+}
+.wxb-switch-sm .wxb-switch-handle {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Checked state ── */
+.wxb-switch-checked {
+  background: var(--wx-blue-700, #0B3D7F);
+  border-color: var(--wx-blue-700, #0B3D7F);
+}
+/* Use calc so handle always lands at right edge regardless of track width */
+.wxb-switch-checked.wxb-switch-md .wxb-switch-handle {
+  left: calc(100% - 18px); /* 16px handle + 2px padding */
+}
+.wxb-switch-checked.wxb-switch-sm .wxb-switch-handle {
+  left: calc(100% - 14px); /* 12px handle + 2px padding */
+}
+
+/* ── Hover ── */
+.wxb-switch:not(.wxb-switch-disabled):hover {
+  border-color: var(--wx-blue-500, #1F6FEB);
+}
+.wxb-switch-checked:not(.wxb-switch-disabled):hover {
+  background: var(--wx-blue-800, #092D5C);
+  border-color: var(--wx-blue-800, #092D5C);
+}
+
+/* ── Focus ring (keyboard) ── */
+.wxb-switch:focus-visible {
+  box-shadow: var(--wx-sh-focus, 0 0 0 2px rgba(31,111,235,.40));
+}
+
+/* ── Active (press) ── */
+.wxb-switch:not(.wxb-switch-disabled):active .wxb-switch-handle {
+  width: 20px;
+}
+.wxb-switch-sm:not(.wxb-switch-disabled):active .wxb-switch-handle {
+  width: 15px;
+}
+.wxb-switch-checked:not(.wxb-switch-disabled):active .wxb-switch-handle {
+  left: calc(100% - 22px); /* stretched handle 20px + 2px padding */
+}
+.wxb-switch-checked.wxb-switch-sm:not(.wxb-switch-disabled):active .wxb-switch-handle {
+  left: calc(100% - 17px); /* stretched handle 15px + 2px padding */
+}
+
+/* ── Disabled ── */
+.wxb-switch-disabled {
+  background: var(--wx-surface-2, #F5F8FB);
+  border-color: var(--wx-border, #E4EAF1);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ── Label text (checkedChildren / unCheckedChildren) ── */
+.wxb-switch-labeled.wxb-switch-md {
+  min-width: 56px;
+}
+.wxb-switch-labeled.wxb-switch-sm {
+  min-width: 44px;
+}
+
+.wxb-switch-label {
+  font: 500 11px/1 var(--wx-font-sans, Inter, sans-serif);
+  letter-spacing: 0.02em;
+  color: var(--wx-fg-4, #8898A8);
+  user-select: none;
+  white-space: nowrap;
+  transition: color 180ms, padding 180ms;
+  position: relative;
+  z-index: 1;
+}
+
+/* unchecked: label sits right of handle */
+.wxb-switch-md .wxb-switch-label {
+  padding: 0 8px 0 20px;
+}
+.wxb-switch-sm .wxb-switch-label {
+  padding: 0 6px 0 16px;
+}
+
+/* checked: label sits left of handle */
+.wxb-switch-checked .wxb-switch-label {
+  color: rgba(255,255,255,0.9);
+}
+.wxb-switch-checked.wxb-switch-md .wxb-switch-label {
+  padding: 0 20px 0 8px;
+}
+.wxb-switch-checked.wxb-switch-sm .wxb-switch-label {
+  padding: 0 16px 0 6px;
+}

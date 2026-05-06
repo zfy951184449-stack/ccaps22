@@ -1,20 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Card,
   Table,
-  Tag,
   Space,
-  Input,
   Select,
-  Button,
   Tooltip,
-  Statistic,
   Row,
   Col,
   Progress,
   message,
-  Switch,
-  Badge,
   Typography,
   Popover,
   Segmented,
@@ -32,6 +25,15 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import { employeeQualificationApi } from '../services/api';
+import { 
+  WxbCard, 
+  WxbKpiCard, 
+  WxbButton, 
+  WxbSwitch, 
+  WxbInput, 
+  WxbTableWrapper, 
+  WxbBadge 
+} from './wxb-ui';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -413,28 +415,20 @@ const QualificationMatrix: React.FC = () => {
             </div>
             <Space>
               {matrixItem ? (
-                <Button type="primary" onClick={handleUpdate} loading={cellLoading}>
+                <WxbButton variant="primary" onClick={handleUpdate} disabled={cellLoading}>
                   保存
-                </Button>
+                </WxbButton>
               ) : (
-                <Button type="primary" onClick={handleCreate} loading={cellLoading}>
+                <WxbButton variant="primary" onClick={handleCreate} disabled={cellLoading}>
                   添加
-                </Button>
+                </WxbButton>
               )}
               {matrixItem && (
-                <Popconfirm
-                  title="确认移除资质？"
-                  onConfirm={handleDelete}
-                  okText="移除"
-                  cancelText="取消"
-                  disabled={cellLoading}
-                >
-                  <Button danger loading={cellLoading} disabled={cellLoading}>
-                    移除
-                  </Button>
-                </Popconfirm>
+                <WxbButton variant="danger" onClick={handleDelete} disabled={cellLoading}>
+                  移除
+                </WxbButton>
               )}
-              <Button onClick={handleCloseEditor}>取消</Button>
+              <WxbButton variant="secondary" onClick={handleCloseEditor}>取消</WxbButton>
             </Space>
           </div>
         );
@@ -461,13 +455,13 @@ const QualificationMatrix: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: '#f5f5f5',
+                    backgroundColor: 'var(--wx-bg-2)',
                     borderRadius: '4px',
-                    border: '1px dashed #d9d9d9',
+                    border: '1px solid transparent',
                     cursor: 'pointer',
                   }}
                 >
-                  <CloseCircleOutlined style={{ color: '#ccc' }} />
+                  <span style={{ color: 'var(--wx-fg-4)', fontSize: 10 }}>—</span>
                 </div>
               </Tooltip>
             </Popover>
@@ -489,32 +483,25 @@ const QualificationMatrix: React.FC = () => {
           >
             <Tooltip title={`${employee.employee_name} - ${qualification.qualification_name}: ${level}级`}>
               <Spin spinning={isActiveCell && cellLoading} size="small">
-                <Badge count={level} size="small">
-                  <div
-                    style={{
-                      width: '100%',
-                      height: compactView ? '30px' : '40px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor:
-                        getLevelColor(level) === 'default' ? '#f0f0f0' : 'rgba(24, 144, 255, 0.1)',
-                      borderRadius: '4px',
-                      border: `2px solid ${
-                        getLevelColor(level) === 'default' ? '#d9d9d9' : '#1890ff'
-                      }`,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Tag
-                      color={getLevelColor(level)}
-                      icon={getLevelIcon(level)}
-                      style={{ margin: 0, fontSize: compactView ? '10px' : '12px' }}
-                    >
-                      {level}
-                    </Tag>
-                  </div>
-                </Badge>
+                <div
+                  style={{
+                    width: '100%',
+                    height: compactView ? '30px' : '40px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: 'var(--wx-color-primary-50)',
+                    borderRadius: '4px',
+                    border: '1px solid var(--wx-color-primary-200)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <WxbBadge 
+                    variant="code" 
+                    status={level >= 4 ? 'success' : 'info'} 
+                    label={`${level} 级`} 
+                  />
+                </div>
               </Spin>
             </Tooltip>
           </Popover>
@@ -524,59 +511,49 @@ const QualificationMatrix: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: '0' }}>
+    <div className="dashboard-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* 统计信息卡片 */}
       {statistics && (
-        <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Row gutter={16}>
           <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="总员工数"
-                value={statistics.totalStats.total_employees}
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
+            <WxbKpiCard
+              title="总员工数"
+              value={statistics.totalStats.total_employees}
+              trend="up"
+            />
           </Col>
           <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="总资质数"
-                value={statistics.totalStats.total_qualifications}
-                prefix={<ExclamationCircleOutlined />}
-              />
-            </Card>
+            <WxbKpiCard
+              title="总资质数"
+              value={statistics.totalStats.total_qualifications}
+              trend="neutral"
+            />
           </Col>
           <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="资质分配数"
-                value={statistics.totalStats.total_assignments}
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
+            <WxbKpiCard
+              title="资质分配数"
+              value={statistics.totalStats.total_assignments}
+              trend="up"
+            />
           </Col>
           <Col span={6}>
-            <Card size="small">
-              <Statistic
-                title="平均等级"
-                value={Number(statistics.totalStats.avg_level || 0).toFixed(1)}
-                prefix={<ExclamationCircleOutlined />}
-              />
-            </Card>
+            <WxbKpiCard
+              title="平均等级"
+              value={Number(statistics.totalStats.avg_level || 0).toFixed(1)}
+              trend="up"
+            />
           </Col>
         </Row>
       )}
 
       {/* 过滤控制面板 */}
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <WxbCard>
         <Row gutter={16} align="middle">
           <Col span={6}>
-            <Input
+            <WxbInput
               placeholder="搜索员工姓名或工号"
-              prefix={<SearchOutlined />}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              allowClear
+              onChange={(e: any) => setSearchText(e.target.value)}
             />
           </Col>
           <Col span={4}>
@@ -608,56 +585,54 @@ const QualificationMatrix: React.FC = () => {
           <Col span={4}>
             <Space>
               <Text style={{ fontSize: '12px' }}>显示空行</Text>
-              <Switch
-                size="small"
+              <WxbSwitch
                 checked={showEmptyRows}
                 onChange={setShowEmptyRows}
-                checkedChildren={<EyeOutlined />}
-                unCheckedChildren={<EyeInvisibleOutlined />}
               />
             </Space>
           </Col>
           <Col span={4}>
             <Space>
               <Text style={{ fontSize: '12px' }}>紧凑视图</Text>
-              <Switch
-                size="small"
+              <WxbSwitch
                 checked={compactView}
                 onChange={setCompactView}
               />
             </Space>
           </Col>
           <Col span={2}>
-            <Button 
-              icon={<DownloadOutlined />} 
-              size="small"
+            <WxbButton 
+              variant="secondary"
+              size="sm"
               onClick={() => message.info('导出功能开发中')}
             >
-              导出
-            </Button>
+              <DownloadOutlined style={{ marginRight: 4 }} />导出
+            </WxbButton>
           </Col>
         </Row>
-      </Card>
+      </WxbCard>
 
       {/* 矩阵表格 */}
-      <Card>
-        <Table
-          columns={columns}
-          dataSource={filteredQualifications}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 项资质`,
-            pageSize: 20,
-            pageSizeOptions: ['10', '20', '50', '100'],
-          }}
-          scroll={{ x: 300 + filteredEmployees.length * (compactView ? 60 : 80), y: 600 }}
-          size={compactView ? 'small' : 'middle'}
-          bordered
-        />
-      </Card>
+      <WxbCard>
+        <WxbTableWrapper>
+          <Table
+            columns={columns}
+            dataSource={filteredQualifications}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 项资质`,
+              pageSize: 20,
+              pageSizeOptions: ['10', '20', '50', '100'],
+            }}
+            scroll={{ x: 300 + filteredEmployees.length * (compactView ? 60 : 80), y: 600 }}
+            size={compactView ? 'small' : 'middle'}
+            bordered
+          />
+        </WxbTableWrapper>
+      </WxbCard>
     </div>
   );
 };

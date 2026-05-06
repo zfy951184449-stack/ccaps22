@@ -8,6 +8,13 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WxbButton, WxbCard, WxbTag } from '../wxb-ui';
 import { WxbSwitch } from '../wxb-ui';
+import type { YAxisMode } from '../wxb-ui/GanttChart/types';
+
+const Y_AXIS_OPTIONS: { mode: YAxisMode; label: string }[] = [
+  { mode: 'operation', label: '操作' },
+  { mode: 'stage-equipment', label: '阶段▸设备' },
+  { mode: 'equipment', label: '设备' },
+];
 
 export interface V3EditorHeaderProps {
   templateCode: string;
@@ -18,6 +25,10 @@ export interface V3EditorHeaderProps {
   showTimeWindows: boolean;
   onToggleTimeWindows: (checked: boolean) => void;
   onAutoSchedule: () => void;
+  /** Current Y-axis grouping mode */
+  yAxisMode: YAxisMode;
+  /** Y-axis mode change handler */
+  onYAxisModeChange: (mode: YAxisMode) => void;
 }
 
 const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
@@ -29,6 +40,8 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
   showTimeWindows,
   onToggleTimeWindows,
   onAutoSchedule,
+  yAxisMode,
+  onYAxisModeChange,
 }) => {
   const navigate = useNavigate();
 
@@ -96,6 +109,51 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
+          {/* Y-axis mode toggle */}
+          <div
+            style={{
+              display: 'inline-flex',
+              borderRadius: 6,
+              border: '1px solid var(--wx-border, #E4EAF1)',
+              overflow: 'hidden',
+              flexShrink: 0,
+            }}
+          >
+            {Y_AXIS_OPTIONS.map(opt => (
+              <button
+                key={opt.mode}
+                onClick={() => onYAxisModeChange(opt.mode)}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  fontWeight: yAxisMode === opt.mode ? 600 : 400,
+                  border: 'none',
+                  cursor: 'pointer',
+                  background: yAxisMode === opt.mode
+                    ? 'var(--wx-blue-50, #E8F4FD)'
+                    : 'transparent',
+                  color: yAxisMode === opt.mode
+                    ? 'var(--wx-blue-600, #1F6FEB)'
+                    : 'var(--wx-fg-3, #5A6B7E)',
+                  borderRight: '1px solid var(--wx-border, #E4EAF1)',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Separator */}
+          <div
+            style={{
+              width: 1,
+              height: 20,
+              background: 'var(--wx-border, #E4EAF1)',
+              flexShrink: 0,
+            }}
+          />
+
           {/* Time window toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: 12, color: 'var(--wx-fg-3, #5A6B7E)', whiteSpace: 'nowrap' }}>

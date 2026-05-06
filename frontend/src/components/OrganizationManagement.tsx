@@ -1,17 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Card,
   Table,
   Space,
-  Tag,
-  Button,
-  Input,
   Typography,
-  Drawer,
   Empty,
-  List,
   message,
-  Statistic,
   Row,
   Col,
   Spin,
@@ -31,6 +24,15 @@ import {
 } from '../types';
 import { organizationStructureApi, organizationEmployeeApi } from '../services/api';
 import type { EmployeeOrgContext } from '../types';
+import { 
+  WxbCard, 
+  WxbKpiCard, 
+  WxbButton, 
+  WxbInput, 
+  WxbTableWrapper, 
+  WxbModal, 
+  WxbBadge 
+} from './wxb-ui';
 
 const { Text } = Typography;
 
@@ -191,8 +193,18 @@ const OrganizationManagement: React.FC = () => {
         render: (_: unknown, record: OrganizationTableRow) => (
           <Space size="small">
             <span>{record.title}</span>
-            <Tag color={record.nodeType === 'UNIT' ? 'processing' : 'purple'}>{record.descriptor}</Tag>
-            {record.gapTag && <Tag color={record.gapTag.color}>{record.gapTag.text}</Tag>}
+            <WxbBadge 
+              variant="outline" 
+              status={record.nodeType === 'UNIT' ? 'info' : 'neutral'} 
+              label={record.descriptor} 
+            />
+            {record.gapTag && (
+              <WxbBadge 
+                variant="outline" 
+                status={record.gapTag.color === 'warning' ? 'warning' : 'error'} 
+                label={record.gapTag.text} 
+              />
+            )}
           </Space>
         ),
       },
@@ -216,16 +228,20 @@ const OrganizationManagement: React.FC = () => {
         key: 'status',
         width: '10%',
         render: (tag: OrganizationTableRow['statusTag']) =>
-          tag ? <Tag color={tag.color}>{tag.text}</Tag> : <Tag color="blue">正常</Tag>,
+          tag ? (
+            <WxbBadge variant="outline" status={tag.color === 'red' ? 'error' : 'neutral'} label={tag.text} />
+          ) : (
+            <WxbBadge variant="outline" status="success" label="正常" />
+          ),
       },
       {
         title: '操作',
         key: 'actions',
         width: '12%',
         render: (_: unknown, record: OrganizationTableRow) => (
-          <Button type="link" onClick={() => handleRowClick(record)}>
+          <WxbButton variant="ghost" size="sm" onClick={() => handleRowClick(record)}>
             查看详情
-          </Button>
+          </WxbButton>
         ),
       },
     ],
@@ -260,74 +276,74 @@ const OrganizationManagement: React.FC = () => {
   }, [selectedRow]);
 
   const renderUnitDetail = (unit: OrgUnitNode) => (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space direction="vertical" size="middle" style={{ width: '100%' }} className="wxb-body">
       <div>
-        <Text type="secondary">单元类型</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>单元类型</div>
         <div>{UNIT_TYPE_LABELS[unit.unitType] || unit.unitType}</div>
       </div>
       <div>
-        <Text type="secondary">单元编码</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>单元编码</div>
         <div>{unit.unitCode || '-'}</div>
       </div>
       <div>
-        <Text type="secondary">默认班次</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>默认班次</div>
         <div>{unit.defaultShiftCode || '-'}</div>
       </div>
       <div>
-        <Text type="secondary">启用状态</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>启用状态</div>
         <div>{unit.isActive ? '启用' : '停用'}</div>
       </div>
       <div>
-        <Text type="secondary">领导节点</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 8 }}>领导节点</div>
         <div>
           {unit.leaders.length > 0 ? (
-            <List
-              size="small"
-              bordered
-              dataSource={unit.leaders}
-              renderItem={(leader) => (
-                <List.Item>
-                  {leader.employeeName}（{ORG_ROLE_LABELS[leader.orgRole] || leader.orgRole}）
-                </List.Item>
-              )}
-            />
+            <Space wrap>
+              {unit.leaders.map(leader => (
+                <WxbBadge 
+                  key={leader.employeeId} 
+                  variant="outline" 
+                  status="info" 
+                  label={`${leader.employeeName} (${ORG_ROLE_LABELS[leader.orgRole] || leader.orgRole})`} 
+                />
+              ))}
+            </Space>
           ) : (
-            <Text>暂无领导</Text>
+            <span style={{ color: 'var(--wx-fg-4)' }}>暂无领导</span>
           )}
         </div>
       </div>
       <div>
-        <Text type="secondary">成员数量</Text>
-        <div>{unit.memberCount}</div>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>成员数量</div>
+        <div>{unit.memberCount} 人</div>
       </div>
     </Space>
   );
 
   const renderLeaderDetail = (leader: OrgLeaderNode) => (
-    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+    <Space direction="vertical" size="middle" style={{ width: '100%' }} className="wxb-body">
       <div>
-        <Text type="secondary">角色</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>角色</div>
         <div>{ORG_ROLE_LABELS[leader.orgRole] || leader.orgRole}</div>
       </div>
       <div>
-        <Text type="secondary">工号</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>工号</div>
         <div>{leader.employeeCode}</div>
       </div>
       <div>
-        <Text type="secondary">在岗状态</Text>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>在岗状态</div>
         <div>{leader.employmentStatus}</div>
       </div>
       <div>
-        <Text type="secondary">直属下属</Text>
-        <div>{leader.directSubordinateCount}</div>
+        <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>直属下属</div>
+        <div>{leader.directSubordinateCount} 人</div>
       </div>
       {leader.orgRole === 'GROUP_LEADER' && (
         <div>
-          <Text type="secondary">班组长数量</Text>
-          <div>{leader.shiftLeaderCount}</div>
+          <div style={{ color: 'var(--wx-fg-3)', marginBottom: 4 }}>班组长数量</div>
+          <div>{leader.shiftLeaderCount} 人</div>
         </div>
       )}
-      {leader.hasShiftLeaderGap && <Tag color="warning">缺少班组长层级，请尽快补充</Tag>}
+      {leader.hasShiftLeaderGap && <WxbBadge variant="outline" status="warning" label="缺少班组长层级，请尽快补充" />}
     </Space>
   );
 
@@ -340,77 +356,86 @@ const OrganizationManagement: React.FC = () => {
     }
     if (selectedRow.nodeType === 'LEADER' && selectedRow.leader) {
       return (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <Space direction="vertical" size="large" style={{ width: '100%' }} className="wxb-body">
           {renderLeaderDetail(selectedRow.leader)}
           <div>
-            <Text strong>所属组织</Text>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>所属组织</div>
             {leaderContextLoading ? (
               <Spin size="small" />
             ) : leaderContext && leaderContext.memberships.length > 0 ? (
-              <List
-                size="small"
-                bordered
-                dataSource={leaderContext.memberships}
-                renderItem={(item) => (
-                  <List.Item>
-                    {item.unitName}（{UNIT_TYPE_LABELS[item.unitType] || item.unitType} · {item.assignmentType === 'PRIMARY' ? '主属' : '辅属'}）
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Text>暂无组织归属信息</Text>
-            )}
-          </div>
-          <div>
-            <Text strong>直接上级</Text>
-            {leaderContextLoading ? (
-              <Spin size="small" />
-            ) : leaderContext && leaderContext.directLeaders.length > 0 ? (
-              <List
-                size="small"
-                dataSource={leaderContext.directLeaders}
-                renderItem={(leader) => (
-                  <List.Item>
-                    {leader.employeeName}（{ORG_ROLE_LABELS[leader.orgRole] || leader.orgRole}）
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Text>暂无上级</Text>
-            )}
-          </div>
-          <div>
-            <Text strong>直接下属</Text>
-            {leaderContextLoading ? (
-              <Spin size="small" />
-            ) : leaderContext && leaderContext.directSubordinates.length > 0 ? (
-              <List
-                size="small"
-                dataSource={leaderContext.directSubordinates}
-                renderItem={(sub) => (
-                  <List.Item>
-                    {sub.employeeName}（{ORG_ROLE_LABELS[sub.orgRole] || sub.orgRole}）
-                  </List.Item>
-                )}
-              />
-            ) : (
-              <Text>暂无直接下属</Text>
-            )}
-          </div>
-          <div>
-            <Text strong>向上汇报链</Text>
-            {leaderContextLoading ? (
-              <Spin size="small" />
-            ) : leaderContext && leaderContext.reportingChain.length > 0 ? (
-              <Space direction="vertical">
-                {leaderContext.reportingChain.map((item) => (
-                  <Tag key={item.employeeId} color="processing">
-                    {item.employeeName}（{ORG_ROLE_LABELS[item.orgRole] || item.orgRole}）
-                  </Tag>
+              <Space wrap>
+                {leaderContext.memberships.map((item, idx) => (
+                  <WxbBadge 
+                    key={idx} 
+                    variant="outline" 
+                    status={item.assignmentType === 'PRIMARY' ? 'success' : 'neutral'} 
+                    label={`${item.unitName} (${UNIT_TYPE_LABELS[item.unitType] || item.unitType} · ${item.assignmentType === 'PRIMARY' ? '主属' : '辅属'})`} 
+                  />
                 ))}
               </Space>
             ) : (
-              <Text>暂无汇报链</Text>
+              <span style={{ color: 'var(--wx-fg-4)' }}>暂无组织归属信息</span>
+            )}
+          </div>
+          <div>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>直接上级</div>
+            {leaderContextLoading ? (
+              <Spin size="small" />
+            ) : leaderContext && leaderContext.directLeaders.length > 0 ? (
+              <Space wrap>
+                {leaderContext.directLeaders.map((leader, idx) => (
+                  <WxbBadge 
+                    key={idx} 
+                    variant="outline" 
+                    status="info" 
+                    label={`${leader.employeeName} (${ORG_ROLE_LABELS[leader.orgRole] || leader.orgRole})`} 
+                  />
+                ))}
+              </Space>
+            ) : (
+              <span style={{ color: 'var(--wx-fg-4)' }}>暂无上级</span>
+            )}
+          </div>
+          <div>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>直接下属</div>
+            {leaderContextLoading ? (
+              <Spin size="small" />
+            ) : leaderContext && leaderContext.directSubordinates.length > 0 ? (
+              <Space wrap>
+                {leaderContext.directSubordinates.map((sub, idx) => (
+                  <WxbBadge 
+                    key={idx} 
+                    variant="outline" 
+                    status="neutral" 
+                    label={`${sub.employeeName} (${ORG_ROLE_LABELS[sub.orgRole] || sub.orgRole})`} 
+                  />
+                ))}
+              </Space>
+            ) : (
+              <span style={{ color: 'var(--wx-fg-4)' }}>暂无直接下属</span>
+            )}
+          </div>
+          <div>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>向上汇报链</div>
+            {leaderContextLoading ? (
+              <Spin size="small" />
+            ) : leaderContext && leaderContext.reportingChain.length > 0 ? (
+              <Space size={4} wrap>
+                {leaderContext.reportingChain.map((item, idx) => (
+                  <React.Fragment key={item.employeeId}>
+                    <WxbBadge 
+                      variant="outline" 
+                      status="info" 
+                      label={`${item.employeeName} (${ORG_ROLE_LABELS[item.orgRole] || item.orgRole})`} 
+                    />
+                    {idx < leaderContext.reportingChain.length - 1 && (
+                      <span style={{ color: 'var(--wx-fg-4)' }}>→</span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </Space>
+            ) : (
+              <span style={{ color: 'var(--wx-fg-4)' }}>暂无汇报链</span>
             )}
           </div>
         </Space>
@@ -423,88 +448,76 @@ const OrganizationManagement: React.FC = () => {
   const unassigned = hierarchy?.unassignedEmployees || [];
 
   return (
-    <Card bordered={false} style={{ minHeight: '100%' }}>
-      <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <Row gutter={16}>
-          <Col span={6}>
-            <Statistic
-              title="组织单元"
-              value={stats?.totalUnits ?? 0}
-              prefix={<ApartmentOutlined />}
-            />
-          </Col>
-          <Col span={6}>
-            <Statistic
-              title="领导节点"
-              value={stats?.totalLeaders ?? 0}
-              prefix={<UserSwitchOutlined />}
-            />
-          </Col>
-          <Col span={6}>
-            <Statistic
-              title="根节点数量"
-              value={stats?.orphanUnits ?? 0}
-              prefix={<TeamOutlined />}
-            />
-          </Col>
-          <Col span={6}>
-            <Statistic
-              title="缺少班组长层级"
-              value={stats?.emptyLeadershipNodes ?? 0}
-              prefix={<IdcardOutlined />}
-            />
-          </Col>
-        </Row>
+    <div className="dashboard-page" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Row gutter={16}>
+        <Col span={6}>
+          <WxbKpiCard title="组织单元" value={stats?.totalUnits ?? 0} trend="neutral" />
+        </Col>
+        <Col span={6}>
+          <WxbKpiCard title="领导节点" value={stats?.totalLeaders ?? 0} trend="neutral" />
+        </Col>
+        <Col span={6}>
+          <WxbKpiCard title="根节点数量" value={stats?.orphanUnits ?? 0} trend="down" />
+        </Col>
+        <Col span={6}>
+          <WxbKpiCard title="缺少班组长层级" value={stats?.emptyLeadershipNodes ?? 0} trend="down" />
+        </Col>
+      </Row>
 
-        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
-          <Input
+      <WxbCard>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <WxbInput
             placeholder="搜索组织或人员"
             value={searchValue}
-            allowClear
-            onChange={(e) => setSearchValue(e.target.value)}
-            prefix={<SearchOutlined />}
+            onChange={(e: any) => setSearchValue(e.target.value)}
             style={{ maxWidth: 320 }}
           />
           <Space>
-            <Button disabled>新增组织单元</Button>
-            <Button disabled>批量导入</Button>
+            <WxbButton variant="secondary" disabled>新增组织单元</WxbButton>
+            <WxbButton variant="secondary" disabled>批量导入</WxbButton>
           </Space>
-        </Space>
+        </div>
 
-        <Table
-          columns={columns}
-          dataSource={tableData}
-          rowKey="key"
-          loading={loading}
-          pagination={false}
-          expandable={{ defaultExpandAllRows: true }}
-          onRow={(record) => ({ onClick: () => handleRowClick(record) })}
-          locale={{ emptyText: loading ? <Spin /> : '暂无组织数据' }}
-        />
+        <WxbTableWrapper>
+          <Table
+            columns={columns}
+            dataSource={tableData}
+            rowKey="key"
+            loading={loading}
+            pagination={false}
+            expandable={{ defaultExpandAllRows: true }}
+            onRow={(record) => ({ onClick: () => handleRowClick(record) })}
+            locale={{ emptyText: loading ? <Spin /> : '暂无组织数据' }}
+          />
+        </WxbTableWrapper>
+      </WxbCard>
 
-        {unassigned.length > 0 && (
-          <Card title="未分配组织的人员" size="small">
-            <Space wrap>
-              {unassigned.map((item: UnassignedEmployeeSummary) => (
-                <Tag key={item.employeeId} color="warning">
-                  {item.employeeName}（{ORG_ROLE_LABELS[item.orgRole] || item.orgRole}）
-                </Tag>
-              ))}
-            </Space>
-          </Card>
-        )}
-      </Space>
+      {unassigned.length > 0 && (
+        <WxbCard>
+          <div style={{ fontWeight: 500, marginBottom: 12 }}>未分配组织的人员</div>
+          <Space wrap>
+            {unassigned.map((item: UnassignedEmployeeSummary) => (
+              <WxbBadge 
+                key={item.employeeId} 
+                variant="outline" 
+                status="warning" 
+                label={`${item.employeeName}（${ORG_ROLE_LABELS[item.orgRole] || item.orgRole}）`} 
+              />
+            ))}
+          </Space>
+        </WxbCard>
+      )}
 
-      <Drawer
-        width={420}
+      <WxbModal
         title={selectedRow ? `${selectedRow.title} - 详情` : '详情'}
         open={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        destroyOnClose
+        onCancel={() => setDrawerVisible(false)}
+        width={600}
+        footer={null}
       >
         {renderDetail()}
-      </Drawer>
-    </Card>
+      </WxbModal>
+    </div>
   );
 };
 

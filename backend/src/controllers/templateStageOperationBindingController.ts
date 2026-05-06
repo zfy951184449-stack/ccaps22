@@ -3,6 +3,7 @@ import pool from '../config/database';
 import {
   listTemplateScheduleBindings,
   upsertTemplateScheduleBinding,
+  BindingRole,
 } from '../services/resourceNodeService';
 
 export const getTemplateStageOperationResourceBinding = async (req: Request, res: Response) => {
@@ -32,6 +33,7 @@ export const putTemplateStageOperationResourceBinding = async (req: Request, res
       req.body.resource_node_id !== undefined && req.body.resource_node_id !== null
         ? Number(req.body.resource_node_id)
         : null;
+    const bindingRole: BindingRole = req.body.binding_role === 'AUXILIARY' ? 'AUXILIARY' : 'PRIMARY';
 
     if (!Number.isInteger(scheduleId) || scheduleId <= 0) {
       return res.status(400).json({ error: 'Invalid scheduleId' });
@@ -42,7 +44,7 @@ export const putTemplateStageOperationResourceBinding = async (req: Request, res
     }
 
     await connection.beginTransaction();
-    const binding = await upsertTemplateScheduleBinding(scheduleId, resourceNodeId, connection);
+    const binding = await upsertTemplateScheduleBinding(scheduleId, resourceNodeId, connection, bindingRole);
     await connection.commit();
 
     res.json({
@@ -60,3 +62,100 @@ export const putTemplateStageOperationResourceBinding = async (req: Request, res
     connection.release();
   }
 };
+
+/**
+ * List all resource bindings for a given template.
+ * Returns bindings joined with resource_nodes so the frontend gets
+ * schedule_id → { resource_node_id, node_name, node_class, equipment_system_type, binding_role } in one call.
+ */
+export const listBindingsByTemplate = async (req: Request, res: Response) => {
+  try {
+    const templateId = Number(req.params.templateId);
+    if (!Number.isInteger(templateId) || templateId <= 0) {
+      return res.status(400).json({ error: 'Invalid templateId' });
+    }
+
+    const [rows] = await pool.query(`
+      SELECT
+        b.template_schedule_id,
+        b.resource_node_id,
+        b.binding_mode,
+        b.binding_role,
+        rn.node_name,
+        rn.node_class,
+        rn.equipment_system_type,
+        rn.equipment_class
+      FROM template_stage_operation_resource_bindings b
+      JOIN stage_operation_schedules sos ON b.template_schedule_id = sos.id
+      JOIN process_stages ps ON sos.stage_id = ps.id
+      JOIN resource_nodes rn ON b.resource_node_id = rn.id
+      WHERE ps.template_id = ?
+    `, [templateId]);
+
+    res.json(rows);
+  } catch (error) {
+    console.error('Error listing bindings by template:', error);
+    res.status(500).json({ error: 'Failed to list bindings by template' });
+  }
+};
+
+/**
+ * Batch update resource bindings for multiple schedule IDs.
+ * Supports both binding (resource_node_id > 0) and unbinding (resource_node_id = null).
+ */
+export const batchUpdateBindings = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const { schedule_ids, resource_node_id, binding_role } = req.body;
+
+    if (!Array.isArray(schedule_ids) || schedule_ids.length === 0) {
+      return res.status(400).json({ error: 'schedule_ids must be a non-empty array' });
+    }
+
+    const resolvedNodeId: number | null =
+      resource_node_id !== undefined && resource_node_id !== null
+        ? Number(resource_node_id)
+        : null;
+
+    const resolvedRole: BindingRole =
+      binding_role === 'AUXILIARY' ? 'AUXILIARY' : 'PRIMARY';
+
+    if (resolvedNodeId !== null && (!Number.isInteger(resolvedNodeId) || resolvedNodeId <= 0)) {
+      return res.status(400).json({ error: 'Invalid resource_node_id' });
+    }
+
+    await connection.beginTransaction();
+
+    let success = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const sid of schedule_ids) {
+      const numericSid = Number(sid);
+      if (!Number.isInteger(numericSid) || numericSid <= 0) {
+        failed++;
+        errors.push(`${sid}: Invalid schedule_id`);
+        continue;
+      }
+
+      try {
+        await upsertTemplateScheduleBinding(numericSid, resolvedNodeId, connection, resolvedRole);
+        success++;
+      } catch (err: any) {
+        failed++;
+        errors.push(`${numericSid}: ${err.message}`);
+      }
+    }
+
+    await connection.commit();
+    res.json({ success, failed, total: schedule_ids.length, errors: errors.slice(0, 10) });
+  } catch (error: any) {
+    await connection.rollback();
+    console.error('Error in batch binding update:', error);
+    res.status(500).json({ error: error.message || 'Batch binding failed' });
+  } finally {
+    connection.release();
+  }
+};
+

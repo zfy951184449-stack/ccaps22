@@ -1,22 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  Modal,
   Tabs,
   Table,
-  Button,
   Select,
   InputNumber,
-  Switch,
   Space,
-  Tag,
   message,
-  Popconfirm,
   Form,
   Row,
   Col,
   Typography,
-  Divider,
-  Badge,
   Empty,
   Tooltip
 } from 'antd';
@@ -30,6 +23,7 @@ import {
   ExclamationCircleOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
+import { WxbModal, WxbButton, WxbBadge, WxbSwitch, WxbTableWrapper } from './wxb-ui';
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -121,6 +115,7 @@ const OperationQualificationModal: React.FC<Props> = ({
   const [activePosition, setActivePosition] = useState<string>('1');
   const [form] = Form.useForm();
   const [addMode, setAddMode] = useState(false);
+  const [deleteRecord, setDeleteRecord] = useState<{position: number, index: number} | null>(null);
 
   const qualificationSearchIndex = useMemo(() => {
     const map = new Map<number, string>();
@@ -221,7 +216,9 @@ const OperationQualificationModal: React.FC<Props> = ({
   };
 
   // 删除资质要求
-  const handleDelete = (position: number, index: number) => {
+  const handleDelete = () => {
+    if (!deleteRecord) return;
+    const { position, index } = deleteRecord;
     const newRequirements = [...(positionRequirements[position] || [])];
     newRequirements.splice(index, 1);
     
@@ -231,6 +228,7 @@ const OperationQualificationModal: React.FC<Props> = ({
     });
     
     message.success('删除成功');
+    setDeleteRecord(null);
   };
 
   // 更新资质要求字段
@@ -329,7 +327,7 @@ const OperationQualificationModal: React.FC<Props> = ({
       key: 'is_mandatory',
       width: 120,
       render: (mandatory: number, record: PositionQualification, index: number) => (
-        <Switch
+        <WxbSwitch
           checked={mandatory === 1}
           onChange={(checked) => handleFieldUpdate(position, index, 'is_mandatory', checked ? 1 : 0)}
           checkedChildren="必须"
@@ -342,14 +340,13 @@ const OperationQualificationModal: React.FC<Props> = ({
       key: 'action',
       width: 80,
       render: (_: any, record: PositionQualification, index: number) => (
-        <Popconfirm
-          title="确定删除这个资质要求吗？"
-          onConfirm={() => handleDelete(position, index)}
-          okText="确定"
-          cancelText="取消"
+        <WxbButton 
+          variant="danger" 
+          size="sm"
+          onClick={() => setDeleteRecord({ position, index })}
         >
-          <Button type="link" danger icon={<DeleteOutlined />} />
-        </Popconfirm>
+          删除
+        </WxbButton>
       ),
     },
   ];
@@ -365,21 +362,17 @@ const OperationQualificationModal: React.FC<Props> = ({
         {/* 统计信息 */}
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col span={8}>
-            <Tag icon={<ExclamationCircleOutlined />} color="red">
-              必须资质: {mandatoryCount} 项
-            </Tag>
+            <WxbBadge variant="outline" status="error" label={`必须资质: ${mandatoryCount} 项`} />
           </Col>
           <Col span={8}>
-            <Tag icon={<CheckCircleOutlined />} color="green">
-              可选资质: {optionalCount} 项
-            </Tag>
+            <WxbBadge variant="outline" status="success" label={`可选资质: ${optionalCount} 项`} />
           </Col>
           <Col span={8}>
             <Space>
               <Tooltip title="复制此位置的要求到其他位置">
-                <Button 
-                  size="small" 
-                  icon={<CopyOutlined />}
+                <WxbButton 
+                  size="sm" 
+                  variant="ghost"
                   onClick={() => {
                     // 简单实现：复制到下一个位置
                     if (position < requiredPeople) {
@@ -389,8 +382,8 @@ const OperationQualificationModal: React.FC<Props> = ({
                     }
                   }}
                 >
-                  复制到下一位置
-                </Button>
+                  <CopyOutlined style={{ marginRight: 4 }} />复制到下一位置
+                </WxbButton>
               </Tooltip>
             </Space>
           </Col>
@@ -398,14 +391,13 @@ const OperationQualificationModal: React.FC<Props> = ({
 
         {/* 添加新资质要求 */}
         {!addMode ? (
-          <Button 
-            type="dashed" 
-            icon={<PlusOutlined />} 
+          <WxbButton 
+            variant="secondary"
             onClick={() => setAddMode(true)}
             style={{ width: '100%', marginBottom: 16 }}
           >
-            添加资质要求
-          </Button>
+            <PlusOutlined style={{ marginRight: 8 }} />添加资质要求
+          </WxbButton>
         ) : (
           <Form form={form} layout="inline" style={{ marginBottom: 16 }}>
             <Form.Item
@@ -456,20 +448,20 @@ const OperationQualificationModal: React.FC<Props> = ({
               initialValue={1}
               valuePropName="checked"
             >
-              <Switch checkedChildren="是" unCheckedChildren="否" />
+              <WxbSwitch checkedChildren="是" unCheckedChildren="否" />
             </Form.Item>
             
             <Form.Item>
               <Space>
-                <Button type="primary" onClick={handleAdd}>
+                <WxbButton variant="primary" onClick={handleAdd}>
                   添加
-                </Button>
-                <Button onClick={() => {
+                </WxbButton>
+                <WxbButton variant="secondary" onClick={() => {
                   setAddMode(false);
                   form.resetFields();
                 }}>
                   取消
-                </Button>
+                </WxbButton>
               </Space>
             </Form.Item>
           </Form>
@@ -477,51 +469,54 @@ const OperationQualificationModal: React.FC<Props> = ({
 
         {/* 资质要求列表 */}
         {requirements.length > 0 ? (
-          <Table
-            columns={getColumns(position)}
-            dataSource={requirements}
-            rowKey={(record, index) => `${position}-${index}`}
-            pagination={false}
-            size="small"
-          />
+          <WxbTableWrapper>
+            <Table
+              columns={getColumns(position)}
+              dataSource={requirements}
+              rowKey={(record, index) => `${position}-${index}`}
+              pagination={false}
+              size="small"
+            />
+          </WxbTableWrapper>
         ) : (
           <Empty description="暂无资质要求" />
         )}
 
         {/* 保存按钮 */}
         <div style={{ marginTop: 16, textAlign: 'right' }}>
-          <Button 
-            type="primary" 
+          <WxbButton 
+            variant="primary"
             onClick={() => handleSavePosition(position)}
-            loading={saving}
+            disabled={saving}
           >
             保存此位置
-          </Button>
+          </WxbButton>
         </div>
       </div>
     );
   };
 
   return (
-    <Modal
-      title={
-        <Space>
-          <Text strong>设置资质要求 - {operationName}</Text>
-          <Badge count={`${requiredPeople}人`} style={{ backgroundColor: '#52c41a' }} />
-        </Space>
-      }
-      open={visible}
-      onCancel={onClose}
-      width={1000}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          取消
-        </Button>,
-        <Button key="saveAll" type="primary" onClick={handleSaveAll} loading={saving}>
-          保存所有位置
-        </Button>,
-      ]}
-    >
+    <>
+      <WxbModal
+        title={
+          <Space>
+            <Text strong>设置资质要求 - {operationName}</Text>
+            <WxbBadge label={`${requiredPeople}人`} status="success" variant="code" />
+          </Space>
+        }
+        open={visible}
+        onCancel={onClose}
+        width={1000}
+        footer={[
+          <WxbButton key="cancel" variant="secondary" onClick={onClose}>
+            取消
+          </WxbButton>,
+          <WxbButton key="saveAll" variant="primary" onClick={handleSaveAll} disabled={saving}>
+            保存所有位置
+          </WxbButton>,
+        ]}
+      >
       {/* 提示信息 */}
       <div style={{ marginBottom: 16, padding: '8px 12px', background: '#e6f7ff', borderRadius: 4 }}>
         <Space>
@@ -540,9 +535,10 @@ const OperationQualificationModal: React.FC<Props> = ({
               <Space>
                 <UserOutlined />
                 <span>位置 {position}</span>
-                <Badge 
-                  count={(positionRequirements[position] || []).length} 
-                  size="small" 
+                <WxbBadge 
+                  label={(positionRequirements[position] || []).length.toString()} 
+                  status="info" 
+                  variant="code"
                 />
               </Space>
             } 
@@ -552,7 +548,21 @@ const OperationQualificationModal: React.FC<Props> = ({
           </TabPane>
         ))}
       </Tabs>
-    </Modal>
+    </WxbModal>
+    <WxbModal
+      title="确认删除"
+      open={!!deleteRecord}
+      onCancel={() => setDeleteRecord(null)}
+      onOk={handleDelete}
+      okText="确定删除"
+      okVariant="danger"
+      width={400}
+    >
+      <p className="wxb-body" style={{ margin: '16px 0' }}>
+        确定要删除这个资质要求吗？
+      </p>
+    </WxbModal>
+    </>
   );
 };
 
