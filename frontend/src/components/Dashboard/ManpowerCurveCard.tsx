@@ -292,7 +292,14 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
 
                         {/* 图例 */}
                         <div className="wxb-cs-legend" style={{ marginTop: 8 }}>
-                            {wxbSeriesConfig.map(sc => (
+                            {wxbSeriesConfig.filter(sc => sc.geometry === 'bar').map(sc => (
+                                <span key={sc.key} className="wxb-cs-legend-item">
+                                    <span className="wxb-cs-swatch" style={{ background: sc.color }} />
+                                    {sc.label}
+                                </span>
+                            ))}
+                            <span className="wxb-cs-legend-divider" />
+                            {wxbSeriesConfig.filter(sc => sc.geometry !== 'bar').map(sc => (
                                 <span key={sc.key} className="wxb-cs-legend-item">
                                     <span className="wxb-cs-swatch" style={{ background: sc.color }} />
                                     {sc.label}

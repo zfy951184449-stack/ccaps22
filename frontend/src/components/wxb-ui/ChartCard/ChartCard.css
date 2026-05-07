@@ -31,11 +31,13 @@
 
 .wxb-chart-legend {
   display: flex;
-  gap: 14px;
-  font: 400 11.5px/1 var(--wx-font-sans, Inter, sans-serif);
+  gap: 6px 12px;
+  font: 400 11.5px/1.5 var(--wx-font-sans, Inter, sans-serif);
   color: var(--wx-fg-3, #5A6B7E);
   flex-wrap: wrap;
   margin-bottom: 8px;
+  max-height: 44px;
+  overflow: hidden;
 }
 
 .wxb-chart-legend-item {

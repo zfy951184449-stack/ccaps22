@@ -399,12 +399,16 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
 
                         {/* 月视图图例 */}
                         <div className="wxb-cs-legend" style={{ marginTop: 8 }}>
-                            {monthWxbSeriesConfig.map(sc => (
+                            {monthWxbSeriesConfig.filter(sc => sc.geometry === 'bar').map(sc => (
                                 <span key={sc.key} className="wxb-cs-legend-item">
-                                    <span
-                                        className={`wxb-cs-swatch${sc.geometry === 'line' ? ' is-dash' : ''}`}
-                                        style={sc.geometry === 'line' ? undefined : { background: sc.color }}
-                                    />
+                                    <span className="wxb-cs-swatch" style={{ background: sc.color }} />
+                                    {sc.label}
+                                </span>
+                            ))}
+                            <span className="wxb-cs-legend-divider" />
+                            {monthWxbSeriesConfig.filter(sc => sc.geometry !== 'bar').map(sc => (
+                                <span key={sc.key} className="wxb-cs-legend-item">
+                                    <span className="wxb-cs-swatch is-dash" />
                                     {sc.label}
                                 </span>
                             ))}
