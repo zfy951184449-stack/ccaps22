@@ -15,7 +15,7 @@ export type ResourceNodeClass =
   | 'UTILITY_STATION';
 
 export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT';
-export type EquipmentSystemType = 'SUS' | 'SS';
+export type EquipmentSystemType = 'SUS' | 'SS' | 'VIRTUAL';
 export type ResourceNodeRelationType = 'CIP_CLEANABLE';
 
 export type TemplateBindingStatus =
@@ -97,7 +97,7 @@ const RESOURCE_NODE_SCOPE_CODE: Record<ResourceNodeScope, string> = {
 
 const ROOM_SUBTYPES = new Set(['MAIN_PROCESS', 'AUXILIARY', 'UTILITY_SHARED']);
 const UTILITY_STATION_SUBTYPES = new Set(['CIP', 'SIP']);
-const EQUIPMENT_SYSTEM_TYPES = new Set<EquipmentSystemType>(['SUS', 'SS']);
+const EQUIPMENT_SYSTEM_TYPES = new Set<EquipmentSystemType>(['SUS', 'SS', 'VIRTUAL']);
 const BINDABLE_NODE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONENT', 'UTILITY_STATION']);
 const CLEANABLE_TARGET_NODE_CLASSES = new Set<ResourceNodeClass>(['EQUIPMENT_UNIT', 'COMPONENT']);
 
@@ -248,8 +248,11 @@ const assertEquipmentAttributes = (
   const equipmentModel = normalizeEquipmentText('equipment_model', attrs.equipmentModel);
 
   if (nodeClass === 'EQUIPMENT_UNIT') {
-    if (!equipmentSystemType || !equipmentClass || !equipmentModel) {
-      throw new Error('EQUIPMENT_UNIT requires equipment_system_type, equipment_class and equipment_model');
+    if (!equipmentSystemType) {
+      throw new Error('EQUIPMENT_UNIT requires equipment_system_type');
+    }
+    if (equipmentSystemType !== 'VIRTUAL' && (!equipmentClass || !equipmentModel)) {
+      throw new Error('Non-VIRTUAL EQUIPMENT_UNIT requires equipment_class and equipment_model');
     }
 
     return {

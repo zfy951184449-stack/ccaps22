@@ -1,8 +1,16 @@
-import React, { useMemo } from 'react';
+/**
+ * 树形表格视图 — 支持全量节点类型 + 层级展开 + 批量操作
+ *
+ * dataSource 接收树结构数据（ResourceNode[]，每个节点有 children），
+ * antd Table 自动通过 children 字段展开树形结构。
+ */
+import React from 'react';
 import { WxbDataTable, WxbTag, WxbButton, WxbPopconfirm } from '../wxb-ui';
 import type { ResourceNode } from '../ProcessTemplateV2/types';
+import { NODE_CLASS_LABEL, NODE_CLASS_COLOR } from './resourceNodeConstants';
 
 interface EquipmentTableViewProps {
+  /** 树结构数据（非平铺），每个节点有 children */
   nodes: ResourceNode[];
   selectedNodeId: number | null;
   selectedIds: number[];
@@ -11,7 +19,8 @@ interface EquipmentTableViewProps {
   onEdit: (node: ResourceNode) => void;
   onDelete: (node: ResourceNode) => void;
   onToggleActive: (node: ResourceNode) => void;
-  onBatchToggleActive: (ids: number[], isActive: boolean) => void;
+  onCreateChild: (parent: ResourceNode) => void;
+  onBatchToggleActive: (ids: number[], active: boolean) => void;
   onBatchDelete: (ids: number[]) => void;
 }
 
@@ -24,169 +33,164 @@ const EquipmentTableView: React.FC<EquipmentTableViewProps> = ({
   onEdit,
   onDelete,
   onToggleActive,
+  onCreateChild,
   onBatchToggleActive,
   onBatchDelete,
 }) => {
-  const columns = useMemo(
-    () => [
-      {
-        title: '设备名称',
-        dataIndex: 'nodeName',
-        key: 'nodeName',
-        width: 180,
-        sorter: (a: ResourceNode, b: ResourceNode) => a.nodeName.localeCompare(b.nodeName),
-        render: (text: string, record: ResourceNode) => (
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--wx-gray-800, #1f2937)' }}>{text}</div>
-            <div style={{ fontSize: 11, color: 'var(--wx-gray-400, #9ca3af)', fontFamily: 'monospace' }}>
-              {record.nodeCode}
-            </div>
-          </div>
-        ),
-      },
-      {
-        title: '系统类型',
-        dataIndex: 'equipmentSystemType',
-        key: 'equipmentSystemType',
-        width: 90,
-        filters: [
-          { text: 'SUS', value: 'SUS' },
-          { text: 'SS', value: 'SS' },
-        ],
-        onFilter: (value: any, record: ResourceNode) => record.equipmentSystemType === value,
-        render: (type: string | null) =>
-          type ? (
-            <WxbTag color={type === 'SUS' ? 'green' : 'blue'}>{type}</WxbTag>
-          ) : (
-            <span style={{ color: 'var(--wx-gray-300)' }}>—</span>
-          ),
-      },
-      {
-        title: '设备类别',
-        dataIndex: 'equipmentClass',
-        key: 'equipmentClass',
-        width: 120,
-        sorter: (a: ResourceNode, b: ResourceNode) =>
-          (a.equipmentClass ?? '').localeCompare(b.equipmentClass ?? ''),
-        render: (text: string | null) => text || '—',
-      },
-      {
-        title: '型号',
-        dataIndex: 'equipmentModel',
-        key: 'equipmentModel',
-        width: 120,
-        render: (text: string | null) => text || '—',
-      },
-      {
-        title: '节点类型',
-        dataIndex: 'nodeClass',
-        key: 'nodeClass',
-        width: 110,
-        render: (cls: string) => (
-          <WxbTag color={cls === 'EQUIPMENT_UNIT' ? 'cyan' : 'neutral'}>
-            {cls === 'EQUIPMENT_UNIT' ? '设备单元' : '组件'}
+  const columns = [
+    {
+      title: '节点名称',
+      dataIndex: 'nodeName',
+      key: 'nodeName',
+      width: 260,
+      render: (text: string, record: ResourceNode) => (
+        <span
+          className={`equip-table-name ${record.id === selectedNodeId ? 'is-selected' : ''}`}
+          onClick={() => onSelect(record.id)}
+        >
+          <WxbTag color={NODE_CLASS_COLOR[record.nodeClass]}>
+            {NODE_CLASS_LABEL[record.nodeClass]}
           </WxbTag>
-        ),
-      },
-      {
-        title: '状态',
-        dataIndex: 'isActive',
-        key: 'isActive',
-        width: 80,
-        filters: [
-          { text: '运行中', value: true },
-          { text: '已停用', value: false },
-        ],
-        onFilter: (value: any, record: ResourceNode) => record.isActive === value,
-        render: (active: boolean) => (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
-            <span
-              className={`equip-status-dot ${active ? 'is-active' : 'is-inactive'}`}
-            />
-            {active ? '运行中' : '已停用'}
-          </span>
-        ),
-      },
-      {
-        title: '操作',
-        key: 'actions',
-        width: 140,
-        render: (_: unknown, record: ResourceNode) => (
-          <div style={{ display: 'flex', gap: 4 }}>
-            <WxbButton size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onEdit(record); }}>
-              编辑
+          <span className="equip-table-name-text">{text}</span>
+        </span>
+      ),
+    },
+    {
+      title: '编号',
+      dataIndex: 'nodeCode',
+      key: 'nodeCode',
+      width: 240,
+    },
+    {
+      title: '子类型',
+      dataIndex: 'nodeSubtype',
+      key: 'nodeSubtype',
+      width: 100,
+      render: (v: string | null) => v ? <WxbTag>{v}</WxbTag> : '—',
+    },
+    {
+      title: '系统类型',
+      dataIndex: 'equipmentSystemType',
+      key: 'equipmentSystemType',
+      width: 90,
+      filters: [
+        { text: 'SUS', value: 'SUS' },
+        { text: 'SS', value: 'SS' },
+        { text: 'VIRTUAL', value: 'VIRTUAL' },
+      ],
+      onFilter: (value: any, record: ResourceNode) => record.equipmentSystemType === value,
+      render: (type: string | null) =>
+        type ? <WxbTag color={type === 'SUS' ? 'green' : type === 'VIRTUAL' ? 'amber' : 'blue'}>{type}</WxbTag> : '—',
+    },
+    {
+      title: '所属部门',
+      dataIndex: 'departmentCode',
+      key: 'departmentCode',
+      width: 90,
+      render: (v: string | null) => v || '全局',
+    },
+    {
+      title: '绑定资源',
+      dataIndex: 'boundResourceCode',
+      key: 'boundResourceCode',
+      width: 120,
+      render: (code: string | null, record: ResourceNode) =>
+        code ? (
+          <WxbTag color="cyan">{code}</WxbTag>
+        ) : record.nodeClass === 'EQUIPMENT_UNIT' || record.nodeClass === 'COMPONENT' || record.nodeClass === 'UTILITY_STATION' ? (
+          <span className="equip-table-unbound">未绑定</span>
+        ) : '—',
+    },
+    {
+      title: '状态',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      width: 80,
+      filters: [
+        { text: '运行中', value: true },
+        { text: '已停用', value: false },
+      ],
+      onFilter: (value: any, record: ResourceNode) => record.isActive === value,
+      render: (active: boolean) => (
+        <span className="equip-status-inline">
+          <span className={`equip-status-dot ${active ? 'is-active' : 'is-inactive'}`} />
+          {active ? '运行中' : '已停用'}
+        </span>
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 260,
+      render: (_: any, record: ResourceNode) => (
+        <span className="equip-table-actions" onClick={(e) => e.stopPropagation()}>
+          <WxbButton size="sm" variant="ghost" onClick={() => onEdit(record)}>编辑</WxbButton>
+          <WxbButton size="sm" variant="ghost" onClick={() => onCreateChild(record)}>新增子节点</WxbButton>
+          <WxbButton size="sm" variant="ghost" onClick={() => onToggleActive(record)}>
+            {record.isActive ? '停用' : '启用'}
+          </WxbButton>
+          <WxbPopconfirm
+            title="确定删除此节点？"
+            description={record.childCount > 0 ? '该节点有子节点，请先删除子节点。' : undefined}
+            onConfirm={() => onDelete(record)}
+            disabled={record.childCount > 0}
+          >
+            <WxbButton size="sm" variant="danger" disabled={record.childCount > 0}>
+              删除
             </WxbButton>
-            <WxbButton
-              size="sm"
-              variant="ghost"
-              onClick={(e) => { e.stopPropagation(); onToggleActive(record); }}
-            >
-              {record.isActive ? '停用' : '启用'}
-            </WxbButton>
-            <WxbPopconfirm
-              title="确定删除此设备？"
-              description={record.childCount > 0 ? '该设备有子节点，请先处理子节点。' : '此操作不可撤销。'}
-              onConfirm={() => onDelete(record)}
-              disabled={record.childCount > 0}
-            >
-              <WxbButton
-                size="sm"
-                variant="ghost"
-                className="wxb-btn-danger-text"
-                disabled={record.childCount > 0}
-                onClick={(e) => e.stopPropagation()}
-              >
-                删除
-              </WxbButton>
-            </WxbPopconfirm>
-          </div>
-        ),
-      },
-    ],
-    [onEdit, onDelete, onToggleActive],
-  );
+          </WxbPopconfirm>
+        </span>
+      ),
+    },
+  ];
 
   const rowSelection = {
     selectedRowKeys: selectedIds,
     onChange: (keys: React.Key[]) => onSelectionChange(keys.map(Number)),
+    checkStrictly: true, // 不级联选中子节点
   };
 
   return (
-    <div className="equip-table-content">
+    <div className="equip-table-view">
+      {/* Batch bar */}
       {selectedIds.length > 0 && (
         <div className="equip-batch-bar">
           <span>已选 {selectedIds.length} 项</span>
-          <WxbButton size="sm" variant="outline" onClick={() => onBatchToggleActive(selectedIds, true)}>
+          <WxbButton size="sm" variant="secondary" onClick={() => onBatchToggleActive(selectedIds, true)}>
             批量启用
           </WxbButton>
-          <WxbButton size="sm" variant="outline" onClick={() => onBatchToggleActive(selectedIds, false)}>
+          <WxbButton size="sm" variant="secondary" onClick={() => onBatchToggleActive(selectedIds, false)}>
             批量停用
           </WxbButton>
           <WxbPopconfirm
-            title={`确定批量删除 ${selectedIds.length} 台设备？`}
+            title={`确定批量删除 ${selectedIds.length} 个节点？`}
             description="此操作不可撤销。"
             onConfirm={() => onBatchDelete(selectedIds)}
           >
-            <WxbButton size="sm" variant="outline" className="wxb-btn-danger-text">
+            <WxbButton size="sm" variant="secondary" className="wxb-btn-danger-text">
               批量删除
             </WxbButton>
           </WxbPopconfirm>
         </div>
       )}
 
-      <WxbDataTable<ResourceNode>
+      <WxbDataTable
         columns={columns}
         dataSource={nodes}
         rowKey="id"
-        size="small"
         rowSelection={rowSelection}
-        pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
-        onRow={(record) => ({
+        pagination={false}
+        scroll={{ x: 1280 }}
+        size="small"
+        defaultExpandAllRows
+        expandable={{
+          childrenColumnName: 'children',
+          defaultExpandAllRows: true,
+          indentSize: 24,
+        }}
+        onRow={(record: ResourceNode) => ({
           onClick: () => onSelect(record.id),
-          style: {
-            cursor: 'pointer',
-            background: selectedNodeId === record.id ? 'var(--wx-blue-50, #eff6ff)' : undefined,
-          },
+          className: record.id === selectedNodeId ? 'equip-table-row-selected' : '',
         })}
       />
     </div>

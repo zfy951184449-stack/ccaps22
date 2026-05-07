@@ -117,6 +117,11 @@ export const getOperationColor = (stageCode: string, alpha: number = 1): string 
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+const toFiniteNumber = (value: unknown, fallback: number): number => {
+    const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export const generateTimeBlocks = (nodes: GanttNode[], stages: ProcessStage[]): TimeBlock[] => {
     const blocks: TimeBlock[] = [];
     const processedNodeIds = new Set<string>();
@@ -208,12 +213,11 @@ export const generateTimeBlocks = (nodes: GanttNode[], stages: ProcessStage[]): 
             const operationData = node.data as StageOperation;
 
             // 解析推荐时间（确保是数字格式）
-            const recommendedTime = typeof operationData?.recommended_time === 'string'
-                ? parseFloat(operationData.recommended_time)
-                : (operationData?.recommended_time || 9); // 默认9:00
+            const recommendedTime = toFiniteNumber(operationData?.recommended_time, 9); // 默认9:00
+            const recommendedDayOffset = toFiniteNumber(operationData?.recommended_day_offset, 0);
 
             // 计算操作的绝对开始时间（小时）
-            const nodeStartDay = node.start_day || 0;
+            const nodeStartDay = toFiniteNumber(node.start_day, 0);
             let operationAbsoluteStartHour = nodeStartDay * 24 + recommendedTime;
 
             // 数据验证 - 使用默认值而不是跳过
@@ -234,22 +238,17 @@ export const generateTimeBlocks = (nodes: GanttNode[], stages: ProcessStage[]): 
 
             // 时间窗口块 - 显示在操作块下方
             // 解析时间窗口参数
-            const windowStartTime = typeof operationData?.window_start_time === 'string'
-                ? parseFloat(operationData.window_start_time)
-                : (operationData?.window_start_time ?? 7); // 默认7:00
-            const windowEndTime = typeof operationData?.window_end_time === 'string'
-                ? parseFloat(operationData.window_end_time)
-                : (operationData?.window_end_time ?? 18); // 默认18:00
+            const windowStartTime = toFiniteNumber(operationData?.window_start_time, 7); // 默认7:00
+            const windowEndTime = toFiniteNumber(operationData?.window_end_time, 18); // 默认18:00
 
             // 获取窗口日偏移量（相对于 operation_day）
-            const windowStartDayOffset = typeof operationData?.window_start_day_offset === 'number'
-                ? operationData.window_start_day_offset : 0;
-            const windowEndDayOffset = typeof operationData?.window_end_day_offset === 'number'
-                ? operationData.window_end_day_offset : 0;
+            const windowStartDayOffset = toFiniteNumber(operationData?.window_start_day_offset, 0);
+            const windowEndDayOffset = toFiniteNumber(operationData?.window_end_day_offset, 0);
 
-            // 计算窗口的绝对小时（基于操作所在天 + 偏移量）
-            const windowStartHour = (node.start_day || 0) * 24 + windowStartDayOffset * 24 + windowStartTime;
-            const windowEndHour = (node.start_day || 0) * 24 + windowEndDayOffset * 24 + windowEndTime;
+            // 窗口日偏移是相对于 operation_day，不是相对于带 recommended_day_offset 的推荐开始日。
+            const operationBaseDay = nodeStartDay - recommendedDayOffset;
+            const windowStartHour = operationBaseDay * 24 + windowStartDayOffset * 24 + windowStartTime;
+            const windowEndHour = operationBaseDay * 24 + windowEndDayOffset * 24 + windowEndTime;
 
 
             if (!isNaN(windowStartHour) && !isNaN(windowEndHour) && windowEndHour > windowStartHour) {

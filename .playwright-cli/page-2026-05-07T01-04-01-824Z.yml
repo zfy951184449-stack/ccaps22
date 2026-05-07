@@ -1,0 +1,112 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - navigation "主导航" [ref=e5]:
+      - button "返回调度中心" [ref=e6] [cursor=pointer]:
+        - generic [ref=e9]: MFG8 APS
+      - generic [ref=e10]:
+        - button "dashboard 调度中心" [ref=e12] [cursor=pointer]:
+          - img "dashboard" [ref=e14]:
+            - img [ref=e15]
+          - generic [ref=e18]: 调度中心
+        - button "setting 基础数据 down" [ref=e20] [cursor=pointer]:
+          - img "setting" [ref=e22]:
+            - img [ref=e23]
+          - generic [ref=e26]: 基础数据
+          - img "down" [ref=e27]:
+            - img [ref=e28]
+        - button "project 生产计划 down" [ref=e31] [cursor=pointer]:
+          - img "project" [ref=e33]:
+            - img [ref=e34]
+          - generic [ref=e37]: 生产计划
+          - img "down" [ref=e38]:
+            - img [ref=e39]
+        - button "apartment 人员与排班 down" [ref=e42] [cursor=pointer]:
+          - img "apartment" [ref=e44]:
+            - img [ref=e45]
+          - generic [ref=e48]: 人员与排班
+          - img "down" [ref=e49]:
+            - img [ref=e50]
+        - button "rocket UI 组件库" [ref=e52] [cursor=pointer]:
+          - img "rocket" [ref=e54]:
+            - img [ref=e55]
+          - generic [ref=e58]: UI 组件库
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - combobox "搜索页面" [ref=e61]
+          - img "search":
+            - img
+          - generic: Ctrl K
+        - button "通知" [ref=e62] [cursor=pointer]:
+          - img "bell" [ref=e63]:
+            - img [ref=e64]
+        - img "当前用户" [ref=e67]: APS
+  - main [ref=e69]:
+    - generic [ref=e70]:
+      - generic [ref=e72]:
+        - button "← 返回" [ref=e73] [cursor=pointer]
+        - generic [ref=e75]:
+          - generic [ref=e77]: PT-00002
+          - generic [ref=e78]: WBP2486/B
+          - generic [ref=e79]: USP
+          - generic [ref=e81]: 周期 41 天
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+            - button "操作" [ref=e85] [cursor=pointer]
+            - button "阶段▸设备" [ref=e86] [cursor=pointer]
+            - button "设备" [ref=e87] [cursor=pointer]
+          - generic [ref=e89]:
+            - generic [ref=e90]: 时间窗口
+            - switch [ref=e91] [cursor=pointer]
+          - button "自动排程" [ref=e93] [cursor=pointer]
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - button "时" [ref=e98] [cursor=pointer]
+            - button "天" [ref=e99] [cursor=pointer]
+            - button "周" [ref=e100] [cursor=pointer]
+            - button "月" [ref=e101] [cursor=pointer]
+          - generic [ref=e102]:
+            - button "−" [ref=e103] [cursor=pointer]
+            - generic [ref=e104]: 14%
+            - button "+" [ref=e105] [cursor=pointer]
+          - generic [ref=e106]:
+            - button "⟳" [ref=e107] [cursor=pointer]
+            - button "⤢" [ref=e108] [cursor=pointer]
+        - generic [ref=e110]:
+          - generic [ref=e111]: 名称
+          - generic [ref=e113]:
+            - generic [ref=e114]:
+              - generic [ref=e115]: ▶
+              - generic "拖拽移动" [ref=e116]: ⠿
+              - generic [ref=e118]: WBP2486/B
+            - generic [ref=e119]:
+              - generic [ref=e120]: ▶
+              - generic "拖拽移动" [ref=e121]: ⠿
+              - generic [ref=e123]: PS-001 - TF-stage
+            - generic [ref=e126]: 摇床短信报警测试（每次项目开始前做一次即可）
+            - generic [ref=e129]: 复苏前文件准备、耗材检查
+            - generic [ref=e132]: 复苏前文件准备、耗材检查
+            - generic [ref=e135]: 种子间房间放行
+            - generic [ref=e138]: TF物料领取；灭菌物料领取
+            - generic [ref=e141]: 复苏前一天准备工作
+            - generic [ref=e144]: 细胞复苏
+            - generic [ref=e147]: 细胞出库
+            - generic [ref=e150]: 参数记录
+            - generic [ref=e153]: 参数记录
+            - generic [ref=e156]: 摇床开启
+            - generic [ref=e159]: SF:T75转500
+            - generic [ref=e162]: 参数记录
+            - generic [ref=e165]: SF:500mL转2*1L
+            - generic [ref=e168]: 参数记录
+            - generic [ref=e171]: SF:2L转2*3L
+            - generic [ref=e174]: 参数记录
+            - generic [ref=e177]: 摇瓶转种
+            - generic [ref=e178]:
+              - generic [ref=e179]: ▶
+              - generic "拖拽移动" [ref=e180]: ⠿
+              - generic [ref=e182]: PS-002 - Wave-stage
+            - generic [ref=e185]: 细胞培养间房间放行
+            - generic [ref=e188]: WAVE接收物料
+            - generic [ref=e191]: 20L WAVE产前Check（设备检查；文件检查；物料检查）
+            - generic [ref=e194]: 20L WAVE推培养基
+            - generic [ref=e197]: WAVE接种

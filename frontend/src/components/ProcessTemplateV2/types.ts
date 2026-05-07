@@ -52,7 +52,7 @@ export type ResourceNodeSubtype =
   | 'SIP'
   | string;
 export type ResourceNodeScope = 'GLOBAL' | 'DEPARTMENT';
-export type EquipmentSystemType = 'SUS' | 'SS';
+export type EquipmentSystemType = 'SUS' | 'SS' | 'VIRTUAL';
 export type NodeCanvasLayoutZone = 'process_floor' | 'aux_lane' | 'utility_lane' | 'pipeline_lane';
 
 export interface NodeCanvasLayoutHint {

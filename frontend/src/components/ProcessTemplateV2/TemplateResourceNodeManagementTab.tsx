@@ -53,7 +53,7 @@ const NODE_CLASS_OPTIONS: Array<{ label: string; value: ResourceNodeClass; icon:
   { label: '厂区', value: 'SITE', icon: <ClusterOutlined /> },
   { label: '产线', value: 'LINE', icon: <ApartmentOutlined /> },
   { label: '房间', value: 'ROOM', icon: <HomeOutlined /> },
-  { label: '设备实例', value: 'EQUIPMENT_UNIT', icon: <ToolOutlined /> },
+  { label: '设备', value: 'EQUIPMENT_UNIT', icon: <ToolOutlined /> },
   { label: '组件/管线', value: 'COMPONENT', icon: <SettingOutlined /> },
   { label: '工作站', value: 'UTILITY_STATION', icon: <ToolOutlined /> },
 ];
@@ -62,7 +62,7 @@ const NODE_CLASS_LABEL: Record<ResourceNodeClass, string> = {
   SITE: '厂区',
   LINE: '产线',
   ROOM: '房间',
-  EQUIPMENT_UNIT: '设备实例',
+  EQUIPMENT_UNIT: '设备',
   COMPONENT: '组件/管线',
   UTILITY_STATION: '工作站',
 };
@@ -247,7 +247,7 @@ const allowedChildBlueprints = (parent: ResourceNode | null): NodeBlueprint[] =>
   if (parent.nodeClass === 'ROOM' && parent.nodeSubtype === 'MAIN_PROCESS') {
     return [
       { nodeClass: 'ROOM', nodeSubtype: 'AUXILIARY', label: '辅助间' },
-      { nodeClass: 'EQUIPMENT_UNIT', label: '设备实例' },
+      { nodeClass: 'EQUIPMENT_UNIT', label: '设备' },
     ];
   }
 
@@ -992,7 +992,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
         draftValues.nodeClass === 'EQUIPMENT_UNIT' &&
         (!draftValues.equipmentSystemType || !draftValues.equipmentClass.trim() || !draftValues.equipmentModel.trim())
       ) {
-        message.error('设备实例必须填写系统类型、设备类和设备型号');
+        message.error('设备必须填写系统类型、设备类别和设备型号');
         return;
       }
 
@@ -1899,7 +1899,7 @@ const TemplateResourceNodeManagementTab: React.FC<TemplateResourceNodeManagement
               <div className="rounded-2xl border border-slate-200 bg-white p-3">
                 <div className="mb-3 text-sm font-semibold text-slate-700">CIP 可清洗对象</div>
                 <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                  <Alert type="info" showIcon message="仅允许关联设备系统类型为 SS 的设备实例或组件。" />
+                  <Alert type="info" showIcon message="仅允许关联设备系统类型为 SS 的设备或组件。" />
                   <Select
                     mode="multiple"
                     showSearch

@@ -1,0 +1,392 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - navigation "主导航" [ref=e5]:
+        - button "返回调度中心" [ref=e6] [cursor=pointer]:
+          - generic [ref=e9]: MFG8 APS
+        - generic [ref=e10]:
+          - button "dashboard 调度中心" [ref=e12] [cursor=pointer]:
+            - img "dashboard" [ref=e14]:
+              - img [ref=e15]
+            - generic [ref=e18]: 调度中心
+          - button "setting 基础数据 down" [ref=e20] [cursor=pointer]:
+            - img "setting" [ref=e22]:
+              - img [ref=e23]
+            - generic [ref=e26]: 基础数据
+            - img "down" [ref=e27]:
+              - img [ref=e28]
+          - button "project 生产计划 down" [ref=e31] [cursor=pointer]:
+            - img "project" [ref=e33]:
+              - img [ref=e34]
+            - generic [ref=e37]: 生产计划
+            - img "down" [ref=e38]:
+              - img [ref=e39]
+          - button "apartment 人员与排班 down" [ref=e42] [cursor=pointer]:
+            - img "apartment" [ref=e44]:
+              - img [ref=e45]
+            - generic [ref=e48]: 人员与排班
+            - img "down" [ref=e49]:
+              - img [ref=e50]
+          - button "rocket UI 组件库" [ref=e52] [cursor=pointer]:
+            - img "rocket" [ref=e54]:
+              - img [ref=e55]
+            - generic [ref=e58]: UI 组件库
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - combobox "搜索页面" [ref=e61]
+            - img "search":
+              - img
+            - generic: Ctrl K
+          - button "通知" [ref=e62] [cursor=pointer]:
+            - img "bell" [ref=e63]:
+              - img [ref=e64]
+          - img "当前用户" [ref=e67]: APS
+    - main [ref=e69]:
+      - generic [ref=e72]:
+        - img [ref=e73]
+        - generic [ref=e77]: 无法加载工艺模版，请返回列表重试。
+  - generic:
+    - generic [ref=e79]:
+      - img "close-circle" [ref=e80]:
+        - img [ref=e81]
+      - text: 加载模板数据失败
+    - generic [ref=e84]:
+      - img "close-circle" [ref=e85]:
+        - img [ref=e86]
+      - text: Too many requests, please try again later
+    - generic [ref=e89]:
+      - img "close-circle" [ref=e90]:
+        - img [ref=e91]
+      - text: 加载模板数据失败
+    - generic [ref=e94]:
+      - img "close-circle" [ref=e95]:
+        - img [ref=e96]
+      - text: 加载模板数据失败
+    - generic [ref=e99]:
+      - img "close-circle" [ref=e100]:
+        - img [ref=e101]
+      - text: 加载模板数据失败
+    - generic [ref=e104]:
+      - img "close-circle" [ref=e105]:
+        - img [ref=e106]
+      - text: 加载模板数据失败
+    - generic [ref=e109]:
+      - img "close-circle" [ref=e110]:
+        - img [ref=e111]
+      - text: 加载模板数据失败
+    - generic [ref=e114]:
+      - img "close-circle" [ref=e115]:
+        - img [ref=e116]
+      - text: 加载模板数据失败
+    - generic [ref=e119]:
+      - img "close-circle" [ref=e120]:
+        - img [ref=e121]
+      - text: 加载模板数据失败
+    - generic [ref=e124]:
+      - img "close-circle" [ref=e125]:
+        - img [ref=e126]
+      - text: 加载模板数据失败
+    - generic [ref=e129]:
+      - img "close-circle" [ref=e130]:
+        - img [ref=e131]
+      - text: 加载模板数据失败
+    - generic [ref=e134]:
+      - img "close-circle" [ref=e135]:
+        - img [ref=e136]
+      - text: 加载模板数据失败
+    - generic [ref=e139]:
+      - img "close-circle" [ref=e140]:
+        - img [ref=e141]
+      - text: 加载模板数据失败
+    - generic [ref=e144]:
+      - img "close-circle" [ref=e145]:
+        - img [ref=e146]
+      - text: 加载模板数据失败
+    - generic [ref=e149]:
+      - img "close-circle" [ref=e150]:
+        - img [ref=e151]
+      - text: 加载模板数据失败
+    - generic [ref=e154]:
+      - img "close-circle" [ref=e155]:
+        - img [ref=e156]
+      - text: 加载模板数据失败
+    - generic [ref=e159]:
+      - img "close-circle" [ref=e160]:
+        - img [ref=e161]
+      - text: 加载模板数据失败
+    - generic [ref=e164]:
+      - img "close-circle" [ref=e165]:
+        - img [ref=e166]
+      - text: 加载模板数据失败
+    - generic [ref=e169]:
+      - img "close-circle" [ref=e170]:
+        - img [ref=e171]
+      - text: 加载模板数据失败
+    - generic [ref=e174]:
+      - img "close-circle" [ref=e175]:
+        - img [ref=e176]
+      - text: 加载模板数据失败
+    - generic [ref=e179]:
+      - img "close-circle" [ref=e180]:
+        - img [ref=e181]
+      - text: 加载模板数据失败
+    - generic [ref=e184]:
+      - img "close-circle" [ref=e185]:
+        - img [ref=e186]
+      - text: 加载模板数据失败
+    - generic [ref=e189]:
+      - img "close-circle" [ref=e190]:
+        - img [ref=e191]
+      - text: 加载模板数据失败
+    - generic [ref=e194]:
+      - img "close-circle" [ref=e195]:
+        - img [ref=e196]
+      - text: 加载模板数据失败
+    - generic [ref=e199]:
+      - img "close-circle" [ref=e200]:
+        - img [ref=e201]
+      - text: 加载模板数据失败
+    - generic [ref=e204]:
+      - img "close-circle" [ref=e205]:
+        - img [ref=e206]
+      - text: 加载模板数据失败
+    - generic [ref=e209]:
+      - img "close-circle" [ref=e210]:
+        - img [ref=e211]
+      - text: 加载模板数据失败
+    - generic [ref=e214]:
+      - img "close-circle" [ref=e215]:
+        - img [ref=e216]
+      - text: 加载模板数据失败
+    - generic [ref=e219]:
+      - img "close-circle" [ref=e220]:
+        - img [ref=e221]
+      - text: 加载模板数据失败
+    - generic [ref=e224]:
+      - img "close-circle" [ref=e225]:
+        - img [ref=e226]
+      - text: 加载模板数据失败
+    - generic [ref=e229]:
+      - img "close-circle" [ref=e230]:
+        - img [ref=e231]
+      - text: 加载模板数据失败
+    - generic [ref=e234]:
+      - img "close-circle" [ref=e235]:
+        - img [ref=e236]
+      - text: 加载模板数据失败
+    - generic [ref=e239]:
+      - img "close-circle" [ref=e240]:
+        - img [ref=e241]
+      - text: 加载模板数据失败
+    - generic [ref=e244]:
+      - img "close-circle" [ref=e245]:
+        - img [ref=e246]
+      - text: 加载模板数据失败
+    - generic [ref=e249]:
+      - img "close-circle" [ref=e250]:
+        - img [ref=e251]
+      - text: 加载模板数据失败
+    - generic [ref=e254]:
+      - img "close-circle" [ref=e255]:
+        - img [ref=e256]
+      - text: 加载模板数据失败
+    - generic [ref=e259]:
+      - img "close-circle" [ref=e260]:
+        - img [ref=e261]
+      - text: 加载模板数据失败
+    - generic [ref=e264]:
+      - img "close-circle" [ref=e265]:
+        - img [ref=e266]
+      - text: 加载模板数据失败
+    - generic [ref=e269]:
+      - img "close-circle" [ref=e270]:
+        - img [ref=e271]
+      - text: 加载模板数据失败
+    - generic [ref=e274]:
+      - img "close-circle" [ref=e275]:
+        - img [ref=e276]
+      - text: 加载模板数据失败
+    - generic [ref=e279]:
+      - img "close-circle" [ref=e280]:
+        - img [ref=e281]
+      - text: 加载模板数据失败
+    - generic [ref=e284]:
+      - img "close-circle" [ref=e285]:
+        - img [ref=e286]
+      - text: 加载模板数据失败
+    - generic [ref=e289]:
+      - img "close-circle" [ref=e290]:
+        - img [ref=e291]
+      - text: 加载模板数据失败
+    - generic [ref=e294]:
+      - img "close-circle" [ref=e295]:
+        - img [ref=e296]
+      - text: 加载模板数据失败
+    - generic [ref=e299]:
+      - img "close-circle" [ref=e300]:
+        - img [ref=e301]
+      - text: 加载模板数据失败
+    - generic [ref=e304]:
+      - img "close-circle" [ref=e305]:
+        - img [ref=e306]
+      - text: 加载模板数据失败
+    - generic [ref=e309]:
+      - img "close-circle" [ref=e310]:
+        - img [ref=e311]
+      - text: 加载模板数据失败
+    - generic [ref=e314]:
+      - img "close-circle" [ref=e315]:
+        - img [ref=e316]
+      - text: 加载模板数据失败
+    - generic [ref=e319]:
+      - img "close-circle" [ref=e320]:
+        - img [ref=e321]
+      - text: 加载模板数据失败
+    - generic [ref=e324]:
+      - img "close-circle" [ref=e325]:
+        - img [ref=e326]
+      - text: 加载模板数据失败
+    - generic [ref=e329]:
+      - img "close-circle" [ref=e330]:
+        - img [ref=e331]
+      - text: 加载模板数据失败
+    - generic [ref=e334]:
+      - img "close-circle" [ref=e335]:
+        - img [ref=e336]
+      - text: 加载模板数据失败
+    - generic [ref=e339]:
+      - img "close-circle" [ref=e340]:
+        - img [ref=e341]
+      - text: 加载模板数据失败
+    - generic [ref=e344]:
+      - img "close-circle" [ref=e345]:
+        - img [ref=e346]
+      - text: 加载模板数据失败
+    - generic [ref=e349]:
+      - img "close-circle" [ref=e350]:
+        - img [ref=e351]
+      - text: 加载模板数据失败
+    - generic [ref=e354]:
+      - img "close-circle" [ref=e355]:
+        - img [ref=e356]
+      - text: 加载模板数据失败
+    - generic [ref=e359]:
+      - img "close-circle" [ref=e360]:
+        - img [ref=e361]
+      - text: 加载模板数据失败
+    - generic [ref=e364]:
+      - img "close-circle" [ref=e365]:
+        - img [ref=e366]
+      - text: 加载模板数据失败
+    - generic [ref=e369]:
+      - img "close-circle" [ref=e370]:
+        - img [ref=e371]
+      - text: 加载模板数据失败
+    - generic [ref=e374]:
+      - img "close-circle" [ref=e375]:
+        - img [ref=e376]
+      - text: 加载模板数据失败
+    - generic [ref=e379]:
+      - img "close-circle" [ref=e380]:
+        - img [ref=e381]
+      - text: 加载模板数据失败
+    - generic [ref=e384]:
+      - img "close-circle" [ref=e385]:
+        - img [ref=e386]
+      - text: 加载模板数据失败
+    - generic [ref=e389]:
+      - img "close-circle" [ref=e390]:
+        - img [ref=e391]
+      - text: 加载模板数据失败
+    - generic [ref=e394]:
+      - img "close-circle" [ref=e395]:
+        - img [ref=e396]
+      - text: 加载模板数据失败
+    - generic [ref=e399]:
+      - img "close-circle" [ref=e400]:
+        - img [ref=e401]
+      - text: 加载模板数据失败
+    - generic [ref=e404]:
+      - img "close-circle" [ref=e405]:
+        - img [ref=e406]
+      - text: 加载模板数据失败
+    - generic [ref=e409]:
+      - img "close-circle" [ref=e410]:
+        - img [ref=e411]
+      - text: 加载模板数据失败
+    - generic [ref=e414]:
+      - img "close-circle" [ref=e415]:
+        - img [ref=e416]
+      - text: 加载模板数据失败
+    - generic [ref=e419]:
+      - img "close-circle" [ref=e420]:
+        - img [ref=e421]
+      - text: 加载模板数据失败
+    - generic [ref=e424]:
+      - img "close-circle" [ref=e425]:
+        - img [ref=e426]
+      - text: 加载模板数据失败
+    - generic [ref=e429]:
+      - img "close-circle" [ref=e430]:
+        - img [ref=e431]
+      - text: 加载模板数据失败
+    - generic [ref=e434]:
+      - img "close-circle" [ref=e435]:
+        - img [ref=e436]
+      - text: 加载模板数据失败
+    - generic [ref=e439]:
+      - img "close-circle" [ref=e440]:
+        - img [ref=e441]
+      - text: 加载模板数据失败
+    - generic [ref=e444]:
+      - img "close-circle" [ref=e445]:
+        - img [ref=e446]
+      - text: 加载模板数据失败
+    - generic [ref=e449]:
+      - img "close-circle" [ref=e450]:
+        - img [ref=e451]
+      - text: 加载模板数据失败
+    - generic [ref=e454]:
+      - img "close-circle" [ref=e455]:
+        - img [ref=e456]
+      - text: 加载模板数据失败
+    - generic [ref=e459]:
+      - img "close-circle" [ref=e460]:
+        - img [ref=e461]
+      - text: 加载模板数据失败
+    - generic [ref=e464]:
+      - img "close-circle" [ref=e465]:
+        - img [ref=e466]
+      - text: 加载模板数据失败
+    - generic [ref=e469]:
+      - img "close-circle" [ref=e470]:
+        - img [ref=e471]
+      - text: 加载模板数据失败
+    - generic [ref=e474]:
+      - img "close-circle" [ref=e475]:
+        - img [ref=e476]
+      - text: 加载模板数据失败
+    - generic [ref=e479]:
+      - img "close-circle" [ref=e480]:
+        - img [ref=e481]
+      - text: 加载模板数据失败
+    - generic [ref=e484]:
+      - img "close-circle" [ref=e485]:
+        - img [ref=e486]
+      - text: 加载模板数据失败
+    - generic [ref=e489]:
+      - img "close-circle" [ref=e490]:
+        - img [ref=e491]
+      - text: 加载模板数据失败
+    - generic [ref=e494]:
+      - img "close-circle" [ref=e495]:
+        - img [ref=e496]
+      - text: 加载模板数据失败
+    - generic [ref=e499]:
+      - img "close-circle" [ref=e500]:
+        - img [ref=e501]
+      - text: 加载模板数据失败
+    - generic [ref=e504]:
+      - img "close-circle" [ref=e505]:
+        - img [ref=e506]
+      - text: 加载模板数据失败

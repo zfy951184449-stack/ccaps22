@@ -21,6 +21,7 @@ const SolverV4Page = lazy(() => import('./pages/SolverV4Page'));
 const ShiftDefinitionsPage = lazy(() => import('./pages/ShiftDefinitionsPage'));
 const UiKitShowcasePage = lazy(() => import('./pages/UiKitShowcasePage'));
 const ProcessTemplatesV3Page = lazy(() => import('./pages/ProcessTemplatesV3Page'));
+const EquipmentManagementPage = lazy(() => import('./pages/EquipmentManagementPage'));
 
 const mvpRedirects: Record<string, string> = {
   '/operations': '/operation-types',
@@ -104,6 +105,7 @@ const AppLayout: React.FC = () => (
             <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
             <Route path="/process-templates-v3" element={<ProcessTemplatesV3Page />} />
             <Route path="/process-templates-v3/:templateId" element={<ProcessTemplatesV3Page />} />
+            <Route path="/equipment-management" element={<EquipmentManagementPage />} />
             <Route path="/ui-kit" element={<UiKitShowcasePage />} />
             {Object.entries(mvpRedirects).map(([path, target]) => (
               <Route

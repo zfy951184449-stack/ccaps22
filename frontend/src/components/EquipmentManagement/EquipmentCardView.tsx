@@ -1,175 +1,287 @@
-import React from 'react';
-import { WxbTag, WxbDropdown } from '../wxb-ui';
-import type { ResourceNode } from '../ProcessTemplateV2/types';
-import type { RoomGroup } from './useEquipmentManager';
+/**
+ * 卡片视图 — 树形嵌套可折叠
+ * 接收树结构数据，递归渲染父子卡片层级
+ */
+import React, { useCallback, useState } from 'react';
+import { WxbTag, WxbDropdown, WxbEmpty } from '../wxb-ui';
+import type { ResourceNode, ResourceNodeClass } from '../ProcessTemplateV2/types';
+import { NODE_CLASS_LABEL, NODE_CLASS_COLOR } from './resourceNodeConstants';
 
-/* ── SVG helpers ───────────────────────────────────────── */
-const RoomIcon: React.FC = () => (
-  <svg className="equip-room-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-    <rect x="2" y="4" width="16" height="13" rx="2" />
-    <path d="M2 8h16M7 8v9M13 8v9" />
+/* ────────────────── SVG Icons ────────────────── */
+
+const NodeIcon: React.FC<{ nodeClass: ResourceNodeClass }> = ({ nodeClass }) => {
+  const icons: Record<string, React.ReactNode> = {
+    SITE: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M3 17V7l7-4 7 4v10H3z" /><path d="M8 17v-5h4v5" />
+      </svg>
+    ),
+    LINE: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M2 10h4l2-3h4l2 3h4" /><circle cx="4" cy="10" r="1.5" /><circle cx="16" cy="10" r="1.5" />
+      </svg>
+    ),
+    ROOM: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="3" y="5" width="14" height="12" rx="2" /><path d="M3 9h14" />
+      </svg>
+    ),
+    EQUIPMENT_UNIT: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="10" cy="10" r="6" /><path d="M10 6v4l3 2" />
+      </svg>
+    ),
+    COMPONENT: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <rect x="4" y="4" width="12" height="12" rx="2" /><path d="M8 8h4M8 12h4" />
+      </svg>
+    ),
+    UTILITY_STATION: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path d="M6 3v14M14 3v14M3 8h14M3 12h14" />
+      </svg>
+    ),
+  };
+  return <span className="equip-card-icon">{icons[nodeClass] ?? icons.COMPONENT}</span>;
+};
+
+const ChevronIcon: React.FC<{ expanded: boolean }> = ({ expanded }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={`equip-chevron ${expanded ? 'is-expanded' : ''}`}
+  >
+    <path d="M6 4l4 4-4 4" />
   </svg>
 );
 
-const EquipmentIcon: React.FC<{ className?: string }> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="4" y="3" width="12" height="14" rx="2" />
-    <circle cx="10" cy="10" r="3" />
-    <path d="M10 7v-2M10 15v-2M7 10H5M15 10h-2" />
-  </svg>
-);
+/* ────────────────── Props ────────────────── */
 
-const MoreIcon: React.FC = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-    <circle cx="4" cy="8" r="1.2" />
-    <circle cx="8" cy="8" r="1.2" />
-    <circle cx="12" cy="8" r="1.2" />
-  </svg>
-);
-
-/* ── Types ──────────────────────────────────────────────── */
 interface EquipmentCardViewProps {
-  roomGroups: RoomGroup[];
+  /** 树结构数据（非平铺） */
+  nodes: ResourceNode[];
   selectedNodeId: number | null;
   onSelect: (nodeId: number) => void;
   onEdit: (node: ResourceNode) => void;
   onDelete: (node: ResourceNode) => void;
   onToggleActive: (node: ResourceNode) => void;
+  onCreateChild: (parent: ResourceNode) => void;
 }
 
-/* ── Card Component ────────────────────────────────────── */
-const EquipmentCard: React.FC<{
-  node: ResourceNode;
-  isSelected: boolean;
-  onSelect: (nodeId: number) => void;
-  onEdit: (node: ResourceNode) => void;
-  onDelete: (node: ResourceNode) => void;
-  onToggleActive: (node: ResourceNode) => void;
-}> = ({ node, isSelected, onSelect, onEdit, onDelete, onToggleActive }) => {
-  const systemType = node.equipmentSystemType ?? '';
+/* ────────────────── Recursive Node Card ────────────────── */
 
-  const dropdownItems = [
-    { key: 'edit', label: '编辑设备' },
+/** 层级深度决定默认展开状态：0,1 层默认展开，>=2 折叠 */
+const DEFAULT_EXPAND_DEPTH = 2;
+
+const RecursiveNodeCard: React.FC<{
+  node: ResourceNode;
+  depth: number;
+  selectedNodeId: number | null;
+  onSelect: (id: number) => void;
+  onEdit: (n: ResourceNode) => void;
+  onDelete: (n: ResourceNode) => void;
+  onToggleActive: (n: ResourceNode) => void;
+  onCreateChild: (n: ResourceNode) => void;
+}> = ({ node, depth, selectedNodeId, onSelect, onEdit, onDelete, onToggleActive, onCreateChild }) => {
+  const [expanded, setExpanded] = useState(depth < DEFAULT_EXPAND_DEPTH);
+  const nodeColor = NODE_CLASS_COLOR[node.nodeClass] ?? 'neutral';
+  const hasChildren = node.children && node.children.length > 0;
+  const isSelected = node.id === selectedNodeId;
+
+  const handleMenuClick = useCallback(
+    (key: string) => {
+      switch (key) {
+        case 'edit': onEdit(node); break;
+        case 'toggle': onToggleActive(node); break;
+        case 'child': onCreateChild(node); break;
+        case 'delete': onDelete(node); break;
+      }
+    },
+    [node, onEdit, onDelete, onToggleActive, onCreateChild],
+  );
+
+  const menuItems = [
+    { key: 'edit', label: '编辑' },
+    { key: 'child', label: '创建子节点' },
     { key: 'toggle', label: node.isActive ? '停用' : '启用' },
     { key: 'delete', label: '删除', danger: true },
   ];
 
-  const handleMenuClick = (key: string) => {
-    switch (key) {
-      case 'edit':
-        onEdit(node);
-        break;
-      case 'toggle':
-        onToggleActive(node);
-        break;
-      case 'delete':
-        onDelete(node);
-        break;
-    }
-  };
+  const handleToggleExpand = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpanded((prev) => !prev);
+  }, []);
 
-  return (
-    <div
-      className={`equip-card ${isSelected ? 'is-selected' : ''} ${!node.isActive ? 'is-inactive' : ''}`}
-      data-system={systemType}
-      onClick={() => onSelect(node.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(node.id); }}
-    >
-      <div className="equip-card-top">
-        <div className="equip-card-icon">
-          <EquipmentIcon />
+  // Leaf node — compact card (no expand)
+  if (!hasChildren) {
+    return (
+      <div
+        className={`equip-card equip-card-leaf ${isSelected ? 'is-selected' : ''} ${!node.isActive ? 'is-inactive' : ''}`}
+        onClick={() => onSelect(node.id)}
+      >
+        <div className={`equip-card-stripe equip-card-stripe-${nodeColor}`} />
+        <div className="equip-card-body">
+          <div className="equip-card-top">
+            <NodeIcon nodeClass={node.nodeClass} />
+            <div className="equip-card-info">
+              <div className="equip-card-name" title={node.nodeName}>{node.nodeName}</div>
+              <div className="equip-card-code" title={node.nodeCode}>{node.nodeCode}</div>
+            </div>
+            <WxbDropdown
+              menu={{
+                items: menuItems.map((item) => ({ key: item.key, label: item.label, danger: item.danger })),
+                onClick: ({ key }) => handleMenuClick(key),
+              }}
+              trigger={['click']}
+            >
+              <button className="equip-card-more" type="button" onClick={(e) => e.stopPropagation()} aria-label="更多操作">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <circle cx="8" cy="3" r="1.5" /><circle cx="8" cy="8" r="1.5" /><circle cx="8" cy="13" r="1.5" />
+                </svg>
+              </button>
+            </WxbDropdown>
+          </div>
+          <div className="equip-card-tags">
+            <WxbTag color={nodeColor}>{NODE_CLASS_LABEL[node.nodeClass]}</WxbTag>
+            {node.nodeSubtype && <WxbTag>{node.nodeSubtype}</WxbTag>}
+            {node.equipmentSystemType && (
+              <WxbTag color={node.equipmentSystemType === 'SUS' ? 'green' : node.equipmentSystemType === 'VIRTUAL' ? 'amber' : 'blue'}>{node.equipmentSystemType}</WxbTag>
+            )}
+            {!node.isActive && <WxbTag color="red">已停用</WxbTag>}
+          </div>
+          <div className="equip-card-meta">
+            <span>{node.departmentCode || '全局'}</span>
+            {node.boundResourceCode && (
+              <span className="equip-card-bound">绑定: {node.boundResourceCode}</span>
+            )}
+          </div>
         </div>
+      </div>
+    );
+  }
+
+  // Branch node — container with expand/collapse
+  return (
+    <div className={`equip-card-branch equip-card-branch-${nodeColor} ${isSelected ? 'is-selected' : ''}`}>
+      {/* Branch header */}
+      <div className="equip-card-branch-header" onClick={() => onSelect(node.id)}>
+        <button
+          className="equip-card-expand-btn"
+          type="button"
+          onClick={handleToggleExpand}
+          aria-label={expanded ? '折叠' : '展开'}
+        >
+          <ChevronIcon expanded={expanded} />
+        </button>
+        <NodeIcon nodeClass={node.nodeClass} />
         <div className="equip-card-info">
           <div className="equip-card-name" title={node.nodeName}>{node.nodeName}</div>
           <div className="equip-card-code" title={node.nodeCode}>{node.nodeCode}</div>
         </div>
+        <div className="equip-card-branch-tags">
+          <WxbTag color={nodeColor}>{NODE_CLASS_LABEL[node.nodeClass]}</WxbTag>
+          {node.nodeSubtype && <WxbTag>{node.nodeSubtype}</WxbTag>}
+          {!node.isActive && <WxbTag color="red">停用</WxbTag>}
+        </div>
+        <span className="equip-card-child-count">{node.children.length} 子节点</span>
         <WxbDropdown
-          items={dropdownItems}
-          onSelect={handleMenuClick}
-          trigger="click"
+          menu={{
+            items: menuItems.map((item) => ({ key: item.key, label: item.label, danger: item.danger })),
+            onClick: ({ key }) => handleMenuClick(key),
+          }}
+          trigger={['click']}
         >
-          <button
-            className="equip-card-more"
-            onClick={(e) => e.stopPropagation()}
-            type="button"
-            aria-label="更多操作"
-          >
-            <MoreIcon />
+          <button className="equip-card-more" type="button" onClick={(e) => e.stopPropagation()} aria-label="更多操作">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="8" cy="3" r="1.5" /><circle cx="8" cy="8" r="1.5" /><circle cx="8" cy="13" r="1.5" />
+            </svg>
           </button>
         </WxbDropdown>
       </div>
 
-      <div className="equip-card-tags">
-        {systemType && (
-          <WxbTag color={systemType === 'SUS' ? 'green' : 'blue'}>
-            {systemType}
-          </WxbTag>
-        )}
-        {node.equipmentClass && (
-          <WxbTag color="neutral">{node.equipmentClass}</WxbTag>
-        )}
-      </div>
-
-      <div className="equip-card-bottom">
-        <span className="equip-card-status">
-          <span className={`equip-status-dot ${node.isActive ? 'is-active' : 'is-inactive'}`} />
-          {node.isActive ? '运行中' : '已停用'}
-        </span>
-        <span className="equip-card-bindings">
-          {node.childCount > 0 ? `${node.childCount} 个子节点` : ''}
-        </span>
-      </div>
+      {/* Children area (collapsible) */}
+      {expanded && (
+        <div className="equip-card-branch-children">
+          {/* Render leaf children as grid */}
+          {(() => {
+            const leaves = node.children.filter((c) => !c.children || c.children.length === 0);
+            const branches = node.children.filter((c) => c.children && c.children.length > 0);
+            return (
+              <>
+                {branches.map((child) => (
+                  <RecursiveNodeCard
+                    key={child.id}
+                    node={child}
+                    depth={depth + 1}
+                    selectedNodeId={selectedNodeId}
+                    onSelect={onSelect}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    onToggleActive={onToggleActive}
+                    onCreateChild={onCreateChild}
+                  />
+                ))}
+                {leaves.length > 0 && (
+                  <div className="equip-card-grid">
+                    {leaves.map((child) => (
+                      <RecursiveNodeCard
+                        key={child.id}
+                        node={child}
+                        depth={depth + 1}
+                        selectedNodeId={selectedNodeId}
+                        onSelect={onSelect}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onToggleActive={onToggleActive}
+                        onCreateChild={onCreateChild}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 };
 
-/* ── Card View Component ───────────────────────────────── */
+/* ────────────────── Main View ────────────────── */
+
 const EquipmentCardView: React.FC<EquipmentCardViewProps> = ({
-  roomGroups,
+  nodes,
   selectedNodeId,
   onSelect,
   onEdit,
   onDelete,
   onToggleActive,
+  onCreateChild,
 }) => {
-  if (roomGroups.length === 0) {
-    return (
-      <div className="equip-empty">
-        <svg className="equip-empty-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.5">
-          <rect x="6" y="10" width="36" height="28" rx="4" />
-          <circle cx="24" cy="24" r="8" />
-          <path d="M24 16v-4M24 36v-4M16 24h-4M36 24h-4" />
-        </svg>
-        <div className="equip-empty-text">暂无设备数据</div>
-      </div>
-    );
+  if (!nodes.length) {
+    return <WxbEmpty description="暂无资源节点" />;
   }
 
   return (
-    <div className="equip-card-content">
-      {roomGroups.map((group) => (
-        <div key={group.roomId ?? 'unassigned'} className="equip-room-section">
-          <div className="equip-room-header">
-            <RoomIcon />
-            <span className="equip-room-name">{group.roomName}</span>
-            <span className="equip-room-count">{group.nodes.length} 台设备</span>
-          </div>
-          <div className="equip-card-grid">
-            {group.nodes.map((node) => (
-              <EquipmentCard
-                key={node.id}
-                node={node}
-                isSelected={selectedNodeId === node.id}
-                onSelect={onSelect}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onToggleActive={onToggleActive}
-              />
-            ))}
-          </div>
-        </div>
+    <div className="equip-card-view">
+      {nodes.map((node) => (
+        <RecursiveNodeCard
+          key={node.id}
+          node={node}
+          depth={0}
+          selectedNodeId={selectedNodeId}
+          onSelect={onSelect}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onToggleActive={onToggleActive}
+          onCreateChild={onCreateChild}
+        />
       ))}
     </div>
   );

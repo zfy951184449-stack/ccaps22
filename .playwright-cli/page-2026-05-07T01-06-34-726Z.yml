@@ -1,0 +1,105 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - navigation "主导航" [ref=e5]:
+      - button "返回调度中心" [ref=e6] [cursor=pointer]:
+        - generic [ref=e9]: MFG8 APS
+      - generic [ref=e10]:
+        - button "dashboard 调度中心" [ref=e12] [cursor=pointer]:
+          - img "dashboard" [ref=e14]:
+            - img [ref=e15]
+          - generic [ref=e18]: 调度中心
+        - button "setting 基础数据 down" [ref=e20] [cursor=pointer]:
+          - img "setting" [ref=e22]:
+            - img [ref=e23]
+          - generic [ref=e26]: 基础数据
+          - img "down" [ref=e27]:
+            - img [ref=e28]
+        - button "project 生产计划 down" [ref=e31] [cursor=pointer]:
+          - img "project" [ref=e33]:
+            - img [ref=e34]
+          - generic [ref=e37]: 生产计划
+          - img "down" [ref=e38]:
+            - img [ref=e39]
+        - button "apartment 人员与排班 down" [ref=e42] [cursor=pointer]:
+          - img "apartment" [ref=e44]:
+            - img [ref=e45]
+          - generic [ref=e48]: 人员与排班
+          - img "down" [ref=e49]:
+            - img [ref=e50]
+        - button "rocket UI 组件库" [ref=e52] [cursor=pointer]:
+          - img "rocket" [ref=e54]:
+            - img [ref=e55]
+          - generic [ref=e58]: UI 组件库
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - combobox "搜索页面" [ref=e61]
+          - img "search":
+            - img
+          - generic: Ctrl K
+        - button "通知" [ref=e62] [cursor=pointer]:
+          - img "bell" [ref=e63]:
+            - img [ref=e64]
+        - img "当前用户" [ref=e67]: APS
+  - main [ref=e69]:
+    - generic [ref=e70]:
+      - generic [ref=e72]:
+        - button "← 返回" [ref=e73] [cursor=pointer]
+        - generic [ref=e75]:
+          - generic [ref=e77]: PT-00004
+          - generic [ref=e78]: WBP2486/DSP
+          - generic [ref=e79]: DSP
+          - generic [ref=e81]: 周期 17 天
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+            - button "操作" [ref=e85] [cursor=pointer]
+            - button "阶段▸设备" [active] [ref=e86] [cursor=pointer]
+            - button "设备" [ref=e87] [cursor=pointer]
+          - generic [ref=e89]:
+            - generic [ref=e90]: 时间窗口
+            - switch [ref=e91] [cursor=pointer]
+          - button "自动排程" [ref=e93] [cursor=pointer]
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]:
+            - button "时" [ref=e98] [cursor=pointer]
+            - button "天" [ref=e99] [cursor=pointer]
+            - button "周" [ref=e100] [cursor=pointer]
+            - button "月" [ref=e101] [cursor=pointer]
+          - generic [ref=e102]:
+            - button "−" [ref=e103] [cursor=pointer]
+            - generic [ref=e104]: 14%
+            - button "+" [ref=e105] [cursor=pointer]
+          - generic [ref=e106]:
+            - button "⟳" [ref=e107] [cursor=pointer]
+            - button "⤢" [ref=e108] [cursor=pointer]
+        - generic [ref=e110]:
+          - generic [ref=e111]: 名称
+          - generic [ref=e113]:
+            - generic [ref=e180]:
+              - generic [ref=e181]: ▶
+              - generic "拖拽移动" [ref=e182]: ⠿
+              - generic [ref=e184]: PS-003 - AC&VIN
+            - generic [ref=e185]:
+              - generic [ref=e186]: ▶
+              - generic "拖拽移动" [ref=e187]: ⠿
+              - generic [ref=e189]: "[未绑定] 设备"
+            - generic [ref=e126]: U1850-PT1810 CIP
+            - generic [ref=e135]: PT1810 罐底取样基座安装&罐顶酸碱口ST阀&SIP
+            - generic [ref=e147]: PT1812 LF滤芯安装&罐底取样基座&取样阀安装&罐底prime口手阀安装&SIP
+            - generic [ref=e156]: AEX AKTA 15"CIP+sample（立检；14点前送样）+排空
+            - generic [ref=e165]: AC Cycle1+Cycle2 至上样(不要停早上交班)
+            - generic [ref=e171]: AC 工艺前检查
+            - generic [ref=e192]: AC Cycle2+Cycle3
+            - generic [ref=e195]: T1810/U1850-T1810 RIN
+            - generic [ref=e198]: AC消毒/保存液/中和排废，tank推至2432（留一个给CEX用）
+            - generic [ref=e201]: AC AKTA 2‘’ CIP-Storage
+            - generic [ref=e204]: PT1812 Bypass CIP
+            - generic [ref=e205]:
+              - generic [ref=e206]: ▶
+              - generic "拖拽移动" [ref=e207]: ⠿
+            - generic [ref=e129]: PT1810 Full CIP
+            - generic [ref=e138]: U1850-PT1810 SIP
+            - generic [ref=e150]: PT1810-PT1812 SIP
+            - generic [ref=e159]: BH1733-U1871接1M碱
+            - generic [ref=e168]: VIN Cycle1 +PT1810-PT1812+T1810/U1850-T1810 RIN
+            - generic [ref=e174]: System flush+取电导

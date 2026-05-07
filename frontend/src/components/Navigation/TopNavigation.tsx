@@ -46,6 +46,7 @@ const navGroups: NavGroup[] = [
     subtitle: 'Master Data',
     icon: <SettingOutlined />,
     children: [
+      { key: 'equipment-management', icon: <SettingOutlined />, label: '资源节点管理', path: '/equipment-management' },
       { key: 'qualifications', icon: <SafetyOutlined />, label: '资质管理', path: '/qualifications' },
       { key: 'qualification-matrix', icon: <TableOutlined />, label: '资质矩阵', path: '/qualification-matrix' },
       { key: 'operations', icon: <SettingOutlined />, label: '操作管理', path: '/operations' },
