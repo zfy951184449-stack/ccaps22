@@ -2,12 +2,12 @@
  * ManpowerCurveCard
  * 
  * 人力供需曲线组件 - 展示一个月内的人力资源供需情况
- * 使用堆叠柱状图（按班次+操作状态）+ 需求折线图的组合形式
+ * 使用 WxbChartCard 堆叠柱状图（按班次+操作状态）+ 需求折线图
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { WxbOverlay, WxbEmpty, WxbTooltip, WxbKpiCard, WxbChartShell } from '../wxb-ui';
-import { DualAxes } from '@ant-design/plots';
+import { WxbOverlay, WxbEmpty, WxbTooltip, WxbKpiCard, WxbChartShell, WxbChartCard } from '../wxb-ui';
+import type { WxbChartSeriesConfig, WxbChartPoint, WxbChartAnnotation } from '../wxb-ui';
 import dayjs, { Dayjs } from 'dayjs';
 import { dashboardService } from '../../services/dashboardService';
 import { ManpowerCurveData } from '../../types/dashboard';
@@ -102,243 +102,149 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
         loadData();
     }, [date, orgPath, shiftId]);
 
-    // 转换为堆叠柱状图数据（按班次+操作状态分组）
-    const stackedBarData = useMemo(() => {
-        const result: any[] = [];
-        dailyData.forEach((d) => {
-            // 如果有班次分组数据，使用分组数据
+    // ============== WxbChartCard 数据转换 ==============
+
+    // 收集所有班次分类
+    const allCategories = useMemo(() => {
+        const cats = new Set<string>();
+        dailyData.forEach(d => {
             if (d.shift_breakdown && d.shift_breakdown.length > 0) {
-                // 先按固定顺序排序
-                const sortedBreakdown = [...d.shift_breakdown].sort((a, b) => {
+                const sorted = [...d.shift_breakdown].sort((a, b) => {
                     const catA = a.has_operation ? `${a.shift_name}(有操作)` : `${a.shift_name}(待命)`;
                     const catB = b.has_operation ? `${b.shift_name}(有操作)` : `${b.shift_name}(待命)`;
                     return getCategoryWeight(catA) - getCategoryWeight(catB);
                 });
-
-                sortedBreakdown.forEach((sb) => {
-                    const categoryLabel = sb.has_operation
-                        ? `${sb.shift_name}(有操作)`
-                        : `${sb.shift_name}(待命)`;
-                    result.push({
-                        date: d.date,
-                        count: sb.count,
-                        category: categoryLabel,
-                        shiftCode: sb.shift_code,
-                        hasOperation: sb.has_operation,
-                    });
+                sorted.forEach(sb => {
+                    const label = sb.has_operation ? `${sb.shift_name}(有操作)` : `${sb.shift_name}(待命)`;
+                    cats.add(label);
                 });
             } else {
-                // 没有分组数据时，使用总可用人数
-                result.push({
-                    date: d.date,
-                    count: d.available_count,
-                    category: '可用人数',
-                    shiftCode: 'DEFAULT',
-                    hasOperation: true,
-                });
+                cats.add('可用人数');
             }
         });
-        return result;
+        // Sort by category order
+        return Array.from(cats).sort((a, b) => getCategoryWeight(a) - getCategoryWeight(b));
     }, [dailyData]);
 
-    // 需求折线图数据
-    const demandLineData = useMemo(() => {
-        return dailyData.map((d) => ({
-            date: d.date,
-            demand: d.demand_count,
-        }));
-    }, [dailyData]);
-
-    // 获取所有班次分类（用于图例和颜色）
-    const allCategories = useMemo(() => {
-        const cats = new Set<string>();
-        stackedBarData.forEach(item => cats.add(item.category));
-        return Array.from(cats);
-    }, [stackedBarData]);
-
-    // 生成动态颜色映射
-    const categoryColors = useMemo(() => {
-        const colorMap: string[] = [];
+    // 生成颜色映射
+    const categoryColorMap = useMemo(() => {
+        const map: Record<string, string> = {};
         allCategories.forEach(cat => {
-            // 从分类名称中提取班次信息
             const hasOp = cat.includes('有操作');
             let shiftCode = 'DEFAULT';
             if (cat.includes('日班') || cat.includes('标准')) shiftCode = 'DAY';
             else if (cat.includes('基础')) shiftCode = 'BASE';
             else if (cat.includes('长白')) shiftCode = 'LONGDAY';
             else if (cat.includes('夜班')) shiftCode = 'night';
-
-            colorMap.push(getShiftColor(shiftCode, hasOp));
+            map[cat] = getShiftColor(shiftCode, hasOp);
         });
-        return colorMap.length > 0 ? colorMap : ['#52c41a'];
+        return map;
     }, [allCategories]);
 
-    // 生成非工作日标记注释
-    const holidayAnnotations = useMemo(() => {
-        const annotations: any[] = [];
+    // WxbChartCard series config
+    const wxbSeriesConfig = useMemo((): WxbChartSeriesConfig[] => {
+        const configs: WxbChartSeriesConfig[] = [];
+        // 各班次分类 → bar 系列
+        allCategories.forEach(cat => {
+            configs.push({
+                key: cat,
+                label: cat,
+                color: categoryColorMap[cat] || '#8c8c8c',
+                geometry: 'bar',
+            });
+        });
+        // 需求折线
+        configs.push({
+            key: 'demand',
+            label: '需求人数',
+            color: '#ff4d4f',
+            geometry: 'line',
+            lineWidth: 2,
+            showPoints: true,
+        });
+        return configs;
+    }, [allCategories, categoryColorMap]);
 
-        dailyData.forEach((d) => {
-            if (!d.is_workday) {
-                const startTime = new Date(d.date).getTime();
-                const endTime = new Date(dayjs(d.date).add(1, 'day').format('YYYY-MM-DD')).getTime();
+    // WxbChartCard points
+    const wxbChartPoints = useMemo((): WxbChartPoint[] => {
+        return dailyData.map(d => {
+            const values: Record<string, number> = { demand: d.demand_count };
 
-                // 只有3倍工资节假日用红色，其他非工作日（周末、2倍节假日）用灰色
-                const isTripleSalary = d.salary_multiplier === 3;
-
-                annotations.push({
-                    type: 'region',
-                    start: [startTime, 'min'],
-                    end: [endTime, 'max'],
-                    style: {
-                        fill: isTripleSalary ? 'rgba(255, 77, 79, 0.15)' : 'rgba(0, 0, 0, 0.04)',
-                    },
+            // 填充各班次分类的值
+            if (d.shift_breakdown && d.shift_breakdown.length > 0) {
+                d.shift_breakdown.forEach(sb => {
+                    const label = sb.has_operation ? `${sb.shift_name}(有操作)` : `${sb.shift_name}(待命)`;
+                    values[label] = (values[label] ?? 0) + sb.count;
                 });
-
-                // 3倍工资节假日添加节日名称标签
-                if (isTripleSalary && d.holiday_name) {
-                    annotations.push({
-                        type: 'text',
-                        position: [d.date, 'max'],
-                        content: d.holiday_name,
-                        style: {
-                            fill: '#ff4d4f',
-                            fontSize: 10,
-                            textAlign: 'center',
-                        },
-                        offsetY: -8,
-                    });
+            } else {
+                if (allCategories.includes('可用人数')) {
+                    values['可用人数'] = d.available_count;
                 }
+            }
+            // 确保所有分类都有值
+            allCategories.forEach(cat => {
+                if (values[cat] === undefined) values[cat] = 0;
+            });
+
+            // extra tooltip info
+            const extra: Array<{ label: string; value: string; color?: string }> = [];
+
+            // 节假日标签
+            if (!d.is_workday) {
+                if (d.salary_multiplier === 3) {
+                    extra.push({ label: d.holiday_name || '法定假日', value: '3倍工资', color: '#ff4d4f' });
+                } else if (d.is_weekend) {
+                    extra.push({ label: '周末', value: '休息日' });
+                } else {
+                    extra.push({ label: '休息日', value: '' });
+                }
+            }
+
+            // 缺口信息
+            if (d.gap > 0) {
+                extra.push({ label: '缺口', value: `${d.gap}人`, color: '#ff4d4f' });
+            }
+
+            return {
+                label: dayjs(d.date).format('M/D'),
+                date: d.date,
+                values,
+                extra: extra.length > 0 ? extra : undefined,
+            };
+        });
+    }, [dailyData, allCategories]);
+
+    // Annotations: 节假日区域 + 总人数参考线
+    const wxbAnnotations = useMemo((): WxbChartAnnotation[] => {
+        const anns: WxbChartAnnotation[] = [];
+
+        // 节假日区域标记
+        dailyData.forEach((d, i) => {
+            if (!d.is_workday) {
+                const isTripleSalary = d.salary_multiplier === 3;
+                anns.push({
+                    type: 'region',
+                    xStart: i,
+                    xEnd: i,
+                    color: isTripleSalary ? '#ff4d4f' : '#000',
+                    opacity: isTripleSalary ? 0.08 : 0.03,
+                });
             }
         });
 
-        return annotations;
-    }, [dailyData]);
+        // 总人数参考线
+        if (data?.total_headcount) {
+            anns.push({
+                type: 'referenceLine',
+                yValue: data.total_headcount,
+                label: `总人数: ${data.total_headcount}`,
+                color: '#8898A8',
+                dash: [4, 4],
+            });
+        }
 
-    // 双轴图配置
-    const chartConfig = useMemo(() => ({
-        data: [stackedBarData, demandLineData],
-        xField: 'date',
-        yField: ['count', 'demand'],
-        geometryOptions: [
-            {
-                geometry: 'column',
-                isStack: true,
-                seriesField: 'category',
-                color: categoryColors,
-                columnWidthRatio: 0.6,
-            },
-            {
-                geometry: 'line',
-                lineStyle: {
-                    lineWidth: 2,
-                },
-                color: '#ff4d4f',
-                point: {
-                    size: 3,
-                    shape: 'circle',
-                    style: {
-                        fill: '#ff4d4f',
-                        stroke: '#fff',
-                        lineWidth: 1,
-                    },
-                },
-            },
-        ],
-        xAxis: {
-            type: 'time' as const,
-            tickCount: 10,
-            label: {
-                formatter: (v: string) => dayjs(v).format('M/D'),
-            },
-        },
-        yAxis: {
-            count: {
-                title: { text: '可用人数' },
-                min: 0,
-            },
-            demand: {
-                title: { text: '需求人数' },
-                min: 0,
-            },
-        },
-        legend: {
-            position: 'top' as const,
-            itemName: {
-                style: {
-                    fontSize: 11,
-                },
-            },
-        },
-        tooltip: {
-            shared: true,
-            showMarkers: true,
-            customContent: (title: string, items: any[]) => {
-                if (!items || items.length === 0) return '';
-
-                const date = dayjs(title).format('M月D日');
-                const dayInfo = dailyData.find(d => d.date === title);
-
-                let holidayLabel = '';
-                if (dayInfo && !dayInfo.is_workday) {
-                    if (dayInfo.salary_multiplier === 3) {
-                        holidayLabel = `<span style="color:#ff4d4f;font-weight:500;"> (${dayInfo.holiday_name || '法定假日'} 3倍)</span>`;
-                    } else if (dayInfo.is_weekend) {
-                        holidayLabel = '<span style="color:var(--wx-fg-4,#8898A8);"> (周末)</span>';
-                    } else {
-                        holidayLabel = '<span style="color:var(--wx-fg-4,#8898A8);"> (休息日)</span>';
-                    }
-                }
-
-                let html = `<div style="padding:8px 12px;"><div style="font-weight:500;margin-bottom:8px;">${date}${holidayLabel}</div>`;
-
-                items.forEach(item => {
-                    const color = item.color || '#1890ff';
-                    const name = item.name || '';
-                    const value = item.value ?? 0;
-                    html += `<div style="display:flex;align-items:center;margin:4px 0;">
-                        <span style="width:8px;height:8px;border-radius:50%;background:${color};margin-right:8px;"></span>
-                        <span style="color:var(--wx-fg-3,#5A6B7E);">${name}:</span>
-                        <span style="font-weight:500;margin-left:4px;">${value}人</span>
-                    </div>`;
-                });
-
-                // 添加缺口信息
-                if (dayInfo && dayInfo.gap > 0) {
-                    html += `<div style="color:#ff4d4f;margin-top:8px;padding-top:8px;border-top:1px dashed var(--wx-border,#E4EAF1);">
-                        缺口: ${dayInfo.gap}人
-                    </div>`;
-                }
-
-                html += '</div>';
-                return html;
-            },
-        },
-        annotations: {
-            count: [
-                ...holidayAnnotations,
-                // 总人数参考线
-                ...(data?.total_headcount ? [{
-                    type: 'line',
-                    start: ['min', data.total_headcount],
-                    end: ['max', data.total_headcount],
-                    style: {
-                        stroke: 'var(--wx-fg-4, #8898A8)',
-                        lineWidth: 1,
-                        lineDash: [4, 4],
-                    },
-                    text: {
-                        content: `总人数: ${data.total_headcount}`,
-                        position: 'end',
-                        style: {
-                            fill: 'var(--wx-fg-4, #8898A8)',
-                            fontSize: 11,
-                        },
-                        offsetY: -5,
-                    },
-                }] : []),
-            ],
-        },
-    }), [stackedBarData, demandLineData, categoryColors, data, dailyData, holidayAnnotations]);
+        return anns;
+    }, [dailyData, data?.total_headcount]);
 
     return (
         <WxbChartShell
@@ -384,9 +290,24 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                             />
                         </div>
 
-                        <div className="dashboard-chart-container">
-                            <DualAxes {...chartConfig} />
+                        {/* 图例 */}
+                        <div className="wxb-cs-legend" style={{ marginTop: 8 }}>
+                            {wxbSeriesConfig.map(sc => (
+                                <span key={sc.key} className="wxb-cs-legend-item">
+                                    <span className="wxb-cs-swatch" style={{ background: sc.color }} />
+                                    {sc.label}
+                                </span>
+                            ))}
                         </div>
+
+                        <WxbChartCard
+                            headless
+                            seriesConfig={wxbSeriesConfig}
+                            points={wxbChartPoints}
+                            annotations={wxbAnnotations}
+                            yUnit="人"
+                            tooltipFormatter={(v) => `${Math.round(v)} 人`}
+                        />
                     </>
                 ) : (
                     !loading && <WxbEmpty />

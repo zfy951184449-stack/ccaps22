@@ -26,6 +26,21 @@ export interface WxbChartPoint {
   label: string;
   date?: string;
   values: Record<string, number>;
+  /** Extra lines appended to tooltip (e.g. gap info, holiday label) */
+  extra?: Array<{ label: string; value: string; color?: string }>;
+}
+
+export interface WxbChartAnnotation {
+  type: 'region' | 'referenceLine';
+  /** region: point indices (inclusive) */
+  xStart?: number;
+  xEnd?: number;
+  /** referenceLine: y value */
+  yValue?: number;
+  label?: string;
+  color?: string;
+  opacity?: number;
+  dash?: number[];
 }
 
 export interface WxbChartCardProps {
@@ -45,9 +60,19 @@ export interface WxbChartCardProps {
   points?: WxbChartPoint[];
   yUnit?: string;
   tooltipFormatter?: (v: number) => string;
+  annotations?: WxbChartAnnotation[];
 }
 
 const X0 = 40, X1 = 640, Y0 = 6, Y1 = 162;
+
+type NormalizedChartData = {
+  series: WxbChartSeriesConfig[];
+  pts: WxbChartPoint[];
+  yScale: { max: number; ticks: number[] };
+  isLegacy: boolean;
+  barSeries: WxbChartSeriesConfig[];
+  lineSeries: WxbChartSeriesConfig[];
+};
 
 /* ── Nice tick calculation ── */
 function niceScale(maxVal: number, tickCount = 5): { max: number; ticks: number[] } {
@@ -67,13 +92,13 @@ export const WxbChartCard: React.FC<WxbChartCardProps> = (props) => {
     title, subtitle, className = '', style, headless = false,
     data, targetValue = 80,
     seriesConfig, points,
-    yUnit, tooltipFormatter,
+    yUnit, tooltipFormatter, annotations,
   } = props;
 
   const isMulti = !!(seriesConfig && points && points.length > 0);
 
   /* ── Normalise into unified model ── */
-  const { series, pts, yScale, isLegacy, barSeries, lineSeries } = useMemo(() => {
+  const { series, pts, yScale, isLegacy, barSeries, lineSeries } = useMemo<NormalizedChartData>(() => {
     if (isMulti) {
       const bars = seriesConfig!.filter(s => s.geometry === 'bar');
       const lines = seriesConfig!.filter(s => s.geometry !== 'bar');
@@ -97,7 +122,7 @@ export const WxbChartCard: React.FC<WxbChartCardProps> = (props) => {
         { key: 'used', label: 'Used', color: '#0B3D7F', lineWidth: 1.7, showPoints: true, areaFill: true },
         { key: 'avail', label: 'Available', color: '#A3CC4F', lineWidth: 1.6 },
       ];
-      const p = data.map(d => ({ label: d.label, date: d.date, values: { used: d.used, avail: d.avail } }));
+      const p: WxbChartPoint[] = data.map(d => ({ label: d.label, date: d.date, values: { used: d.used, avail: d.avail } }));
       return { series: s, pts: p, yScale: { max: 100, ticks: [0, 25, 50, 75, 100] }, isLegacy: true, barSeries: [] as WxbChartSeriesConfig[], lineSeries: s };
     }
     return { series: [], pts: [], yScale: { max: 100, ticks: [0, 25, 50, 75, 100] }, isLegacy: true, barSeries: [] as WxbChartSeriesConfig[], lineSeries: [] as WxbChartSeriesConfig[] };
@@ -205,6 +230,24 @@ export const WxbChartCard: React.FC<WxbChartCardProps> = (props) => {
         {/* target line (legacy) */}
         {isLegacy && <line x1="40" y1={yFor(targetValue)} x2="640" y2={yFor(targetValue)} stroke="#E8B53C" strokeDasharray="3 3" strokeWidth="1" />}
 
+        {/* annotations: regions */}
+        {annotations?.filter(a => a.type === 'region').map((a, i) => {
+          const x1a = a.xStart !== undefined && xs[a.xStart] !== undefined ? xs[a.xStart] - barWidth / 2 : X0;
+          const x2a = a.xEnd !== undefined && xs[a.xEnd] !== undefined ? xs[a.xEnd] + barWidth / 2 : X1;
+          return <rect key={`rgn-${i}`} x={x1a} y={Y0} width={x2a - x1a} height={Y1 - Y0} fill={a.color ?? '#000'} opacity={a.opacity ?? 0.04} rx={2} />;
+        })}
+
+        {/* annotations: reference lines */}
+        {annotations?.filter(a => a.type === 'referenceLine' && a.yValue !== undefined).map((a, i) => {
+          const y = yFor(a.yValue!);
+          return (
+            <g key={`ref-${i}`}>
+              <line x1={X0} y1={y} x2={X1} y2={y} stroke={a.color ?? '#8898A8'} strokeWidth="1" strokeDasharray={a.dash ? a.dash.join(' ') : '4 4'} />
+              {a.label && <text x={X1 + 4} y={y + 3} fontFamily="var(--wx-font-mono)" fontSize="9" fill={a.color ?? '#8898A8'}>{a.label}</text>}
+            </g>
+          );
+        })}
+
         {/* stacked bars */}
         {stackedBars.map(b => (
           <rect key={b.key} x={b.x} y={b.y} width={b.w} height={Math.max(0, b.h)} rx={2} fill={b.color} fillOpacity="0.85" />
@@ -286,6 +329,16 @@ export const WxbChartCard: React.FC<WxbChartCardProps> = (props) => {
               <span className={`wxb-chart-tip-delta ${(active.values['used'] ?? 0) - targetValue >= 0 ? 'is-good' : 'is-bad'}`}>
                 {(active.values['used'] ?? 0) - targetValue >= 0 ? '+' : '−'}{Math.abs((active.values['used'] ?? 0) - targetValue).toFixed(1)}
               </span>
+            </div>
+          )}
+          {active.extra && active.extra.length > 0 && (
+            <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px dashed var(--wx-border, #E4EAF1)' }}>
+              {active.extra.map((ex, i) => (
+                <div key={i} className="wxb-chart-tip-row">
+                  <span className="l" style={ex.color ? { color: ex.color } : undefined}>{ex.label}</span>
+                  <span className="v" style={ex.color ? { color: ex.color } : undefined}>{ex.value}</span>
+                </div>
+              ))}
             </div>
           )}
         </>)}
