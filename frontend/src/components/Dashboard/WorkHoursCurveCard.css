@@ -1,128 +1,63 @@
 /**
- * WorkHoursCurveCard Styles (wxb-ui migrated)
- * 
- * Granularity pill toggle → WxbSegmented (removed CSS)
- * RangePicker Antd override → WxbRangePicker (removed CSS)
- * Toggle button → WxbButton (removed CSS)
- * Retained: batch legend chip styles (no wxb equivalent)
+ * WorkHoursCurveCard Styles (wxb-ui fully migrated)
+ *
+ * All legend items now use wxb-cs-legend / wxb-cs-legend-item classes
+ * from ChartShell.css with interactive extensions below.
  */
 
-/* ---------- 批次图例 Chip 区域（日视图专属） ---------- */
-.workhours-legend-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
+/* ---------- Interactive wxb legend extensions ---------- */
+
+/* Container modifier for interactive legend rows */
+.wxb-cs-legend--interactive {
     padding: 10px 0 6px;
     border-top: 1px solid var(--wx-border, #E4EAF1);
     margin-top: 12px;
-}
-
-.workhours-legend-label {
-    font-size: 11px;
-    color: var(--wx-fg-4, #8898A8);
-    font-weight: 500;
-    letter-spacing: 0.04em;
-    flex-shrink: 0;
-    margin-right: 2px;
-}
-
-/* 总需求固定图例（不可交互）*/
-.workhours-total-legend {
-    display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 8px;
-    background: rgba(255, 77, 79, 0.08);
-    border: 1.5px solid rgba(255, 77, 79, 0.25);
-    font-size: 11px;
-    font-weight: 600;
-    color: #ff4d4f;
+}
+
+/* Divider between fixed legend and toggleable items */
+.wxb-cs-legend-divider {
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    background: var(--wx-border, #E4EAF1);
     flex-shrink: 0;
+}
+
+/* Fixed legend item (e.g. 总需求 — not clickable) */
+.wxb-cs-legend-item.is-fixed {
     cursor: default;
-}
-
-.workhours-total-legend-line {
-    display: inline-block;
-    width: 18px;
-    height: 2.5px;
-    background: #ff4d4f;
-    border-radius: 2px;
-}
-
-/* wxb toggle button override */
-.workhours-toggle-btn-wxb.wxb-btn {
-    font-size: 10px;
     font-weight: 600;
-    padding: 3px 8px;
-    white-space: nowrap;
 }
 
-/* 各批次 Chip（可交互=图例联动）*/
-.workhours-batch-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 8px;
-    border: 1.5px solid transparent;
-    font-size: 11px;
-    font-weight: 500;
+/* Toggleable legend items */
+.wxb-cs-legend-item.is-toggle {
     cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition:
-        background 0.18s ease,
-        border-color 0.18s ease,
-        color 0.18s ease,
-        transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.18s ease;
     user-select: none;
+    transition: opacity 0.18s ease;
+    border-radius: 3px;
+    padding: 1px 4px;
 }
 
-.workhours-batch-chip:hover {
-    transform: scale(1.05);
+.wxb-cs-legend-item.is-toggle:hover {
+    background: var(--wx-surface-2, #F5F8FB);
 }
 
-/* 选中态 */
-.workhours-batch-chip.selected {
-    color: #fff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+/* Active state — fully visible */
+.wxb-cs-legend-item.is-toggle.is-on {
+    opacity: 1;
+    font-weight: 500;
 }
 
-/* 未选中态 */
-.workhours-batch-chip.unselected {
-    background: var(--wx-surface-3, #EDF1F6);
-    border-color: var(--wx-border, #E4EAF1);
-    color: var(--wx-fg-4, #8898A8);
-    opacity: 0.65;
+/* Inactive state — dimmed */
+.wxb-cs-legend-item.is-toggle.is-off {
+    opacity: 0.4;
 }
 
-.workhours-batch-chip.unselected:hover {
-    opacity: 0.9;
-    color: var(--wx-fg-3, #5A6B7E);
+.wxb-cs-legend-item.is-toggle.is-off:hover {
+    opacity: 0.7;
 }
 
-/* Chip 左侧彩色虚线图例线 */
-.workhours-chip-line {
-    display: inline-block;
-    width: 14px;
-    height: 2px;
-    border-radius: 2px;
-    flex-shrink: 0;
-    /* 虚线效果用 repeating-linear-gradient 模拟 */
-    background-image: repeating-linear-gradient(
-        to right,
-        currentColor 0,
-        currentColor 4px,
-        transparent 4px,
-        transparent 8px
-    );
-    background-size: 100% 100%;
-}
-
-.workhours-batch-chip.selected .workhours-chip-line {
-    background-image: none;
-    background-color: rgba(255,255,255,0.85);
+.wxb-cs-legend-item.is-toggle.is-off .wxb-cs-swatch {
+    opacity: 0.5;
 }

@@ -7,9 +7,10 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { WxbOverlay, WxbEmpty, WxbTooltip, WxbKpiCard, WxbSegmented, WxbButton, WxbChartShell } from '../wxb-ui';
+import { WxbOverlay, WxbEmpty, WxbTooltip, WxbKpiCard, WxbSegmented, WxbButton, WxbChartShell, WxbChartCard } from '../wxb-ui';
+import type { WxbChartSeriesConfig, WxbChartPoint } from '../wxb-ui';
 import { WxbRangePicker } from '../wxb-ui/RangePicker/RangePicker';
-import { Line, DualAxes } from '@ant-design/plots';
+
 import dayjs, { Dayjs } from 'dayjs';
 import { dashboardService } from '../../services/dashboardService';
 import { WorkHoursData, DayViewData, MonthViewData, BatchInfo } from '../../types/dashboard';
@@ -111,82 +112,56 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
         return map;
     }, [dayViewData?.batches]);
 
-    const lineData = useMemo(() => {
+    /* ── WxbChartCard multi-series config ── */
+    const wxbSeriesConfig = useMemo((): WxbChartSeriesConfig[] => {
+        const configs: WxbChartSeriesConfig[] = [
+            { key: '总需求', label: '总需求', color: '#ff4d4f', lineWidth: 2.5, showPoints: true, areaFill: true },
+        ];
+        if (dayViewData?.batches) {
+            dayViewData.batches
+                .filter(b => selectedBatches.includes(b.batch_id))
+                .forEach(batch => {
+                    configs.push({
+                        key: batch.batch_code,
+                        label: batch.batch_code,
+                        color: batchColorMap[batch.batch_code] || '#8c8c8c',
+                        lineWidth: 1.5,
+                        dash: [4, 2],
+                        showPoints: false,
+                    });
+                });
+        }
+        return configs;
+    }, [dayViewData?.batches, selectedBatches, batchColorMap]);
+
+    const wxbChartPoints = useMemo((): WxbChartPoint[] => {
         if (!dayViewData) return [];
+        // Collect all unique dates
+        const dateSet = new Set<string>();
+        dayViewData.total_by_date.forEach(d => dateSet.add(d.date));
+        const dates = Array.from(dateSet).sort();
 
-        const result: any[] = [];
+        // Build total map
+        const totalMap: Record<string, number> = {};
+        dayViewData.total_by_date.forEach(d => { totalMap[d.date] = d.work_hours; });
 
-        // 添加总需求线
-        dayViewData.total_by_date.forEach((d) => {
-            result.push({
-                date: d.date,
-                hours: d.work_hours,
-                batch: '总需求',
-            });
-        });
-
-        // 添加各批次线
+        // Build batch maps
+        const batchMaps: Record<string, Record<string, number>> = {};
         dayViewData.daily_data
             .filter(d => selectedBatches.includes(d.batch_id))
-            .forEach((d) => {
-                result.push({
-                    date: d.date,
-                    hours: d.work_hours,
-                    batch: d.batch_code,
-                });
+            .forEach(d => {
+                if (!batchMaps[d.batch_code]) batchMaps[d.batch_code] = {};
+                batchMaps[d.batch_code][d.date] = d.work_hours;
             });
 
-        return result;
+        return dates.map(date => {
+            const values: Record<string, number> = { '总需求': totalMap[date] ?? 0 };
+            Object.entries(batchMaps).forEach(([code, map]) => {
+                values[code] = map[date] ?? 0;
+            });
+            return { label: dayjs(date).format('M/D'), date, values };
+        });
     }, [dayViewData, selectedBatches]);
-
-    const dayChartConfig = useMemo(() => ({
-        data: lineData,
-        xField: 'date',
-        yField: 'hours',
-        seriesField: 'batch',
-        smooth: false,
-        animation: false,
-        lineStyle: (datum: any) => ({
-            lineWidth: datum.batch === '总需求' ? 3 : 1.5,
-            lineDash: datum.batch === '总需求' ? [] : [4, 2],
-        }),
-        color: (datum: any) => {
-            if (datum.batch === '总需求') return '#ff4d4f';
-            return batchColorMap[datum.batch] || '#8c8c8c';
-        },
-        point: {
-            size: (datum: any) => datum.batch === '总需求' ? 4 : 2,
-            shape: 'circle',
-            style: (datum: any) => ({
-                fill: datum.batch === '总需求' ? '#ff4d4f' : batchColorMap[datum.batch] || '#8c8c8c',
-                stroke: '#fff',
-                lineWidth: 1,
-            }),
-        },
-        xAxis: {
-            type: 'time' as const,
-            tickCount: 10,
-            label: {
-                formatter: (v: string) => dayjs(v).format('M/D'),
-            },
-        },
-        yAxis: {
-            title: { text: '工时 (h)' },
-            min: 0,
-        },
-        legend: {
-            position: 'top' as const,
-            itemName: { style: { fontSize: 11 } },
-        },
-        tooltip: {
-            shared: true,
-            showMarkers: true,
-            formatter: (datum: any) => ({
-                name: datum.batch,
-                value: `${datum.hours.toFixed(1)} h`,
-            }),
-        },
-    }), [lineData, batchColorMap]);
 
     const batchOptions = useMemo(() => {
         return dayViewData?.batches ?? [];
@@ -229,76 +204,47 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
         return map;
     }, [monthViewData?.monthly_data]);
 
-    // 堆叠柱状图数据
-    const monthColumnData = useMemo(() => {
-        if (!monthViewData) return [];
-
-        const result: any[] = [];
-        monthViewData.monthly_data.forEach(m => {
-            m.batch_breakdown.forEach(b => {
-                result.push({
-                    month: m.month_label,
-                    batch: b.batch_code,
-                    hours: b.work_hours,
-                });
-            });
-            // 如果该月没有数据，添加一个0值
-            if (m.batch_breakdown.length === 0) {
-                result.push({
-                    month: m.month_label,
-                    batch: '无数据',
-                    hours: 0,
-                });
-            }
+    // WxbChartCard 月视图 series config: 各批次为 bar + 峰值为 line
+    const monthWxbSeriesConfig = useMemo((): WxbChartSeriesConfig[] => {
+        const configs: WxbChartSeriesConfig[] = [];
+        // 堆叠柱状图 — 每个批次一个 bar series
+        const allBatches = new Set<string>();
+        monthViewData?.monthly_data.forEach(m => {
+            m.batch_breakdown.forEach(b => allBatches.add(b.batch_code));
         });
-        return result;
-    }, [monthViewData]);
+        Array.from(allBatches).forEach(batch => {
+            configs.push({
+                key: batch,
+                label: batch,
+                color: monthBatchColorMap[batch] || '#8c8c8c',
+                geometry: 'bar',
+            });
+        });
+        // 峰值折线
+        configs.push({
+            key: 'peak',
+            label: '峰值日工时',
+            color: '#ff4d4f',
+            geometry: 'line',
+            lineWidth: 2,
+            showPoints: true,
+        });
+        return configs;
+    }, [monthViewData?.monthly_data, monthBatchColorMap]);
 
-    // 峰值折线数据
-    const peakLineData = useMemo(() => {
+    const monthWxbChartPoints = useMemo((): WxbChartPoint[] => {
         if (!monthViewData) return [];
-        return monthViewData.monthly_data.map(m => ({
-            month: m.month_label,
-            peak: m.peak_daily_hours,
-            peakDate: m.peak_date,
-        }));
+        return monthViewData.monthly_data.map(m => {
+            const values: Record<string, number> = { peak: m.peak_daily_hours };
+            m.batch_breakdown.forEach(b => {
+                values[b.batch_code] = b.work_hours;
+            });
+            return { label: m.month_label, date: m.peak_date, values };
+        });
     }, [monthViewData]);
 
-    const monthChartConfig = useMemo(() => ({
-        data: [monthColumnData, peakLineData],
-        xField: 'month',
-        yField: ['hours', 'peak'],
-        geometryOptions: [
-            {
-                geometry: 'column',
-                isStack: true,
-                seriesField: 'batch',
-                color: (datum: any) => monthBatchColorMap[datum.batch] || '#8c8c8c',
-                columnWidthRatio: 0.5,
-            },
-            {
-                geometry: 'line',
-                color: '#ff4d4f',
-                lineStyle: { lineWidth: 2 },
-                point: {
-                    size: 5,
-                    shape: 'diamond',
-                    style: { fill: '#ff4d4f', stroke: '#fff', lineWidth: 2 },
-                },
-            },
-        ],
-        yAxis: {
-            hours: { title: { text: '月总工时 (h)' }, min: 0 },
-            peak: { title: { text: '峰值日工时 (h)' }, min: 0 },
-        },
-        legend: {
-            position: 'top' as const,
-        },
-        tooltip: {
-            shared: true,
-            showMarkers: true,
-        },
-    }), [monthColumnData, peakLineData, monthBatchColorMap]);
+    // 用于条件渲染的检查
+    const monthHasData = monthWxbChartPoints.length > 0;
 
 
     // ============== 渲染 ==============
@@ -358,7 +304,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
 
             <WxbOverlay loading={loading}>
                 {/* 日视图 */}
-                {granularity === 'day' && dayViewData && lineData.length > 0 && (
+                {granularity === 'day' && dayViewData && wxbChartPoints.length > 0 && (
                     <>
                         <div className="dashboard-kpi-grid">
                             <WxbKpiCard
@@ -384,29 +330,27 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                             />
                         </div>
 
-                        {/* 图例联动 Chip 行（日视图专属） */}
+                        {/* 图例联动行（日视图专属，wxb-cs-legend 风格） */}
                         {batchOptions.length > 0 && (
-                            <div className="workhours-legend-bar">
-                                <span className="workhours-legend-label">LEGEND</span>
-
-                                {/* 总需求固定图例（不可关闭） */}
+                            <div className="wxb-cs-legend wxb-cs-legend--interactive">
+                                {/* 总需求（固定，不可关闭） */}
                                 <WxbTooltip title="总工时需求，始终显示">
-                                    <div className="workhours-total-legend">
-                                        <span className="workhours-total-legend-line" />
+                                    <span className="wxb-cs-legend-item is-fixed">
+                                        <span className="wxb-cs-swatch" style={{ background: '#ff4d4f' }} />
                                         总需求
-                                    </div>
+                                    </span>
                                 </WxbTooltip>
 
-                                <div style={{ width: 1, height: 14, background: 'var(--wx-border, #E4EAF1)', flexShrink: 0 }} />
+                                <span className="wxb-cs-legend-divider" />
 
                                 {/* 全选/清空 */}
                                 <WxbTooltip title={allBatchesSelected ? '清空批次线' : '显示所有批次线'}>
-                                    <WxbButton variant="ghost" size="sm" onClick={toggleAllBatches} className="workhours-toggle-btn-wxb">
+                                    <WxbButton variant="ghost" size="sm" onClick={toggleAllBatches} style={{ fontSize: 10, padding: '2px 6px' }}>
                                         {allBatchesSelected ? '清空' : '全选'}
                                     </WxbButton>
                                 </WxbTooltip>
 
-                                {/* 批次图例 Chip */}
+                                {/* 批次图例 */}
                                 {batchOptions.map(batch => {
                                     const color = batchColorMap[batch.batch_code];
                                     const isSelected = selectedBatches.includes(batch.batch_id);
@@ -414,44 +358,36 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                                         <WxbTooltip
                                             key={batch.batch_id}
                                             title={isSelected
-                                                ? `点击隐藏 [${batch.batch_code}] 的工时曲线`
-                                                : `点击显示 [${batch.batch_code}] 的工时曲线`
+                                                ? `点击隐藏 [${batch.batch_code}]`
+                                                : `点击显示 [${batch.batch_code}]`
                                             }
                                             placement="top"
                                         >
-                                            <div
-                                                className={`workhours-batch-chip ${isSelected ? 'selected' : 'unselected'}`}
-                                                style={isSelected ? {
-                                                    background: color,
-                                                    borderColor: color,
-                                                } : {
-                                                    borderColor: `${color}30`
-                                                }}
+                                            <span
+                                                className={`wxb-cs-legend-item is-toggle ${isSelected ? 'is-on' : 'is-off'}`}
                                                 onClick={() => toggleSingleBatch(batch.batch_id)}
                                             >
-                                                <span
-                                                    className="workhours-chip-line"
-                                                    style={isSelected
-                                                        ? { backgroundColor: 'rgba(255,255,255,0.85)', backgroundImage: 'none' }
-                                                        : { color }
-                                                    }
-                                                />
+                                                <span className="wxb-cs-swatch" style={{ background: color }} />
                                                 {batch.batch_code}
-                                            </div>
+                                            </span>
                                         </WxbTooltip>
                                     );
                                 })}
                             </div>
                         )}
 
-                        <div className="dashboard-chart-container">
-                            <Line {...dayChartConfig} />
-                        </div>
+                        <WxbChartCard
+                            headless
+                            seriesConfig={wxbSeriesConfig}
+                            points={wxbChartPoints}
+                            yUnit="h"
+                            tooltipFormatter={(v) => `${v.toFixed(1)} h`}
+                        />
                     </>
                 )}
 
                 {/* 月视图 */}
-                {granularity === 'month' && monthViewData && monthColumnData.length > 0 && (
+                {granularity === 'month' && monthViewData && monthHasData && (
                     <>
                         <div className="dashboard-kpi-grid" style={{ gridTemplateColumns: '1fr' }}>
                             <WxbKpiCard
@@ -460,16 +396,34 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                                 unit={`h (共${monthViewData.summary.total_employees}人)`}
                             />
                         </div>
-                        <div className="dashboard-chart-container">
-                            <DualAxes {...monthChartConfig} />
+
+                        {/* 月视图图例 */}
+                        <div className="wxb-cs-legend" style={{ marginTop: 8 }}>
+                            {monthWxbSeriesConfig.map(sc => (
+                                <span key={sc.key} className="wxb-cs-legend-item">
+                                    <span
+                                        className={`wxb-cs-swatch${sc.geometry === 'line' ? ' is-dash' : ''}`}
+                                        style={sc.geometry === 'line' ? undefined : { background: sc.color }}
+                                    />
+                                    {sc.label}
+                                </span>
+                            ))}
                         </div>
+
+                        <WxbChartCard
+                            headless
+                            seriesConfig={monthWxbSeriesConfig}
+                            points={monthWxbChartPoints}
+                            yUnit="h"
+                            tooltipFormatter={(v) => `${v.toFixed(1)} h`}
+                        />
                     </>
                 )}
 
                 {/* 无数据状态 */}
                 {!loading && (
-                    (granularity === 'day' && (!dayViewData || lineData.length === 0)) ||
-                    (granularity === 'month' && (!monthViewData || monthColumnData.length === 0))
+                    (granularity === 'day' && (!dayViewData || wxbChartPoints.length === 0)) ||
+                    (granularity === 'month' && (!monthViewData || !monthHasData))
                 ) && (
                         <WxbEmpty />
                     )}
