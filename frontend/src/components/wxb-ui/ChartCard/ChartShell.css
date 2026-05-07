@@ -1,0 +1,102 @@
+/* WxbChartShell — visual wrapper for hybrid chart cards
+   Extends WxbChartCard's design language to any chart engine */
+
+.wxb-chart-shell {
+  background: var(--wx-bg, #fff);
+  border: 1px solid var(--wx-border, #E4EAF1);
+  border-radius: 10px;
+  padding: 20px 22px;
+  box-shadow: var(--wx-sh-1, 0 1px 2px rgba(15,27,45,.04));
+  overflow: hidden;
+  font-family: var(--wx-font-sans, Inter, sans-serif);
+  transition: box-shadow 0.25s ease;
+}
+
+.wxb-chart-shell:hover {
+  box-shadow: 0 4px 16px rgba(15,27,45,.07);
+}
+
+/* ── Header ── */
+.wxb-cs-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.wxb-cs-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wxb-cs-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wxb-cs-icon--blue   { background: linear-gradient(135deg, rgba(31,111,235,.12), rgba(31,111,235,.05)); color: var(--wx-blue-600, #1A5FC7); }
+.wxb-cs-icon--teal   { background: linear-gradient(135deg, rgba(19,194,194,.12), rgba(19,194,194,.05)); color: #13c2c2; }
+.wxb-cs-icon--green  { background: linear-gradient(135deg, rgba(31,122,83,.12), rgba(31,122,83,.05));   color: var(--wx-green-700, #1F7A53); }
+.wxb-cs-icon--purple { background: linear-gradient(135deg, rgba(114,46,209,.12), rgba(114,46,209,.05)); color: #722ed1; }
+.wxb-cs-icon--orange { background: linear-gradient(135deg, rgba(232,181,60,.12), rgba(232,181,60,.05)); color: #d48806; }
+
+.wxb-cs-title {
+  margin: 0;
+  font: 600 15px/1.2 var(--wx-font-sans, Inter, sans-serif);
+  color: var(--wx-ink, #0F1B2D);
+  letter-spacing: -0.01em;
+}
+
+.wxb-cs-sub {
+  font: 400 11.5px/1 var(--wx-font-sans, Inter, sans-serif);
+  color: var(--wx-fg-4, #8898A8);
+  margin-top: 4px;
+}
+
+.wxb-cs-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Legend ── */
+.wxb-cs-legend {
+  display: flex;
+  gap: 14px;
+  font: 400 11.5px/1 var(--wx-font-sans, Inter, sans-serif);
+  color: var(--wx-fg-3, #5A6B7E);
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding-top: 2px;
+}
+
+.wxb-cs-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wxb-cs-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.wxb-cs-swatch.is-dash {
+  background: repeating-linear-gradient(90deg, #8898A8 0, #8898A8 3px, transparent 3px, transparent 6px) !important;
+  border-radius: 0;
+}
+
+/* ── Body ── */
+.wxb-cs-body {
+  position: relative;
+}

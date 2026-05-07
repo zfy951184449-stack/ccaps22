@@ -1,12 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { DatePicker, Cascader, Select, Button, Space } from 'antd';
-import { LeftOutlined, RightOutlined, CalendarOutlined, TeamOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { Dayjs } from 'dayjs';
-import GlassCard from '../common/GlassCard';
+import { WxbCard, WxbButton, WxbDatePicker, WxbSelect, WxbDivider } from '../wxb-ui';
+import { WxbCascader } from '../wxb-ui/Cascader/Cascader';
 import { dashboardService } from '../../services/dashboardService';
 import { DepartmentOption, ShiftOption } from '../../types/dashboard';
 
-const { Option } = Select;
+/* ── Inline SVG icons (generic UI glyphs not in bioprocess icon set) ── */
+const IconCalendar = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+);
+const IconUsers = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+);
+const IconClock = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+    </svg>
+);
+const IconChevronLeft = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 18l-6-6 6-6" />
+    </svg>
+);
+const IconChevronRight = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18l6-6-6-6" />
+    </svg>
+);
+
+const { Option } = require('antd').Select;
 
 interface DashboardFilterBarProps {
     selectedDate: Dayjs;
@@ -50,7 +76,7 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
     const handleNextMonth = () => onDateChange(selectedDate.add(1, 'month'));
 
     return (
-        <GlassCard
+        <WxbCard
             className="dashboard-filter-bar"
             style={{
                 marginBottom: 24,
@@ -58,99 +84,83 @@ const DashboardFilterBar: React.FC<DashboardFilterBarProps> = ({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                borderRadius: '20px',
                 zIndex: 10
             }}
         >
             <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
                 {/* Date Navigation */}
-                <div className="filter-group date-nav">
-                    <span className="filter-label" style={{ marginRight: 12, color: '#8c8c8c', fontSize: 13, fontWeight: 500 }}>
-                        <CalendarOutlined /> 日期
+                <div className="filter-group date-nav" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="filter-label" style={{ marginRight: 4, color: 'var(--wx-fg-3, #5A6B7E)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <IconCalendar /> 日期
                     </span>
-                    <Space>
-                        <Button
-                            type="text"
-                            shape="circle"
-                            icon={<LeftOutlined />}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <WxbButton
+                            variant="ghost"
+                            size="sm"
                             onClick={handlePrevMonth}
-                            style={{ color: '#595959' }}
-                        />
-                        <DatePicker
+                            style={{ padding: '4px 6px', borderRadius: '50%', minWidth: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <IconChevronLeft />
+                        </WxbButton>
+                        <WxbDatePicker
                             picker="month"
                             value={selectedDate}
-                            onChange={(date) => date && onDateChange(date)}
+                            onChange={(date: any) => date && onDateChange(date)}
                             allowClear={false}
                             format="YYYY-MM"
-                            style={{
-                                width: 140,
-                                borderRadius: 8,
-                                border: '1px solid rgba(0,0,0,0.06)',
-                                background: 'rgba(255,255,255,0.5)'
-                            }}
-                            bordered={false}
+                            style={{ width: 140 }}
                         />
-                        <Button
-                            type="text"
-                            shape="circle"
-                            icon={<RightOutlined />}
+                        <WxbButton
+                            variant="ghost"
+                            size="sm"
                             onClick={handleNextMonth}
-                            style={{ color: '#595959' }}
-                        />
-                    </Space>
+                            style={{ padding: '4px 6px', borderRadius: '50%', minWidth: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <IconChevronRight />
+                        </WxbButton>
+                    </div>
                 </div>
 
-                <div
-                    style={{
-                        width: 1,
-                        height: 24,
-                        background: 'rgba(0,0,0,0.06)',
-                        margin: '0 8px'
-                    }}
-                />
+                <WxbDivider direction="vertical" style={{ height: 24 }} />
 
                 {/* Org Filter */}
-                <div className="filter-group">
-                    <span className="filter-label" style={{ marginRight: 12, color: '#8c8c8c', fontSize: 13, fontWeight: 500 }}>
-                        <TeamOutlined /> 组织
+                <div className="filter-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="filter-label" style={{ color: 'var(--wx-fg-3, #5A6B7E)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <IconUsers /> 组织
                     </span>
-                    <Cascader
+                    <WxbCascader
                         options={orgOptions}
                         value={orgPath}
-                        onChange={(value) => onOrgChange((value || []) as number[])}
+                        onChange={(value: any) => onOrgChange((value || []) as number[])}
                         placeholder="全部组织"
                         changeOnSelect
                         style={{ width: 180 }}
-                        bordered={false}
-                        className="glass-input"
                     />
                 </div>
 
                 {/* Shift Filter */}
-                <div className="filter-group">
-                    <span className="filter-label" style={{ marginRight: 12, color: '#8c8c8c', fontSize: 13, fontWeight: 500 }}>
-                        <ClockCircleOutlined /> 班次
+                <div className="filter-group" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="filter-label" style={{ color: 'var(--wx-fg-3, #5A6B7E)', fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <IconClock /> 班次
                     </span>
-                    <Select
+                    <WxbSelect
                         value={selectedShift}
                         onChange={onShiftChange}
                         placeholder="全部班次"
                         allowClear
                         style={{ width: 140 }}
-                        bordered={false}
-                        className="glass-input"
                     >
                         {shiftOptions.map((s) => (
                             <Option key={s.id} value={s.id}>{s.shift_name}</Option>
                         ))}
-                    </Select>
+                    </WxbSelect>
                 </div>
             </div>
 
-            <div style={{ color: '#8c8c8c', fontSize: 12 }}>
+            <div style={{ color: 'var(--wx-fg-4, #8898A8)', fontSize: 12 }}>
                 {selectedDate.format('YYYY年 M月')}
             </div>
-        </GlassCard>
+        </WxbCard>
     );
 };
 

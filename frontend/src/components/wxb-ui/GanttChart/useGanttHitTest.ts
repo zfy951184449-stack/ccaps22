@@ -63,6 +63,11 @@ export function useGanttHitTest(
     return spans;
   }, [tasks, groups]);
 
+  const groupById = useMemo(
+    () => new Map(groups.map(group => [group.id, group])),
+    [groups],
+  );
+
   const hitTest = useCallback((
     canvasX: number,
     canvasY: number,
@@ -110,6 +115,9 @@ export function useGanttHitTest(
     if (rowIndex < flatRows.length) {
       const flatRow = flatRows[rowIndex];
       if (flatRow && flatRow.type === 'group') {
+        const group = groupById.get(flatRow.id);
+        if (group?.showSummaryBar === false) return null;
+
         const span = groupSpanMap.get(flatRow.id);
         if (span) {
           const barH = BAR_HEIGHT;
@@ -145,7 +153,7 @@ export function useGanttHitTest(
     }
 
     return null;
-  }, [startHour, hourWidth, rowTasksMap, groupSpanMap, flatRows]);
+  }, [startHour, hourWidth, rowTasksMap, groupSpanMap, flatRows, groupById]);
 
   return { hitTest };
 }

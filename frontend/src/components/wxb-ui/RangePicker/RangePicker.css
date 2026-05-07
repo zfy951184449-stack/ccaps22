@@ -1,0 +1,15 @@
+/* WxbRangePicker — consistent with WxbDatePicker visual style */
+.wxb-rangepicker.ant-picker {
+  width: 100%;
+  border-radius: 4px;
+  border-color: var(--wx-border, #E4EAF1);
+  height: 36px;
+  font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans);
+}
+.wxb-rangepicker.ant-picker-focused {
+  border-color: var(--wx-blue-500, #1F6FEB);
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15);
+}
+.wxb-rp-error.ant-picker {
+  border-color: var(--wx-red-500, #D6493A);
+}

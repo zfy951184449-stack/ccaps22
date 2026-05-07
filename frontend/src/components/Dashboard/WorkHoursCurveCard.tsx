@@ -7,15 +7,25 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DatePicker, Spin, Empty, Tooltip } from 'antd';
-import { ClockCircleOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { WxbOverlay, WxbEmpty, WxbTooltip, WxbKpiCard, WxbSegmented, WxbButton, WxbChartShell } from '../wxb-ui';
+import { WxbRangePicker } from '../wxb-ui/RangePicker/RangePicker';
 import { Line, DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
 import { dashboardService } from '../../services/dashboardService';
 import { WorkHoursData, DayViewData, MonthViewData, BatchInfo } from '../../types/dashboard';
 import './WorkHoursCurveCard.css';
 
-const { RangePicker } = DatePicker;
+/* ── Inline SVG icons ── */
+const IconClock = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+    </svg>
+);
+const IconInfo = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
+    </svg>
+);
 
 // 批次颜色列表
 const BATCH_COLORS = [
@@ -294,29 +304,31 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
     // ============== 渲染 ==============
 
     return (
-        <div className="dashboard-glass-card">
-            {/* 卡片头部：标题 + 挪度 Pill Toggle + 月视图 RangePicker */}
-            <div className="dashboard-card-header">
-                <div className="dashboard-card-title">
-                    <div className="dashboard-card-icon teal">
-                        <ClockCircleOutlined />
-                    </div>
-                    工时需求曲线
-                    <Tooltip title={granularity === 'day'
+        <WxbChartShell
+            icon={<IconClock />}
+            iconColor="teal"
+            title="工时需求曲线"
+            subtitle={granularity === 'day'
+                ? `${date.format('YYYY年M月')} · 日视图`
+                : `${monthRange[0].format('YYYY-MM')} ~ ${monthRange[1].format('YYYY-MM')}`
+            }
+            actions={
+                <>
+                    <WxbTooltip title={granularity === 'day'
                         ? "红色粗线为每日总工时需求，虚线为各批次工时需求"
                         : "柱状图为按批次堆叠的月总工时，红色折线为每月峰値日工时"
                     }>
-                        <InfoCircleOutlined style={{ color: '#c0c0c0', fontSize: 13, marginLeft: 2 }} />
-                    </Tooltip>
-                </div>
+                        <span style={{ color: 'var(--wx-fg-4, #8898A8)', cursor: 'help', display: 'inline-flex' }}>
+                            <IconInfo />
+                        </span>
+                    </WxbTooltip>
 
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {/* 月视图：时间范围选择（优化样式） */}
+                    {/* 月视图：时间范围选择 */}
                     {granularity === 'month' && (
-                        <RangePicker
+                        <WxbRangePicker
                             picker="month"
                             value={monthRange}
-                            onChange={(dates) => {
+                            onChange={(dates: any) => {
                                 if (dates && dates[0] && dates[1]) {
                                     setMonthRange([dates[0], dates[1]]);
                                 }
@@ -324,90 +336,82 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                             allowClear={false}
                             size="small"
                             style={{ width: 195 }}
-                            bordered={false}
-                            className="workhours-range-picker"
                         />
                     )}
 
-                    {/* 粒度切换：自定义 Pill Toggle（替代 Antd Radio.Group） */}
-                    <div className="granularity-pill-toggle">
-                        <button
-                            className={`granularity-pill-btn ${granularity === 'day' ? 'active' : ''}`}
-                            onClick={() => { setGranularity('day'); setData(null); }}
-                        >日视图</button>
-                        <button
-                            className={`granularity-pill-btn ${granularity === 'month' ? 'active' : ''}`}
-                            onClick={() => { setGranularity('month'); setData(null); }}
-                        >月视图</button>
-                    </div>
-                </div>
-            </div>
+                    {/* 粒度切换：WxbSegmented */}
+                    <WxbSegmented
+                        size="sm"
+                        options={[
+                            { label: '日视图', value: 'day' },
+                            { label: '月视图', value: 'month' },
+                        ]}
+                        value={granularity}
+                        onChange={(val) => {
+                            setGranularity(val as 'day' | 'month');
+                            setData(null);
+                        }}
+                    />
+                </>
+            }
+        >
 
-            <Spin spinning={loading}>
+            <WxbOverlay loading={loading}>
                 {/* 日视图 */}
                 {granularity === 'day' && dayViewData && lineData.length > 0 && (
                     <>
-                        <div className="dashboard-stats-grid">
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">月度总工时</div>
-                                <div className="dashboard-stat-value">
-                                    {dayViewData.summary.total_hours}
-                                    <span className="dashboard-stat-suffix">h</span>
-                                </div>
-                            </div>
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">日均工时</div>
-                                <div className="dashboard-stat-value">
-                                    {dayViewData.summary.avg_daily_hours}
-                                    <span className="dashboard-stat-suffix">h/天</span>
-                                </div>
-                            </div>
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">峰値工时</div>
-                                <div className="dashboard-stat-value danger">
-                                    {dayViewData.summary.peak_hours}
-                                    <span className="dashboard-stat-suffix">
-                                        {dayViewData.summary.peak_date ? `h (${dayjs(dayViewData.summary.peak_date).format('M/D')})` : 'h'}
-                                    </span>
-                                </div>
-                            </div>
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">活跃批次</div>
-                                <div className="dashboard-stat-value info">
-                                    {dayViewData.summary.batch_count}
-                                    <span className="dashboard-stat-suffix">个</span>
-                                </div>
-                            </div>
+                        <div className="dashboard-kpi-grid">
+                            <WxbKpiCard
+                                title="月度总工时"
+                                value={dayViewData.summary.total_hours}
+                                unit="h"
+                            />
+                            <WxbKpiCard
+                                title="日均工时"
+                                value={dayViewData.summary.avg_daily_hours}
+                                unit="h/天"
+                            />
+                            <WxbKpiCard
+                                title="峰値工时"
+                                value={dayViewData.summary.peak_hours}
+                                unit={dayViewData.summary.peak_date ? `h (${dayjs(dayViewData.summary.peak_date).format('M/D')})` : 'h'}
+                                trend="down"
+                            />
+                            <WxbKpiCard
+                                title="活跃批次"
+                                value={dayViewData.summary.batch_count}
+                                unit="个"
+                            />
                         </div>
 
-                        {/* 图例联动 Chip 行（日视图专属，替代头部的 Select） */}
+                        {/* 图例联动 Chip 行（日视图专属） */}
                         {batchOptions.length > 0 && (
                             <div className="workhours-legend-bar">
                                 <span className="workhours-legend-label">LEGEND</span>
 
                                 {/* 总需求固定图例（不可关闭） */}
-                                <Tooltip title="总工时需求，始终显示">
+                                <WxbTooltip title="总工时需求，始终显示">
                                     <div className="workhours-total-legend">
                                         <span className="workhours-total-legend-line" />
                                         总需求
                                     </div>
-                                </Tooltip>
+                                </WxbTooltip>
 
-                                <div style={{ width: 1, height: 14, background: 'rgba(0,0,0,0.07)', flexShrink: 0 }} />
+                                <div style={{ width: 1, height: 14, background: 'var(--wx-border, #E4EAF1)', flexShrink: 0 }} />
 
                                 {/* 全选/清空 */}
-                                <Tooltip title={allBatchesSelected ? '清空批次线' : '显示所有批次线'}>
-                                    <button className="workhours-toggle-btn" onClick={toggleAllBatches}>
+                                <WxbTooltip title={allBatchesSelected ? '清空批次线' : '显示所有批次线'}>
+                                    <WxbButton variant="ghost" size="sm" onClick={toggleAllBatches} className="workhours-toggle-btn-wxb">
                                         {allBatchesSelected ? '清空' : '全选'}
-                                    </button>
-                                </Tooltip>
+                                    </WxbButton>
+                                </WxbTooltip>
 
                                 {/* 批次图例 Chip */}
                                 {batchOptions.map(batch => {
                                     const color = batchColorMap[batch.batch_code];
                                     const isSelected = selectedBatches.includes(batch.batch_id);
                                     return (
-                                        <Tooltip
+                                        <WxbTooltip
                                             key={batch.batch_id}
                                             title={isSelected
                                                 ? `点击隐藏 [${batch.batch_code}] 的工时曲线`
@@ -434,7 +438,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                                                 />
                                                 {batch.batch_code}
                                             </div>
-                                        </Tooltip>
+                                        </WxbTooltip>
                                     );
                                 })}
                             </div>
@@ -449,14 +453,12 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                 {/* 月视图 */}
                 {granularity === 'month' && monthViewData && monthColumnData.length > 0 && (
                     <>
-                        <div className="dashboard-stats-grid" style={{ gridTemplateColumns: '1fr' }}>
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">月人均操作工时 (均値)</div>
-                                <div className="dashboard-stat-value info">
-                                    {monthViewData.summary.avg_hours_per_person}
-                                    <span className="dashboard-stat-suffix">h (共{monthViewData.summary.total_employees}人)</span>
-                                </div>
-                            </div>
+                        <div className="dashboard-kpi-grid" style={{ gridTemplateColumns: '1fr' }}>
+                            <WxbKpiCard
+                                title="月人均操作工时 (均値)"
+                                value={monthViewData.summary.avg_hours_per_person}
+                                unit={`h (共${monthViewData.summary.total_employees}人)`}
+                            />
                         </div>
                         <div className="dashboard-chart-container">
                             <DualAxes {...monthChartConfig} />
@@ -469,10 +471,10 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                     (granularity === 'day' && (!dayViewData || lineData.length === 0)) ||
                     (granularity === 'month' && (!monthViewData || monthColumnData.length === 0))
                 ) && (
-                        <Empty description="暂无数据" />
+                        <WxbEmpty />
                     )}
-            </Spin>
-        </div>
+            </WxbOverlay>
+        </WxbChartShell>
     );
 };
 

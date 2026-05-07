@@ -50,10 +50,22 @@ export const useGanttData = (options: UseGanttDataOptions | ProcessTemplate) => 
     const fetchData = useCallback(async () => {
         if (isExternalMode) return; // 外部模式不从 API 加载
 
+        const templateId = Number(template.id);
+        if (!Number.isInteger(templateId) || templateId <= 0) {
+            setStages([]);
+            setStageOperations({});
+            setGanttNodes([]);
+            setTimeBlocks([]);
+            setExpandedKeys([]);
+            setPersonnelCurve({ points: [], peak: null });
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             // 获取阶段数据
-            const stagesResponse = await axios.get(`${API_BASE_URL}/process-stages/template/${template.id}`);
+            const stagesResponse = await axios.get(`${API_BASE_URL}/process-stages/template/${templateId}`);
             const fetchedStages = stagesResponse.data;
             setStages(fetchedStages);
 
@@ -78,12 +90,12 @@ export const useGanttData = (options: UseGanttDataOptions | ProcessTemplate) => 
             setTimeBlocks(blocks);
 
             // 默认只展开根节点（模版名称）
-            const defaultExpandedKeys = [template.id.toString()];
+            const defaultExpandedKeys = [templateId.toString()];
             setExpandedKeys(defaultExpandedKeys);
 
             // 加载人员用量曲线
             try {
-                const curveResponse = await axios.get(`${API_BASE_URL}/process-templates/${template.id}/personnel-curve`);
+                const curveResponse = await axios.get(`${API_BASE_URL}/process-templates/${templateId}/personnel-curve`);
                 setPersonnelCurve({
                     points: curveResponse.data.points || [],
                     peak: curveResponse.data.peak || null

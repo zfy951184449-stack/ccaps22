@@ -387,6 +387,7 @@ export function drawGroupBars(
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const startRow = Math.floor(scrollY / rowHeight);
   const endRow = Math.ceil((scrollY + canvasH - totalHeaderH) / rowHeight);
+  const groupById = new Map(groups.map(group => [group.id, group]));
 
   // Build group → time span map from ALL tasks (not filtered by collapse)
   const groupSpan = new Map<string, { min: number; max: number }>();
@@ -430,6 +431,8 @@ export function drawGroupBars(
     const row = flatRows[r];
     if (row.type !== 'group') continue;
     if (r < startRow - 1 || r > endRow + 1) continue;
+    const group = groupById.get(row.id);
+    if (group?.showSummaryBar === false) continue;
 
     const span = groupSpan.get(row.id);
     if (!span) continue;

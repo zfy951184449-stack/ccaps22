@@ -113,6 +113,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
             const i = renderStart + idx;
             const top = i * ROW_HEIGHT;
             const isGroup = row.type === 'group';
+            const canToggleGroup = isGroup && row.hasChildren && !row.isSubRow;
                   const isSelected = row.taskId ? selectedTaskIds.has(row.taskId) : false;
                   const isHovered = i === hoveredRow;
                   const isShareHighlighted = row.taskId ? (shareHighlightTaskIds?.has(row.taskId) ?? false) : false;
@@ -149,13 +150,13 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                   alignItems: 'center',
                   paddingLeft: 8 + row.depth * 16,
                   background: rowBg,
-                  cursor: isGroup && !row.isSubRow ? 'grab' : 'default',
+                  cursor: canToggleGroup ? 'grab' : 'default',
                   borderBottom: `1px solid ${THEME.divider}`,
                   borderLeft: leftBorder,
                   userSelect: 'none',
                   transition: 'background 0.1s ease',
                 }}
-                onClick={() => isGroup && !row.isSubRow && handleToggle(row.id, row.isExpanded)}
+                onClick={() => canToggleGroup && handleToggle(row.id, row.isExpanded)}
                 onMouseEnter={() => handleRowMouseEnter(i)}
                 onMouseLeave={handleRowMouseLeave}
               >
@@ -207,7 +208,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                     {!row.hasChildren && <span style={{ width: 20 }} />}
 
                     {/* Drag handle for group rows */}
-                    {isGroup && (
+                    {isGroup && row.hasChildren && (
                       <span
                         style={{
                           fontSize: 10,

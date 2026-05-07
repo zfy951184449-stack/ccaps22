@@ -53,6 +53,13 @@ export interface UseResourceViewResult {
   getBindingForSchedule: (scheduleId: number) => EquipmentInfo | null;
 }
 
+type ResourceTaskUpdate = {
+  groupId: string;
+  conflictType?: 'OVERLAP';
+  color?: string;
+  renderOnGroupRow?: boolean;
+};
+
 // ---------------------------------------------------------------------------
 // Stage color palette (extended for ≥6 stages)
 // ---------------------------------------------------------------------------
@@ -145,9 +152,9 @@ function buildStageEquipmentGroups(
   tasks: GanttTask[],
   bindingMap: Map<number, EquipmentInfo>,
   equipmentMap: Map<number, EquipmentInfo>,
-): { groups: GanttGroup[]; taskUpdates: Map<string, { groupId: string; conflictType?: 'OVERLAP' }> } {
+): { groups: GanttGroup[]; taskUpdates: Map<string, ResourceTaskUpdate> } {
   const groups: GanttGroup[] = [];
-  const taskUpdates = new Map<string, { groupId: string; conflictType?: 'OVERLAP' }>();
+  const taskUpdates = new Map<string, ResourceTaskUpdate>();
 
   for (const stage of stages) {
     const stageColor = STAGE_COLOR_PALETTE[stage.order % STAGE_COLOR_PALETTE.length];
@@ -158,6 +165,7 @@ function buildStageEquipmentGroups(
       label: stage.name,
       color: stageColor,
       type: 'stage',
+      showSummaryBar: false,
     });
 
     // Collect tasks for this stage
@@ -197,33 +205,16 @@ function buildStageEquipmentGroups(
         label: equipLabel,
         parentId: `res-stage-${stage.id}`,
         color: isUnbound ? 'var(--wx-fg-4, #8898A8)' : stageColor,
+        showSummaryBar: false,
       });
 
-      // Overlap split
-      const layers = splitIntoLayers(eqTasks);
-      const hasOverlap = layers.length > 1;
-
-      for (let layerIdx = 0; layerIdx < layers.length; layerIdx++) {
-        const layerGroupId = layerIdx === 0
-          ? fullEquipGroupId
-          : `${fullEquipGroupId}__sub${layerIdx}`;
-
-        // Create sub-row groups for overflow layers
-        if (layerIdx > 0) {
-          groups.push({
-            id: layerGroupId,
-            label: '',  // Sub-row: no label
-            parentId: `res-stage-${stage.id}`,
-            color: stageColor,
-          });
-        }
-
-        for (const task of layers[layerIdx]) {
-          taskUpdates.set(task.id, {
-            groupId: layerGroupId,
-            conflictType: hasOverlap ? 'OVERLAP' : undefined,
-          });
-        }
+      const hasOverlap = !isUnbound && splitIntoLayers(eqTasks).length > 1;
+      for (const task of eqTasks) {
+        taskUpdates.set(task.id, {
+          groupId: fullEquipGroupId,
+          conflictType: hasOverlap ? 'OVERLAP' : undefined,
+          renderOnGroupRow: true,
+        });
       }
     }
   }
@@ -236,9 +227,9 @@ function buildEquipmentGroups(
   bindingMap: Map<number, EquipmentInfo>,
   equipmentMap: Map<number, EquipmentInfo>,
   stages: Array<{ id: string; name: string; code: string; order: number }>,
-): { groups: GanttGroup[]; taskUpdates: Map<string, { groupId: string; conflictType?: 'OVERLAP'; color?: string }> } {
+): { groups: GanttGroup[]; taskUpdates: Map<string, ResourceTaskUpdate> } {
   const groups: GanttGroup[] = [];
-  const taskUpdates = new Map<string, { groupId: string; conflictType?: 'OVERLAP'; color?: string }>();
+  const taskUpdates = new Map<string, ResourceTaskUpdate>();
 
   // Group all tasks by equipment (ignoring stage)
   const byEquipment = new Map<string, GanttTask[]>();
@@ -275,38 +266,22 @@ function buildEquipmentGroups(
       id: `res-${equipKey}`,
       label: equipLabel,
       color: isUnbound ? 'var(--wx-fg-4, #8898A8)' : 'var(--wx-blue-800, #0B3D7F)',
+      showSummaryBar: false,
     });
 
-    // Overlap split
-    const layers = splitIntoLayers(eqTasks);
-    const hasOverlap = layers.length > 1;
+    const hasOverlap = !isUnbound && splitIntoLayers(eqTasks).length > 1;
+    for (const task of eqTasks) {
+      // Color by stage
+      const stageId = task.data?.stageId;
+      const stageFullId = stageId !== undefined ? `stage_${stageId}` : undefined;
+      const color = stageFullId ? stageColorMap.get(stageFullId) : undefined;
 
-    for (let layerIdx = 0; layerIdx < layers.length; layerIdx++) {
-      const layerGroupId = layerIdx === 0
-        ? `res-${equipKey}`
-        : `res-${equipKey}__sub${layerIdx}`;
-
-      if (layerIdx > 0) {
-        groups.push({
-          id: layerGroupId,
-          label: '',
-          parentId: `res-${equipKey}`,
-          color: 'var(--wx-blue-800, #0B3D7F)',
-        });
-      }
-
-      for (const task of layers[layerIdx]) {
-        // Color by stage
-        const stageId = task.data?.stageId;
-        const stageFullId = stageId !== undefined ? `stage_${stageId}` : undefined;
-        const color = stageFullId ? stageColorMap.get(stageFullId) : undefined;
-
-        taskUpdates.set(task.id, {
-          groupId: layerGroupId,
-          conflictType: hasOverlap ? 'OVERLAP' : undefined,
-          color,
-        });
-      }
+      taskUpdates.set(task.id, {
+        groupId: `res-${equipKey}`,
+        conflictType: hasOverlap ? 'OVERLAP' : undefined,
+        color,
+        renderOnGroupRow: true,
+      });
     }
   }
 
@@ -394,7 +369,7 @@ export function useResourceView(
 
     let result: {
       groups: GanttGroup[];
-      taskUpdates: Map<string, { groupId: string; conflictType?: 'OVERLAP'; color?: string }>;
+      taskUpdates: Map<string, ResourceTaskUpdate>;
     };
 
     if (yAxisMode === 'stage-equipment') {
@@ -418,6 +393,7 @@ export function useResourceView(
         groupId: update.groupId,
         conflictType: update.conflictType ?? task.conflictType,
         color: (update as any).color ?? task.color,
+        renderOnGroupRow: update.renderOnGroupRow ?? task.renderOnGroupRow,
       };
     }).filter(Boolean) as GanttTask[];
 

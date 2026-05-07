@@ -1,37 +1,12 @@
 /* =====================================================
  * Dashboard Premium Design System
- * 调度中心高级视觉系统 — 白色玻璃态 + 精致微交互
+ * 调度中心视觉系统 — wxb-ui ChartShell + 白色主题
  * ===================================================== */
 
 /* ---------- 页面容器 ---------- */
 .dashboard-page {
     padding-bottom: 40px;
     position: relative;
-}
-
-/* 背景环境光斑（浅色，不深色） */
-.dashboard-page::before {
-    content: '';
-    position: fixed;
-    top: -20%;
-    right: -10%;
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(0, 120, 212, 0.05) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-}
-
-.dashboard-page::after {
-    content: '';
-    position: fixed;
-    bottom: -10%;
-    left: 5%;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(19, 194, 194, 0.04) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
 }
 
 /* ---------- Dashboard 两栏网格 ---------- */
@@ -48,142 +23,18 @@
     }
 }
 
-/* ---------- 高级玻璃态卡片基础 ---------- */
-.dashboard-glass-card {
-    background: rgba(255, 255, 255, 0.82);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.75);
-    border-radius: 20px;
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.9) inset,
-        0 4px 24px rgba(0, 0, 0, 0.06),
-        0 1px 4px rgba(0, 0, 0, 0.04);
-    padding: 24px;
-    position: relative;
-    overflow: hidden;
-    transition: box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.dashboard-glass-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(255, 255, 255, 0.9) 50%,
-        transparent 100%);
-    pointer-events: none;
-}
-
-.dashboard-glass-card:hover {
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.9) inset,
-        0 8px 40px rgba(0, 0, 0, 0.09),
-        0 2px 8px rgba(0, 0, 0, 0.05);
-    transform: translateY(-2px);
-}
-
-/* ---------- 卡片标题区 ---------- */
-.dashboard-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-}
-
-.dashboard-card-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    color: #1a1a2e;
-    letter-spacing: -0.01em;
-}
-
-.dashboard-card-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    flex-shrink: 0;
-}
-
-.dashboard-card-icon.blue {
-    background: linear-gradient(135deg, rgba(0, 120, 212, 0.12), rgba(0, 120, 212, 0.06));
-    color: #0078D4;
-}
-
-.dashboard-card-icon.teal {
-    background: linear-gradient(135deg, rgba(19, 194, 194, 0.12), rgba(19, 194, 194, 0.06));
-    color: #13c2c2;
-}
-
-.dashboard-card-icon.green {
-    background: linear-gradient(135deg, rgba(16, 124, 16, 0.12), rgba(16, 124, 16, 0.06));
-    color: #107C10;
-}
-
-.dashboard-card-icon.purple {
-    background: linear-gradient(135deg, rgba(114, 46, 209, 0.12), rgba(114, 46, 209, 0.06));
-    color: #722ed1;
-}
-
-/* ---------- KPI 统计网格 ---------- */
-.dashboard-stats-grid {
+/* ---------- KPI Grid (WxbKpiCard container) ---------- */
+.dashboard-kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 16px;
     margin-bottom: 24px;
 }
 
-.dashboard-stat-item {
-    background: rgba(250, 250, 252, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.04);
-    border-radius: 12px;
-    padding: 14px 16px;
-    transition: background 0.2s ease;
-}
-
-.dashboard-stat-item:hover {
-    background: rgba(245, 247, 255, 0.9);
-}
-
-.dashboard-stat-label {
-    font-size: 11px;
-    color: #8c8c8c;
-    font-weight: 500;
-    margin-bottom: 6px;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-}
-
-.dashboard-stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: #1a1a2e;
-    line-height: 1.2;
-    letter-spacing: -0.02em;
-}
-
-.dashboard-stat-value.success { color: #107C10; }
-.dashboard-stat-value.warning { color: #FFAA44; }
-.dashboard-stat-value.danger  { color: #D13438; }
-.dashboard-stat-value.info    { color: #0078D4; }
-
-.dashboard-stat-suffix {
-    font-size: 13px;
-    font-weight: 400;
-    color: #8c8c8c;
-    margin-left: 4px;
+@media (max-width: 900px) {
+    .dashboard-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 /* ---------- 图表容器 ---------- */
@@ -193,44 +44,29 @@
 }
 
 /* ---------- Filter Bar ---------- */
-.dashboard-filter-bar {
-    background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(20px) saturate(180%) !important;
-    -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-    border: 1px solid rgba(255, 255, 255, 0.8) !important;
-    border-radius: 16px !important;
-    box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.95) inset,
-        0 2px 16px rgba(0, 0, 0, 0.05) !important;
-    margin-bottom: 20px;
-}
-
-.dashboard-filter-divider {
-    width: 1px;
-    height: 20px;
-    background: rgba(0, 0, 0, 0.08);
-    flex-shrink: 0;
+.dashboard-filter-bar.wxb-card {
+    border-radius: 12px;
 }
 
 /* ---------- 批次卡片（DailyAssignments） ---------- */
 .batch-card-premium {
     flex: 0 0 300px;
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 16px;
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: var(--wx-surface-1, #FAFBFD);
+    border-radius: 12px;
+    border: 1px solid var(--wx-border, #E4EAF1);
     overflow: hidden;
     scroll-snap-align: start;
     transition: box-shadow 0.25s ease, transform 0.25s ease;
 }
 
 .batch-card-premium:hover {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.09);
+    box-shadow: var(--wx-sh-2, 0 4px 12px rgba(15, 27, 45, 0.08));
     transform: translateY(-2px);
 }
 
 .batch-card-header-premium {
     padding: 14px 18px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid var(--wx-border, #E4EAF1);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -253,28 +89,28 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(248, 249, 255, 0.8);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    background: var(--wx-surface-2, #F5F8FB);
+    border-bottom: 1px solid var(--wx-border, #E4EAF1);
 }
 
 .stage-name-premium {
     font-size: 12px;
     font-weight: 600;
-    color: #1a1a2e;
+    color: var(--wx-ink, #0F1B2D);
     letter-spacing: 0.01em;
 }
 
 .stage-count-badge {
     font-size: 11px;
-    color: #8c8c8c;
-    background: rgba(0, 0, 0, 0.05);
+    color: var(--wx-fg-4, #8898A8);
+    background: var(--wx-surface-3, #EDF1F6);
     padding: 2px 8px;
     border-radius: 10px;
 }
 
 .operation-item-premium {
     padding: 10px 18px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid var(--wx-border, #E4EAF1);
     transition: background 0.2s ease;
 }
 
@@ -283,7 +119,7 @@
 }
 
 .operation-item-premium:hover {
-    background: rgba(0, 120, 212, 0.02);
+    background: var(--wx-surface-2, #F5F8FB);
 }
 
 .operation-meta {
@@ -296,7 +132,7 @@
 .operation-time-premium {
     font-size: 12px;
     font-weight: 600;
-    color: #0078D4;
+    color: var(--wx-blue-600, #1A5FC7);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -304,15 +140,15 @@
 
 .operation-headcount {
     font-size: 11px;
-    color: #8c8c8c;
-    background: rgba(0, 0, 0, 0.04);
+    color: var(--wx-fg-4, #8898A8);
+    background: var(--wx-surface-3, #EDF1F6);
     padding: 2px 8px;
     border-radius: 8px;
 }
 
 .operation-name-premium {
     font-size: 12px;
-    color: #3d3d3d;
+    color: var(--wx-fg-2, #2D3D50);
     margin-bottom: 8px;
     line-height: 1.4;
 }
@@ -337,15 +173,15 @@
 }
 
 .assignment-chip.assigned {
-    background: rgba(16, 124, 16, 0.08);
-    border: 1px solid rgba(16, 124, 16, 0.2);
-    color: #107C10;
+    background: rgba(31, 122, 83, 0.08);
+    border: 1px solid rgba(31, 122, 83, 0.2);
+    color: var(--wx-green-700, #1F7A53);
 }
 
 .assignment-chip.unassigned {
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    color: #8c8c8c;
+    background: var(--wx-surface-3, #EDF1F6);
+    border: 1px solid var(--wx-border, #E4EAF1);
+    color: var(--wx-fg-4, #8898A8);
 }
 
 /* ---------- 批次滚动容器 ---------- */
@@ -364,47 +200,6 @@
     display: none;
 }
 
-/* ---------- 全局 Glass Input Override ---------- */
-.glass-input .ant-select-selector,
-.glass-input.ant-picker,
-.glass-input-range.ant-picker {
-    background: rgba(255, 255, 255, 0.6) !important;
-    border: 1px solid rgba(0, 0, 0, 0.07) !important;
-    border-radius: 10px !important;
-    box-shadow: none !important;
-    transition: background 0.2s ease !important;
-}
-
-.glass-input .ant-select-selector:hover,
-.glass-input.ant-picker:hover,
-.glass-input-range.ant-picker:hover {
-    background: rgba(255, 255, 255, 0.95) !important;
-    border-color: rgba(0, 120, 212, 0.3) !important;
-}
-
-/* ---------- 滚动条样式 ---------- */
-.glass-card ::-webkit-scrollbar,
-.dashboard-glass-card ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-}
-
-.glass-card ::-webkit-scrollbar-track,
-.dashboard-glass-card ::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.glass-card ::-webkit-scrollbar-thumb,
-.dashboard-glass-card ::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.12);
-    border-radius: 4px;
-}
-
-.glass-card ::-webkit-scrollbar-thumb:hover,
-.dashboard-glass-card ::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.22);
-}
-
 /* ---------- 批次筛选 Chip 行 ---------- */
 .batch-filter-bar {
     display: flex;
@@ -421,33 +216,21 @@
     display: none;
 }
 
-/* 全选/清空快捷按钮 */
-.batch-filter-toggle-btn {
-    flex-shrink: 0;
+/* wxb styled toggle button override */
+.batch-filter-toggle-btn-wxb.wxb-btn {
     font-size: 11px;
     font-weight: 600;
     padding: 4px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    background: rgba(0, 0, 0, 0.04);
-    color: #595959;
-    cursor: pointer;
     white-space: nowrap;
-    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-    line-height: 1.4;
-}
-
-.batch-filter-toggle-btn:hover {
-    background: rgba(0, 120, 212, 0.08);
-    border-color: rgba(0, 120, 212, 0.3);
-    color: #0078D4;
+    display: inline-flex;
+    align-items: center;
 }
 
 /* 分隔线 */
 .batch-filter-divider {
     width: 1px;
     height: 16px;
-    background: rgba(0, 0, 0, 0.08);
+    background: var(--wx-border, #E4EAF1);
     flex-shrink: 0;
 }
 
@@ -476,28 +259,25 @@
 
 .batch-chip:hover {
     transform: scale(1.05);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--wx-sh-1, 0 1px 2px rgba(15, 27, 45, 0.04));
 }
 
-/* 选中态 — 彩色背景 白字 */
 .batch-chip.selected {
     color: #fff;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-/* 未选中态 — 浅灰背景 */
 .batch-chip.unselected {
-    background: rgba(0, 0, 0, 0.04);
-    border-color: rgba(0, 0, 0, 0.07);
-    color: #8c8c8c;
+    background: var(--wx-surface-3, #EDF1F6);
+    border-color: var(--wx-border, #E4EAF1);
+    color: var(--wx-fg-4, #8898A8);
 }
 
 .batch-chip.unselected:hover {
-    background: rgba(0, 0, 0, 0.07);
-    color: #595959;
+    background: var(--wx-surface-2, #F5F8FB);
+    color: var(--wx-fg-3, #5A6B7E);
 }
 
-/* Chip 左侧颜色圆点 */
 .batch-chip-dot {
     width: 7px;
     height: 7px;
@@ -508,4 +288,23 @@
 
 .batch-chip.unselected .batch-chip-dot {
     opacity: 0.5;
+}
+
+/* ---------- 滚动条样式 ---------- */
+.wxb-chart-shell ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.wxb-chart-shell ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.wxb-chart-shell ::-webkit-scrollbar-thumb {
+    background: var(--wx-border-strong, #C7D1DD);
+    border-radius: 4px;
+}
+
+.wxb-chart-shell ::-webkit-scrollbar-thumb:hover {
+    background: var(--wx-fg-4, #8898A8);
 }

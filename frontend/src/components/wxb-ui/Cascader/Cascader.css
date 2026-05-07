@@ -1,0 +1,28 @@
+/* WxbCascader — consistent with WxbSelect visual style */
+.wxb-cascader.ant-cascader { width: 100%; }
+.wxb-cascader .ant-select-selector {
+  border-radius: 4px !important;
+  border-color: var(--wx-border, #E4EAF1) !important;
+  font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans) !important;
+  height: 36px !important;
+  padding: 2px 12px !important;
+}
+.wxb-cascader.ant-select-focused .ant-select-selector {
+  border-color: var(--wx-blue-500, #1F6FEB) !important;
+  box-shadow: 0 0 0 2px rgba(31, 111, 235, 0.15) !important;
+}
+.wxb-cascader-error .ant-select-selector {
+  border-color: var(--wx-red-500, #D6493A) !important;
+}
+.wxb-cascader-popup .ant-cascader-menu {
+  font: 400 var(--wx-fs-14, 14px)/1.5 var(--wx-font-sans);
+  border-radius: 6px;
+}
+.wxb-cascader-popup .ant-cascader-menu-item-active {
+  background: var(--wx-surface-2, #F5F8FB);
+}
+.wxb-cascader-popup .ant-cascader-menu-item-selected {
+  background: var(--wx-blue-100, #E6F2FB);
+  color: var(--wx-blue-700, #0B3D7F);
+  font-weight: 500;
+}

@@ -6,13 +6,24 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Spin, Empty, Tooltip } from 'antd';
-import { TeamOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { WxbOverlay, WxbEmpty, WxbTooltip, WxbKpiCard, WxbChartShell } from '../wxb-ui';
 import { DualAxes } from '@ant-design/plots';
 import dayjs, { Dayjs } from 'dayjs';
 import { dashboardService } from '../../services/dashboardService';
 import { ManpowerCurveData } from '../../types/dashboard';
 import './ManpowerCurveCard.css';
+
+/* ── Inline SVG icons ── */
+const IconUsers = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+);
+const IconInfo = () => (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
+    </svg>
+);
 
 interface ManpowerCurveCardProps {
     date: Dayjs;
@@ -272,9 +283,9 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                     if (dayInfo.salary_multiplier === 3) {
                         holidayLabel = `<span style="color:#ff4d4f;font-weight:500;"> (${dayInfo.holiday_name || '法定假日'} 3倍)</span>`;
                     } else if (dayInfo.is_weekend) {
-                        holidayLabel = '<span style="color:#8c8c8c;"> (周末)</span>';
+                        holidayLabel = '<span style="color:var(--wx-fg-4,#8898A8);"> (周末)</span>';
                     } else {
-                        holidayLabel = '<span style="color:#8c8c8c;"> (休息日)</span>';
+                        holidayLabel = '<span style="color:var(--wx-fg-4,#8898A8);"> (休息日)</span>';
                     }
                 }
 
@@ -286,15 +297,15 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                     const value = item.value ?? 0;
                     html += `<div style="display:flex;align-items:center;margin:4px 0;">
                         <span style="width:8px;height:8px;border-radius:50%;background:${color};margin-right:8px;"></span>
-                        <span style="color:#595959;">${name}:</span>
+                        <span style="color:var(--wx-fg-3,#5A6B7E);">${name}:</span>
                         <span style="font-weight:500;margin-left:4px;">${value}人</span>
                     </div>`;
                 });
 
                 // 添加缺口信息
                 if (dayInfo && dayInfo.gap > 0) {
-                    html += `<div style="color:#ff4d4f;margin-top:8px;padding-top:8px;border-top:1px dashed #f0f0f0;">
-                        <WarningOutlined /> 缺口: ${dayInfo.gap}人
+                    html += `<div style="color:#ff4d4f;margin-top:8px;padding-top:8px;border-top:1px dashed var(--wx-border,#E4EAF1);">
+                        缺口: ${dayInfo.gap}人
                     </div>`;
                 }
 
@@ -311,7 +322,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                     start: ['min', data.total_headcount],
                     end: ['max', data.total_headcount],
                     style: {
-                        stroke: '#8c8c8c',
+                        stroke: 'var(--wx-fg-4, #8898A8)',
                         lineWidth: 1,
                         lineDash: [4, 4],
                     },
@@ -319,7 +330,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                         content: `总人数: ${data.total_headcount}`,
                         position: 'end',
                         style: {
-                            fill: '#8c8c8c',
+                            fill: 'var(--wx-fg-4, #8898A8)',
                             fontSize: 11,
                         },
                         offsetY: -5,
@@ -330,59 +341,47 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
     }), [stackedBarData, demandLineData, categoryColors, data, dailyData, holidayAnnotations]);
 
     return (
-        <div className="dashboard-glass-card">
-            {/* 卡片标题 */}
-            <div className="dashboard-card-header">
-                <div className="dashboard-card-title">
-                    <div className="dashboard-card-icon blue">
-                        <TeamOutlined />
-                    </div>
-                    人力供需曲线
-                    <Tooltip title="堆叠柱状图显示各班次可用人数（深色=有操作任务，浅色=待命），红色折线为需求人数">
-                        <InfoCircleOutlined style={{ color: '#c0c0c0', fontSize: 13, marginLeft: 2 }} />
-                    </Tooltip>
-                </div>
-            </div>
-
-            <Spin spinning={loading}>
+        <WxbChartShell
+            icon={<IconUsers />}
+            iconColor="blue"
+            title="人力供需曲线"
+            subtitle={`${date.format('YYYY年M月')} · 堆叠柱状图 + 需求折线`}
+            actions={
+                <WxbTooltip title="堆叠柱状图显示各班次可用人数（深色=有操作任务，浅色=待命），红色折线为需求人数">
+                    <span style={{ color: 'var(--wx-fg-4, #8898A8)', cursor: 'help', display: 'inline-flex' }}>
+                        <IconInfo />
+                    </span>
+                </WxbTooltip>
+            }
+        >
+            <WxbOverlay loading={loading}>
                 {data && dailyData.length > 0 ? (
                     <>
-                        {/* KPI 统计块 — 原生 CSS Grid，替代 Antd Row/Col */}
-                        <div className="dashboard-stats-grid">
-                            {/* 团队总人数 */}
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">团队总人数</div>
-                                <div className="dashboard-stat-value">
-                                    {data.total_headcount ?? 0}
-                                    <span className="dashboard-stat-suffix">人</span>
-                                </div>
-                            </div>
-                            {/* 人力充足率 */}
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">人力充足率</div>
-                                <div className={`dashboard-stat-value ${summary.sufficiency_rate >= 80 ? 'success' : 'warning'}`}>
-                                    {summary.sufficiency_rate}
-                                    <span className="dashboard-stat-suffix">%</span>
-                                </div>
-                            </div>
-                            {/* 平均缺口 */}
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">平均缺口</div>
-                                <div className={`dashboard-stat-value ${Number(summary.avg_gap) > 0 ? 'danger' : 'success'}`}>
-                                    {summary.avg_gap}
-                                    <span className="dashboard-stat-suffix">人/天</span>
-                                </div>
-                            </div>
-                            {/* 峰值缺口 */}
-                            <div className="dashboard-stat-item">
-                                <div className="dashboard-stat-label">峰值缺口</div>
-                                <div className={`dashboard-stat-value ${summary.max_gap > 0 ? 'danger' : 'success'}`}>
-                                    {summary.max_gap}
-                                    <span className="dashboard-stat-suffix">
-                                        {summary.max_gap_date ? `人 (${dayjs(summary.max_gap_date).format('M/D')})` : '人'}
-                                    </span>
-                                </div>
-                            </div>
+                        {/* KPI 统计块 */}
+                        <div className="dashboard-kpi-grid">
+                            <WxbKpiCard
+                                title="团队总人数"
+                                value={data.total_headcount ?? 0}
+                                unit="人"
+                            />
+                            <WxbKpiCard
+                                title="人力充足率"
+                                value={summary.sufficiency_rate}
+                                unit="%"
+                                trend={summary.sufficiency_rate >= 80 ? 'up' : 'down'}
+                            />
+                            <WxbKpiCard
+                                title="平均缺口"
+                                value={summary.avg_gap}
+                                unit="人/天"
+                                trend={Number(summary.avg_gap) > 0 ? 'down' : 'up'}
+                            />
+                            <WxbKpiCard
+                                title="峰值缺口"
+                                value={summary.max_gap}
+                                unit={summary.max_gap_date ? `人 (${dayjs(summary.max_gap_date).format('M/D')})` : '人'}
+                                trend={summary.max_gap > 0 ? 'down' : 'up'}
+                            />
                         </div>
 
                         <div className="dashboard-chart-container">
@@ -390,10 +389,10 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                         </div>
                     </>
                 ) : (
-                    <Empty description="暂无数据" />
+                    !loading && <WxbEmpty />
                 )}
-            </Spin>
-        </div>
+            </WxbOverlay>
+        </WxbChartShell>
     );
 };
 

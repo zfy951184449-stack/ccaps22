@@ -35,6 +35,14 @@ interface ProcessTemplateV3EditorProps {
   templateId: number;
 }
 
+const EMPTY_TEMPLATE: ProcessTemplate = {
+  id: 0,
+  template_code: '',
+  template_name: '',
+  description: '',
+  total_days: 0,
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -143,9 +151,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
 
   // ---- Gantt data (stages → nodes → timeBlocks) ----
-  const ganttData = useGanttData(
-    template ?? { id: 0, template_code: '', template_name: '', description: '', total_days: 0 },
-  );
+  const ganttTemplate = useMemo(() => template ?? EMPTY_TEMPLATE, [template]);
+  const ganttData = useGanttData(ganttTemplate);
 
   // ---- Editor actions (drag / resize / delete / auto-schedule) ----
   const actions = useV3EditorActions({

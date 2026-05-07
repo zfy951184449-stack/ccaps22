@@ -1,0 +1,17 @@
+/* WxbOverlay — translucent loading mask */
+.wxb-overlay-container {
+  position: relative;
+  min-height: 120px;
+}
+
+.wxb-overlay-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: inherit;
+  backdrop-filter: blur(2px);
+}

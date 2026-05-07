@@ -44,6 +44,8 @@ export interface GanttTask {
   data?: Record<string, unknown>;
   /** Share group badges: array of { id, label, color } */
   shareGroups?: Array<{ id: string; label: string; color: string }>;
+  /** Render this task directly on its group row instead of creating a child task row. */
+  renderOnGroupRow?: boolean;
 }
 
 export interface GanttGroup {
@@ -57,6 +59,8 @@ export interface GanttGroup {
   color?: string;
   /** Semantic type marker */
   type?: 'batch' | 'stage' | 'template';
+  /** Whether to draw an aggregate summary bar on the group row. Defaults to true. */
+  showSummaryBar?: boolean;
 }
 
 export interface GanttDependency {

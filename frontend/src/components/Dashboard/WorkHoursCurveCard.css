@@ -1,64 +1,11 @@
 /**
- * WorkHoursCurveCard Premium Styles
- * 工时需求曲线 — 专属精致样式（禁止深色/流光）
+ * WorkHoursCurveCard Styles (wxb-ui migrated)
+ * 
+ * Granularity pill toggle → WxbSegmented (removed CSS)
+ * RangePicker Antd override → WxbRangePicker (removed CSS)
+ * Toggle button → WxbButton (removed CSS)
+ * Retained: batch legend chip styles (no wxb equivalent)
  */
-
-/* ---------- Pill Toggle 粒度切换器 ---------- */
-.granularity-pill-toggle {
-    display: inline-flex;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 10px;
-    padding: 3px;
-    gap: 2px;
-    flex-shrink: 0;
-}
-
-.granularity-pill-btn {
-    padding: 4px 14px;
-    border-radius: 8px;
-    border: none;
-    background: transparent;
-    font-size: 12px;
-    font-weight: 500;
-    color: #8c8c8c;
-    cursor: pointer;
-    transition:
-        background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-        color 0.2s ease,
-        box-shadow 0.2s ease;
-    white-space: nowrap;
-    line-height: 1.5;
-    letter-spacing: 0.02em;
-}
-
-.granularity-pill-btn:hover:not(.active) {
-    background: rgba(0, 0, 0, 0.06);
-    color: #595959;
-}
-
-.granularity-pill-btn.active {
-    background: #fff;
-    color: #0078D4;
-    font-weight: 600;
-    box-shadow:
-        0 1px 4px rgba(0, 0, 0, 0.10),
-        0 1px 0 rgba(255, 255, 255, 0.8) inset;
-}
-
-/* ---------- 月视图 RangePicker 精致化 ---------- */
-.workhours-range-picker.ant-picker {
-    background: rgba(255, 255, 255, 0.7) !important;
-    border: 1px solid rgba(0, 0, 0, 0.08) !important;
-    border-radius: 10px !important;
-    box-shadow: none !important;
-    font-size: 12px;
-    transition: border-color 0.2s ease, background 0.2s ease;
-}
-
-.workhours-range-picker.ant-picker:hover {
-    background: rgba(255, 255, 255, 0.95) !important;
-    border-color: rgba(0, 120, 212, 0.35) !important;
-}
 
 /* ---------- 批次图例 Chip 区域（日视图专属） ---------- */
 .workhours-legend-bar {
@@ -67,13 +14,13 @@
     gap: 6px;
     flex-wrap: wrap;
     padding: 10px 0 6px;
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    border-top: 1px solid var(--wx-border, #E4EAF1);
     margin-top: 12px;
 }
 
 .workhours-legend-label {
     font-size: 11px;
-    color: #aaa;
+    color: var(--wx-fg-4, #8898A8);
     font-weight: 500;
     letter-spacing: 0.04em;
     flex-shrink: 0;
@@ -104,6 +51,14 @@
     border-radius: 2px;
 }
 
+/* wxb toggle button override */
+.workhours-toggle-btn-wxb.wxb-btn {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    white-space: nowrap;
+}
+
 /* 各批次 Chip（可交互=图例联动）*/
 .workhours-batch-chip {
     display: inline-flex;
@@ -130,23 +85,23 @@
     transform: scale(1.05);
 }
 
-/* 选中态：彩色左虚线边框 + 浅色背景（模拟图中虚线风格） */
+/* 选中态 */
 .workhours-batch-chip.selected {
     color: #fff;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
-/* 未选中态：浅灰、不透明度降低（暗示图中线已隐藏）*/
+/* 未选中态 */
 .workhours-batch-chip.unselected {
-    background: rgba(0, 0, 0, 0.03);
-    border-color: rgba(0, 0, 0, 0.07);
-    color: #aaa;
+    background: var(--wx-surface-3, #EDF1F6);
+    border-color: var(--wx-border, #E4EAF1);
+    color: var(--wx-fg-4, #8898A8);
     opacity: 0.65;
 }
 
 .workhours-batch-chip.unselected:hover {
     opacity: 0.9;
-    color: #595959;
+    color: var(--wx-fg-3, #5A6B7E);
 }
 
 /* Chip 左侧彩色虚线图例线 */
@@ -165,44 +120,9 @@
         transparent 8px
     );
     background-size: 100% 100%;
-    /* 选中时改为实线 */
 }
 
 .workhours-batch-chip.selected .workhours-chip-line {
     background-image: none;
     background-color: rgba(255,255,255,0.85);
-}
-
-/* 全选/清空按钮（与 DailyPanel 独立样式，更小更克制）*/
-.workhours-toggle-btn {
-    font-size: 10px;
-    font-weight: 600;
-    padding: 3px 8px;
-    border-radius: 7px;
-    border: 1px solid rgba(0, 0, 0, 0.09);
-    background: rgba(0, 0, 0, 0.03);
-    color: #8c8c8c;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background 0.18s, color 0.18s, border-color 0.18s;
-    flex-shrink: 0;
-    line-height: 1.5;
-}
-
-.workhours-toggle-btn:hover {
-    background: rgba(0, 120, 212, 0.07);
-    border-color: rgba(0, 120, 212, 0.25);
-    color: #0078D4;
-}
-
-/* 月视图信息条（替代旧的 summary-row） */
-.workhours-month-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0 6px;
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
-    margin-top: 12px;
-    font-size: 12px;
-    color: #8c8c8c;
 }

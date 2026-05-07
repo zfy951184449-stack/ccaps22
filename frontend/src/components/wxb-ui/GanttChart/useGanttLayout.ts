@@ -58,9 +58,13 @@ export function useGanttLayout(
 
       for (const group of childGroups) {
         countDescendants(group.id);
+        const directTasks = groupTasksMap.get(group.id) || [];
+        const rowTasks = directTasks.filter(task => !task.renderOnGroupRow);
+        const inlineTasks = directTasks.filter(task => task.renderOnGroupRow);
         const isCollapsed = collapsedGroups.has(group.id);
-        const hasChildren = (groupTasksMap.get(group.id)?.length ?? 0) > 0
+        const hasChildren = rowTasks.length > 0
           || (childGroupsMap.get(group.id)?.length ?? 0) > 0;
+        const groupRowIndex = flatRows.length;
 
         flatRows.push({
           id: group.id,
@@ -73,14 +77,16 @@ export function useGanttLayout(
           groupType: group.type,
           groupId: group.parentId,
         });
+        for (const task of inlineTasks) {
+          taskRowMap.set(task.id, groupRowIndex);
+        }
 
         if (!isCollapsed) {
           // Recurse into child groups
           dfs(group.id, depth + 1);
 
           // Add direct tasks of this group
-          const directTasks = groupTasksMap.get(group.id) || [];
-          for (const task of directTasks) {
+          for (const task of rowTasks) {
             const rowIndex = flatRows.length;
             flatRows.push({
               id: task.id,

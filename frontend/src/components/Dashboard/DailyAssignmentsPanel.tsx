@@ -5,20 +5,44 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Spin, Empty, Button, Tooltip, DatePicker } from 'antd';
-import {
-    LeftOutlined,
-    RightOutlined,
-    TeamOutlined,
-    ClockCircleOutlined,
-    CheckSquareOutlined,
-    BorderOutlined,
-} from '@ant-design/icons';
+import { WxbOverlay, WxbEmpty, WxbButton, WxbTooltip, WxbDatePicker, WxbChartShell } from '../wxb-ui';
 import { Dayjs } from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { dashboardService } from '../../services/dashboardService';
 import { DailyAssignmentsData, BatchData } from '../../types/dashboard';
 import './DailyAssignmentsPanel.css';
+
+/* ── Inline SVG icons ── */
+const IconUsers = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+);
+const IconClock = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+    </svg>
+);
+const IconChevronLeft = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 18l-6-6 6-6" />
+    </svg>
+);
+const IconChevronRight = () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18l6-6-6-6" />
+    </svg>
+);
+const IconCheckSquare = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12l2 2 4-4" />
+    </svg>
+);
+const IconSquare = () => (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+    </svg>
+);
 
 // 批次颜色列表
 const BATCH_COLORS = [
@@ -155,53 +179,66 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
     }, []);
 
     return (
-        <div className="dashboard-glass-card daily-assignments-panel">
-            {/* 上行：标题 + 日期选择 + 左右滚动按鈕 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div className="dashboard-card-title">
-                    <div className="dashboard-card-icon green">
-                        <TeamOutlined />
-                    </div>
-                    每日操作人员分配
-                </div>
-
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <WxbChartShell
+            icon={<IconUsers />}
+            iconColor="green"
+            title="每日操作人员分配"
+            subtitle={`${selectedDate.format('YYYY-MM-DD')} · 批次操作与人员`}
+            actions={
+                <>
                     {/* Date Picker */}
-                    <DatePicker
+                    <WxbDatePicker
                         value={selectedDate}
-                        onChange={(d) => { if (d) setSelectedDate(d); }}
+                        onChange={(d: any) => { if (d) setSelectedDate(d); }}
                         allowClear={false}
-                        className="glass-input"
                         style={{ width: 120 }}
                         format="MM-DD"
                         showToday={false}
-                        disabledDate={(current) => !current.isSame(date, 'month')}
+                        disabledDate={(current: any) => !current.isSame(date, 'month')}
                     />
-                    {/* 左右滚动按鈕 */}
+                    {/* 左右滚动按钮 */}
                     <div style={{ display: 'flex', gap: 2 }}>
-                        <Button icon={<LeftOutlined />} size="small" onClick={scrollLeft}
-                            disabled={!canScrollLeft} shape="circle" type="text" />
-                        <Button icon={<RightOutlined />} size="small" onClick={scrollRight}
-                            disabled={!canScrollRight} shape="circle" type="text" />
+                        <WxbButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={scrollLeft}
+                            disabled={!canScrollLeft}
+                            style={{ padding: '4px 6px', borderRadius: '50%', minWidth: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <IconChevronLeft />
+                        </WxbButton>
+                        <WxbButton
+                            variant="ghost"
+                            size="sm"
+                            onClick={scrollRight}
+                            disabled={!canScrollRight}
+                            style={{ padding: '4px 6px', borderRadius: '50%', minWidth: 28, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <IconChevronRight />
+                        </WxbButton>
                     </div>
-                </div>
-            </div>
+                </>
+            }
+            className="daily-assignments-panel"
+        >
 
             {/* 下行： Chip 批次筛选行 */}
             {safeBatches.length > 0 && (
                 <div className="batch-filter-bar" style={{ marginBottom: 16 }}>
-                    {/* 全选 / 清空按鈕 */}
-                    <Tooltip title={allSelected ? '清空选择' : '全部选中'} placement="top">
-                        <button
-                            className="batch-filter-toggle-btn"
+                    {/* 全选 / 清空按钮 */}
+                    <WxbTooltip title={allSelected ? '清空选择' : '全部选中'} placement="top">
+                        <WxbButton
+                            variant="ghost"
+                            size="sm"
                             onClick={toggleAll}
+                            className="batch-filter-toggle-btn-wxb"
                         >
                             {allSelected
-                                ? <><CheckSquareOutlined style={{ marginRight: 4 }} />全选</>
-                                : <><BorderOutlined style={{ marginRight: 4 }} />全选</>
+                                ? <><IconCheckSquare /> <span style={{ marginLeft: 4 }}>全选</span></>
+                                : <><IconSquare /> <span style={{ marginLeft: 4 }}>全选</span></>
                             }
-                        </button>
-                    </Tooltip>
+                        </WxbButton>
+                    </WxbTooltip>
 
                     <div className="batch-filter-divider" />
 
@@ -210,7 +247,7 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                         const color = batchColorMap[batch.batch_id];
                         const isSelected = selectedBatches.includes(batch.batch_id);
                         return (
-                            <Tooltip
+                            <WxbTooltip
                                 key={batch.batch_id}
                                 title={isSelected ? '点击取消筛选' : '点击筛选该批次'}
                                 placement="top"
@@ -231,13 +268,13 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                                     />
                                     {batch.batch_code}
                                 </div>
-                            </Tooltip>
+                            </WxbTooltip>
                         );
                     })}
                 </div>
             )}
 
-            <Spin spinning={loading}>
+            <WxbOverlay loading={loading}>
                 {filteredBatches.length > 0 ? (
                     <div
                         className="batch-scroll-container"
@@ -270,7 +307,7 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                                             >
                                                 {batch.batch_code}
                                             </span>
-                                            <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                                            <span style={{ fontSize: 12, color: 'var(--wx-fg-4, #8898A8)' }}>
                                                 {totalOps} 项操作
                                             </span>
                                         </div>
@@ -288,7 +325,7 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                                                         <div key={op.operation_plan_id} className="operation-item-premium">
                                                             <div className="operation-meta">
                                                                 <span className="operation-time-premium">
-                                                                    <ClockCircleOutlined />
+                                                                    <IconClock />
                                                                     {op.start_time}
                                                                 </span>
                                                                 <span className="operation-headcount">{op.required_people}人</span>
@@ -296,14 +333,14 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                                                             <div className="operation-name-premium">{op.operation_name}</div>
                                                             <div className="assignments-flex">
                                                                 {op.assignments.map(a => (
-                                                                    <Tooltip
+                                                                    <WxbTooltip
                                                                         key={a.position}
                                                                         title={a.employee_name ? `位置${a.position}: ${a.employee_name}` : `位置${a.position}: 待分配`}
                                                                     >
                                                                         <span className={`assignment-chip ${a.employee_name ? 'assigned' : 'unassigned'}`}>
                                                                             {a.position}. {a.employee_name || '--'}
                                                                         </span>
-                                                                    </Tooltip>
+                                                                    </WxbTooltip>
                                                                 ))}
                                                             </div>
                                                         </div>
@@ -317,12 +354,11 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                         </AnimatePresence>
                     </div>
                 ) : (
-                    !loading && <Empty description="暂无数据" />
+                    !loading && <WxbEmpty />
                 )}
-            </Spin>
-        </div>
+            </WxbOverlay>
+        </WxbChartShell>
     );
 };
 
 export default DailyAssignmentsPanel;
-
