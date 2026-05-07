@@ -200,95 +200,9 @@
     display: none;
 }
 
-/* ---------- 批次筛选 Chip 行 ---------- */
-.batch-filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding: 2px 0 4px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
 
-.batch-filter-bar::-webkit-scrollbar {
-    display: none;
-}
+/* (batch filter bar and chip styles removed — now using wxb-cs-legend--interactive) */
 
-/* wxb styled toggle button override */
-.batch-filter-toggle-btn-wxb.wxb-btn {
-    font-size: 11px;
-    font-weight: 600;
-    padding: 4px 10px;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-}
-
-/* 分隔线 */
-.batch-filter-divider {
-    width: 1px;
-    height: 16px;
-    background: var(--wx-border, #E4EAF1);
-    flex-shrink: 0;
-}
-
-/* 单个批次 Chip */
-.batch-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 4px 10px 4px 8px;
-    border-radius: 10px;
-    border: 1.5px solid transparent;
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition:
-        background 0.18s ease,
-        border-color 0.18s ease,
-        color 0.18s ease,
-        transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
-        box-shadow 0.18s ease;
-    user-select: none;
-    line-height: 1.4;
-}
-
-.batch-chip:hover {
-    transform: scale(1.05);
-    box-shadow: var(--wx-sh-1, 0 1px 2px rgba(15, 27, 45, 0.04));
-}
-
-.batch-chip.selected {
-    color: #fff;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
-}
-
-.batch-chip.unselected {
-    background: var(--wx-surface-3, #EDF1F6);
-    border-color: var(--wx-border, #E4EAF1);
-    color: var(--wx-fg-4, #8898A8);
-}
-
-.batch-chip.unselected:hover {
-    background: var(--wx-surface-2, #F5F8FB);
-    color: var(--wx-fg-3, #5A6B7E);
-}
-
-.batch-chip-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    transition: opacity 0.18s;
-}
-
-.batch-chip.unselected .batch-chip-dot {
-    opacity: 0.5;
-}
 
 /* ---------- 滚动条样式 ---------- */
 .wxb-chart-shell ::-webkit-scrollbar {

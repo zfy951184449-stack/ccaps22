@@ -222,16 +222,16 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
             className="daily-assignments-panel"
         >
 
-            {/* 下行： Chip 批次筛选行 */}
+            {/* 批次筛选行（wxb-cs-legend 风格） */}
             {safeBatches.length > 0 && (
-                <div className="batch-filter-bar" style={{ marginBottom: 16 }}>
-                    {/* 全选 / 清空按钮 */}
+                <div className="wxb-cs-legend wxb-cs-legend--interactive" style={{ marginBottom: 16 }}>
+                    {/* 全选 / 清空 */}
                     <WxbTooltip title={allSelected ? '清空选择' : '全部选中'} placement="top">
                         <WxbButton
                             variant="ghost"
                             size="sm"
                             onClick={toggleAll}
-                            className="batch-filter-toggle-btn-wxb"
+                            style={{ fontSize: 10, padding: '2px 6px' }}
                         >
                             {allSelected
                                 ? <><IconCheckSquare /> <span style={{ marginLeft: 4 }}>全选</span></>
@@ -240,9 +240,9 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                         </WxbButton>
                     </WxbTooltip>
 
-                    <div className="batch-filter-divider" />
+                    <span className="wxb-cs-legend-divider" />
 
-                    {/* 批次 Chip 列表 */}
+                    {/* 批次图例 */}
                     {safeBatches.map(batch => {
                         const color = batchColorMap[batch.batch_id];
                         const isSelected = selectedBatches.includes(batch.batch_id);
@@ -252,22 +252,13 @@ const DailyAssignmentsPanel: React.FC<DailyAssignmentsPanelProps> = ({ date }) =
                                 title={isSelected ? '点击取消筛选' : '点击筛选该批次'}
                                 placement="top"
                             >
-                                <div
-                                    className={`batch-chip ${isSelected ? 'selected' : 'unselected'}`}
-                                    style={isSelected ? {
-                                        background: color,
-                                        borderColor: color,
-                                    } : {
-                                        borderColor: `${color}30`,
-                                    }}
+                                <span
+                                    className={`wxb-cs-legend-item is-toggle ${isSelected ? 'is-on' : 'is-off'}`}
                                     onClick={() => toggleBatch(batch.batch_id)}
                                 >
-                                    <span
-                                        className="batch-chip-dot"
-                                        style={{ background: isSelected ? 'rgba(255,255,255,0.8)' : color }}
-                                    />
+                                    <span className="wxb-cs-swatch" style={{ background: color }} />
                                     {batch.batch_code}
-                                </div>
+                                </span>
                             </WxbTooltip>
                         );
                     })}
