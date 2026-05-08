@@ -2,7 +2,7 @@
  * WxbGanttChart v2 — Canvas Rendering Engine
  * 5-layer drawing pipeline: Grid → TimeAxis → Connectors → Bars → DragOverlay
  */
-import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme, DragState } from './types';
+import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme, DragState, GanttTimeScale } from './types';
 import {
   THEME, ROW_HEIGHT, HEADER_HEIGHT, HEATMAP_HEIGHT,
   BAR_HEIGHT, STAGE_BAR_HEIGHT, BAR_RADIUS, STAGE_BAR_RADIUS,
@@ -36,12 +36,27 @@ export interface DrawConfig {
   todayHour: number | null;
   viewMode: string;
   dpr: number;
+  timeScale?: GanttTimeScale;
   /** Task IDs in the same share-group transitive component as hovered task */
   hoveredShareTaskIds?: Set<string>;
   /** Color of the hovered share component */
   hoveredShareColor?: string;
   /** Per-task share component color map: taskId → color */
   shareColorMap?: Map<string, string>;
+}
+
+function scaledX(hour: number, cfg: DrawConfig): number {
+  return (cfg.timeScale ? cfg.timeScale.hourToX(hour) : hourToX(hour, cfg.startHour, cfg.hourWidth)) - cfg.scrollX;
+}
+
+function scaledWidth(start: number, end: number, cfg: DrawConfig): number {
+  return cfg.timeScale
+    ? cfg.timeScale.widthBetween(start, end)
+    : Math.abs(end - start) * cfg.hourWidth;
+}
+
+function isRangeVisible(start: number, end: number, cfg: DrawConfig): boolean {
+  return cfg.timeScale ? cfg.timeScale.isRangeVisible(start, end) : end > start;
 }
 
 /** Clip rendering to below-header area. Must call ctx.restore() after. */
@@ -86,7 +101,7 @@ export function drawGrid(
   cfg: DrawConfig,
   flatRows: FlatRow[]
 ): void {
-  const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight, showGrid } = cfg;
+  const { startHour, scrollY, canvasW, canvasH, rowHeight, showGrid } = cfg;
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const startDay = Math.floor(startHour / 24);
 
@@ -117,8 +132,8 @@ export function drawGrid(
   const totalDays = Math.ceil((cfg.endHour - startHour) / 24);
   for (let d = 0; d <= totalDays; d++) {
     const dayHour = (startDay + d) * 24;
-    const x = hourToX(dayHour, startHour, hourWidth) - scrollX;
-    const dayW = hourWidth * 24;
+    const x = scaledX(dayHour, cfg);
+    const dayW = scaledWidth(dayHour, dayHour + 24, cfg);
     if (x < -dayW || x > canvasW + dayW) continue;
 
     // Weekend shading (simplified: d%7 == 5 or 6 for Sat/Sun)
@@ -133,15 +148,19 @@ export function drawGrid(
     // 长白时段 (17:00-21:00): subtle amber tint
     if (dayW > 40) {
       // 工作时段 9:00-17:00
-      const workX = x + 9 * hourWidth;
-      const workW = 8 * hourWidth;
+      const workStart = dayHour + 9;
+      const workEnd = dayHour + 17;
+      const workX = scaledX(workStart, cfg);
+      const workW = scaledWidth(workStart, workEnd, cfg);
       if (workX + workW > 0 && workX < canvasW) {
         ctx.fillStyle = 'rgba(59, 130, 246, 0.06)';
         ctx.fillRect(workX, totalHeaderH, workW, canvasH - totalHeaderH);
       }
       // 长白时段 17:00-21:00
-      const overtimeX = x + 17 * hourWidth;
-      const overtimeW = 4 * hourWidth;
+      const overtimeStart = dayHour + 17;
+      const overtimeEnd = dayHour + 21;
+      const overtimeX = scaledX(overtimeStart, cfg);
+      const overtimeW = scaledWidth(overtimeStart, overtimeEnd, cfg);
       if (overtimeX + overtimeW > 0 && overtimeX < canvasW) {
         ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
         ctx.fillRect(overtimeX, totalHeaderH, overtimeW, canvasH - totalHeaderH);
@@ -158,7 +177,9 @@ export function drawGrid(
 
     // Hour gridlines — always visible (matches old: #E2E8F0, 0.5px)
     for (let h = 1; h < 24; h++) {
-      const hx = x + h * hourWidth;
+      const hour = dayHour + h;
+      if (!isRangeVisible(hour, hour + 1, cfg)) continue;
+      const hx = scaledX(hour, cfg);
       if (hx < 0 || hx > canvasW) continue;
       ctx.strokeStyle = '#E2E8F0';
       ctx.lineWidth = 0.5;
@@ -169,9 +190,26 @@ export function drawGrid(
     }
   }
 
+  if (cfg.timeScale?.collapsedIntervals.length) {
+    for (const interval of cfg.timeScale.collapsedIntervals) {
+      const x = scaledX(interval.start, cfg);
+      if (x < -4 || x > canvasW + 4) continue;
+      ctx.fillStyle = hexToRgba(THEME.fg4, 0.10);
+      ctx.fillRect(x - 1.5, totalHeaderH, 3, canvasH - totalHeaderH);
+      ctx.strokeStyle = hexToRgba(THEME.fg4, 0.28);
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, totalHeaderH);
+      ctx.lineTo(x, canvasH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
   // Today marker
   if (cfg.showToday && cfg.todayHour !== null && cfg.todayHour !== undefined) {
-    const tx = hourToX(cfg.todayHour, startHour, hourWidth) - scrollX;
+    const tx = scaledX(cfg.todayHour, cfg);
     if (tx > 0 && tx < canvasW) {
       ctx.strokeStyle = THEME.blue500;
       ctx.lineWidth = 1.5;
@@ -203,7 +241,7 @@ export function drawTimeAxis(
   cfg: DrawConfig,
   peaks?: Map<number, { peak: number; peakHour: number }>
 ): void {
-  const { startHour, hourWidth, scrollX, canvasW, showHeatmap } = cfg;
+  const { startHour, canvasW, showHeatmap } = cfg;
   const startDay = Math.floor(startHour / 24);
   const totalDays = Math.ceil((cfg.endHour - startHour) / 24);
   const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
@@ -219,18 +257,18 @@ export function drawTimeAxis(
   ctx.stroke();
 
   // Adaptive day labels based on zoom level
-  const dayW = hourWidth * 24;
+  const dayW = scaledWidth(startDay * 24, (startDay + 1) * 24, cfg);
   const showDayLabels = dayW > 30;  // hide individual day labels when too cramped
   const showHourSubs = dayW > 80;   // hour sub-labels only when space allows
 
   // Week-level labels for very small zoom
   if (!showDayLabels) {
     // Group days into weeks and draw week labels
-    const weekSize = 7;
-    for (let w = 0; w < Math.ceil(totalDays / weekSize); w++) {
-      const weekStartDay = startDay + w * weekSize;
-      const wx = hourToX(weekStartDay * 24, startHour, hourWidth) - scrollX;
-      const ww = dayW * weekSize;
+      const weekSize = 7;
+      for (let w = 0; w < Math.ceil(totalDays / weekSize); w++) {
+        const weekStartDay = startDay + w * weekSize;
+      const wx = scaledX(weekStartDay * 24, cfg);
+      const ww = scaledWidth(weekStartDay * 24, (weekStartDay + weekSize) * 24, cfg);
       if (wx + ww < 0 || wx > canvasW) continue;
 
       ctx.fillStyle = THEME.ink;
@@ -319,14 +357,15 @@ export function drawTimeAxis(
   } else {
     for (let d = 0; d < totalDays; d++) {
       const dayHour = (startDay + d) * 24;
-      const x = hourToX(dayHour, startHour, hourWidth) - scrollX;
-      if (x + dayW < 0 || x > canvasW) continue;
+      const x = scaledX(dayHour, cfg);
+      const currentDayW = scaledWidth(dayHour, dayHour + 24, cfg);
+      if (x + currentDayW < 0 || x > canvasW) continue;
 
       // Day label
       ctx.fillStyle = THEME.ink;
       ctx.font = `600 12px ${FONT_SANS}`;
       ctx.textAlign = 'center';
-      ctx.fillText(`Day ${startDay + d}`, x + dayW / 2, 18);
+      ctx.fillText(`Day ${startDay + d}`, x + currentDayW / 2, 18);
 
       // Hour sub-labels: adaptive density based on zoom
       if (showHourSubs) {
@@ -340,7 +379,9 @@ export function drawTimeAxis(
         else if (dayW > 120) step = 3; // every 3 hours
 
         for (let h = 0; h < 24; h += step) {
-          const hx = x + h * hourWidth;
+          const hour = dayHour + h;
+          if (!isRangeVisible(hour, hour + 1, cfg)) continue;
+          const hx = scaledX(hour, cfg);
           if (hx < 0 || hx > canvasW) continue;
           ctx.fillText(`${h.toString().padStart(2, '0')}`, hx, 34);
         }
@@ -348,7 +389,9 @@ export function drawTimeAxis(
         // Hour tick marks in header (small vertical lines at each hour)
         if (dayW > 120) {
           for (let h = 0; h < 24; h++) {
-            const hx = x + h * hourWidth;
+            const hour = dayHour + h;
+            if (!isRangeVisible(hour, hour + 1, cfg)) continue;
+            const hx = scaledX(hour, cfg);
             if (hx < 0 || hx > canvasW) continue;
             const isLabeled = h % step === 0;
             ctx.strokeStyle = isLabeled ? THEME.border : hexToRgba(THEME.border, 0.5);
@@ -358,6 +401,22 @@ export function drawTimeAxis(
             ctx.lineTo(hx, HEADER_HEIGHT);
             ctx.stroke();
           }
+        }
+      }
+
+      if (cfg.timeScale?.collapsedIntervals.length) {
+        for (const interval of cfg.timeScale.collapsedIntervals) {
+          if (interval.start < dayHour || interval.start >= dayHour + 24) continue;
+          const cx = scaledX(interval.start, cfg);
+          if (cx < 0 || cx > canvasW) continue;
+          ctx.strokeStyle = hexToRgba(THEME.fg4, 0.26);
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath();
+          ctx.moveTo(cx, 0);
+          ctx.lineTo(cx, totalHeaderH);
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
       }
 
@@ -383,8 +442,8 @@ export function drawTimeAxis(
       const peakData = peaks.get(dayNum);
       if (!peakData || peakData.peak === 0) continue;
 
-      const x = hourToX(dayNum * 24, startHour, hourWidth) - scrollX;
-      const dayW = hourWidth * 24;
+      const x = scaledX(dayNum * 24, cfg);
+      const dayW = scaledWidth(dayNum * 24, (dayNum + 1) * 24, cfg);
       if (x + dayW < 0 || x > canvasW) continue;
 
       const color = getHeatColor(peakData.peak, minP, maxP);
@@ -410,7 +469,7 @@ export function drawGroupBars(
   tasks: GanttTask[],
   taskRowMap: Map<string, number>
 ): void {
-  const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight } = cfg;
+  const { scrollY, canvasW, canvasH, rowHeight } = cfg;
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const startRow = Math.floor(scrollY / rowHeight);
   const endRow = Math.ceil((scrollY + canvasH - totalHeaderH) / rowHeight);
@@ -464,8 +523,8 @@ export function drawGroupBars(
     const span = groupSpan.get(row.id);
     if (!span) continue;
 
-    const x = hourToX(span.min, startHour, hourWidth) - scrollX;
-    const w = Math.max((span.max - span.min) * hourWidth, 4);
+    const x = scaledX(span.min, cfg);
+    const w = Math.max(scaledWidth(span.min, span.max, cfg), 4);
     if (x + w < 0 || x > canvasW) continue;
 
     const y = totalHeaderH + r * rowHeight - scrollY;
@@ -510,7 +569,7 @@ export function drawBars(
   tasks: GanttTask[],
   taskRowMap: Map<string, number>
 ): void {
-  const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight, showProgress } = cfg;
+  const { scrollY, canvasW, canvasH, rowHeight, showProgress } = cfg;
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const startRow = Math.floor(scrollY / rowHeight);
   const endRow = Math.ceil((scrollY + canvasH - totalHeaderH) / rowHeight);
@@ -521,8 +580,8 @@ export function drawBars(
     // Row culling
     if (row < startRow - 1 || row > endRow + 1) continue;
 
-    const x = hourToX(task.start, startHour, hourWidth) - scrollX;
-    const w = Math.max((task.end - task.start) * hourWidth, 4);
+    const x = scaledX(task.start, cfg);
+    const w = Math.max(scaledWidth(task.start, task.end, cfg), 4);
     // Column culling
     if (x + w < 0 || x > canvasW) continue;
 
@@ -592,8 +651,8 @@ export function drawBars(
       // --- Window background layer (semi-transparent, behind operation) ---
       if (task.windowStart !== undefined && task.windowEnd !== undefined
         && (task.windowStart !== task.start || task.windowEnd !== task.end)) {
-        const wx = hourToX(task.windowStart, startHour, hourWidth) - scrollX;
-        const ww = Math.max((task.windowEnd - task.windowStart) * hourWidth, 4);
+        const wx = scaledX(task.windowStart, cfg);
+        const ww = Math.max(scaledWidth(task.windowStart, task.windowEnd, cfg), 4);
 
         // 1. Solid tinted fill (10% opacity)
         ctx.fillStyle = colorWithAlpha(stageAccentColor, 0.07, THEME.surface2);
@@ -751,7 +810,7 @@ export function drawDependencies(
   deps: GanttDependency[]
 ): void {
   if (deps.length === 0) return;
-  const { startHour, hourWidth, scrollX, scrollY, canvasH, rowHeight } = cfg;
+  const { scrollY, rowHeight } = cfg;
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const taskMap = new Map(tasks.map(t => [t.id, t]));
 
@@ -764,14 +823,8 @@ export function drawDependencies(
     if (fromRow === undefined || toRow === undefined) continue;
 
     const anchor = getAnchorType(dep.type);
-    const fromX = hourToX(
-      anchor.from === 'end' ? fromTask.end : fromTask.start,
-      startHour, hourWidth
-    ) - scrollX;
-    const toX = hourToX(
-      anchor.to === 'end' ? toTask.end : toTask.start,
-      startHour, hourWidth
-    ) - scrollX;
+    const fromX = scaledX(anchor.from === 'end' ? fromTask.end : fromTask.start, cfg);
+    const toX = scaledX(anchor.to === 'end' ? toTask.end : toTask.start, cfg);
     const fromY = totalHeaderH + fromRow * rowHeight + rowHeight / 2 - scrollY;
     const toY = totalHeaderH + toRow * rowHeight + rowHeight / 2 - scrollY;
 
@@ -848,7 +901,7 @@ export function drawLinks(
   highlightedLinkIds?: string[]
 ): void {
   if (links.length === 0) return;
-  const { startHour, hourWidth, scrollX, scrollY, rowHeight } = cfg;
+  const { scrollY, rowHeight } = cfg;
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
   const taskMap = new Map(tasks.map(t => [t.id, t]));
   const hasHighlight = highlightedLinkIds && highlightedLinkIds.length > 0;
@@ -874,8 +927,8 @@ export function drawLinks(
       const rB = taskRowMap.get(tB.id);
       if (rA === undefined || rB === undefined) continue;
 
-      const axCenter = hourToX((tA.start + tA.end) / 2, startHour, hourWidth) - scrollX;
-      const bxCenter = hourToX((tB.start + tB.end) / 2, startHour, hourWidth) - scrollX;
+      const axCenter = scaledX((tA.start + tA.end) / 2, cfg);
+      const bxCenter = scaledX((tB.start + tB.end) / 2, cfg);
       const ayCenter = totalHeaderH + rA * rowHeight + rowHeight / 2 - scrollY;
       const byCenter = totalHeaderH + rB * rowHeight + rowHeight / 2 - scrollY;
 
@@ -935,7 +988,7 @@ export function drawDragOverlay(
 ): void {
   if (!dragState || !dragState.isDragging) return;
 
-  const { startHour, hourWidth, scrollX, scrollY, canvasW, canvasH, rowHeight } = cfg;
+  const { scrollY, canvasH, rowHeight } = cfg;
 
   // ===== Resize mode: specialized ghost rendering =====
   if (dragState.type === 'resize-start' || dragState.type === 'resize-end') {
@@ -944,8 +997,8 @@ export function drawDragOverlay(
     if (!orig) return;
 
     const barH = BAR_HEIGHT, barR = BAR_RADIUS;
-    const origX = (orig.start - startHour) * hourWidth - scrollX;
-    const origW = (orig.end - orig.start) * hourWidth;
+    const origX = scaledX(orig.start, cfg);
+    const origW = scaledWidth(orig.start, orig.end, cfg);
     const y = totalHeaderH + orig.row * rowHeight + (rowHeight - barH) / 2 - scrollY;
 
     // Skip if out of viewport
@@ -962,10 +1015,10 @@ export function drawDragOverlay(
     // Ghost: stretched/shrunk based on resize direction
     let ghostX = origX, ghostW = origW;
     if (dragState.type === 'resize-start') {
-      ghostX = origX + dragState.deltaHours * hourWidth;
-      ghostW = origW - dragState.deltaHours * hourWidth;
+      ghostX = scaledX(orig.start + dragState.deltaHours, cfg);
+      ghostW = scaledWidth(orig.start + dragState.deltaHours, orig.end, cfg);
     } else {
-      ghostW = origW + dragState.deltaHours * hourWidth;
+      ghostW = scaledWidth(orig.start, orig.end + dragState.deltaHours, cfg);
     }
 
     // Minimum visual width
@@ -1021,8 +1074,8 @@ export function drawDragOverlay(
 
   // 1. Draw time window highlight (single task move only)
   if (!dragState.isGroupDrag && dragState.windowMinHour !== undefined && dragState.windowMaxHour !== undefined) {
-    const winX = (dragState.windowMinHour - startHour) * hourWidth - scrollX;
-    const winW = (dragState.windowMaxHour - dragState.windowMinHour) * hourWidth;
+    const winX = scaledX(dragState.windowMinHour, cfg);
+    const winW = scaledWidth(dragState.windowMinHour, dragState.windowMaxHour, cfg);
     const orig = dragState.originals.get(dragState.primaryId);
     if (orig) {
       const winY = totalHeaderH + orig.row * rowHeight - scrollY;
@@ -1047,8 +1100,8 @@ export function drawDragOverlay(
   for (const [taskId, orig] of Array.from(dragState.originals)) {
     const barH = BAR_HEIGHT;
     const barR = BAR_RADIUS;
-    const origX = (orig.start - startHour) * hourWidth - scrollX;
-    const origW = (orig.end - orig.start) * hourWidth;
+    const origX = scaledX(orig.start, cfg);
+    const origW = scaledWidth(orig.start, orig.end, cfg);
     const origY = totalHeaderH + orig.row * rowHeight + (rowHeight - barH) / 2 - scrollY;
 
     // Skip if out of viewport
@@ -1063,7 +1116,7 @@ export function drawDragOverlay(
     ctx.setLineDash([]);
 
     // Ghost position: semi-transparent bar
-    const ghostX = origX + dragState.deltaHours * hourWidth;
+    const ghostX = scaledX(orig.start + dragState.deltaHours, cfg);
 
     // Ghost fill
     ctx.fillStyle = colors.fill;
@@ -1100,7 +1153,7 @@ export function drawDragOverlay(
   if (dragState.isGroupDrag || dragState.affectedTaskIds.length > 1) {
     const orig = dragState.originals.get(dragState.primaryId) || dragState.originals.values().next().value;
     if (orig) {
-      const tooltipX = (orig.start + dragState.deltaHours - startHour) * hourWidth - scrollX;
+      const tooltipX = scaledX(orig.start + dragState.deltaHours, cfg);
       const tooltipY = totalHeaderH + orig.row * rowHeight - scrollY - 4;
       const sign = dragState.deltaHours >= 0 ? '+' : '';
       const count = dragState.affectedTaskIds.length;

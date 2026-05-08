@@ -17,6 +17,8 @@
   cursor: pointer;
   padding: 0;
   background: var(--wx-surface-2, #F5F8FB);
+  background-color: var(--wx-surface-2, #F5F8FB);
+  background-image: none;
   transition: background 180ms cubic-bezier(.2,0,0,1),
               border-color 180ms cubic-bezier(.2,0,0,1),
               box-shadow 180ms;
@@ -40,7 +42,7 @@
   position: absolute;
   top: 2px;
   left: 2px;
-  background: #fff;
+  background: var(--wx-bg, #FFFFFF);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0,0,0,.18);
   transition: left 180ms cubic-bezier(.2,0,0,1),
@@ -57,8 +59,9 @@
 }
 
 /* ── Checked state ── */
-.wxb-switch-checked {
+.wxb-switch.wxb-switch-checked {
   background: var(--wx-blue-700, #0B3D7F);
+  background-color: var(--wx-blue-700, #0B3D7F);
   border-color: var(--wx-blue-700, #0B3D7F);
 }
 /* Use calc so handle always lands at right edge regardless of track width */
@@ -71,10 +74,12 @@
 
 /* ── Hover ── */
 .wxb-switch:not(.wxb-switch-disabled):hover {
+  background-color: var(--wx-blue-50, #F2F7FC);
   border-color: var(--wx-blue-500, #1F6FEB);
 }
-.wxb-switch-checked:not(.wxb-switch-disabled):hover {
+.wxb-switch.wxb-switch-checked:not(.wxb-switch-disabled):hover {
   background: var(--wx-blue-800, #092D5C);
+  background-color: var(--wx-blue-800, #092D5C);
   border-color: var(--wx-blue-800, #092D5C);
 }
 
@@ -100,6 +105,7 @@
 /* ── Disabled ── */
 .wxb-switch-disabled {
   background: var(--wx-surface-2, #F5F8FB);
+  background-color: var(--wx-surface-2, #F5F8FB);
   border-color: var(--wx-border, #E4EAF1);
   cursor: not-allowed;
   opacity: 0.5;

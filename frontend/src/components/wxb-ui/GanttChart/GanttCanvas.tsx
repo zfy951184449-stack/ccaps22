@@ -10,7 +10,7 @@ import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, draw
 import { useGanttHitTest } from './useGanttHitTest';
 import { useGanttDrag } from './useGanttDrag';
 import type { UseGanttDragResult } from './useGanttDrag';
-import { clamp } from './ganttUtils';
+import { buildGanttTimeScale, clamp } from './ganttUtils';
 
 interface GanttCanvasProps {
   tasks: GanttTask[];
@@ -28,6 +28,7 @@ interface GanttCanvasProps {
   showToday: boolean;
   showProgress: boolean;
   showHeatmap: boolean;
+  collapseEmptyNightShifts?: boolean;
   readOnly: boolean;
   zoomRange: [number, number];
   personnelPeaks?: Map<number, { peak: number; peakHour: number }>;
@@ -51,7 +52,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   tasks, groups, flatRows, taskRowMap, dependencies, links,
   state, stateRef, dispatch,
   startHour, endHour,
-  showGrid, showToday, showProgress, showHeatmap, readOnly, zoomRange,
+  showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, readOnly, zoomRange,
   personnelPeaks,
   onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
   onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
@@ -105,19 +106,34 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flatRows.length]);
 
+  // In expanded day mode, override startHour/endHour for hit detection and drag
+  const effectiveStartHour = state.expandedDay !== null ? state.expandedDay * 24 : startHour;
+  const effectiveEndHour = state.expandedDay !== null ? (state.expandedDay + 1) * 24 : endHour;
+
+  const hourWidth = state.dayWidth / 24;
+  const timeScale = React.useMemo(
+    () => buildGanttTimeScale(effectiveStartHour, effectiveEndHour, hourWidth, {
+      collapseEmptyNightShifts: !!collapseEmptyNightShifts && state.expandedDay === null,
+      tasks,
+    }),
+    [effectiveStartHour, effectiveEndHour, hourWidth, collapseEmptyNightShifts, state.expandedDay, tasks],
+  );
+  const timeScaleRef = useRef(timeScale);
+  timeScaleRef.current = timeScale;
+
   // ===== DATA REFS: mirror props into refs so RAF closure always reads latest =====
   const dataRef = useRef({
     tasks, groups, flatRows, taskRowMap, dependencies, links,
-    startHour, endHour,
-    showGrid, showToday, showProgress, showHeatmap,
+    startHour, endHour, timeScale,
+    showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts,
     personnelPeaks,
     highlightedLinkIds,
     shareColorMap,
   });
   dataRef.current = {
     tasks, groups, flatRows, taskRowMap, dependencies, links,
-    startHour, endHour,
-    showGrid, showToday, showProgress, showHeatmap,
+    startHour, endHour, timeScale,
+    showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts,
     personnelPeaks,
     highlightedLinkIds,
     shareColorMap,
@@ -127,12 +143,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const shareHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoveredShareRef = useRef<{ taskIds: Set<string>; color: string } | null>(null);
 
-  // In expanded day mode, override startHour/endHour for hit detection and drag
-  const effectiveStartHour = state.expandedDay !== null ? state.expandedDay * 24 : startHour;
-  const effectiveEndHour = state.expandedDay !== null ? (state.expandedDay + 1) * 24 : endHour;
-
-  const hourWidth = state.dayWidth / 24;
-  const { hitTest } = useGanttHitTest(tasks, groups, flatRows, taskRowMap, effectiveStartHour, hourWidth);
+  const { hitTest } = useGanttHitTest(tasks, groups, flatRows, taskRowMap, effectiveStartHour, hourWidth, timeScale);
 
   const onAutoScroll = useCallback((dx: number) => {
     dispatch({ type: 'SCROLL', dx, dy: 0 });
@@ -155,6 +166,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     onGroupDragEnd,
     onAutoScroll,
     canvasWidth: state.canvasW,
+    timeScale,
   });
 
   // Mirror dragState into a ref so RAF loop can read latest value
@@ -215,10 +227,12 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         let effectiveStartHour = d.startHour;
         let effectiveEndHour = d.endHour;
         let effectiveScrollX = s.scrollX;
+        let effectiveTimeScale = d.timeScale;
         if (s.expandedDay !== null) {
           effectiveStartHour = s.expandedDay * 24;
           effectiveEndHour = (s.expandedDay + 1) * 24;
           effectiveScrollX = 0;  // no horizontal scroll in single-day mode
+          effectiveTimeScale = buildGanttTimeScale(effectiveStartHour, effectiveEndHour, s.dayWidth / 24);
         }
 
         const cfg = {
@@ -238,6 +252,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           hoveredShareTaskIds: hoveredShareRef.current?.taskIds,
           hoveredShareColor: hoveredShareRef.current?.color,
           shareColorMap: d.shareColorMap ? new Map(Array.from(d.shareColorMap.entries()).map(([k, v]) => [k, v.color])) : undefined,
+          timeScale: effectiveTimeScale,
         };
 
         // L0: Grid (row bg + hover highlight + grid lines)
@@ -271,7 +286,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   // Mark dirty when data changes
   useEffect(() => {
     dispatch({ type: 'MARK_DIRTY' });
-  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, highlightedLinkIds, shareColorMap, dispatch]);
+  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, timeScale, highlightedLinkIds, shareColorMap, dispatch]);
 
   // Compute scroll limits when row count or canvas size changes
   useEffect(() => {
@@ -284,11 +299,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
 
   // Compute horizontal scroll limit
   useEffect(() => {
-    const hourWidth = state.dayWidth / 24;
-    const contentW = (endHour - startHour) * hourWidth;
+    const contentW = timeScale.totalWidth;
     const maxX = Math.max(0, contentW - state.canvasW);
     dispatch({ type: 'SET_MAX_SCROLL_X', maxX });
-  }, [state.dayWidth, startHour, endHour, state.canvasW, dispatch]);
+  }, [timeScale.totalWidth, state.canvasW, dispatch]);
 
   // Wheel handler: scroll + zoom
   useEffect(() => {
@@ -493,9 +507,8 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         dispatch({ type: 'EXPAND_DAY', day: null });
       } else {
         // Not expanded — compute which day was clicked
-        const hw = s.dayWidth / 24;
         const worldX = cx + s.scrollX;
-        const dayHour = worldX / hw + startHour;
+        const dayHour = timeScaleRef.current.xToHour(worldX);
         const dayNum = Math.floor(dayHour / 24);
         dispatch({ type: 'EXPAND_DAY', day: dayNum });
       }
@@ -507,7 +520,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     if (hit) {
       if (onTaskDoubleClick) onTaskDoubleClick(hit.task);
     }
-  }, [onTaskDoubleClick, hitTest, stateRef, showHeatmap, startHour, dispatch]);
+  }, [onTaskDoubleClick, hitTest, stateRef, showHeatmap, dispatch]);
 
   const handleMouseLeave = useCallback(() => {
     isPanning.current = false;

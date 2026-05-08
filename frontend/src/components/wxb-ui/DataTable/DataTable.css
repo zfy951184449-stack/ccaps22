@@ -156,6 +156,13 @@
   overflow: hidden;
 }
 
+.wxb-table-inline-list {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wx-space-8);
+  flex-wrap: wrap;
+}
+
 .wxb-table-action-menu-label {
   display: inline-flex;
   min-width: 72px;

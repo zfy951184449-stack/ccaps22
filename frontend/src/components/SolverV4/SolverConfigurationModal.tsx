@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Switch, List, Typography, Button, Space, Select, Divider, InputNumber } from 'antd';
-import { SettingOutlined, UndoOutlined, SaveOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons';
-
-const { Text } = Typography;
-const { Option } = Select;
+import {
+    WxbButton,
+    WxbDivider,
+    WxbIcon,
+    WxbInputNumber,
+    WxbModal,
+    WxbSelect,
+    WxbSwitch,
+} from '../wxb-ui';
 
 export interface SolverConfig {
     enable_share_group: boolean;
@@ -244,460 +248,258 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_balance_night_shifts', title: '夜班均衡', description: '团队内夜班数量均匀分配' },
     ];
 
+    const objectiveControls = [
+        {
+            key: 'enable_minimize_deviation',
+            weightKey: 'objective_weight_deviation',
+            title: '最小化工时偏差',
+            description: '减少实际工时与标准工时的偏差',
+        },
+        {
+            key: 'enable_minimize_special_shifts',
+            weightKey: 'objective_weight_special_shifts',
+            title: '最小化特殊班次',
+            description: '减少非标准班次的使用数量',
+        },
+        {
+            key: 'enable_balance_night_shifts',
+            weightKey: 'objective_weight_night_balance',
+            title: '夜班均衡分配',
+            description: '惩罚夜班分配不均匀（方差 x 权重）',
+        },
+        {
+            key: 'enable_balance_weekend_work',
+            weightKey: 'objective_weight_weekend_balance',
+            title: '周末工作均衡',
+            description: '惩罚周末/节假日工作分配不均匀',
+        },
+        {
+            key: 'enable_minimize_triple_salary',
+            weightKey: 'objective_weight_triple_salary',
+            title: '三倍薪日成本优化',
+            description: '尽量避免在法定节假日安排排班',
+        },
+        {
+            key: 'allow_position_vacancy',
+            weightKey: 'objective_weight_vacancy',
+            title: '允许岗位空缺',
+            description: '允许无人接手时留空（高惩罚权重）',
+        },
+    ];
+
+    const isToggleDisabled = (key: keyof SolverConfig) =>
+        (key === 'strict_locked_shifts' && !config.enable_locked_shifts) ||
+        (key === 'enable_prefer_extended_night_rest' && !config.enable_night_rest);
+
+    const onNumberChange = (key: keyof SolverConfig, value: number | string | null) => {
+        handleWeightChange(key, typeof value === 'number' ? value : value === null ? null : Number(value));
+    };
+
+    const renderToggleRows = (items: { key: string; title: string; description: string; indent?: boolean }[]) => (
+        <div className="solver-v4-config-list">
+            {items.map((item) => {
+                const key = item.key as keyof SolverConfig;
+                return (
+                    <div key={item.key} className={`solver-v4-config-row ${item.indent ? 'solver-v4-config-row-indent' : ''}`}>
+                        <div className="solver-v4-config-copy">
+                            <strong>{item.title}</strong>
+                            <span>{item.description}</span>
+                        </div>
+                        <WxbSwitch
+                            checked={config[key] as boolean}
+                            onChange={() => handleToggle(key)}
+                            disabled={isToggleDisabled(key)}
+                        />
+                    </div>
+                );
+            })}
+        </div>
+    );
+
+    const renderNumberField = (
+        key: keyof SolverConfig,
+        label: string,
+        options?: { min?: number; max?: number; step?: number; addonAfter?: string; disabled?: boolean },
+    ) => (
+        <label className="solver-v4-number-field">
+            <span>{label}</span>
+            <WxbInputNumber
+                size="small"
+                min={options?.min}
+                max={options?.max}
+                step={options?.step}
+                value={config[key] as number}
+                onChange={(val) => onNumberChange(key, val)}
+                addonAfter={options?.addonAfter}
+                disabled={options?.disabled}
+            />
+        </label>
+    );
+
     return (
-        <Modal
-            title={
-                <Space>
-                    <SettingOutlined />
-                    <span>求解器配置</span>
-                </Space>
-            }
+        <WxbModal
+            title="求解器配置"
             open={visible}
             onCancel={onClose}
-            footer={[
-                <Button key="reset" icon={<UndoOutlined />} onClick={handleReset}>
+            footer={(
+                <div className="solver-v4-modal-footer">
+                <WxbButton type="button" variant="ghost" onClick={handleReset}>
+                    <WxbIcon name="flow-divert" size={15} />
                     恢复默认
-                </Button>,
-                <Button key="save" type="primary" icon={<SaveOutlined />} onClick={onClose}>
+                </WxbButton>
+                <WxbButton type="button" variant="primary" onClick={onClose}>
+                    <WxbIcon name="released" size={15} />
                     保存配置
-                </Button>,
-            ]}
-            width={500}
-            className="glassmorphism-modal"
+                </WxbButton>
+                </div>
+            )}
+            width={640}
+            className="solver-v4-config-modal"
         >
-            <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 8 }}>
-
-                {/* Team Selection Section */}
-                <div style={{ marginBottom: 24, background: '#fafafa', padding: 16, borderRadius: 8, border: '1px solid #f0f0f0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                        <TeamOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                        <Text strong>团队范围</Text>
+            <div className="solver-v4-config-body">
+                <section className="solver-v4-config-panel">
+                    <div className="solver-v4-config-panel-title">
+                        <WxbIcon name="upstream-suite" size={16} />
+                        <strong>团队范围</strong>
                     </div>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-                        限定求解范围至指定团队。留空则包含所有员工。
-                    </Text>
-                    <Select
+                    <p>限定求解范围至指定团队。留空则包含所有员工。</p>
+                    <WxbSelect
                         mode="multiple"
-                        style={{ width: '100%' }}
                         placeholder="选择团队（默认：全部）"
                         value={config.team_ids}
-                        onChange={handleTeamChange}
+                        onChange={(values) => handleTeamChange(values as number[])}
                         loading={loadingTeams}
-                        optionFilterProp="children"
+                        optionFilterProp="label"
                         allowClear
-                    >
-                        {teams.map(team => (
-                            <Option key={team.id} value={team.id}>
-                                {team.teamName} ({team.teamCode})
-                            </Option>
-                        ))}
-                    </Select>
-                </div>
+                        options={teams.map(team => ({
+                            value: team.id,
+                            label: `${team.teamName} (${team.teamCode})`,
+                        }))}
+                    />
+                </section>
 
-                {/* Solver Time Control */}
-                <div style={{ marginBottom: 24, background: '#f0f5ff', padding: 16, borderRadius: 8, border: '1px solid #adc6ff' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                        <SettingOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                        <Text strong>求解参数</Text>
+                <section className="solver-v4-config-panel solver-v4-config-panel-info">
+                    <div className="solver-v4-config-panel-title">
+                        <WxbIcon name="hold-time" size={16} />
+                        <strong>求解参数</strong>
                     </div>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-                        时间越长结果越优，但响应更慢。建议范围 60–600 秒。
-                    </Text>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 13 }}>最大求解时间</Text>
-                            <InputNumber
-                                size="small"
-                                min={30}
-                                max={3600}
-                                step={30}
-                                value={config.max_time_seconds}
-                                onChange={(val) => handleWeightChange('max_time_seconds', val)}
-                                style={{ width: 80 }}
-                                addonAfter="秒"
-                            />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 13 }}>停滞超时</Text>
-                            <InputNumber
-                                size="small"
-                                min={30}
-                                max={3600}
-                                step={30}
-                                value={config.stagnation_limit}
-                                onChange={(val) => handleWeightChange('stagnation_limit', val)}
-                                style={{ width: 80 }}
-                                addonAfter="秒"
-                            />
-                        </div>
+                    <p>时间越长结果越优，但响应更慢。建议范围 60 到 600 秒。</p>
+                    <div className="solver-v4-config-grid">
+                        {renderNumberField('max_time_seconds', '最大求解时间', { min: 30, max: 3600, step: 30, addonAfter: '秒' })}
+                        {renderNumberField('stagnation_limit', '停滞超时', { min: 30, max: 3600, step: 30, addonAfter: '秒' })}
                     </div>
-                </div>
+                </section>
 
-                <Divider orientation="left" style={{ margin: '12px 0' }}>硬约束</Divider>
+                <WxbDivider label="硬约束" />
+                {renderToggleRows(constraints)}
 
-                <List
-                    itemLayout="horizontal"
-                    dataSource={constraints}
-                    renderItem={(item: any) => (
-                        <List.Item
-                            style={item.indent ? { paddingLeft: 24, background: '#fafafa', borderRadius: 4 } : {}}
-                            actions={[
-                                <Switch
-                                    checked={config[item.key as keyof SolverConfig] as boolean}
-                                    onChange={() => handleToggle(item.key as keyof SolverConfig)}
-                                    disabled={item.key === 'strict_locked_shifts' && !config.enable_locked_shifts}
-                                />
-                            ]}
-                        >
-                            <List.Item.Meta
-                                title={<Text strong>{item.title}</Text>}
-                                description={item.description}
-                            />
-                        </List.Item>
-                    )}
-                />
-
-                {/* Leadership Coverage Parameters */}
                 {config.enable_leadership_coverage && (
-                    <div style={{ padding: '12px 16px', background: '#f0f5ff', borderRadius: 8, marginTop: 8, border: '1px solid #adc6ff' }}>
-                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
-                            管理岗偏好权重配置（数值越大，优化压力越高）
-                        </Text>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>非工作日出勤惩罚</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={0}
-                                    max={1000}
-                                    value={config.objective_weight_leader_nonworkday}
-                                    onChange={(val) => handleWeightChange('objective_weight_leader_nonworkday', val)}
-                                    style={{ width: 70 }}
-                                />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>工作日休息惩罚</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={0}
-                                    max={1000}
-                                    value={config.objective_weight_leader_workday_rest}
-                                    onChange={(val) => handleWeightChange('objective_weight_leader_workday_rest', val)}
-                                    style={{ width: 70 }}
-                                />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>操作分配惩罚</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={0}
-                                    max={1000}
-                                    value={config.objective_weight_leader_ops}
-                                    onChange={(val) => handleWeightChange('objective_weight_leader_ops', val)}
-                                    style={{ width: 70 }}
-                                />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>特殊班次惩罚</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={0}
-                                    max={1000}
-                                    value={config.objective_weight_leader_special}
-                                    onChange={(val) => handleWeightChange('objective_weight_leader_special', val)}
-                                    style={{ width: 70 }}
-                                />
-                            </div>
+                    <section className="solver-v4-config-subpanel">
+                        <p>管理岗偏好权重配置。数值越大，优化压力越高。</p>
+                        <div className="solver-v4-config-grid">
+                            {renderNumberField('objective_weight_leader_nonworkday', '非工作日出勤惩罚', { min: 0, max: 1000 })}
+                            {renderNumberField('objective_weight_leader_workday_rest', '工作日休息惩罚', { min: 0, max: 1000 })}
+                            {renderNumberField('objective_weight_leader_ops', '操作分配惩罚', { min: 0, max: 1000 })}
+                            {renderNumberField('objective_weight_leader_special', '特殊班次惩罚', { min: 0, max: 1000 })}
                         </div>
-                    </div>
+                    </section>
                 )}
 
-                <Divider orientation="left" style={{ margin: '12px 0' }}>连续天数约束</Divider>
+                <WxbDivider label="连续天数约束" />
+                {renderToggleRows(consecutiveDaysConstraints)}
 
-                <List
-                    itemLayout="horizontal"
-                    dataSource={consecutiveDaysConstraints}
-                    renderItem={(item) => (
-                        <List.Item
-                            actions={[
-                                <Switch
-                                    checked={config[item.key as keyof SolverConfig] as boolean}
-                                    onChange={() => handleToggle(item.key as keyof SolverConfig)}
-                                />
-                            ]}
-                        >
-                            <List.Item.Meta
-                                title={<Text strong>{item.title}</Text>}
-                                description={item.description}
-                            />
-                        </List.Item>
-                    )}
-                />
+                <WxbDivider label="夜班约束" />
+                {renderToggleRows(nightShiftConstraints)}
 
-                <Divider orientation="left" style={{ margin: '12px 0' }}>夜班约束</Divider>
-
-                <List
-                    itemLayout="horizontal"
-                    dataSource={nightShiftConstraints}
-                    renderItem={(item: any) => (
-                        <List.Item
-                            style={item.indent ? { paddingLeft: 24, background: '#fafafa', borderRadius: 4 } : {}}
-                            actions={[
-                                <Switch
-                                    checked={config[item.key as keyof SolverConfig] as boolean}
-                                    onChange={() => handleToggle(item.key as keyof SolverConfig)}
-                                    disabled={item.key === 'enable_prefer_extended_night_rest' && !config.enable_night_rest}
-                                />
-                            ]}
-                        >
-                            <List.Item.Meta
-                                title={<Text strong>{item.title}</Text>}
-                                description={item.description}
-                            />
-                        </List.Item>
-                    )}
-                />
-
-                {/* Night Shift Interval Parameter */}
                 {config.enable_night_shift_interval && (
-                    <div style={{ padding: '8px 16px', background: '#f6f8fa', borderRadius: 8, marginTop: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text type="secondary" style={{ fontSize: 13 }}>夜班最小间隔天数</Text>
-                            <InputNumber
-                                size="small"
-                                min={2}
-                                max={30}
-                                value={config.min_night_shift_interval}
-                                onChange={(val) => handleWeightChange('min_night_shift_interval', val)}
-                                style={{ width: 70 }}
-                                addonAfter="天"
-                            />
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                    <section className="solver-v4-config-subpanel">
+                        {renderNumberField('min_night_shift_interval', '夜班最小间隔天数', { min: 2, max: 30, addonAfter: '天' })}
+                        <p>
                             当前设置：两次夜班之间至少间隔 {(config.min_night_shift_interval || 7) - 1} 天
-                        </Text>
-                    </div>
+                        </p>
+                    </section>
                 )}
 
-                {/* Prefer Extended Night Rest Parameters */}
                 {config.enable_prefer_extended_night_rest && config.enable_night_rest && (
-                    <div style={{ padding: '8px 16px', background: '#f6f8fa', borderRadius: 8, marginTop: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <Text type="secondary" style={{ fontSize: 13 }}>期望休息天数</Text>
-                            <InputNumber
-                                size="small"
-                                min={2}
-                                max={4}
-                                value={config.preferred_night_rest_days}
-                                onChange={(val) => handleWeightChange('preferred_night_rest_days', val)}
-                                style={{ width: 70 }}
-                                addonAfter="天"
-                            />
+                    <section className="solver-v4-config-subpanel">
+                        <div className="solver-v4-config-grid">
+                            {renderNumberField('preferred_night_rest_days', '期望休息天数', { min: 2, max: 4, addonAfter: '天' })}
+                            {renderNumberField('objective_weight_night_rest_extend', '惩罚权重', { min: 0, max: 500 })}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <Text type="secondary" style={{ fontSize: 13 }}>惩罚权重</Text>
-                            <InputNumber
-                                size="small"
-                                min={0}
-                                max={500}
-                                value={config.objective_weight_night_rest_extend}
-                                onChange={(val) => handleWeightChange('objective_weight_night_rest_extend', val)}
-                                style={{ width: 70 }}
-                            />
-                        </div>
-                        <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: 'block' }}>
+                        <p>
                             强制休息 1 天 + 尽量多休 {(config.preferred_night_rest_days || 2) - 1} 天
-                        </Text>
-                    </div>
+                        </p>
+                    </section>
                 )}
 
-                {/* Consecutive Work/Rest Pattern Parameters */}
                 {config.enable_consecutive_work_rest_pattern && (
-                    <div style={{ padding: '12px 16px', background: '#f6f8fa', borderRadius: 8, marginTop: 8 }}>
-                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 10 }}>
-                            ⚠️ 启用后若存在锁定班次，请确认不与该约束冲突
-                        </Text>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>最少连续上班</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={1}
-                                    max={config.max_consecutive_work_days_pattern}
-                                    value={config.min_consecutive_work_days_pattern}
-                                    onChange={(val) => handleWeightChange('min_consecutive_work_days_pattern', val)}
-                                    style={{ width: 70 }}
-                                    addonAfter="天"
-                                />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>最多连续上班</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={config.min_consecutive_work_days_pattern}
-                                    max={7}
-                                    value={config.max_consecutive_work_days_pattern}
-                                    onChange={(val) => handleWeightChange('max_consecutive_work_days_pattern', val)}
-                                    style={{ width: 70 }}
-                                    addonAfter="天"
-                                />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>最少连续休息</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={1}
-                                    max={config.max_consecutive_rest_days_pattern}
-                                    value={config.min_consecutive_rest_days_pattern}
-                                    onChange={(val) => handleWeightChange('min_consecutive_rest_days_pattern', val)}
-                                    style={{ width: 70 }}
-                                    addonAfter="天"
-                                />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>最多连续休息</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={config.min_consecutive_rest_days_pattern}
-                                    max={7}
-                                    value={config.max_consecutive_rest_days_pattern}
-                                    onChange={(val) => handleWeightChange('max_consecutive_rest_days_pattern', val)}
-                                    style={{ width: 70 }}
-                                    addonAfter="天"
-                                />
-                            </div>
+                    <section className="solver-v4-config-subpanel">
+                        <p>启用后若存在锁定班次，请确认不与该约束冲突。</p>
+                        <div className="solver-v4-config-grid">
+                            {renderNumberField('min_consecutive_work_days_pattern', '最少连续上班', { min: 1, max: config.max_consecutive_work_days_pattern, addonAfter: '天' })}
+                            {renderNumberField('max_consecutive_work_days_pattern', '最多连续上班', { min: config.min_consecutive_work_days_pattern, max: 7, addonAfter: '天' })}
+                            {renderNumberField('min_consecutive_rest_days_pattern', '最少连续休息', { min: 1, max: config.max_consecutive_rest_days_pattern, addonAfter: '天' })}
+                            {renderNumberField('max_consecutive_rest_days_pattern', '最多连续休息', { min: config.min_consecutive_rest_days_pattern, max: 7, addonAfter: '天' })}
                         </div>
-                    </div>
+                    </section>
                 )}
 
-                <Divider orientation="left" style={{ margin: '12px 0' }}>独立任务</Divider>
-
-                <div style={{ background: '#f5f0ff', padding: 16, borderRadius: 8, border: '1px solid #d3adf7', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                        <ToolOutlined style={{ marginRight: 8, color: '#722ed1' }} />
-                        <Text strong style={{ color: '#531dab' }}>独立任务配置</Text>
+                <WxbDivider label="独立任务" />
+                <section className="solver-v4-config-panel">
+                    <div className="solver-v4-config-panel-title">
+                        <WxbIcon name="kanban" size={16} />
+                        <strong>独立任务配置</strong>
                     </div>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-                        控制值班任务（周期/弹性/临时）是否参与自动排班及其空缺策略。
-                    </Text>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {/* Enable standalone tasks */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div>
-                                <Text strong style={{ fontSize: 13 }}>纳入独立任务</Text>
-                                <br />
-                                <Text type="secondary" style={{ fontSize: 12 }}>启用后，当月有效的独立任务将参与自动排班</Text>
+                    <p>控制值班任务（周期/弹性/临时）是否参与自动排班及其空缺策略。</p>
+                    <div className="solver-v4-config-list">
+                        <div className="solver-v4-config-row">
+                            <div className="solver-v4-config-copy">
+                                <strong>纳入独立任务</strong>
+                                <span>启用后，当月有效的独立任务将参与自动排班</span>
                             </div>
-                            <Switch
-                                checked={config.enable_standalone_tasks}
-                                onChange={() => handleToggle('enable_standalone_tasks')}
-                            />
+                            <WxbSwitch checked={config.enable_standalone_tasks} onChange={() => handleToggle('enable_standalone_tasks')} />
                         </div>
-
-                        {/* Allow vacancy */}
                         {config.enable_standalone_tasks && (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, borderLeft: '2px solid #d3adf7' }}>
-                                <div>
-                                    <Text strong style={{ fontSize: 13 }}>允许独立任务空缺</Text>
-                                    <br />
-                                    <Text type="secondary" style={{ fontSize: 12 }}>无合适候选人时允许岗位留空</Text>
+                            <div className="solver-v4-config-row solver-v4-config-row-indent">
+                                <div className="solver-v4-config-copy">
+                                    <strong>允许独立任务空缺</strong>
+                                    <span>无合适候选人时允许岗位留空</span>
                                 </div>
-                                <Switch
-                                    checked={config.allow_standalone_vacancy}
-                                    onChange={() => handleToggle('allow_standalone_vacancy')}
-                                />
+                                <WxbSwitch checked={config.allow_standalone_vacancy} onChange={() => handleToggle('allow_standalone_vacancy')} />
                             </div>
                         )}
-
-                        {/* Vacancy weight */}
                         {config.enable_standalone_tasks && config.allow_standalone_vacancy && (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: 16, borderLeft: '2px solid #d3adf7' }}>
-                                <Text type="secondary" style={{ fontSize: 13 }}>空缺惩罚权重</Text>
-                                <InputNumber
-                                    size="small"
-                                    min={100}
-                                    max={100000}
-                                    step={1000}
-                                    value={config.objective_weight_standalone_vacancy}
-                                    onChange={(val) => handleWeightChange('objective_weight_standalone_vacancy', val)}
-                                    style={{ width: 100 }}
-                                />
+                            <div className="solver-v4-config-row solver-v4-config-row-indent">
+                                {renderNumberField('objective_weight_standalone_vacancy', '空缺惩罚权重', { min: 100, max: 100000, step: 1000 })}
                             </div>
                         )}
                     </div>
-                </div>
+                </section>
 
-                <Divider orientation="left" style={{ margin: '12px 0' }}>优化目标</Divider>
-                <List
-                    itemLayout="horizontal"
-                    dataSource={[
-                        {
-                            key: 'enable_minimize_deviation',
-                            weightKey: 'objective_weight_deviation',
-                            title: '最小化工时偏差',
-                            description: '减少实际工时与标准工时的偏差',
-                        },
-                        {
-                            key: 'enable_minimize_special_shifts',
-                            weightKey: 'objective_weight_special_shifts',
-                            title: '最小化特殊班次',
-                            description: '减少非标准班次的使用数量',
-                        },
-                        {
-                            key: 'enable_balance_night_shifts',
-                            weightKey: 'objective_weight_night_balance',
-                            title: '夜班均衡分配',
-                            description: '惩罚夜班分配不均匀（方差 × 权重）',
-                        },
-                        {
-                            key: 'enable_balance_weekend_work',
-                            weightKey: 'objective_weight_weekend_balance',
-                            title: '周末工作均衡',
-                            description: '惩罚周末/节假日工作分配不均匀',
-                        },
-                        {
-                            key: 'enable_minimize_triple_salary',
-                            weightKey: 'objective_weight_triple_salary',
-                            title: '三倍薪日成本优化',
-                            description: '尽量避免在法定节假日（三倍薪资）安排排班',
-                        },
-                        {
-                            key: 'allow_position_vacancy',
-                            weightKey: 'objective_weight_vacancy',
-                            title: '允许岗位空缺',
-                            description: '允许无人接手时留空（高惩罚权重）',
-                        },
-                    ]}
-                    renderItem={(item) => (
-                        <List.Item
-                            actions={[
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ fontSize: 12, color: '#999' }}>权重:</span>
-                                    <InputNumber
-                                        size="small"
-                                        min={0}
-                                        value={config[item.weightKey as keyof SolverConfig] as number}
-                                        onChange={(val) => handleWeightChange(item.weightKey as keyof SolverConfig, val)}
-                                        disabled={!config[item.key as keyof SolverConfig]}
-                                        style={{ width: 70 }}
-                                    />
-                                    <Switch
-                                        checked={config[item.key as keyof SolverConfig] as boolean}
-                                        onChange={() => handleToggle(item.key as keyof SolverConfig)}
+                <WxbDivider label="优化目标" />
+                <div className="solver-v4-config-list">
+                    {objectiveControls.map((item) => {
+                        const key = item.key as keyof SolverConfig;
+                        const weightKey = item.weightKey as keyof SolverConfig;
+                        return (
+                            <div key={item.key} className="solver-v4-config-row solver-v4-config-row-objective">
+                                <div className="solver-v4-config-copy">
+                                    <strong>{item.title}</strong>
+                                    <span>{item.description}</span>
+                                </div>
+                                <div className="solver-v4-objective-controls">
+                                    {renderNumberField(weightKey, '权重', { min: 0, disabled: !(config[key] as boolean) })}
+                                    <WxbSwitch
+                                        checked={config[key] as boolean}
+                                        onChange={() => handleToggle(key)}
                                     />
                                 </div>
-                            ]}
-                        >
-                            <List.Item.Meta
-                                title={<Text strong>{item.title}</Text>}
-                                description={item.description}
-                            />
-                        </List.Item>
-                    )}
-                />
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
-        </Modal>
+        </WxbModal>
     );
 };
 

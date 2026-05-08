@@ -1,17 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DatePicker, Table, Tag, Typography, Space, Button, message, Select, Tabs } from 'antd';
+import { message } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import OperationReviewModal from './OperationReviewModal';
 import SolveProgressV4Modal from './SolveProgressV4Modal';
 import SolveResultV4Page from './SolveResultV4Page';
 import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from './SolverConfigurationModal';
-import { SettingOutlined, HistoryOutlined, UnorderedListOutlined, ThunderboltOutlined, ToolOutlined } from '@ant-design/icons';
 import RunHistoryTab from './RunHistoryTab';
 import IntervalSolveTab from './IntervalSolveTab';
 import StandingDutyTab from './StandingDutyTab';
-
-const { Title } = Typography;
+import {
+    DepartmentFilterValue,
+    filterBatchesByDepartment,
+    getDefaultSelectedBatchIds,
+    getVisibleSelectedBatchIds,
+} from './batchSelection';
+import {
+    WxbBulkActionBar,
+    WxbButton,
+    WxbCard,
+    WxbDataTable,
+    WxbDatePicker,
+    WxbFilterBar,
+    WxbIcon,
+    WxbPageHeader,
+    WxbPageShell,
+    WxbSelect,
+    WxbTabs,
+    WxbTag,
+} from '../wxb-ui';
+import type { WxbTagColor } from '../wxb-ui';
 
 interface BatchPlan {
     id: number;
@@ -44,7 +62,7 @@ const MonthlyBatchSelector: React.FC = () => {
 
     // Department Filter State
     const [teams, setTeams] = useState<Team[]>([]);
-    const [selectedDepartment, setSelectedDepartment] = useState<'all' | number>('all');
+    const [selectedDepartment, setSelectedDepartment] = useState<DepartmentFilterValue>('all');
     const [loadingTeams, setLoadingTeams] = useState(false);
 
     // Progress Modal State
@@ -82,20 +100,10 @@ const MonthlyBatchSelector: React.FC = () => {
 
             if (result.success && Array.isArray(result.data)) {
                 setData(result.data);
-                // Default select all ACTIVATED batches
-                const activatedIds = result.data
-                    .filter((batch: BatchPlan) => batch.plan_status === 'ACTIVATED')
-                    .map((batch: BatchPlan) => batch.id);
-                setSelectedRowKeys(activatedIds);
             } else {
                 // Fallback if API structure is different or returns error
                 if (Array.isArray(result)) {
                     setData(result);
-                    // Default select all ACTIVATED batches for fallback case too
-                    const activatedIds = result
-                        .filter((batch: BatchPlan) => batch.plan_status === 'ACTIVATED')
-                        .map((batch: BatchPlan) => batch.id);
-                    setSelectedRowKeys(activatedIds);
                 } else {
                     console.error("Unexpected API response:", result);
                     message.error('加载批次数据失败');
@@ -114,13 +122,17 @@ const MonthlyBatchSelector: React.FC = () => {
         // Note: selectedRowKeys reset is handled inside fetchData via auto-selecting ACTIVATED
     }, [selectedMonth]);
 
+    useEffect(() => {
+        setSelectedRowKeys(getDefaultSelectedBatchIds(data, selectedDepartment));
+    }, [data, selectedDepartment]);
+
     const handleMonthChange = (date: Dayjs | null) => {
         if (date) {
             setSelectedMonth(date);
         }
     };
 
-    const handleDepartmentChange = (value: 'all' | number) => {
+    const handleDepartmentChange = (value: DepartmentFilterValue) => {
         setSelectedDepartment(value);
         // 自动同步到高级配置
         if (value === 'all') {
@@ -132,17 +144,214 @@ const MonthlyBatchSelector: React.FC = () => {
             }));
         }
         // 自动勾选过滤后的 ACTIVATED 批次
-        const filtered = data.filter(item => value === 'all' || item.team_id === value);
-        const activatedIds = filtered
-            .filter(batch => batch.plan_status === 'ACTIVATED')
-            .map(batch => batch.id);
-        setSelectedRowKeys(activatedIds);
+        setSelectedRowKeys(getDefaultSelectedBatchIds(data, value));
     };
 
     // 高级配置关闭时反向同步部门筛选器
     const handleConfigClose = () => {
         setConfigVisible(false);
         const ids = solverConfig.team_ids || [];
+        const nextDepartment = ids.length === 1 ? ids[0] : 'all';
+        setSelectedDepartment(nextDepartment);
+        setSelectedRowKeys(getDefaultSelectedBatchIds(data, nextDepartment));
+    };
+
+    // 计算过滤后的数据
+    const filteredData = Array.isArray(data)
+        ? filterBatchesByDepartment(data, selectedDepartment)
+        : [];
+    const visibleSelectedRowKeys = getVisibleSelectedBatchIds(selectedRowKeys, filteredData);
+
+    const handleScheduleSelected = () => {
+        if (visibleSelectedRowKeys.length === 0) {
+            message.warning('请至少选择一个批次进行排班。');
+            return;
+        }
+
+        setModalVisible(true);
+    };
+
+    const handleResetSelection = () => {
+        setSelectedRowKeys([]);
+    };
+
+    const onSelectChange = (newSelectedRowKeys: React.Key[]) => {
+        setSelectedRowKeys(newSelectedRowKeys);
+    };
+
+    const handleSchedulingSuccess = (runId: number) => {
+        setModalVisible(false); // Close review modal
+        setCurrentRunId(runId);
+        setProgressVis(true); // Open progress modal
+    };
+
+    const handleProgressClose = () => {
+        setProgressVis(false);
+        setCurrentRunId(null);
+    };
+
+    const rowSelection = {
+        selectedRowKeys: visibleSelectedRowKeys,
+        onChange: onSelectChange,
+    };
+
+    const getPlanStatusColor = (status?: string): WxbTagColor => {
+        if (status === 'IN PROGRESS' || status === 'ACTIVATED') return 'blue';
+        if (status === 'COMPLETED') return 'green';
+        if (status === 'PENDING') return 'amber';
+        return 'neutral';
+    };
+
+    const columns: ColumnsType<BatchPlan> = [
+        {
+            title: '批次编号',
+            dataIndex: 'batch_code',
+            key: 'batch_code',
+            sorter: (a, b) => a.batch_code.localeCompare(b.batch_code),
+        },
+        {
+            title: '产品',
+            dataIndex: 'template_name',
+            key: 'template_name',
+            render: (text) => text || '-',
+        },
+        {
+            title: '状态',
+            dataIndex: 'plan_status',
+            key: 'plan_status',
+            render: (status) => {
+                return <WxbTag color={getPlanStatusColor(status)}>{status || 'DRAFT'}</WxbTag>;
+            },
+        },
+        {
+            title: '部门',
+            dataIndex: 'team_name',
+            key: 'team_name',
+            render: (text) => text || '-',
+        },
+        {
+            title: '开始日期',
+            dataIndex: 'planned_start_date',
+            key: 'planned_start_date',
+            sorter: (a, b) => dayjs(a.planned_start_date).unix() - dayjs(b.planned_start_date).unix(),
+        },
+        {
+            title: '结束日期',
+            dataIndex: 'planned_end_date',
+            key: 'planned_end_date',
+            sorter: (a, b) => dayjs(a.planned_end_date).unix() - dayjs(b.planned_end_date).unix(),
+        },
+    ];
+
+    return (
+        <WxbPageShell size="full" gap="md" className="solver-v4-shell">
+            <WxbPageHeader
+                eyebrow="Solver V4"
+                title="排班调度"
+                description="选择月度批次、区间求解或值班任务后启动 V4 自动排班。"
+                meta={<WxbTag color="blue">白色 wxb-ui 主题</WxbTag>}
+                actions={(
+                    <WxbButton
+                        type="button"
+                        variant="secondary"
+                        onClick={() => setConfigVisible(true)}
+                    >
+                        <WxbIcon name="cip-system" size={16} />
+                        高级配置
+                    </WxbButton>
+                )}
+            />
+
+            <WxbCard className="solver-v4-card" noPadding>
+            <WxbTabs
+                defaultActiveKey="batches"
+                items={[
+                    {
+                        key: 'batches',
+                        label: (
+                            <span className="solver-v4-tab-label">
+                                <WxbIcon name="batch-record" size={15} />
+                                批次列表
+                            </span>
+                        ),
+                        children: (
+                            <div className="solver-v4-tab-panel">
+                                <WxbFilterBar
+                                    resultCount={filteredData.length}
+                                    resultLabel="个批次"
+                                    filters={(
+                                        <>
+                                            <WxbSelect
+                                                value={selectedDepartment}
+                                                onChange={handleDepartmentChange}
+                                                loading={loadingTeams}
+                                                className="solver-v4-filter-select"
+                                                options={[
+                                                    { value: 'all', label: '所有部门' },
+                                                    ...teams.map(team => ({
+                                                        value: team.id,
+                                                        label: team.teamName,
+                                                    })),
+                                                ]}
+                                            />
+                                            <WxbDatePicker
+                                                picker="month"
+                                                value={selectedMonth}
+                                                onChange={handleMonthChange}
+                                                allowClear={false}
+                                                className="solver-v4-month-picker"
+                                            />
+                                        </>
+                                    )}
+                                />
+
+                                <WxbDataTable<BatchPlan>
+                                    rowSelection={rowSelection}
+                                    columns={columns}
+                                    dataSource={filteredData}
+                                    rowKey="id"
+                                    loading={loading}
+                                    density="standard"
+                                    emptyState={{ description: '当前月份没有可排班批次' }}
+                                    pagination={{
+                                        total: filteredData.length,
+                                        pageSize: 10,
+                                        showSizeChanger: true,
+                                        showTotal: (total) => `共 ${total} 条`
+                                    }}
+                                />
+
+                                <WxbBulkActionBar
+                                    selectedCount={visibleSelectedRowKeys.length}
+                                    onClear={handleResetSelection}
+                                    clearLabel="重置选择"
+                                    summary={(
+                                        <span className="solver-v4-selection-text">
+                                            已选 <strong>{visibleSelectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
+                                        </span>
+                                    )}
+                                    actions={[
+                                        {
+                                            key: 'schedule',
+                                            label: '排班选中批次',
+                                            variant: 'primary',
+                                            onClick: handleScheduleSelected,
+                                        },
+                                    ]}
+                                />
+                                {visibleSelectedRowKeys.length === 0 && (
+                                    <div className="solver-v4-action-footer">
+                                        <span className="solver-v4-selection-text">
+                                            已选 <strong>0</strong> / 共 {filteredData.length} 个批次
+                                        </span>
+                                        <WxbButton type="button" variant="primary" onClick={handleScheduleSelected}>
+                                            排班选中批次
+                                        </WxbButton>
+                                    </div>
+                                )}
+                            </div>
+                        ),
+                    },
         if (ids.length === 1) {
             setSelectedDepartment(ids[0]);
         } else {
@@ -188,6 +397,13 @@ const MonthlyBatchSelector: React.FC = () => {
         onChange: onSelectChange,
     };
 
+    const getPlanStatusColor = (status?: string): WxbTagColor => {
+        if (status === 'IN PROGRESS' || status === 'ACTIVATED') return 'blue';
+        if (status === 'COMPLETED') return 'green';
+        if (status === 'PENDING') return 'amber';
+        return 'neutral';
+    };
+
     const columns: ColumnsType<BatchPlan> = [
         {
             title: '批次编号',
@@ -206,11 +422,7 @@ const MonthlyBatchSelector: React.FC = () => {
             dataIndex: 'plan_status',
             key: 'plan_status',
             render: (status) => {
-                let color = 'default';
-                if (status === 'IN PROGRESS' || status === 'ACTIVATED') color = 'blue';
-                if (status === 'COMPLETED') color = 'green';
-                if (status === 'PENDING') color = 'gold';
-                return <Tag color={color}>{status || 'DRAFT'}</Tag>;
+                return <WxbTag color={getPlanStatusColor(status)}>{status || 'DRAFT'}</WxbTag>;
             },
         },
         {
@@ -234,67 +446,75 @@ const MonthlyBatchSelector: React.FC = () => {
     ];
 
     return (
-        <Card
-            bordered={false}
-            style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-            bodyStyle={{ padding: '24px' }}
-        >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Title level={4} style={{ margin: 0 }}>排班调度</Title>
-                    <Button
-                        icon={<SettingOutlined />}
+        <WxbPageShell size="full" gap="md" className="solver-v4-shell">
+            <WxbPageHeader
+                eyebrow="Solver V4"
+                title="排班调度"
+                description="选择月度批次、区间求解或值班任务后启动 V4 自动排班。"
+                meta={<WxbTag color="blue">白色 wxb-ui 主题</WxbTag>}
+                actions={(
+                    <WxbButton
+                        type="button"
+                        variant="secondary"
                         onClick={() => setConfigVisible(true)}
                     >
+                        <WxbIcon name="cip-system" size={16} />
                         高级配置
-                    </Button>
-                </div>
-            </div>
+                    </WxbButton>
+                )}
+            />
 
-            <Tabs
+            <WxbCard className="solver-v4-card" noPadding>
+            <WxbTabs
                 defaultActiveKey="batches"
                 items={[
                     {
                         key: 'batches',
                         label: (
-                            <span><UnorderedListOutlined style={{ marginRight: 6 }} />批次列表</span>
+                            <span className="solver-v4-tab-label">
+                                <WxbIcon name="batch-record" size={15} />
+                                批次列表
+                            </span>
                         ),
                         children: (
-                            <>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                                    <Space size="middle">
-                                        <Select
-                                            value={selectedDepartment}
-                                            onChange={handleDepartmentChange}
-                                            loading={loadingTeams}
-                                            style={{
-                                                width: 200,
-                                                borderRadius: '12px',
-                                                boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-                                            }}
-                                            options={[
-                                                { value: 'all', label: '所有部门' },
-                                                ...teams.map(team => ({
-                                                    value: team.id,
-                                                    label: team.teamName,
-                                                })),
-                                            ]}
-                                        />
-                                        <DatePicker.MonthPicker
-                                            value={selectedMonth}
-                                            onChange={handleMonthChange}
-                                            allowClear={false}
-                                            style={{ width: 150, borderRadius: '8px' }}
-                                        />
-                                    </Space>
-                                </div>
+                            <div className="solver-v4-tab-panel">
+                                <WxbFilterBar
+                                    resultCount={filteredData.length}
+                                    resultLabel="个批次"
+                                    filters={(
+                                        <>
+                                            <WxbSelect
+                                                value={selectedDepartment}
+                                                onChange={handleDepartmentChange}
+                                                loading={loadingTeams}
+                                                className="solver-v4-filter-select"
+                                                options={[
+                                                    { value: 'all', label: '所有部门' },
+                                                    ...teams.map(team => ({
+                                                        value: team.id,
+                                                        label: team.teamName,
+                                                    })),
+                                                ]}
+                                            />
+                                            <WxbDatePicker
+                                                picker="month"
+                                                value={selectedMonth}
+                                                onChange={handleMonthChange}
+                                                allowClear={false}
+                                                className="solver-v4-month-picker"
+                                            />
+                                        </>
+                                    )}
+                                />
 
-                                <Table
+                                <WxbDataTable<BatchPlan>
                                     rowSelection={rowSelection}
                                     columns={columns}
                                     dataSource={filteredData}
                                     rowKey="id"
                                     loading={loading}
+                                    density="standard"
+                                    emptyState={{ description: '当前月份没有可排班批次' }}
                                     pagination={{
                                         total: filteredData.length,
                                         pageSize: 10,
@@ -303,43 +523,70 @@ const MonthlyBatchSelector: React.FC = () => {
                                     }}
                                 />
 
-                                <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <span style={{ color: '#86868B', fontSize: 13 }}>
-                                        已选 <strong style={{ color: '#1D1D1F' }}>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
-                                    </span>
-                                    <div style={{ display: 'flex', gap: 12 }}>
-                                        <Button onClick={handleResetSelection}>重置选择</Button>
-                                        <Button type="primary" onClick={handleScheduleSelected}>
+                                <WxbBulkActionBar
+                                    selectedCount={selectedRowKeys.length}
+                                    onClear={handleResetSelection}
+                                    clearLabel="重置选择"
+                                    summary={(
+                                        <span className="solver-v4-selection-text">
+                                            已选 <strong>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
+                                        </span>
+                                    )}
+                                    actions={[
+                                        {
+                                            key: 'schedule',
+                                            label: '排班选中批次',
+                                            variant: 'primary',
+                                            onClick: handleScheduleSelected,
+                                        },
+                                    ]}
+                                />
+                                {selectedRowKeys.length === 0 && (
+                                    <div className="solver-v4-action-footer">
+                                        <span className="solver-v4-selection-text">
+                                            已选 <strong>0</strong> / 共 {filteredData.length} 个批次
+                                        </span>
+                                        <WxbButton type="button" variant="primary" onClick={handleScheduleSelected}>
                                             排班选中批次
-                                        </Button>
+                                        </WxbButton>
                                     </div>
-                                </div>
-                            </>
+                                )}
+                            </div>
                         ),
                     },
                     {
                         key: 'interval',
                         label: (
-                            <span><ThunderboltOutlined style={{ marginRight: 6 }} />区间求解</span>
+                            <span className="solver-v4-tab-label">
+                                <WxbIcon name="hold-time" size={15} />
+                                区间求解
+                            </span>
                         ),
                         children: <IntervalSolveTab />,
                     },
                     {
                         key: 'duties',
                         label: (
-                            <span><ToolOutlined style={{ marginRight: 6 }} />值班任务</span>
+                            <span className="solver-v4-tab-label">
+                                <WxbIcon name="kanban" size={15} />
+                                值班任务
+                            </span>
                         ),
                         children: <StandingDutyTab />,
                     },
                     {
                         key: 'history',
                         label: (
-                            <span><HistoryOutlined style={{ marginRight: 6 }} />历史记录</span>
+                            <span className="solver-v4-tab-label">
+                                <WxbIcon name="oos-clock" size={15} />
+                                历史记录
+                            </span>
                         ),
                         children: <RunHistoryTab />,
                     },
                 ]}
             />
+            </WxbCard>
 
             <OperationReviewModal
                 visible={modalVisible}
@@ -372,7 +619,7 @@ const MonthlyBatchSelector: React.FC = () => {
                 runId={currentRunId}
                 onClose={() => setResultVis(false)}
             />
-        </Card >
+        </WxbPageShell>
     );
 };
 

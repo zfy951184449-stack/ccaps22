@@ -1,6 +1,7 @@
 /**
  * WxbGanttChart v2 — Pure Utility Functions
  */
+import type { CollapsedTimeInterval, GanttTask, GanttTimeScale } from './types';
 
 /**
  * Convert hours offset to pixel X position
@@ -14,6 +15,116 @@ export function hourToX(hour: number, startHour: number, hourWidth: number): num
  */
 export function xToHour(x: number, startHour: number, hourWidth: number): number {
   return x / hourWidth + startHour;
+}
+
+function rangesOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aEnd > bStart && aStart < bEnd;
+}
+
+function isOperationTask(task: GanttTask): boolean {
+  return task.type !== 'stage' && task.type !== 'timeWindow';
+}
+
+function buildCollapsedNightIntervals(
+  startHour: number,
+  endHour: number,
+  tasks: GanttTask[],
+): CollapsedTimeInterval[] {
+  const intervals: CollapsedTimeInterval[] = [];
+  const firstDay = Math.floor(startHour / 24) - 1;
+  const lastDay = Math.ceil(endHour / 24);
+  const operationTasks = tasks.filter(isOperationTask);
+
+  for (let day = firstDay; day <= lastDay; day++) {
+    const nightStart = day * 24 + 21;
+    const nightEnd = (day + 1) * 24 + 9;
+    const clippedStart = Math.max(nightStart, startHour);
+    const clippedEnd = Math.min(nightEnd, endHour);
+    if (clippedEnd <= clippedStart) continue;
+
+    const hasOperation = operationTasks.some(task =>
+      rangesOverlap(task.start, task.end, clippedStart, clippedEnd)
+    );
+    if (!hasOperation) {
+      intervals.push({ start: clippedStart, end: clippedEnd, kind: 'night' });
+    }
+  }
+
+  return intervals;
+}
+
+/**
+ * Build a horizontal time scale. When collapseEmptyNightShifts is true, empty
+ * night shifts are removed from the x-axis while task hours remain unchanged.
+ */
+export function buildGanttTimeScale(
+  startHour: number,
+  endHour: number,
+  hourWidth: number,
+  options?: { collapseEmptyNightShifts?: boolean; tasks?: GanttTask[] },
+): GanttTimeScale {
+  const collapsedIntervals = options?.collapseEmptyNightShifts
+    ? buildCollapsedNightIntervals(startHour, endHour, options.tasks ?? [])
+    : [];
+
+  const collapsedBefore = (hour: number): number => {
+    const boundedHour = Math.max(startHour, Math.min(hour, endHour));
+    let total = 0;
+    for (const interval of collapsedIntervals) {
+      if (boundedHour <= interval.start) continue;
+      total += Math.max(0, Math.min(boundedHour, interval.end) - interval.start);
+    }
+    return total;
+  };
+
+  const isHourCollapsed = (hour: number): boolean =>
+    collapsedIntervals.some(interval => hour >= interval.start && hour < interval.end);
+
+  const hourToVisibleHours = (hour: number): number => {
+    const boundedHour = Math.max(startHour, Math.min(hour, endHour));
+    return boundedHour - startHour - collapsedBefore(boundedHour);
+  };
+
+  const hourToScaledX = (hour: number): number => hourToVisibleHours(hour) * hourWidth;
+
+  const xToScaledHour = (x: number): number => {
+    const visibleHours = Math.max(0, x / hourWidth);
+    let hiddenSoFar = 0;
+    for (const interval of collapsedIntervals) {
+      const intervalVisibleStart = interval.start - startHour - hiddenSoFar;
+      if (visibleHours <= intervalVisibleStart) {
+        return Math.max(startHour, Math.min(startHour + visibleHours + hiddenSoFar, endHour));
+      }
+      hiddenSoFar += interval.end - interval.start;
+    }
+    return Math.max(startHour, Math.min(startHour + visibleHours + hiddenSoFar, endHour));
+  };
+
+  const widthBetween = (rangeStart: number, rangeEnd: number): number => {
+    const from = Math.min(rangeStart, rangeEnd);
+    const to = Math.max(rangeStart, rangeEnd);
+    return Math.abs(hourToScaledX(to) - hourToScaledX(from));
+  };
+
+  const totalVisibleHours = endHour - startHour - collapsedIntervals.reduce(
+    (sum, interval) => sum + interval.end - interval.start,
+    0,
+  );
+
+  return {
+    startHour,
+    endHour,
+    hourWidth,
+    totalWidth: Math.max(0, totalVisibleHours * hourWidth),
+    collapsedIntervals,
+    hourToX: hourToScaledX,
+    xToHour: xToScaledHour,
+    widthBetween,
+    isHourCollapsed,
+    isRangeVisible: (rangeStart, rangeEnd) => widthBetween(rangeStart, rangeEnd) > 0.5,
+    pixelDeltaToHourDelta: (originHour, deltaX) =>
+      xToScaledHour(hourToScaledX(originHour) + deltaX) - originHour,
+  };
 }
 
 /**

@@ -6,21 +6,31 @@
  *   Bottom: Monthly FLEXIBLE/AD_HOC instances table (generate / delete)
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-    Card, Row, Col, Button, Table, Tag, Modal, Form, Input, InputNumber,
-    Select, Radio, Checkbox, DatePicker, message, Empty, Popconfirm,
-    Typography, Space, Tooltip, Spin, Divider,
-} from 'antd';
-import {
-    PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined,
-    CalendarOutlined, TeamOutlined, ClockCircleOutlined,
-    ExclamationCircleOutlined, ToolOutlined, ApartmentOutlined,
-} from '@ant-design/icons';
+import { Form, message } from 'antd';
 import axios from 'axios';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-
-const { Text } = Typography;
+import {
+    WxbBulkActionBar,
+    WxbButton,
+    WxbCard,
+    WxbCheckbox,
+    WxbDataTable,
+    WxbDatePicker,
+    WxbDivider,
+    WxbEmpty,
+    WxbIcon,
+    WxbInput,
+    WxbInputNumber,
+    WxbModal,
+    WxbPopconfirm,
+    WxbRadioGroup,
+    WxbSelect,
+    WxbSpinner,
+    WxbTag,
+    WxbTooltip,
+} from '../wxb-ui';
+import type { WxbTagColor } from '../wxb-ui';
 
 // ─── Label mappings (排班员友好) ─────────────────────────────
 
@@ -30,10 +40,10 @@ const TASK_TYPE_LABELS: Record<string, string> = {
     AD_HOC: '临时任务',
 };
 
-const STATUS_LABELS: Record<string, { text: string; color: string }> = {
+const STATUS_LABELS: Record<string, { text: string; color: WxbTagColor }> = {
     PENDING: { text: '待排班', color: 'blue' },
     SCHEDULED: { text: '已排班', color: 'green' },
-    COMPLETED: { text: '已完成', color: 'default' },
+    COMPLETED: { text: '已完成', color: 'neutral' },
     CANCELLED: { text: '已取消', color: 'red' },
 };
 
@@ -51,6 +61,12 @@ const WEEKDAY_OPTIONS = [
     { label: '周五', value: 5 },
     { label: '周六', value: 6 },
     { label: '周日', value: 7 },
+];
+
+const TASK_TYPE_OPTIONS = [
+    { label: '周期值班', value: 'RECURRING' },
+    { label: '弹性安排', value: 'FLEXIBLE' },
+    { label: '临时任务', value: 'AD_HOC' },
 ];
 
 // ─── Types ───────────────────────────────────────────────────
@@ -88,14 +104,14 @@ interface SolverTeam {
     teamName: string;
 }
 
-// ─── Template left-bar color ─────────────────────────────────
+// ─── Template visual state ───────────────────────────────────
 
-function getAccentColor(task: StandaloneTask, shifts: ShiftDef[]): string {
+function getAccentClass(task: StandaloneTask, shifts: ShiftDef[]): string {
     const parsedIds = parseShiftIds(task.preferred_shift_ids);
-    if (parsedIds.length === 0) return '#8b5cf6'; // default purple
+    if (parsedIds.length === 0) return 'solver-v4-duty-template-default';
     const firstShift = shifts.find(s => parsedIds.includes(s.id));
-    if (firstShift?.is_night_shift) return '#7c3aed';
-    return '#f59e0b';
+    if (firstShift?.is_night_shift) return 'solver-v4-duty-template-night';
+    return 'solver-v4-duty-template-day';
 }
 
 function parseShiftIds(raw: number[] | string | null): number[] {
@@ -126,6 +142,47 @@ function formatRecurrenceRule(rule: any): string {
     return freq;
 }
 
+interface TaskTypeFieldProps {
+    value?: string;
+    onChange?: (value: string) => void;
+    onTaskTypeChange: (value: string) => void;
+}
+
+const TaskTypeField: React.FC<TaskTypeFieldProps> = ({ value, onChange, onTaskTypeChange }) => (
+    <WxbRadioGroup
+        options={TASK_TYPE_OPTIONS}
+        value={value}
+        onChange={(next) => {
+            onChange?.(next);
+            onTaskTypeChange(next);
+        }}
+    />
+);
+
+interface WeekdayFieldProps {
+    value?: number[];
+    onChange?: (value: number[]) => void;
+}
+
+const WeekdayField: React.FC<WeekdayFieldProps> = ({ value = [], onChange }) => (
+    <div className="solver-v4-duty-weekday-group">
+        {WEEKDAY_OPTIONS.map(option => (
+            <WxbCheckbox
+                key={option.value}
+                checked={value.includes(option.value)}
+                onChange={(checked) => {
+                    const next = checked
+                        ? [...value, option.value].sort((a, b) => a - b)
+                        : value.filter(item => item !== option.value);
+                    onChange?.(next);
+                }}
+            >
+                {option.label}
+            </WxbCheckbox>
+        ))}
+    </div>
+);
+
 // ═══════════════════════════════════════════════════════════════
 // Component
 // ═══════════════════════════════════════════════════════════════
@@ -146,6 +203,9 @@ const StandingDutyTab: React.FC = () => {
     const [teams, setTeams] = useState<SolverTeam[]>([]);
     const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
     const [selectedInstanceIds, setSelectedInstanceIds] = useState<number[]>([]);
+    const [deleteTemplateTarget, setDeleteTemplateTarget] = useState<StandaloneTask | null>(null);
+    const [regenerateTarget, setRegenerateTarget] = useState<StandaloneTask | null>(null);
+    const [confirmActionLoading, setConfirmActionLoading] = useState(false);
 
     // ── Data Fetching ──
 
@@ -164,7 +224,6 @@ const StandingDutyTab: React.FC = () => {
     const fetchInstances = useCallback(async () => {
         setInstanceLoading(true);
         try {
-            const month = selectedMonth.format('YYYY-MM');
             const startDate = selectedMonth.startOf('month').format('YYYY-MM-DD');
             const endDate = selectedMonth.endOf('month').format('YYYY-MM-DD');
             const res = await axios.get('/api/standalone-tasks', {
@@ -234,69 +293,62 @@ const StandingDutyTab: React.FC = () => {
     };
 
     const handleDeleteTemplate = (template: StandaloneTask) => {
-        Modal.confirm({
-            title: `删除模板「${template.task_name}」`,
-            content: '是否同时删除该模板已生成的所有实例？',
-            okText: '删除模板 + 所有实例',
-            okType: 'danger',
-            cancelText: '仅删除模板',
-            onOk: async () => {
-                try {
-                    await axios.post(`/api/standalone-tasks/${template.id}/delete-instances`);
-                    await axios.delete(`/api/standalone-tasks/${template.id}`);
-                    message.success('模板及其所有实例已删除');
-                    fetchTemplates();
-                    fetchInstances();
-                } catch { message.error('删除失败'); }
-            },
-            onCancel: async () => {
-                try {
-                    await axios.delete(`/api/standalone-tasks/${template.id}`);
-                    message.success('模板已删除（实例保留）');
-                    fetchTemplates();
-                } catch { message.error('删除失败'); }
-            },
-        });
+        setDeleteTemplateTarget(template);
+    };
+
+    const confirmDeleteTemplate = async (deleteInstances: boolean) => {
+        if (!deleteTemplateTarget) return;
+        setConfirmActionLoading(true);
+        try {
+            if (deleteInstances) {
+                await axios.post(`/api/standalone-tasks/${deleteTemplateTarget.id}/delete-instances`);
+            }
+            await axios.delete(`/api/standalone-tasks/${deleteTemplateTarget.id}`);
+            message.success(deleteInstances ? '模板及其所有实例已删除' : '模板已删除（实例保留）');
+            fetchTemplates();
+            if (deleteInstances) fetchInstances();
+            setDeleteTemplateTarget(null);
+        } catch {
+            message.error('删除失败');
+        } finally {
+            setConfirmActionLoading(false);
+        }
     };
 
     const handleBatchDelete = async () => {
         if (selectedInstanceIds.length === 0) return;
-        Modal.confirm({
-            title: `批量删除 ${selectedInstanceIds.length} 个实例`,
-            content: '删除后无法恢复，确认继续？',
-            okType: 'danger',
-            okText: '确认删除',
-            cancelText: '取消',
-            onOk: async () => {
-                try {
-                    const res = await axios.post('/api/standalone-tasks/batch-delete', { ids: selectedInstanceIds });
-                    message.success(`已删除 ${res.data?.deleted_count ?? selectedInstanceIds.length} 个实例`);
-                    setSelectedInstanceIds([]);
-                    fetchInstances();
-                } catch { message.error('批量删除失败'); }
-            },
-        });
+        try {
+            const res = await axios.post('/api/standalone-tasks/batch-delete', { ids: selectedInstanceIds });
+            message.success(`已删除 ${res.data?.deleted_count ?? selectedInstanceIds.length} 个实例`);
+            setSelectedInstanceIds([]);
+            fetchInstances();
+        } catch {
+            message.error('批量删除失败');
+        }
     };
 
     const handleRegenerate = async (template: StandaloneTask) => {
+        setRegenerateTarget(template);
+    };
+
+    const confirmRegenerate = async () => {
+        if (!regenerateTarget) return;
         const month = selectedMonth.format('YYYY-MM');
-        Modal.confirm({
-            title: `重新生成「${template.task_name}」${selectedMonth.format('YYYY年M月')}实例`,
-            content: '将先删除该模板本月已有实例，然后按最新模板配置重新生成。',
-            okText: '确认重新生成',
-            cancelText: '取消',
-            onOk: async () => {
-                try {
-                    // Step 1: Delete existing instances for this template + month
-                    await axios.post(`/api/standalone-tasks/${template.id}/delete-instances`, { target_month: month });
-                    // Step 2: Regenerate
-                    const res = await axios.post('/api/standalone-tasks/generate-recurring', { target_month: month });
-                    const count = res.data?.generated_count ?? 0;
-                    message.success(`已重新生成 ${count} 个实例`);
-                    fetchInstances();
-                } catch { message.error('重新生成失败'); }
-            },
-        });
+        setConfirmActionLoading(true);
+        try {
+            // Step 1: Delete existing instances for this template + month
+            await axios.post(`/api/standalone-tasks/${regenerateTarget.id}/delete-instances`, { target_month: month });
+            // Step 2: Regenerate
+            const res = await axios.post('/api/standalone-tasks/generate-recurring', { target_month: month });
+            const count = res.data?.generated_count ?? 0;
+            message.success(`已重新生成 ${count} 个实例`);
+            fetchInstances();
+            setRegenerateTarget(null);
+        } catch {
+            message.error('重新生成失败');
+        } finally {
+            setConfirmActionLoading(false);
+        }
     };
 
     const openCreateModal = () => {
@@ -407,58 +459,82 @@ const StandingDutyTab: React.FC = () => {
             .join(', ');
 
         return (
-            <Col xs={24} md={12} key={t.id}>
-                <Card
-                    size="small"
-                    style={{
-                        borderLeft: `4px solid ${getAccentColor(t, shifts)}`,
-                        borderRadius: 8,
-                    }}
-                    bodyStyle={{ padding: '12px 16px' }}
-                >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
-                            <Space size={8} style={{ marginBottom: 4 }}>
-                                <Text strong style={{ fontSize: 15 }}>{t.task_name}</Text>
-                                <Tag color="blue" style={{ fontSize: 11 }}>
-                                    {TASK_TYPE_LABELS[t.task_type]} / {formatRecurrenceRule(t.recurrence_rule)}
-                                </Tag>
-                            </Space>
-                            <div style={{ color: '#666', fontSize: 13, marginTop: 4 }}>
-                                <TeamOutlined /> {t.required_people}人
-                                <Divider type="vertical" />
-                                <ClockCircleOutlined /> {t.duration_minutes}分钟 ({(t.duration_minutes / 60).toFixed(1)}小时)
-                                {t.team_name && (
-                                    <>
-                                        <Divider type="vertical" />
-                                        <ApartmentOutlined /> {t.team_name}
-                                    </>
-                                )}
-                                {shiftNames && (
-                                    <>
-                                        <Divider type="vertical" />
-                                        限定班次: {shiftNames}
-                                    </>
-                                )}
-                            </div>
+            <WxbCard
+                key={t.id}
+                className={`solver-v4-duty-template-card ${getAccentClass(t, shifts)}`}
+            >
+                <div className="solver-v4-duty-card-header">
+                    <div className="solver-v4-duty-card-main">
+                        <div className="solver-v4-duty-card-title-row">
+                            <span className="solver-v4-duty-card-title">{t.task_name}</span>
+                            <WxbTag color="blue">
+                                {TASK_TYPE_LABELS[t.task_type]} / {formatRecurrenceRule(t.recurrence_rule)}
+                            </WxbTag>
                         </div>
-                        <Space size={4}>
-                            <Tooltip title="重新生成本月">
-                                <Button type="text" size="small" icon={<ReloadOutlined />}
-                                    onClick={() => handleRegenerate(t)} />
-                            </Tooltip>
-                            <Tooltip title="编辑">
-                                <Button type="text" size="small" icon={<EditOutlined />}
-                                    onClick={() => openEditModal(t)} />
-                            </Tooltip>
-                            <Tooltip title="删除">
-                                <Button type="text" size="small" danger icon={<DeleteOutlined />}
-                                    onClick={() => handleDeleteTemplate(t)} />
-                            </Tooltip>
-                        </Space>
+                        <div className="solver-v4-duty-card-meta">
+                            <span className="solver-v4-duty-meta-item">
+                                <WxbIcon name="released" size={14} />
+                                {t.required_people}人
+                            </span>
+                            <WxbDivider direction="vertical" />
+                            <span className="solver-v4-duty-meta-item">
+                                <WxbIcon name="hold-time" size={14} />
+                                {t.duration_minutes}分钟 ({(t.duration_minutes / 60).toFixed(1)}小时)
+                            </span>
+                            {t.team_name && (
+                                <>
+                                    <WxbDivider direction="vertical" />
+                                    <span className="solver-v4-duty-meta-item">
+                                        <WxbIcon name="upstream-suite" size={14} />
+                                        {t.team_name}
+                                    </span>
+                                </>
+                            )}
+                            {shiftNames && (
+                                <>
+                                    <WxbDivider direction="vertical" />
+                                    <span>限定班次: {shiftNames}</span>
+                                </>
+                            )}
+                        </div>
                     </div>
-                </Card>
-            </Col>
+                    <div className="solver-v4-duty-card-actions">
+                        <WxbTooltip title="重新生成本月">
+                            <WxbButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label="重新生成本月"
+                                onClick={() => handleRegenerate(t)}
+                            >
+                                <WxbIcon name="flow-divert" size={15} />
+                            </WxbButton>
+                        </WxbTooltip>
+                        <WxbTooltip title="编辑">
+                            <WxbButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label="编辑模板"
+                                onClick={() => openEditModal(t)}
+                            >
+                                <WxbIcon name="inspect" size={15} />
+                            </WxbButton>
+                        </WxbTooltip>
+                        <WxbTooltip title="删除">
+                            <WxbButton
+                                type="button"
+                                variant="danger"
+                                size="sm"
+                                aria-label="删除模板"
+                                onClick={() => handleDeleteTemplate(t)}
+                            >
+                                <WxbIcon name="rejected" size={15} />
+                            </WxbButton>
+                        </WxbTooltip>
+                    </div>
+                </div>
+            </WxbCard>
         );
     };
 
@@ -501,10 +577,10 @@ const StandingDutyTab: React.FC = () => {
             width: 180,
             render: (_: any, record: StandaloneTask) => {
                 const ids = parseShiftIds(record.preferred_shift_ids);
-                if (ids.length === 0) return <Text type="secondary">不限</Text>;
+                if (ids.length === 0) return <span className="solver-v4-muted-text">不限</span>;
                 return ids.map(id => {
                     const s = shifts.find(sh => sh.id === id);
-                    return s ? <Tag key={id}>{s.shift_name}</Tag> : null;
+                    return s ? <WxbTag key={id} color="neutral">{s.shift_name}</WxbTag> : null;
                 });
             },
         },
@@ -514,8 +590,8 @@ const StandingDutyTab: React.FC = () => {
             key: 'status',
             width: 90,
             render: (v: string) => {
-                const st = STATUS_LABELS[v] || { text: v, color: 'default' };
-                return <Tag color={st.color}>{st.text}</Tag>;
+                const st = STATUS_LABELS[v] || { text: v, color: 'neutral' as WxbTagColor };
+                return <WxbTag color={st.color}>{st.text}</WxbTag>;
             },
         },
         {
@@ -523,9 +599,16 @@ const StandingDutyTab: React.FC = () => {
             key: 'actions',
             width: 70,
             render: (_: any, record: StandaloneTask) => (
-                <Popconfirm title="确认删除？" onConfirm={() => handleDelete(record.id)}>
-                    <Button type="text" size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
+                <WxbPopconfirm
+                    title="确认删除？"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={() => handleDelete(record.id)}
+                >
+                    <WxbButton type="button" variant="danger" size="sm" aria-label="删除实例">
+                        <WxbIcon name="rejected" size={14} />
+                    </WxbButton>
+                </WxbPopconfirm>
             ),
         },
     ];
@@ -535,7 +618,7 @@ const StandingDutyTab: React.FC = () => {
     // ═══════════════════════════════════════════════════════════════
 
     const renderModal = () => (
-        <Modal
+        <WxbModal
             title={editingTask ? '编辑值班模板' : '新建值班模板'}
             open={modalVisible}
             onCancel={() => setModalVisible(false)}
@@ -544,100 +627,92 @@ const StandingDutyTab: React.FC = () => {
             cancelText="取消"
             width={560}
             destroyOnClose
+            forceRender
+            className="solver-v4-duty-modal"
         >
-            <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+            <Form form={form} layout="vertical" className="solver-v4-duty-form">
                 <Form.Item name="task_name" label="任务名称"
                     rules={[{ required: true, message: '请输入任务名称' }]}>
-                    <Input placeholder="例如：夜班值守" />
+                    <WxbInput placeholder="例如：夜班值守" />
                 </Form.Item>
 
                 <Form.Item name="task_type" label="任务类型"
                     rules={[{ required: true }]}>
-                    <Radio.Group onChange={(e) => setTaskType(e.target.value)}>
-                        <Radio.Button value="RECURRING">周期值班</Radio.Button>
-                        <Radio.Button value="FLEXIBLE">弹性安排</Radio.Button>
-                        <Radio.Button value="AD_HOC">临时任务</Radio.Button>
-                    </Radio.Group>
+                    <TaskTypeField onTaskTypeChange={setTaskType} />
                 </Form.Item>
 
                 {taskType === 'RECURRING' && (
-                    <div style={{
-                        background: '#f0f5ff', padding: '12px 16px', borderRadius: 8,
-                        marginBottom: 16, border: '1px solid #d6e4ff',
-                    }}>
-                        <Text strong style={{ display: 'block', marginBottom: 8 }}>重复规则</Text>
-                        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                            <Space size={16}>
-                                <Form.Item name="freq" label="频率" style={{ marginBottom: 0 }}>
-                                    <Select style={{ width: 140 }}>
-                                        <Select.Option value="DAILY">每天</Select.Option>
-                                        <Select.Option value="WEEKLY">每周</Select.Option>
-                                        <Select.Option value="MONTHLY">每月</Select.Option>
-                                    </Select>
-                                </Form.Item>
-                                <Form.Item name="interval" label="间隔" style={{ marginBottom: 0 }}>
-                                    <InputNumber min={1} max={30} style={{ width: 80 }} />
-                                </Form.Item>
-                            </Space>
-                            <Form.Item name="days" label="指定日期" style={{ marginBottom: 0 }}>
-                                <Checkbox.Group options={WEEKDAY_OPTIONS} />
+                    <div className="solver-v4-duty-rule-panel">
+                        <span className="solver-v4-duty-rule-title">重复规则</span>
+                        <div className="solver-v4-duty-form-row">
+                            <Form.Item name="freq" label="频率">
+                                <WxbSelect
+                                    className="solver-v4-duty-select-sm"
+                                    options={[
+                                        { label: '每天', value: 'DAILY' },
+                                        { label: '每周', value: 'WEEKLY' },
+                                        { label: '每月', value: 'MONTHLY' },
+                                    ]}
+                                />
                             </Form.Item>
-                        </Space>
+                            <Form.Item name="interval" label="间隔">
+                                <WxbInputNumber min={1} max={30} className="solver-v4-duty-number-xs" />
+                            </Form.Item>
+                        </div>
+                        <Form.Item name="days" label="指定日期">
+                            <WeekdayField />
+                        </Form.Item>
                     </div>
                 )}
 
                 {(taskType === 'FLEXIBLE' || taskType === 'AD_HOC') && (
-                    <Space size={16} style={{ marginBottom: 16 }}>
-                        <Form.Item name="earliest_start" label="开始日期" style={{ marginBottom: 0 }}>
-                            <DatePicker />
+                    <div className="solver-v4-duty-form-row">
+                        <Form.Item name="earliest_start" label="开始日期">
+                            <WxbDatePicker />
                         </Form.Item>
-                        <Form.Item name="deadline" label="截止日期" style={{ marginBottom: 0 }}
+                        <Form.Item name="deadline" label="截止日期"
                             rules={[{ required: true, message: '请选择截止日期' }]}>
-                            <DatePicker />
+                            <WxbDatePicker />
                         </Form.Item>
-                    </Space>
+                    </div>
                 )}
 
-                <Space size={16}>
+                <div className="solver-v4-duty-form-row">
                     <Form.Item name="required_people" label="需求人数"
                         rules={[{ required: true }]}>
-                        <InputNumber min={1} max={50} addonAfter="人" style={{ width: 120 }} />
+                        <WxbInputNumber min={1} max={50} addonAfter="人" className="solver-v4-duty-number-sm" />
                     </Form.Item>
                     <Form.Item name="duration_minutes" label="工时"
                         rules={[{ required: true }]}>
-                        <InputNumber min={1} max={1440} addonAfter="分钟" style={{ width: 160 }} />
+                        <WxbInputNumber min={1} max={1440} addonAfter="分钟" className="solver-v4-duty-number-md" />
                     </Form.Item>
-                </Space>
+                </div>
 
                 <Form.Item name="preferred_shift_ids" label="限定班次">
-                    <Select
+                    <WxbSelect
                         mode="multiple"
                         placeholder="选择限定的班次（不选则不限）"
                         allowClear
-                        optionFilterProp="children"
-                    >
-                        {shifts.filter(s => s.nominal_hours > 0).map(s => (
-                            <Select.Option key={s.id} value={s.id}>
-                                {s.shift_name} ({s.start_time}-{s.end_time})
-                            </Select.Option>
-                        ))}
-                    </Select>
+                        optionFilterProp="label"
+                        options={shifts.filter(s => s.nominal_hours > 0).map(s => ({
+                            label: `${s.shift_name} (${s.start_time}-${s.end_time})`,
+                            value: s.id,
+                        }))}
+                    />
                 </Form.Item>
 
                 <Form.Item name="team_id" label="所属部门">
-                    <Select
+                    <WxbSelect
                         placeholder="选择部门"
                         allowClear
-                    >
-                        {teams.map(t => (
-                            <Select.Option key={t.id} value={t.id}>
-                                {t.teamName}
-                            </Select.Option>
-                        ))}
-                    </Select>
+                        options={teams.map(t => ({
+                            label: t.teamName,
+                            value: t.id,
+                        }))}
+                    />
                 </Form.Item>
             </Form>
-        </Modal>
+        </WxbModal>
     );
 
     // ═══════════════════════════════════════════════════════════════
@@ -645,138 +720,187 @@ const StandingDutyTab: React.FC = () => {
     // ═══════════════════════════════════════════════════════════════
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* ── Top: Templates ── */}
-            <Card
-                title="值班模板"
-                size="small"
-                extra={
-                    <Space size={12}>
-                        <Select
+        <div className="solver-v4-duty-layout">
+            <WxbCard noPadding className="solver-v4-duty-section">
+                <div className="solver-v4-duty-section-header">
+                    <div>
+                        <h3 className="solver-v4-duty-section-title">值班模板</h3>
+                        <span className="solver-v4-duty-section-subtitle">按部门维护周期值班、弹性安排和临时任务模板</span>
+                    </div>
+                    <div className="solver-v4-duty-section-actions">
+                        <WxbSelect
+                            className="solver-v4-duty-filter-select"
                             placeholder="全部部门"
                             allowClear
-                            style={{ width: 140 }}
-                            value={selectedTeamId}
-                            onChange={v => setSelectedTeamId(v ?? null)}
-                        >
-                            {teams.map(t => (
-                                <Select.Option key={t.id} value={t.id}>
-                                    {t.teamName}
-                                </Select.Option>
-                            ))}
-                        </Select>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
+                            value={selectedTeamId ?? undefined}
+                            onChange={(v) => setSelectedTeamId((v as number | undefined) ?? null)}
+                            options={teams.map(t => ({
+                                label: t.teamName,
+                                value: t.id,
+                            }))}
+                        />
+                        <WxbButton type="button" variant="primary" onClick={openCreateModal}>
+                            <WxbIcon name="recipe" size={15} />
                             新建模板
-                        </Button>
-                    </Space>
-                }
-                bodyStyle={{ padding: 16 }}
-            >
-                <Spin spinning={loading}>
-                    {filteredTemplates.length === 0 ? (
-                        <Empty
+                        </WxbButton>
+                    </div>
+                </div>
+                <div className="solver-v4-duty-section-body">
+                    {loading ? (
+                        <WxbSpinner tip="加载值班模板..." />
+                    ) : filteredTemplates.length === 0 ? (
+                        <WxbEmpty
                             description={selectedTeamId ? '该部门暂无值班模板' : '暂无值班模板，请先创建'}
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            action={(
+                                <WxbButton type="button" variant="secondary" size="sm" onClick={openCreateModal}>
+                                    新建模板
+                                </WxbButton>
+                            )}
                         />
                     ) : (
-                        <Row gutter={[12, 12]}>
+                        <div className="solver-v4-duty-template-grid">
                             {filteredTemplates.map(renderTemplateCard)}
-                        </Row>
+                        </div>
                     )}
-                </Spin>
-            </Card>
+                </div>
+            </WxbCard>
 
-            {/* ── Bottom: Instances ── */}
-            <Card
-                title="本月实例"
-                size="small"
-                extra={
-                    <Space size={12}>
-                        <DatePicker
+            <WxbCard noPadding className="solver-v4-duty-section">
+                <div className="solver-v4-duty-section-header">
+                    <div>
+                        <h3 className="solver-v4-duty-section-title">本月实例</h3>
+                        <span className="solver-v4-duty-section-subtitle">用于参与当月 Solver V4 排班的值班任务</span>
+                    </div>
+                    <div className="solver-v4-duty-section-actions">
+                        <WxbDatePicker
                             picker="month"
                             value={selectedMonth}
-                            onChange={v => v && setSelectedMonth(v)}
+                            onChange={v => v && setSelectedMonth(v as Dayjs)}
                             allowClear={false}
-                            style={{ width: 150 }}
+                            className="solver-v4-duty-month-picker"
                         />
-                        <Button
-                            type={instances.length === 0 ? 'primary' : 'default'}
-                            icon={<ReloadOutlined />}
-                            loading={generateLoading}
+                        <WxbButton
+                            type="button"
+                            variant={instances.length === 0 ? 'primary' : 'secondary'}
+                            disabled={generateLoading}
                             onClick={handleGenerate}
                         >
-                            生成本月实例
-                        </Button>
-                    </Space>
-                }
-                bodyStyle={{ padding: 0 }}
-            >
-            {filteredInstances.length === 0 && !instanceLoading ? (
-                    <div style={{
-                        textAlign: 'center', padding: '40px 0',
-                        background: '#fffbe6', borderBottom: '1px solid #ffe58f',
-                    }}>
-                        <ExclamationCircleOutlined style={{ fontSize: 24, color: '#faad14', marginBottom: 8 }} />
-                        <div style={{ color: '#ad6800', fontWeight: 500 }}>
-                            {selectedMonth.format('YYYY年M月')} {selectedTeamId ? '该部门' : ''}尚未生成值班实例
-                        </div>
-                        <div style={{ color: '#ad6800', fontSize: 12, marginTop: 4 }}>
-                            请点击右上方"生成本月实例"按钮，系统将根据周期模板自动展开
-                        </div>
+                            <WxbIcon name="flow-divert" size={15} />
+                            {generateLoading ? '生成中...' : '生成本月实例'}
+                        </WxbButton>
                     </div>
-                ) : (
-                    <>
-                        {selectedInstanceIds.length > 0 && (
-                            <div style={{
-                                padding: '8px 16px',
-                                background: '#fff1f0',
-                                borderBottom: '1px solid #ffccc7',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 12,
-                            }}>
-                                <Text type="secondary">
-                                    已选 {selectedInstanceIds.length} 项
-                                </Text>
-                                <Button size="small" danger onClick={handleBatchDelete}>
-                                    批量删除
-                                </Button>
-                                <Button size="small" onClick={() => setSelectedInstanceIds([])}>
-                                    取消选择
-                                </Button>
+                </div>
+                <div className="solver-v4-duty-table-wrap">
+                    {filteredInstances.length === 0 && !instanceLoading ? (
+                        <div className="solver-v4-duty-empty-warning">
+                            <WxbIcon name="expiry" size={24} />
+                            <div className="solver-v4-duty-empty-title">
+                                {selectedMonth.format('YYYY年M月')} {selectedTeamId ? '该部门' : ''}尚未生成值班实例
                             </div>
-                        )}
-                        <Table
-                            dataSource={filteredInstances}
-                            columns={instanceColumns}
-                            rowKey="id"
-                            size="small"
-                            loading={instanceLoading}
-                            pagination={false}
-                            scroll={{ y: 360 }}
-                            rowSelection={{
-                                selectedRowKeys: selectedInstanceIds,
-                                onChange: (keys) => setSelectedInstanceIds(keys as number[]),
-                            }}
-                        />
-                        <div style={{
-                            padding: '8px 16px',
-                            background: '#fafafa',
-                            borderTop: '1px solid #f0f0f0',
-                            fontSize: 13,
-                            color: '#666',
-                        }}>
-                            共 {instanceStats.total} 个实例
-                            <Divider type="vertical" />
-                            待排班 {instanceStats.pending}
-                            <Divider type="vertical" />
-                            已排班 {instanceStats.scheduled}
+                            <div className="solver-v4-duty-empty-desc">
+                                请点击右上方“生成本月实例”，系统将根据周期模板自动展开。
+                            </div>
                         </div>
-                    </>
-                )}
-            </Card>
+                    ) : (
+                        <>
+                            <WxbBulkActionBar
+                                selectedCount={selectedInstanceIds.length}
+                                onClear={() => setSelectedInstanceIds([])}
+                                actions={[
+                                    {
+                                        key: 'batch-delete',
+                                        label: '批量删除',
+                                        variant: 'danger',
+                                        onClick: handleBatchDelete,
+                                        confirm: {
+                                            title: `批量删除 ${selectedInstanceIds.length} 个实例`,
+                                            description: '删除后无法恢复，确认继续？',
+                                            okText: '确认删除',
+                                            cancelText: '取消',
+                                        },
+                                    },
+                                ]}
+                                className="solver-v4-duty-bulk-bar"
+                            />
+                            <WxbDataTable<StandaloneTask>
+                                dataSource={filteredInstances}
+                                columns={instanceColumns}
+                                rowKey="id"
+                                size="small"
+                                density="compact"
+                                loading={instanceLoading}
+                                pagination={false}
+                                scroll={{ y: 360 }}
+                                rowSelection={{
+                                    selectedRowKeys: selectedInstanceIds,
+                                    onChange: (keys) => setSelectedInstanceIds(keys as number[]),
+                                }}
+                            />
+                            <div className="solver-v4-duty-instance-footer">
+                                <span>共 {instanceStats.total} 个实例</span>
+                                <WxbDivider direction="vertical" />
+                                <span>待排班 {instanceStats.pending}</span>
+                                <WxbDivider direction="vertical" />
+                                <span>已排班 {instanceStats.scheduled}</span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </WxbCard>
 
             {renderModal()}
+            <WxbModal
+                title={deleteTemplateTarget ? `删除模板「${deleteTemplateTarget.task_name}」` : '删除模板'}
+                open={Boolean(deleteTemplateTarget)}
+                onCancel={() => setDeleteTemplateTarget(null)}
+                width={520}
+                footer={(
+                    <div className="solver-v4-modal-footer">
+                        <WxbButton
+                            type="button"
+                            variant="ghost"
+                            disabled={confirmActionLoading}
+                            onClick={() => setDeleteTemplateTarget(null)}
+                        >
+                            取消
+                        </WxbButton>
+                        <WxbButton
+                            type="button"
+                            variant="secondary"
+                            disabled={confirmActionLoading}
+                            onClick={() => confirmDeleteTemplate(false)}
+                        >
+                            仅删除模板
+                        </WxbButton>
+                        <WxbButton
+                            type="button"
+                            variant="danger"
+                            disabled={confirmActionLoading}
+                            onClick={() => confirmDeleteTemplate(true)}
+                        >
+                            {confirmActionLoading ? '删除中...' : '删除模板和实例'}
+                        </WxbButton>
+                    </div>
+                )}
+            >
+                <div className="solver-v4-duty-confirm-body">
+                    是否同时删除该模板已生成的所有实例？
+                </div>
+            </WxbModal>
+            <WxbModal
+                title={regenerateTarget ? `重新生成「${regenerateTarget.task_name}」${selectedMonth.format('YYYY年M月')}实例` : '重新生成实例'}
+                open={Boolean(regenerateTarget)}
+                onCancel={() => setRegenerateTarget(null)}
+                onOk={confirmRegenerate}
+                okText="确认重新生成"
+                cancelText="取消"
+                confirmLoading={confirmActionLoading}
+                width={520}
+            >
+                <div className="solver-v4-duty-confirm-body">
+                    将先删除该模板本月已有实例，然后按最新模板配置重新生成。
+                </div>
+            </WxbModal>
         </div>
     );
 };

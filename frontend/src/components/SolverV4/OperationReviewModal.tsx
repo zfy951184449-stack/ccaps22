@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Button, Badge, message, Tag, Alert } from 'antd';
+import { message } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 
 import QualifiedPersonnelModal from './QualifiedPersonnelModal';
 import { SolverConfig, DEFAULT_SOLVER_CONFIG } from './SolverConfigurationModal';
+import {
+    WxbButton,
+    WxbDataTable,
+    WxbEmpty,
+    WxbIcon,
+    WxbModal,
+    WxbTag,
+} from '../wxb-ui';
+import type { WxbTagColor } from '../wxb-ui';
 
 interface PositionRequirement {
     position_number: number;
@@ -199,7 +208,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
             key: 'time',
             width: 200,
             render: (_, record) => (
-                <div style={{ fontSize: '12px' }}>
+                <div className="solver-v4-time-cell">
                     <div>{dayjs(record.planned_start).format('MMM DD HH:mm')} -</div>
                     <div>{dayjs(record.planned_end).format('MMM DD HH:mm')}</div>
                 </div>
@@ -210,25 +219,24 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
             key: 'positions',
             render: (_, record) => {
                 if (!record.positions || record.positions.length === 0) {
-                    return <span style={{ color: '#ccc' }}>无特殊要求</span>;
+                    return <span className="solver-v4-muted-text">无特殊要求</span>;
                 }
 
                 return (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className="solver-v4-position-tags">
                         {record.positions.map(pos => {
                             // Scarcity Logic based on candidate count
                             const available = pos.available_count;
 
-                            let color = 'success'; // >= 4 candidates
-                            if (available === 0) color = 'error';
-                            else if (available === 1) color = 'warning';
-                            else if (available <= 3) color = 'gold';
+                            let color: WxbTagColor = 'green'; // >= 4 candidates
+                            if (available === 0) color = 'red';
+                            else if (available <= 3) color = 'amber';
 
                             return (
-                                <Tag
+                                <WxbTag
                                     key={pos.position_number}
                                     color={color}
-                                    style={{ cursor: 'pointer', margin: 0, width: 'fit-content' }}
+                                    className="solver-v4-clickable-tag"
                                     onClick={() => setSelectedPos({
                                         operationId: record.operation_plan_id,
                                         positionNumber: pos.position_number,
@@ -236,7 +244,7 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
                                     })}
                                 >
                                     Pos {pos.position_number}: {pos.available_count} 人合格
-                                </Tag>
+                                </WxbTag>
                             );
                         })}
                     </div>
@@ -249,12 +257,12 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
             key: 'status',
             width: 100,
             render: (status) => {
-                let color = 'default';
-                if (status === 'READY') color = 'success';
-                if (status === 'LOCKED') color = 'warning';
-                if (status === 'PENDING') color = 'processing';
+                let color: WxbTagColor = 'neutral';
+                if (status === 'READY') color = 'green';
+                if (status === 'LOCKED') color = 'amber';
+                if (status === 'PENDING') color = 'blue';
 
-                return <Badge status={color as any} text={status} />;
+                return <WxbTag color={color}>{status}</WxbTag>;
             },
         },
     ];
@@ -285,124 +293,119 @@ const OperationReviewModal: React.FC<OperationReviewModalProps> = ({ visible, on
 
     return (
         <>
-            <Modal
+            <WxbModal
                 title={`审查待排班操作 - ${month.format('YYYY年MM月')}`}
                 open={visible}
                 onCancel={onCancel}
                 width={900}
-                footer={[
-                    <Button key="cancel" onClick={onCancel}>
+                className="solver-v4-review-modal"
+                footer={(
+                    <div className="solver-v4-modal-footer">
+                    <WxbButton key="cancel" type="button" variant="ghost" onClick={onCancel}>
                         取消
-                    </Button>,
-                    <Button
+                    </WxbButton>
+                    <WxbButton
                         key="precheck"
+                        type="button"
+                        variant="secondary"
                         onClick={handlePrecheck}
-                        loading={precheckLoading}
-                        disabled={data.length === 0}
+                        disabled={data.length === 0 || precheckLoading}
+                        aria-busy={precheckLoading || undefined}
                     >
-                        预检
-                    </Button>,
-                    <Button key="confirm" type="primary" onClick={handleConfirm} loading={loading}>
-                        确认并排班
-                    </Button>,
-                ]}
-                styles={{ body: { maxHeight: '70vh', overflowY: 'auto' } }}
+                        {precheckLoading ? '预检中...' : '预检'}
+                    </WxbButton>
+                    <WxbButton
+                        key="confirm"
+                        type="button"
+                        variant="primary"
+                        onClick={handleConfirm}
+                        disabled={loading}
+                        aria-busy={loading || undefined}
+                    >
+                        {loading ? '启动中...' : '确认并排班'}
+                    </WxbButton>
+                    </div>
+                )}
             >
                 {/* Precheck Results Panel */}
                 {precheckResults && (
-                    <Alert
-                        type={precheckResults.status === 'PASS' ? 'success' : precheckResults.status === 'WARNING' ? 'warning' : 'error'}
-                        message={`预检${precheckResults.status === 'PASS' ? '通过' : precheckResults.status === 'WARNING' ? '有警告' : '有错误'}`}
-                        description={
-                            <div style={{ maxHeight: 150, overflowY: 'auto' }}>
-                                {precheckResults.checks
-                                    .filter(c => c.status !== 'PASS')
-                                    .map((c, i) => (
-                                        <div key={i} style={{ marginBottom: 4 }}>
-                                            {c.status === 'ERROR' ? '🔴' : '⚠️'} {c.message}
-                                        </div>
-                                    ))}
-                                {precheckResults.checks.every(c => c.status === 'PASS') && (
-                                    <div>✅ 所有 {precheckResults.checks.length} 项检查均通过</div>
-                                )}
-                            </div>
-                        }
-                        showIcon
-                        closable
-                        onClose={() => setPrecheckResults(null)}
-                        style={{ marginBottom: 16 }}
-                    />
+                    <div className={`solver-v4-precheck-summary solver-v4-precheck-${precheckResults.status.toLowerCase()}`}>
+                        <strong>
+                            预检{precheckResults.status === 'PASS' ? '通过' : precheckResults.status === 'WARNING' ? '有警告' : '有错误'}
+                        </strong>
+                        <div>
+                            {precheckResults.checks
+                                .filter(c => c.status !== 'PASS')
+                                .map((c, i) => (
+                                    <p key={i}>{c.status === 'ERROR' ? '错误' : '警告'}：{c.message}</p>
+                                ))}
+                            {precheckResults.checks.every(c => c.status === 'PASS') && (
+                                <p>所有 {precheckResults.checks.length} 项检查均通过</p>
+                            )}
+                        </div>
+                        <WxbButton type="button" variant="ghost" size="sm" onClick={() => setPrecheckResults(null)}>
+                            关闭
+                        </WxbButton>
+                    </div>
                 )}
-                <div style={{ marginBottom: 16 }}>
+                <div className="solver-v4-review-stats">
                     已选批次：<strong>{batchIds.length}</strong> |
                     总操作数：<strong>{data.length}</strong> |
                     总岗位数：<strong>{data.reduce((sum, op) => sum + (op.positions?.length || op.required_people || 1), 0)}</strong>
                 </div>
 
-                <Alert
-                    type="info"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message="本次 V4 排班会保留已锁定的操作人员和班次"
-                    description="求解器会把锁定数据当作硬约束，应用结果时也不会覆盖这些人工锁定记录。"
-                />
+                <div className="solver-v4-info-panel">
+                    <WxbIcon name="review-ok" size={18} />
+                    <div>
+                        <strong>本次 V4 排班会保留已锁定的操作人员和班次</strong>
+                        <p>求解器会把锁定数据当作硬约束，应用结果时也不会覆盖这些人工锁定记录。</p>
+                    </div>
+                </div>
 
                 {loading && data.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: 20 }}>加载中...</div>
+                    <div className="solver-v4-loading-text">加载中...</div>
                 ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <div className="solver-v4-review-groups">
                         {/* 1. Share Groups */}
                         {Object.entries(groupedData.groups).map(([key, groupData]) => (
-                            <div key={key} style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-                                <div style={{
-                                    background: '#fafafa',
-                                    padding: '8px 16px',
-                                    fontWeight: 600,
-                                    borderBottom: '1px solid #f0f0f0',
-                                    color: '#666'
-                                }}>
+                            <div key={key} className="solver-v4-review-group">
+                                <div className="solver-v4-review-group-title">
                                     共享组：{groupData.name}
                                 </div>
-                                <Table
+                                <WxbDataTable<OperationOperation>
                                     columns={columns}
                                     dataSource={groupData.ops}
                                     rowKey="operation_plan_id"
                                     pagination={false}
                                     size="small"
+                                    density="compact"
                                 />
                             </div>
                         ))}
 
                         {/* 2. Independent Operations */}
                         {groupedData.independent.length > 0 && (
-                            <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, overflow: 'hidden' }}>
-                                <div style={{
-                                    background: '#fafafa',
-                                    padding: '8px 16px',
-                                    fontWeight: 600,
-                                    borderBottom: '1px solid #f0f0f0',
-                                    color: '#666'
-                                }}>
+                            <div className="solver-v4-review-group">
+                                <div className="solver-v4-review-group-title">
                                     独立操作
                                 </div>
-                                <Table
+                                <WxbDataTable<OperationOperation>
                                     columns={columns}
                                     dataSource={groupedData.independent}
                                     rowKey="operation_plan_id"
                                     pagination={false}
                                     size="small"
+                                    density="compact"
                                 />
                             </div>
                         )}
 
                         {data.length === 0 && !loading && (
-                            <div style={{ textAlign: 'center', color: '#999', padding: 20 }}>
-                                所选批次在该时段内没有找到操作。
-                            </div>
+                            <WxbEmpty description="所选批次在该时段内没有找到操作。" />
                         )}
                     </div>
                 )}
-            </Modal>
+            </WxbModal>
 
             <QualifiedPersonnelModal
                 visible={!!selectedPos}

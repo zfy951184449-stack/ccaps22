@@ -6,7 +6,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  transition: background 180ms cubic-bezier(.2,0,0,1), border-color 180ms, color 180ms;
+  background-image: none;
+  transition: background-color 180ms cubic-bezier(.2,0,0,1), border-color 180ms, color 180ms;
   box-sizing: border-box;
 }
 
@@ -16,18 +17,18 @@
 .wxb-btn-lg { height: 44px; padding: 0 20px; font-size: 15px; }
 
 /* Variants */
-.wxb-btn-primary { background: var(--wx-blue-700); color: #fff; border: 1px solid var(--wx-blue-700); }
-.wxb-btn-primary:hover:not(:disabled) { background: var(--wx-blue-800); border-color: var(--wx-blue-800); }
-.wxb-btn-primary:active:not(:disabled) { background: var(--wx-blue-900); border-color: var(--wx-blue-900); }
+.wxb-btn.wxb-btn-primary { background-color: var(--wx-blue-700); color: var(--wx-bg); border: 1px solid var(--wx-blue-700); }
+.wxb-btn.wxb-btn-primary:hover:not(:disabled) { background-color: var(--wx-blue-800); border-color: var(--wx-blue-800); }
+.wxb-btn.wxb-btn-primary:active:not(:disabled) { background-color: var(--wx-blue-900); border-color: var(--wx-blue-900); }
 
-.wxb-btn-secondary { background: #fff; color: var(--wx-blue-700); border: 1px solid var(--wx-blue-700); }
-.wxb-btn-secondary:hover:not(:disabled) { background: var(--wx-blue-100); }
+.wxb-btn.wxb-btn-secondary { background-color: var(--wx-bg); color: var(--wx-blue-700); border: 1px solid var(--wx-blue-700); }
+.wxb-btn.wxb-btn-secondary:hover:not(:disabled) { background-color: var(--wx-blue-100); }
 
-.wxb-btn-ghost { background: transparent; color: var(--wx-blue-500); border: 1px solid transparent; }
-.wxb-btn-ghost:hover:not(:disabled) { background: var(--wx-blue-100); }
+.wxb-btn.wxb-btn-ghost { background-color: transparent; color: var(--wx-blue-500); border: 1px solid transparent; }
+.wxb-btn.wxb-btn-ghost:hover:not(:disabled) { background-color: var(--wx-blue-100); }
 
-.wxb-btn-danger { background: var(--wx-red-500); color: #fff; border: 1px solid var(--wx-red-500); }
-.wxb-btn-danger:hover:not(:disabled) { background: var(--wx-red-700); border-color: var(--wx-red-700); }
+.wxb-btn.wxb-btn-danger { background-color: var(--wx-red-500); color: var(--wx-bg); border: 1px solid var(--wx-red-500); }
+.wxb-btn.wxb-btn-danger:hover:not(:disabled) { background-color: var(--wx-red-700); border-color: var(--wx-red-700); }
 
 /* Disabled */
-.wxb-btn:disabled { background: var(--wx-surface-2); color: var(--wx-fg-4); border: 1px solid var(--wx-border); cursor: not-allowed; }
+.wxb-btn:disabled { background-color: var(--wx-surface-2); color: var(--wx-fg-4); border: 1px solid var(--wx-border); cursor: not-allowed; }

@@ -1,9 +1,10 @@
 import React from 'react';
 import MonthlyBatchSelector from '../components/SolverV4/MonthlyBatchSelector';
+import '../components/SolverV4/SolverV4.css';
 
 const SolverV4Page: React.FC = () => {
     return (
-        <div style={{ height: '100%', padding: '24px' }}>
+        <div className="solver-v4-page">
             <MonthlyBatchSelector />
         </div>
     );

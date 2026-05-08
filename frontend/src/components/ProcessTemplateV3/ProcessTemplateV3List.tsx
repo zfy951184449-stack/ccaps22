@@ -18,7 +18,6 @@ import {
   WxbButton,
   WxbCard,
   WxbSelect,
-  WxbSegmented,
   WxbTabs,
   WxbTag,
   WxbEmpty,
@@ -31,7 +30,6 @@ import {
   WxbCheckbox,
   WxbPageShell,
   WxbPageHeader,
-  WxbPageGrid,
   WxbPageSection,
   WxbFilterBar,
   WxbSelectionSummary,
@@ -46,7 +44,6 @@ import './ProcessTemplateV3List.css';
 
 type StatusFilter = 'all' | 'risk' | 'recent';
 type SortBy = 'updated' | 'cycle' | 'name';
-type ViewDensity = 'card' | 'compact';
 
 const RECENT_DAYS = 14;
 
@@ -69,12 +66,6 @@ const isRecent = (t: TemplateSummary) => {
   return Math.abs(Date.now() - ts) / 86_400_000 <= RECENT_DAYS;
 };
 
-const fmtDate = (v: string) => {
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit' }).format(d);
-};
-
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -90,7 +81,6 @@ const ProcessTemplateV3List: React.FC = () => {
   const [searchValue, setSearchValue] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('updated');
-  const [density, setDensity] = useState<ViewDensity>('card');
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   // ---- Create modal ----
@@ -255,55 +245,6 @@ const ProcessTemplateV3List: React.FC = () => {
     return badges;
   };
 
-  // ---- Render card ----
-  const renderCard = (t: TemplateSummary) => (
-    <WxbCard
-      key={t.id}
-      className={`v3-template-card ${selectedId === t.id ? 'is-selected' : ''}`}
-      onClick={() => goEditor(t)}
-    >
-      <div className="v3-template-card-head">
-        <div className="v3-template-title-block">
-          <WxbTag color="blue">{t.template_code}</WxbTag>
-          <h3 className="v3-template-title">{t.template_name}</h3>
-        </div>
-        <div className="v3-template-cycle">
-          <div className="v3-template-cycle-label">周期</div>
-          <div className="v3-template-cycle-value">{t.total_days} 天</div>
-        </div>
-      </div>
-
-      <p className="v3-template-description">{t.description || '暂无工艺描述'}</p>
-
-      <div className="v3-template-meta">
-        <span>{t.team_name || '未分配单元'}</span>
-        <span>·</span>
-        <span>更新 {fmtDate(t.updated_at)}</span>
-        {Number(t.stage_count ?? 0) > 0 && <><span>·</span><span>{t.stage_count} 阶段</span></>}
-      </div>
-
-      {hasRisk(t) && (
-        <div className="v3-template-risks">
-          {riskBadges(t)}
-        </div>
-      )}
-
-      <div className="v3-template-actions">
-        <WxbButton size="sm" onClick={(e) => { e.stopPropagation(); goEditor(t); }}>
-          进入编辑器
-        </WxbButton>
-        <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>
-          复制
-        </WxbButton>
-        <div className="v3-template-actions-spacer" />
-        <WxbCheckbox
-          checked={selectedId === t.id}
-          onChange={() => setSelectedId(t.id)}
-        />
-      </div>
-    </WxbCard>
-  );
-
   // ---- Render compact row ----
   const renderRow = (t: TemplateSummary) => (
     <WxbCard
@@ -386,16 +327,6 @@ const ProcessTemplateV3List: React.FC = () => {
               ]}
             />
           )}
-          view={(
-            <WxbSegmented
-              value={density}
-              onChange={(v) => setDensity(v as ViewDensity)}
-              options={[
-                { label: '卡片', value: 'card' },
-                { label: '紧凑', value: 'compact' },
-              ]}
-            />
-          )}
           selection={(
             <WxbSelectionSummary
               selectedCount={selectedTemplate ? 1 : 0}
@@ -424,11 +355,15 @@ const ProcessTemplateV3List: React.FC = () => {
 
         {/* Content */}
         {loading ? (
-          <WxbPageGrid>
+          <WxbPageSection density="compact">
             {Array.from({ length: 6 }, (_, i) => (
-              <WxbCard key={`sk-${i}`}><WxbSkeleton rows={4} /></WxbCard>
+              <WxbCard key={`sk-${i}`} noPadding className="v3-template-row">
+                <div className="v3-template-row-inner">
+                  <WxbSkeleton rows={1} />
+                </div>
+              </WxbCard>
             ))}
-          </WxbPageGrid>
+          </WxbPageSection>
         ) : displayed.length === 0 ? (
           <WxbPageSection variant="framed" className="v3-list-empty">
             <WxbEmpty
@@ -436,10 +371,6 @@ const ProcessTemplateV3List: React.FC = () => {
               action={<WxbButton onClick={() => setCreateOpen(true)}>新建第一个模板</WxbButton>}
             />
           </WxbPageSection>
-        ) : density === 'card' ? (
-          <WxbPageGrid>
-            {displayed.map(renderCard)}
-          </WxbPageGrid>
         ) : (
           <WxbPageSection density="compact">
             {displayed.map(renderRow)}

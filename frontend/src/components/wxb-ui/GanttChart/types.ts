@@ -135,6 +135,8 @@ export interface WxbGanttChartProps {
   showHeatmap?: boolean;
   /** Show minimap (default: false) */
   showMinimap?: boolean;
+  /** Collapse 21:00-09:00 night spans that do not contain operation tasks. */
+  collapseEmptyNightShifts?: boolean;
   /** Enable fullscreen button (default: false) */
   enableFullscreen?: boolean;
   /** Read-only mode (default: false) */
@@ -236,6 +238,26 @@ export interface DragState {
   warningLevel: 'normal' | 'warning' | 'danger';
   /** Whether this is a group cascade drag */
   isGroupDrag: boolean;
+}
+
+export interface CollapsedTimeInterval {
+  start: number;
+  end: number;
+  kind: 'night';
+}
+
+export interface GanttTimeScale {
+  startHour: number;
+  endHour: number;
+  hourWidth: number;
+  totalWidth: number;
+  collapsedIntervals: CollapsedTimeInterval[];
+  hourToX: (hour: number) => number;
+  xToHour: (x: number) => number;
+  widthBetween: (start: number, end: number) => number;
+  isHourCollapsed: (hour: number) => boolean;
+  isRangeVisible: (start: number, end: number) => boolean;
+  pixelDeltaToHourDelta: (originHour: number, deltaX: number) => number;
 }
 
 export interface HitTestResult {

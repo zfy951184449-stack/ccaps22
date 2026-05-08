@@ -1,8 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Modal, Progress, Button, Statistic, Row, Col, Typography, Tag, message, Popconfirm } from 'antd';
-import { StopOutlined, CheckCircleOutlined, ClockCircleOutlined, CodeOutlined, SaveOutlined } from '@ant-design/icons';
-
-const { Text } = Typography;
+import { message } from 'antd';
+import {
+    WxbButton,
+    WxbIcon,
+    WxbKpiCard,
+    WxbModal,
+    WxbPopconfirm,
+    WxbProgress,
+    WxbTag,
+} from '../wxb-ui';
+import type { WxbTagColor } from '../wxb-ui';
 
 interface SolveProgressV4ModalProps {
     visible: boolean;
@@ -18,22 +25,16 @@ interface LogLine {
     category?: 'GENERAL' | 'CONSTRAINT' | 'CONFLICT' | 'SOLVER' | 'PROGRESS';
 }
 
-// 日志颜色配置
-const LOG_COLORS: Record<string, string> = {
-    SUCCESS: '#4ec9b0',   // 绿色 - 成功
-    WARNING: '#dcdcaa',   // 黄色 - 警告
-    ERROR: '#f48771',     // 红色 - 错误
-    INFO: '#9cdcfe',      // 蓝色 - 信息
+const CATEGORY_LABELS: Record<string, string> = {
+    CONSTRAINT: '约束',
+    CONFLICT: '冲突',
+    SOLVER: '求解',
+    PROGRESS: '进度',
+    GENERAL: '通用',
 };
 
-// 分类图标
-const CATEGORY_ICONS: Record<string, string> = {
-    CONSTRAINT: '⚙️',
-    CONFLICT: '⚠️',
-    SOLVER: '🧠',
-    PROGRESS: '📈',
-    GENERAL: '📝',
-};
+const stripLogIcons = (value: string) =>
+    value.replace(/\p{Extended_Pictographic}/gu, '').replace(/\uFE0F/g, '').trim();
 
 const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, runId, onCancel, onViewResults }) => {
     const [status, setStatus] = useState<string>('INIT');
@@ -117,7 +118,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                             if (newCount > prevCount) {
                                 const newItems = sp.logs_full.slice(prevCount).map((l: any) => ({
                                     time: l.time || new Date().toLocaleTimeString(),
-                                    message: l.message,
+                                    message: stripLogIcons(l.message || ''),
                                     type: l.level || 'INFO',
                                     category: l.category || 'GENERAL',
                                 } as LogLine));
@@ -134,10 +135,10 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                             if (newCount > prevCount) {
                                 const newItems = sp.logs.slice(prevCount).map((l: string) => ({
                                     time: new Date().toLocaleTimeString(),
-                                    message: l,
-                                    type: l.includes('✅') ? 'SUCCESS' :
-                                        l.includes('❌') ? 'ERROR' :
-                                            l.includes('⚠️') ? 'WARNING' : 'INFO',
+                                    message: stripLogIcons(l),
+                                    type: /error|failed|失败|错误/i.test(l) ? 'ERROR' :
+                                        /warning|warn|警告/i.test(l) ? 'WARNING' :
+                                            /success|completed|完成|通过/i.test(l) ? 'SUCCESS' : 'INFO',
                                     category: 'GENERAL',
                                 } as LogLine));
                                 return [...prevLogs, ...newItems];
@@ -176,6 +177,7 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
     };
 
     const isCompleted = status === 'COMPLETED' || status === 'APPLIED';
+    const isTerminal = isTerminalStatus(status);
 
     const handleStop = async () => {
         if (!runId) return;
@@ -224,142 +226,115 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
         }
     };
 
+    const progressStatus = status === 'FAILED' ? 'error' : (isCompleted ? 'success' : 'normal');
+    const statusColor: WxbTagColor = status === 'FAILED' ? 'red' : isCompleted ? 'green' : status === 'STOPPING' ? 'amber' : 'blue';
+
     return (
-        <Modal
+        <WxbModal
             open={visible}
             onCancel={onCancel}
             footer={null}
-            closable={false}
+            closable
             width={700}
             centered
             maskClosable={false}
-            styles={{ body: { padding: 0 } }} // Clean style
+            className="solver-v4-progress-modal"
         >
-            <div style={{ padding: '24px 24px 0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <Typography.Title level={4} style={{ margin: 0 }}>自动排班进度</Typography.Title>
-                    <Tag color={isCompleted ? 'green' : (status === 'STOPPING' ? 'orange' : 'blue')}>{status}</Tag>
+            <div className="solver-v4-progress-shell">
+                <div className="solver-v4-progress-header">
+                    <h2>自动排班进度</h2>
+                    <WxbTag color={statusColor}>{status}</WxbTag>
                 </div>
 
-                {/* Progress Bar */}
-                <Progress
+                <WxbProgress
                     percent={progress}
-                    status={status === 'FAILED' ? 'exception' : (isCompleted ? 'success' : 'active')}
-                    strokeWidth={12}
+                    status={progressStatus}
                 />
-            </div>
 
-            {/* Metrics Cards */}
-            <div style={{ background: '#f5f7fa', padding: '16px 24px', margin: '16px 0', borderTop: '1px solid #eee', borderBottom: '1px solid #eee' }}>
-                <Row gutter={16}>
-                    <Col span={12}>
-                        <Statistic
-                            title="已分配班次"
-                            value={metrics.assigned}
-                            prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-                        />
-                    </Col>
-                    <Col span={12}>
-                        <Statistic
-                            title="已用时"
-                            value={metrics.elapsed}
-                            prefix={<ClockCircleOutlined />}
-                        />
-                    </Col>
-                </Row>
-            </div>
+                <div className="solver-v4-progress-kpis">
+                    <WxbKpiCard title="已分配班次" value={metrics.assigned}>
+                        <WxbIcon name="released" size={22} />
+                    </WxbKpiCard>
+                    <WxbKpiCard title="已用时" value={metrics.elapsed}>
+                        <WxbIcon name="hold-time" size={22} />
+                    </WxbKpiCard>
+                </div>
 
-            {/* Terminal Console */}
-            <div style={{ padding: '0 24px 24px' }}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                    <CodeOutlined /> 实时日志
-                </Text>
+                <div className="solver-v4-log-title">
+                    <WxbIcon name="inspect" size={15} />
+                    实时日志
+                </div>
 
-                <div
-                    ref={logContainerRef}
-                    style={{
-                        background: '#1e1e1e',
-                        color: '#d4d4d4',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        height: '250px',
-                        overflowY: 'auto',
-                        fontFamily: "'Consolas', 'Monaco', monospace",
-                        fontSize: '12px',
-                        lineHeight: '1.5'
-                    }}
-                >
+                <div ref={logContainerRef} className="solver-v4-log-panel">
                     {logs.length === 0 ? (
-                        <div style={{ color: '#666' }}>等待求解器日志...</div>
+                        <div className="solver-v4-log-empty">等待求解器日志...</div>
                     ) : (
                         logs.map((log, index) => (
-                            <div key={index} style={{ marginBottom: 4, display: 'flex', alignItems: 'flex-start' }}>
-                                <span style={{ color: '#666', marginRight: 6, flexShrink: 0 }}>[{log.time}]</span>
+                            <div key={index} className="solver-v4-log-line">
+                                <span className="solver-v4-log-time">[{log.time}]</span>
                                 {log.category && log.category !== 'GENERAL' && (
-                                    <span style={{ marginRight: 4 }}>{CATEGORY_ICONS[log.category] || ''}</span>
+                                    <span className="solver-v4-log-category">{CATEGORY_LABELS[log.category] || log.category}</span>
                                 )}
-                                <span style={{
-                                    color: LOG_COLORS[log.type] || '#d4d4d4',
-                                    wordBreak: 'break-word',
-                                }}>
+                                <span className={`solver-v4-log-message solver-v4-log-${log.type.toLowerCase()}`}>
                                     {log.message}
                                 </span>
                             </div>
                         ))
                     )}
-                    {status === 'RUNNING' && <div style={{ color: '#666' }}>_</div>}
+                    {status === 'RUNNING' && <div className="solver-v4-log-cursor">_</div>}
+                </div>
+
+                <div className="solver-v4-modal-footer">
+                    <WxbButton type="button" variant="ghost" onClick={onCancel}>关闭</WxbButton>
+
+                    <div className="solver-v4-action-group">
+                        {!isTerminal && (
+                            <WxbButton
+                                type="button"
+                                variant="danger"
+                                onClick={handleStop}
+                                disabled={status === 'STOPPING'}
+                                aria-busy={status === 'STOPPING' || undefined}
+                            >
+                                {status === 'STOPPING' ? '停止中...' : '停止排班'}
+                            </WxbButton>
+                        )}
+
+                        {(isCompleted || (status === 'FAILED' && (metrics.assigned || 0) > 0)) && !isApplied && (
+                            <WxbPopconfirm
+                                title="应用排班结果"
+                                description="将写入新的自动排班数据，但会保留已锁定的操作分配和班次。是否继续？"
+                                onConfirm={handleApplyResult}
+                                okText="确认应用"
+                                cancelText="取消"
+                                okButtonProps={{ loading: applying }}
+                            >
+                                <WxbButton type="button" variant="primary" disabled={applying} aria-busy={applying || undefined}>
+                                    <WxbIcon name="released" size={15} />
+                                    {applying ? '应用中...' : '应用排班结果'}
+                                </WxbButton>
+                            </WxbPopconfirm>
+                        )}
+
+                        {isApplied && (
+                            <WxbButton type="button" variant="primary" disabled>
+                                <WxbIcon name="released" size={15} />
+                                已应用
+                            </WxbButton>
+                        )}
+
+                        <WxbButton
+                            type="button"
+                            variant="secondary"
+                            disabled={!isCompleted && !((metrics.assigned || 0) > 0)}
+                            onClick={() => runId && onViewResults(runId)}
+                        >
+                            查看结果
+                        </WxbButton>
+                    </div>
                 </div>
             </div>
-
-            {/* Footer Actions */}
-            <div style={{ padding: '0 24px 24px', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                {!isCompleted ? (
-                    <Button
-                        danger
-                        icon={<StopOutlined />}
-                        onClick={handleStop}
-                        loading={status === 'STOPPING'}
-                        disabled={status === 'STOPPING'}
-                    >
-                        {status === 'STOPPING' ? '停止中...' : '停止排班'}
-                    </Button>
-                ) : (
-                    <Button onClick={onCancel}>关闭</Button>
-                )}
-
-                {(isCompleted || (status === 'FAILED' && (metrics.assigned || 0) > 0)) && !isApplied && (
-                    <Popconfirm
-                        title="应用排班结果"
-                        description="将写入新的自动排班数据，但会保留已锁定的操作分配和班次。是否继续？"
-                        onConfirm={handleApplyResult}
-                        okText="确认应用"
-                        cancelText="取消"
-                        okButtonProps={{ loading: applying }}
-                    >
-                        <Button
-                            type="primary"
-                            icon={<SaveOutlined />}
-                            loading={applying}
-                        >
-                            应用排班结果
-                        </Button>
-                    </Popconfirm>
-                )}
-
-                {isApplied && (
-                    <Button type="primary" disabled icon={<CheckCircleOutlined />}>
-                        已应用
-                    </Button>
-                )}
-
-                <Button
-                    disabled={!isCompleted && !((metrics.assigned || 0) > 0)}
-                    onClick={() => runId && onViewResults(runId)}
-                >
-                    查看结果
-                </Button>
-            </div>
-        </Modal>
+        </WxbModal>
     );
 };
 

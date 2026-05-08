@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Table, Tag, Button, message, Space, Tooltip } from 'antd';
-import { ReloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import SolveResultV4Page from './SolveResultV4Page';
+import { WxbButton, WxbDataTable, WxbIcon, WxbTag, WxbTooltip } from '../wxb-ui';
 
 interface RunRecord {
     id: number;
@@ -24,42 +24,42 @@ interface RunRecord {
 const SolverQualityTag: React.FC<{ record: RunRecord }> = ({ record }) => {
     // 正在运行
     if (['QUEUED', 'RUNNING'].includes(record.status)) {
-        return <Tag color="processing">🔵 求解中</Tag>;
+        return <WxbTag color="blue">求解中</WxbTag>;
     }
 
     if (record.status === 'APPLIED') {
-        return <Tag color="success">✅ 已应用</Tag>;
+        return <WxbTag color="green">已应用</WxbTag>;
     }
 
     // 失败 / 无解
     if (record.status === 'FAILED' && !record.solver_status) {
-        return <Tag color="error">❌ 无解</Tag>;
+        return <WxbTag color="red">无解</WxbTag>;
     }
 
     // 根据 solver_status 判断
     if (record.solver_status === 'OPTIMAL') {
-        return <Tag color="success">✅ 最优解</Tag>;
+        return <WxbTag color="green">最优解</WxbTag>;
     }
 
     if (record.solver_status === 'FEASIBLE' || record.solver_status === 'FEASIBLE (Forced)') {
         const gapStr = record.gap !== null ? ` (Gap ${record.gap}%)` : '';
         return (
-            <Tooltip title={`与最优解的理论差距: ${record.gap ?? '未知'}%`}>
-                <Tag color="warning">🟡 可行解{gapStr}</Tag>
-            </Tooltip>
+            <WxbTooltip title={`与最优解的理论差距: ${record.gap ?? '未知'}%`}>
+                <WxbTag color="amber">可行解{gapStr}</WxbTag>
+            </WxbTooltip>
         );
     }
 
     if (record.solver_status === 'INFEASIBLE') {
-        return <Tag color="error">❌ 无解</Tag>;
+        return <WxbTag color="red">无解</WxbTag>;
     }
 
     // 兜底
     if (record.status === 'COMPLETED') {
-        return <Tag color="success">✅ 已完成</Tag>;
+        return <WxbTag color="green">已完成</WxbTag>;
     }
 
-    return <Tag color="default">{record.status}</Tag>;
+    return <WxbTag>{record.status}</WxbTag>;
 };
 
 const RunHistoryTab: React.FC = () => {
@@ -102,7 +102,7 @@ const RunHistoryTab: React.FC = () => {
             key: 'run_code',
             width: 180,
             render: (text) => (
-                <span style={{ fontFamily: 'SF Mono, monospace', fontSize: 12, color: '#86868B' }}>
+                <span className="solver-v4-code-text">
                     {text}
                 </span>
             ),
@@ -120,7 +120,7 @@ const RunHistoryTab: React.FC = () => {
             render: (_, record) => {
                 const start = record.window_start ? dayjs(record.window_start).format('YYYY-MM-DD') : '-';
                 const end = record.window_end ? dayjs(record.window_end).format('YYYY-MM-DD') : '-';
-                return <span>{start} ~ {end}</span>;
+                return <span className="solver-v4-time-cell">{start} ~ {end}</span>;
             },
         },
         {
@@ -129,7 +129,7 @@ const RunHistoryTab: React.FC = () => {
             key: 'fill_rate',
             width: 120,
             render: (val) => val !== null ? (
-                <span style={{ fontWeight: 600, color: val >= 90 ? '#34C759' : val >= 70 ? '#FF9500' : '#FF3B30' }}>
+                <span className={`solver-v4-rate solver-v4-rate-${val >= 90 ? 'good' : val >= 70 ? 'warn' : 'bad'}`}>
                     {val}%
                 </span>
             ) : '-',
@@ -146,56 +146,69 @@ const RunHistoryTab: React.FC = () => {
             dataIndex: 'created_at',
             key: 'created_at',
             width: 170,
-            render: (text) => text ? dayjs(text).format('YYYY-MM-DD HH:mm') : '-',
+            render: (text) => (
+                <span className="solver-v4-time-cell">
+                    {text ? dayjs(text).format('YYYY-MM-DD HH:mm') : '-'}
+                </span>
+            ),
             sorter: (a, b) => dayjs(a.created_at).unix() - dayjs(b.created_at).unix(),
             defaultSortOrder: 'descend',
         },
         {
             title: '操作',
             key: 'actions',
-            width: 150,
+            width: 130,
+            fixed: 'right',
             render: (_, record) => (
-                <Space>
+                <div className="solver-v4-table-actions">
                     {['COMPLETED', 'APPLIED'].includes(record.status) && (
-                        <Button
-                            type="link"
-                            size="small"
-                            icon={<EyeOutlined />}
+                        <WxbButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="solver-v4-nowrap-button"
                             onClick={() => handleViewResult(record.id)}
                         >
+                            <WxbIcon name="inspect" size={14} />
                             查看结果
-                        </Button>
+                        </WxbButton>
                     )}
-                </Space>
+                </div>
             ),
         },
     ];
 
     return (
-        <>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#86868B', fontSize: 13 }}>
-                    共 <strong style={{ color: '#1D1D1F' }}>{data.length}</strong> 条历史记录
+        <div className="solver-v4-tab-panel">
+            <div className="solver-v4-action-footer solver-v4-action-footer-top">
+                <span className="solver-v4-selection-text">
+                    共 <strong>{data.length}</strong> 条历史记录
                 </span>
-                <Button
-                    icon={<ReloadOutlined />}
+                <WxbButton
+                    type="button"
+                    variant="secondary"
                     onClick={fetchRuns}
-                    loading={loading}
+                    disabled={loading}
+                    aria-busy={loading || undefined}
                 >
-                    刷新
-                </Button>
+                    <WxbIcon name="flow-divert" size={15} />
+                    {loading ? '刷新中...' : '刷新'}
+                </WxbButton>
             </div>
 
-            <Table
+            <WxbDataTable<RunRecord>
                 columns={columns}
                 dataSource={data}
                 rowKey="id"
                 loading={loading}
+                density="standard"
+                emptyState={{ description: '暂无求解历史记录' }}
                 pagination={{
                     pageSize: 10,
                     showSizeChanger: true,
                     showTotal: (total) => `共 ${total} 条`,
                 }}
+                scroll={{ x: 1100 }}
                 size="middle"
             />
 
@@ -204,7 +217,7 @@ const RunHistoryTab: React.FC = () => {
                 runId={selectedRunId}
                 onClose={() => setResultVisible(false)}
             />
-        </>
+        </div>
     );
 };
 

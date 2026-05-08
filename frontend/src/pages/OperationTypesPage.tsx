@@ -1,8 +1,29 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, message, Tag, Popconfirm, Space, Tabs, Row, Col, Tooltip } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, BgColorsOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import type { WxbDataTableProps } from '../components/wxb-ui/DataTable/DataTable';
+import { WxbButton } from '../components/wxb-ui/Button/Button';
+import { WxbDataTable } from '../components/wxb-ui/DataTable/DataTable';
+import { WxbEmpty } from '../components/wxb-ui/Empty/Empty';
+import { WxbFormField } from '../components/wxb-ui/FormField/FormField';
+import { WxbInput } from '../components/wxb-ui/Input/Input';
+import { WxbInputNumber } from '../components/wxb-ui/InputNumber/InputNumber';
+import { WxbModal } from '../components/wxb-ui/Modal/WxbModal';
+import {
+    WxbPageHeader,
+    WxbPageSection,
+    WxbPageShell,
+} from '../components/wxb-ui/PageLayout/PageLayout';
+import { WxbPopconfirm } from '../components/wxb-ui/Popconfirm/Popconfirm';
+import { WxbSelect } from '../components/wxb-ui/Select/Select';
+import { WxbTabs } from '../components/wxb-ui/Tabs/Tabs';
+import { WxbTag, type WxbTagColor } from '../components/wxb-ui/Tag/Tag';
+import { WxbTooltip } from '../components/wxb-ui/Tooltip/Tooltip';
+import { wxbToast } from '../components/wxb-ui/Toast/Toast';
 import './OperationTypesPage.css';
+
+type OperationCategory = 'MONITOR' | 'PROCESS' | 'PREP';
+type ColorToken = 'blue' | 'green' | 'amber' | 'red' | 'cyan' | 'neutral';
+type FormColorToken = ColorToken | 'legacy';
 
 interface OperationType {
     id: number;
@@ -12,7 +33,7 @@ interface OperationType {
     team_code: string;
     team_name: string;
     color: string;
-    category: 'MONITOR' | 'PROCESS' | 'PREP';
+    category: OperationCategory;
     display_order: number;
     is_active: boolean;
 }
@@ -23,329 +44,613 @@ interface Team {
     unit_name: string;
 }
 
-const PRESET_COLORS = [
-    '#1890ff', '#52c41a', '#faad14', '#f5222d', '#722ed1',
-    '#13c2c2', '#eb2f96', '#fa8c16', '#2f54eb', '#a0d911',
-    '#8c8c8c', '#595959', '#36cfc9', '#9254de', '#73d13d'
+interface OperationTypeFormState {
+    type_code: string;
+    type_name: string;
+    team_id: number | null;
+    category: OperationCategory;
+    colorToken: FormColorToken;
+    colorValue: string;
+    display_order: number;
+}
+
+type FormErrors = Partial<Record<keyof OperationTypeFormState, string>>;
+
+interface ColorOption {
+    token: ColorToken;
+    label: string;
+    variableName: string;
+}
+
+interface CategoryMeta {
+    label: string;
+    tagColor: WxbTagColor;
+    defaultColorToken: ColorToken;
+}
+
+type OperationIconName = 'plus' | 'refresh' | 'edit' | 'delete';
+
+const COLOR_OPTIONS: ColorOption[] = [
+    { token: 'blue', label: '蓝色', variableName: '--wx-blue-500' },
+    { token: 'green', label: '绿色', variableName: '--wx-green-500' },
+    { token: 'amber', label: '琥珀色', variableName: '--wx-amber-500' },
+    { token: 'red', label: '红色', variableName: '--wx-red-500' },
+    { token: 'cyan', label: '青色', variableName: '--wx-blue-400' },
+    { token: 'neutral', label: '中性色', variableName: '--wx-fg-4' },
 ];
 
-const CATEGORY_OPTIONS = [
-    { value: 'PROCESS', label: '工艺类', color: '#1890ff' },
-    { value: 'PREP', label: '准备/收尾类', color: '#52c41a' },
-    { value: 'MONITOR', label: '监控类', color: '#faad14' },
-];
+const CATEGORY_META: Record<OperationCategory, CategoryMeta> = {
+    PROCESS: { label: '工艺类', tagColor: 'blue', defaultColorToken: 'blue' },
+    PREP: { label: '准备/收尾类', tagColor: 'green', defaultColorToken: 'green' },
+    MONITOR: { label: '监控类', tagColor: 'amber', defaultColorToken: 'amber' },
+};
+
+const DEFAULT_COLOR_TOKEN: ColorToken = 'blue';
+
+const DEFAULT_FORM_STATE: OperationTypeFormState = {
+    type_code: '',
+    type_name: '',
+    team_id: null,
+    category: 'PROCESS',
+    colorToken: DEFAULT_COLOR_TOKEN,
+    colorValue: '',
+    display_order: 0,
+};
+
+const OPERATION_CODE_PATTERN = /^[A-Za-z_]+$/;
+
+const toUpperOperationCode = (value: string) => value.trimStart().toUpperCase();
+
+const normalizeColorValue = (value?: string | null) =>
+    String(value || '').replace(/\s+/g, '').toLowerCase();
+
+const readCssVariable = (variableName: string) => {
+    if (typeof window === 'undefined') return `var(${variableName})`;
+    const resolved = window.getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+    return resolved || `var(${variableName})`;
+};
+
+const resolveColorTokenValue = (token: ColorToken) => {
+    const option = COLOR_OPTIONS.find((item) => item.token === token) ?? COLOR_OPTIONS[0];
+    return readCssVariable(option.variableName);
+};
+
+const getColorTokenLabel = (token: FormColorToken) => {
+    if (token === 'legacy') return '沿用当前颜色';
+    return COLOR_OPTIONS.find((item) => item.token === token)?.label ?? '蓝色';
+};
+
+const inferExactColorToken = (value?: string | null): ColorToken | undefined => {
+    const normalizedValue = normalizeColorValue(value);
+    if (!normalizedValue) return undefined;
+
+    return COLOR_OPTIONS.find((option) =>
+        normalizeColorValue(readCssVariable(option.variableName)) === normalizedValue
+    )?.token;
+};
+
+const getDisplayColorToken = (record: OperationType): ColorToken =>
+    inferExactColorToken(record.color) ?? CATEGORY_META[record.category]?.defaultColorToken ?? 'blue';
+
+const getInitialFormState = (activeTeamId: string): OperationTypeFormState => ({
+    ...DEFAULT_FORM_STATE,
+    team_id: activeTeamId !== 'all' ? Number.parseInt(activeTeamId, 10) : null,
+    colorValue: resolveColorTokenValue(DEFAULT_COLOR_TOKEN),
+});
+
+const getFormStateFromRecord = (record: OperationType): OperationTypeFormState => {
+    const exactColorToken = inferExactColorToken(record.color);
+
+    return {
+        type_code: record.type_code,
+        type_name: record.type_name,
+        team_id: record.team_id,
+        category: record.category,
+        colorToken: exactColorToken ?? 'legacy',
+        colorValue: record.color || resolveColorTokenValue(CATEGORY_META[record.category].defaultColorToken),
+        display_order: record.display_order ?? 0,
+    };
+};
+
+const validateForm = (formState: OperationTypeFormState): FormErrors => {
+    const nextErrors: FormErrors = {};
+    const operationCode = formState.type_code.trim();
+
+    if (!operationCode) {
+        nextErrors.type_code = '请输入类型代码';
+    } else if (!OPERATION_CODE_PATTERN.test(operationCode)) {
+        nextErrors.type_code = '仅允许英文字母和下划线';
+    }
+
+    if (!formState.type_name.trim()) {
+        nextErrors.type_name = '请输入类型名称';
+    }
+
+    if (!formState.team_id) {
+        nextErrors.team_id = '请选择所属Team';
+    }
+
+    if (!formState.category) {
+        nextErrors.category = '请选择分类';
+    }
+
+    if (!Number.isFinite(formState.display_order) || formState.display_order < 0) {
+        nextErrors.display_order = '排序值不能小于 0';
+    }
+
+    return nextErrors;
+};
+
+const OperationIcon: React.FC<{ name: OperationIconName }> = ({ name }) => {
+    const paths: Record<OperationIconName, React.ReactNode> = {
+        plus: (
+            <>
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+            </>
+        ),
+        refresh: (
+            <>
+                <path d="M20 12a8 8 0 0 1-13.5 5.8" />
+                <path d="M4 12A8 8 0 0 1 17.5 6.2" />
+                <path d="M17 3v4h-4" />
+                <path d="M7 21v-4h4" />
+            </>
+        ),
+        edit: (
+            <>
+                <path d="M4 20h16" />
+                <path d="M14.5 5.5 18 9 9 18H5.5v-3.5l9-9Z" />
+            </>
+        ),
+        delete: (
+            <>
+                <path d="M5 7h14" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+                <path d="M8 7l1 12h6l1-12" />
+                <path d="M10 7V5h4v2" />
+            </>
+        ),
+    };
+
+    return (
+        <svg
+            className="operation-types-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+        >
+            {paths[name]}
+        </svg>
+    );
+};
 
 const OperationTypesPage: React.FC = () => {
     const [types, setTypes] = useState<OperationType[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
     const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
     const [editingType, setEditingType] = useState<OperationType | null>(null);
     const [activeTeamId, setActiveTeamId] = useState<string>('all');
     const [submitting, setSubmitting] = useState(false);
-    const [form] = Form.useForm();
+    const [formState, setFormState] = useState<OperationTypeFormState>(() => getInitialFormState('all'));
+    const [formErrors, setFormErrors] = useState<FormErrors>({});
 
     const fetchData = useCallback(async () => {
         setLoading(true);
+        setLoadError(false);
         try {
             const [typesRes, teamsRes] = await Promise.all([
-                axios.get('/api/operation-types'),
-                axios.get('/api/organization/teams')
+                axios.get<OperationType[]>('/api/operation-types'),
+                axios.get<Team[]>('/api/organization/teams'),
             ]);
             setTypes(typesRes.data);
             setTeams(teamsRes.data);
-        } catch (err) {
-            message.error('加载数据失败');
+        } catch {
+            setLoadError(true);
+            wxbToast.error('加载操作类型失败');
         } finally {
             setLoading(false);
         }
     }, []);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
-    const handleSave = async (values: any) => {
+    const updateFormField = useCallback(
+        <K extends keyof OperationTypeFormState>(field: K, value: OperationTypeFormState[K]) => {
+            setFormState((current) => ({ ...current, [field]: value }));
+            setFormErrors((current) => {
+                if (!current[field]) return current;
+                const nextErrors = { ...current };
+                delete nextErrors[field];
+                return nextErrors;
+            });
+        },
+        [],
+    );
+
+    const handleAdd = useCallback(() => {
+        setEditingType(null);
+        setFormState(getInitialFormState(activeTeamId));
+        setFormErrors({});
+        setModalVisible(true);
+    }, [activeTeamId]);
+
+    const handleEdit = useCallback((record: OperationType) => {
+        setEditingType(record);
+        setFormState(getFormStateFromRecord(record));
+        setFormErrors({});
+        setModalVisible(true);
+    }, []);
+
+    const closeModal = useCallback(() => {
+        if (submitting) return;
+        setModalVisible(false);
+        setEditingType(null);
+        setFormErrors({});
+    }, [submitting]);
+
+    const handleDelete = useCallback(
+        async (id: number) => {
+            try {
+                await axios.delete(`/api/operation-types/${id}`);
+                wxbToast.success('已删除/停用');
+                fetchData();
+            } catch {
+                wxbToast.error('删除失败');
+            }
+        },
+        [fetchData],
+    );
+
+    const buildPayload = useCallback(() => ({
+        type_code: formState.type_code.trim().toUpperCase(),
+        type_name: formState.type_name.trim(),
+        team_id: formState.team_id,
+        category: formState.category,
+        color: formState.colorToken === 'legacy'
+            ? formState.colorValue
+            : resolveColorTokenValue(formState.colorToken),
+        display_order: formState.display_order,
+    }), [formState]);
+
+    const handleSubmit = useCallback(async () => {
+        const nextErrors = validateForm(formState);
+        setFormErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            wxbToast.warning('请先修正表单内容');
+            return;
+        }
+
         setSubmitting(true);
         try {
+            const payload = buildPayload();
             if (editingType) {
-                await axios.put(`/api/operation-types/${editingType.id}`, values);
-                message.success('更新成功');
+                await axios.put(`/api/operation-types/${editingType.id}`, payload);
+                wxbToast.success('更新成功');
             } else {
-                await axios.post('/api/operation-types', values);
-                message.success('创建成功');
+                await axios.post('/api/operation-types', payload);
+                wxbToast.success('创建成功');
             }
+
             setModalVisible(false);
-            form.resetFields();
             setEditingType(null);
+            setFormErrors({});
             fetchData();
         } catch (err: any) {
             if (err.response?.status === 409) {
-                message.error('类型代码已存在');
+                wxbToast.error('类型代码已存在');
+                setFormErrors((current) => ({ ...current, type_code: '类型代码已存在' }));
             } else {
-                message.error('操作失败');
+                wxbToast.error('保存失败');
             }
         } finally {
             setSubmitting(false);
         }
-    };
-
-    const handleDelete = async (id: number) => {
-        try {
-            await axios.delete(`/api/operation-types/${id}`);
-            message.success('已删除/停用');
-            fetchData();
-        } catch {
-            message.error('删除失败');
-        }
-    };
-
-    const handleEdit = (record: OperationType) => {
-        setEditingType(record);
-        form.setFieldsValue(record);
-        setModalVisible(true);
-    };
-
-    const handleAdd = () => {
-        setEditingType(null);
-        form.resetFields();
-        // 如果当前选中了特定 team，自动填充
-        if (activeTeamId !== 'all') {
-            form.setFieldValue('team_id', parseInt(activeTeamId));
-        }
-        setModalVisible(true);
-    };
+    }, [buildPayload, editingType, fetchData, formState]);
 
     const filteredTypes = useMemo(() => {
-        return activeTeamId === 'all'
-            ? types
-            : types.filter(t => t.team_id === parseInt(activeTeamId));
+        if (activeTeamId === 'all') return types;
+        const parsedTeamId = Number.parseInt(activeTeamId, 10);
+        return types.filter((type) => type.team_id === parsedTeamId);
     }, [types, activeTeamId]);
 
-    const columns = [
+    const tabItems = useMemo(() => [
+        { key: 'all', label: `全部 (${types.length})` },
+        ...teams.map((team) => {
+            const count = types.filter((type) => type.team_id === team.id).length;
+            return { key: team.id.toString(), label: `${team.unit_name} (${count})` };
+        }),
+    ], [teams, types]);
+
+    const colorSelectOptions = useMemo(() => {
+        const options = COLOR_OPTIONS.map((option) => ({
+            value: option.token,
+            label: (
+                <span className="operation-color-option">
+                    <span className={`operation-color-swatch is-${option.token}`} aria-hidden="true" />
+                    <span>{option.label}</span>
+                </span>
+            ),
+        }));
+
+        if (formState.colorToken === 'legacy') {
+            return [
+                {
+                    value: 'legacy',
+                    label: (
+                        <span className="operation-color-option">
+                            <span className={`operation-color-swatch is-${CATEGORY_META[formState.category].defaultColorToken}`} aria-hidden="true" />
+                            <span>沿用当前颜色</span>
+                        </span>
+                    ),
+                },
+                ...options,
+            ];
+        }
+
+        return options;
+    }, [formState.category, formState.colorToken]);
+
+    const categorySelectOptions = useMemo(() =>
+        (Object.entries(CATEGORY_META) as Array<[OperationCategory, CategoryMeta]>).map(([value, meta]) => ({
+            value,
+            label: <WxbTag color={meta.tagColor}>{meta.label}</WxbTag>,
+        })),
+    []);
+
+    const columns: WxbDataTableProps<OperationType>['columns'] = useMemo(() => [
         {
             title: '类型代码',
             dataIndex: 'type_code',
-            width: 140,
-            render: (v: string) => <code className="type-code">{v}</code>,
-            sorter: (a: OperationType, b: OperationType) => a.type_code.localeCompare(b.type_code)
+            width: 160,
+            sorter: (a, b) => a.type_code.localeCompare(b.type_code),
+            render: (value: string) => <WxbTag color="blue">{value}</WxbTag>,
         },
         {
             title: '类型名称',
             dataIndex: 'type_name',
-            width: 150,
-            sorter: (a: OperationType, b: OperationType) => a.type_name.localeCompare(b.type_name)
+            width: 170,
+            sorter: (a, b) => a.type_name.localeCompare(b.type_name),
         },
         {
-            title: '所属Team',
+            title: '所属 Team',
             dataIndex: 'team_name',
-            width: 100,
-            render: (v: string, record: OperationType) => (
-                <Tag>{record.team_code} - {v}</Tag>
-            )
+            width: 140,
+            render: (_value: string, record) => (
+                <WxbTag color="neutral">{record.team_code} - {record.team_name}</WxbTag>
+            ),
         },
         {
-            title: '颜色',
+            title: '显示色',
             dataIndex: 'color',
-            width: 100,
-            render: (c: string) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                        width: 20, height: 20, borderRadius: 4,
-                        backgroundColor: c, border: '1px solid #d9d9d9'
-                    }} />
-                    <span style={{ fontSize: 12, color: '#666' }}>{c}</span>
-                </div>
-            )
+            width: 140,
+            render: (_value: string, record) => {
+                const token = getDisplayColorToken(record);
+                return (
+                    <span className="operation-color-cell">
+                        <span className={`operation-color-swatch is-${token}`} aria-hidden="true" />
+                        <span>{getColorTokenLabel(token)}</span>
+                    </span>
+                );
+            },
         },
         {
             title: '分类',
             dataIndex: 'category',
-            width: 100,
-            render: (cat: string) => {
-                const opt = CATEGORY_OPTIONS.find(o => o.value === cat);
-                return <Tag color={opt?.color || '#1890ff'}>{opt?.label || cat}</Tag>;
+            width: 130,
+            filters: (Object.entries(CATEGORY_META) as Array<[OperationCategory, CategoryMeta]>)
+                .map(([value, meta]) => ({ text: meta.label, value })),
+            onFilter: (value, record) => record.category === value,
+            render: (category: OperationCategory) => {
+                const meta = CATEGORY_META[category] ?? CATEGORY_META.PROCESS;
+                return <WxbTag color={meta.tagColor}>{meta.label}</WxbTag>;
             },
-            filters: CATEGORY_OPTIONS.map(o => ({ text: o.label, value: o.value })),
-            onFilter: (value: any, record: OperationType) => record.category === value,
         },
         {
             title: '排序',
             dataIndex: 'display_order',
-            width: 80,
-            sorter: (a: OperationType, b: OperationType) => a.display_order - b.display_order
+            width: 90,
+            sorter: (a, b) => a.display_order - b.display_order,
+            render: (value: number) => <span className="operation-order-value">{value}</span>,
         },
         {
             title: '操作',
             width: 120,
-            render: (_: any, record: OperationType) => (
-                <Space>
-                    <Tooltip title="编辑">
-                        <Button
-                            size="small"
-                            type="text"
-                            icon={<EditOutlined />}
+            render: (_value, record) => (
+                <span className="operation-table-actions">
+                    <WxbTooltip title="编辑">
+                        <WxbButton
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`编辑 ${record.type_name}`}
                             onClick={() => handleEdit(record)}
-                        />
-                    </Tooltip>
-                    <Popconfirm
+                        >
+                            <OperationIcon name="edit" />
+                        </WxbButton>
+                    </WxbTooltip>
+                    <WxbPopconfirm
                         title="确定要删除/停用此操作类型？"
-                        description="如果该类型已被操作使用，将变为停用状态"
+                        description="如果该类型已被操作使用，将变为停用状态。"
+                        okText="删除/停用"
+                        cancelText="取消"
                         onConfirm={() => handleDelete(record.id)}
                     >
-                        <Tooltip title="删除">
-                            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
-                        </Tooltip>
-                    </Popconfirm>
-                </Space>
-            )
-        }
-    ];
-
-    const tabItems = useMemo(() => [
-        { key: 'all', label: `全部 (${types.length})` },
-        ...teams.map(t => {
-            const count = types.filter(type => type.team_id === t.id).length;
-            return { key: t.id.toString(), label: `${t.unit_name} (${count})` };
-        })
-    ], [teams, types]);
+                        <WxbButton
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            aria-label={`删除 ${record.type_name}`}
+                        >
+                            <OperationIcon name="delete" />
+                        </WxbButton>
+                    </WxbPopconfirm>
+                </span>
+            ),
+        },
+    ], [handleDelete, handleEdit]);
 
     return (
-        <div className="operation-types-page">
-            <Card
+        <WxbPageShell size="full" gap="lg" className="operation-types-page">
+            <WxbPageHeader
+                eyebrow="Master Data"
                 title="操作类型管理"
-                extra={
-                    <Space>
-                        <Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                description="维护 USP、DSP、Buffer 等团队的标准操作类型，供工艺模板、排班求解和资源需求复用。"
+                meta={(
+                    <>
+                        <WxbTag color="blue">共 {types.length} 项</WxbTag>
+                        <WxbTag color="green">{teams.length} 个 Team</WxbTag>
+                    </>
+                )}
+                actions={(
+                    <>
+                        <WxbButton
+                            type="button"
+                            variant="secondary"
+                            onClick={fetchData}
+                            disabled={loading}
+                        >
+                            <OperationIcon name="refresh" />
+                            {loading ? '刷新中...' : '刷新'}
+                        </WxbButton>
+                        <WxbButton type="button" variant="primary" onClick={handleAdd}>
+                            <OperationIcon name="plus" />
                             新增类型
-                        </Button>
-                    </Space>
-                }
-            >
-                <Tabs
+                        </WxbButton>
+                    </>
+                )}
+            />
+
+            <WxbPageSection variant="framed" density="compact" className="operation-types-section">
+                <WxbTabs
                     activeKey={activeTeamId}
                     onChange={setActiveTeamId}
                     items={tabItems}
-                    style={{ marginBottom: 16 }}
+                    className="operation-types-tabs"
                 />
 
-                <Table
+                <WxbDataTable<OperationType>
                     columns={columns}
                     dataSource={filteredTypes}
                     rowKey="id"
                     loading={loading}
-                    size="small"
-                    pagination={{ pageSize: 20, showSizeChanger: true, showTotal: (total) => `共 ${total} 条` }}
+                    density="compact"
+                    emptyState={{
+                        description: activeTeamId === 'all' ? '暂无操作类型' : '当前 Team 暂无操作类型',
+                        action: <WxbButton type="button" variant="secondary" onClick={handleAdd}>新增类型</WxbButton>,
+                    }}
+                    errorState={loadError ? {
+                        title: '操作类型加载失败',
+                        description: '请检查后端服务或稍后重试。',
+                        action: <WxbButton type="button" variant="secondary" onClick={fetchData}>重新加载</WxbButton>,
+                    } : undefined}
+                    pagination={{
+                        pageSize: 20,
+                        showSizeChanger: true,
+                        showTotal: (total) => `共 ${total} 条`,
+                    }}
                 />
-            </Card>
+            </WxbPageSection>
 
-            <Modal
+            <WxbModal
                 title={editingType ? '编辑操作类型' : '新增操作类型'}
                 open={modalVisible}
-                onCancel={() => { setModalVisible(false); setEditingType(null); }}
-                onOk={() => form.submit()}
+                onCancel={closeModal}
+                onOk={handleSubmit}
                 confirmLoading={submitting}
-                width={500}
+                okText={editingType ? '保存修改' : '创建类型'}
+                cancelText="取消"
+                width={560}
+                destroyOnClose
             >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={handleSave}
-                    initialValues={{ color: '#1890ff', display_order: 0, category: 'PROCESS' }}
+                <form
+                    className="operation-type-form"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        handleSubmit();
+                    }}
                 >
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="type_code"
-                                label="类型代码"
-                                rules={[
-                                    { required: true, message: '请输入类型代码' },
-                                    { pattern: /^[A-Za-z_]+$/, message: '仅允许英文字母和下划线' }
-                                ]}
-                                tooltip="建议使用大写英文，如 CELL_CULTURE"
-                                normalize={(value) => value?.toUpperCase()}
-                            >
-                                <Input
-                                    placeholder="如 CELL_CULTURE"
-                                    disabled={!!editingType}
-                                    style={{ textTransform: 'uppercase' }}
-                                />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="type_name"
-                                label="类型名称"
-                                rules={[{ required: true, message: '请输入类型名称' }]}
-                            >
-                                <Input placeholder="如 细胞培养" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item
-                        name="team_id"
-                        label="所属Team"
-                        rules={[{ required: true, message: '请选择所属Team' }]}
-                    >
-                        <Select
-                            placeholder="请选择Team"
-                            options={teams.map(t => ({ value: t.id, label: `${t.unit_code} - ${t.unit_name}` }))}
+                    <div className="operation-type-form-grid">
+                        <WxbInput
+                            label="类型代码"
+                            value={formState.type_code}
+                            placeholder="如 CELL_CULTURE"
+                            disabled={Boolean(editingType)}
+                            error={formErrors.type_code}
+                            helpText="仅允许英文字母和下划线，保存时会转换为大写。"
+                            onChange={(event) => updateFormField('type_code', toUpperOperationCode(event.target.value))}
                         />
-                    </Form.Item>
+                        <WxbInput
+                            label="类型名称"
+                            value={formState.type_name}
+                            placeholder="如 细胞培养"
+                            error={formErrors.type_name}
+                            onChange={(event) => updateFormField('type_name', event.target.value)}
+                        />
+                    </div>
 
-                    <Form.Item
-                        name="category"
+                    <WxbSelect
+                        label="所属 Team"
+                        value={formState.team_id ?? undefined}
+                        placeholder="请选择 Team"
+                        error={formErrors.team_id}
+                        options={teams.map((team) => ({
+                            value: team.id,
+                            label: `${team.unit_code} - ${team.unit_name}`,
+                        }))}
+                        onChange={(value) => updateFormField('team_id', Number(value))}
+                    />
+
+                    <WxbSelect
                         label="分类"
-                        rules={[{ required: true, message: '请选择分类' }]}
-                        tooltip="分类影响求解器排班优先级"
-                    >
-                        <Select
-                            placeholder="请选择分类"
-                            options={CATEGORY_OPTIONS.map(o => ({
-                                value: o.value,
-                                label: (
-                                    <Space>
-                                        <Tag color={o.color} style={{ margin: 0 }}>{o.label}</Tag>
-                                    </Space>
-                                ),
-                            }))}
-                        />
-                    </Form.Item>
+                        value={formState.category}
+                        placeholder="请选择分类"
+                        error={formErrors.category}
+                        options={categorySelectOptions}
+                        onChange={(value) => {
+                            const nextCategory = value as OperationCategory;
+                            updateFormField('category', nextCategory);
+                            if (formState.colorToken !== 'legacy') {
+                                updateFormField('colorToken', CATEGORY_META[nextCategory].defaultColorToken);
+                            }
+                        }}
+                    />
 
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="color" label="显示颜色">
-                                <Select
-                                    placeholder="选择颜色"
-                                    optionLabelProp="label"
-                                >
-                                    {PRESET_COLORS.map(c => (
-                                        <Select.Option key={c} value={c} label={c}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <div style={{
-                                                    width: 16, height: 16, borderRadius: 3,
-                                                    backgroundColor: c, border: '1px solid #d9d9d9'
-                                                }} />
-                                                <span>{c}</span>
-                                            </div>
-                                        </Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="display_order"
-                                label="排序值"
-                                tooltip="数值越小越靠前"
-                            >
-                                <Input type="number" min={0} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                </Form>
-            </Modal>
-        </div>
+                    <div className="operation-type-form-grid">
+                        <WxbSelect
+                            label="显示颜色"
+                            value={formState.colorToken}
+                            placeholder="选择颜色"
+                            options={colorSelectOptions}
+                            optionLabelProp="label"
+                            onChange={(value) => updateFormField('colorToken', value as FormColorToken)}
+                        />
+                        <WxbInputNumber
+                            label="排序值"
+                            min={0}
+                            precision={0}
+                            value={formState.display_order}
+                            error={formErrors.display_order}
+                            onChange={(value) => updateFormField('display_order', Number(value ?? 0))}
+                        />
+                    </div>
+
+                    <WxbFormField helpText="分类影响求解器排班优先级；显示颜色用于操作类型在模板与排班视图中的识别。">
+                        <WxbEmpty
+                            className="operation-form-hint"
+                            image={<span className={`operation-color-preview is-${formState.colorToken === 'legacy' ? CATEGORY_META[formState.category].defaultColorToken : formState.colorToken}`} />}
+                            description={`${CATEGORY_META[formState.category].label} · ${getColorTokenLabel(formState.colorToken)}`}
+                        />
+                    </WxbFormField>
+                </form>
+            </WxbModal>
+        </WxbPageShell>
     );
 };
 

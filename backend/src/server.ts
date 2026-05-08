@@ -170,7 +170,7 @@ if (fs.existsSync(frontendBuildPath)) {
 
 // --- P0-2: Global Error Handler ---
 // This MUST be registered AFTER all routes.
-// Express identifies error handlers by the 4-parameter signature (err, req, res, next).
+// Express identifies error handlers by the 4-parameter handler shape (err, req, res, next).
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
   const timestamp = new Date().toISOString();

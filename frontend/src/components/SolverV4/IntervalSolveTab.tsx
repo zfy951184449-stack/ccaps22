@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Card, DatePicker, Table, Tag, Typography, Space, Button, message, Select, Alert, Tooltip } from 'antd';
-import { ThunderboltOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { message } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import SolveProgressV4Modal from './SolveProgressV4Modal';
 import SolveResultV4Page from './SolveResultV4Page';
 import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from './SolverConfigurationModal';
-import { SettingOutlined } from '@ant-design/icons';
-
-const { Text, Title } = Typography;
-const { RangePicker } = DatePicker;
+import {
+    WxbButton,
+    WxbDataTable,
+    WxbDatePicker,
+    WxbFilterBar,
+    WxbIcon,
+    WxbRangePicker,
+    WxbSelect,
+    WxbTag,
+} from '../wxb-ui';
+import type { WxbTagColor } from '../wxb-ui';
 
 interface BatchPlan {
     id: number;
@@ -145,6 +151,13 @@ const IntervalSolveTab: React.FC = () => {
         ? data.filter(item => selectedDepartment === 'all' || item.team_id === selectedDepartment)
         : [];
 
+    const getPlanStatusColor = (status?: string): WxbTagColor => {
+        if (status === 'IN PROGRESS' || status === 'ACTIVATED') return 'blue';
+        if (status === 'COMPLETED') return 'green';
+        if (status === 'PENDING') return 'amber';
+        return 'neutral';
+    };
+
     const handleIntervalSolve = async () => {
         if (selectedRowKeys.length === 0) {
             message.warning('请至少选择一个批次进行排班。');
@@ -251,11 +264,7 @@ const IntervalSolveTab: React.FC = () => {
             dataIndex: 'plan_status',
             key: 'plan_status',
             render: (status) => {
-                let color = 'default';
-                if (status === 'IN PROGRESS' || status === 'ACTIVATED') color = 'blue';
-                if (status === 'COMPLETED') color = 'green';
-                if (status === 'PENDING') color = 'gold';
-                return <Tag color={color}>{status || 'DRAFT'}</Tag>;
+                return <WxbTag color={getPlanStatusColor(status)}>{status || 'DRAFT'}</WxbTag>;
             },
         },
         {
@@ -279,86 +288,65 @@ const IntervalSolveTab: React.FC = () => {
     ];
 
     return (
-        <>
-            <Alert
-                type="info"
-                showIcon
-                icon={<InfoCircleOutlined />}
-                style={{ marginBottom: 16, borderRadius: 8 }}
-                message="区间求解模式"
-                description={
-                    <span>
-                        仅重新优化指定日期范围内的排班。区间外的已有排班数据（已执行的事实）将被<strong>完全冻结</strong>，
-                        不会被修改。整月约束（连续工作天数、夜班间隔等）仍然有效。
-                    </span>
-                }
-            />
-
-            {/* Controls Row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Text strong>月份：</Text>
-                    <DatePicker.MonthPicker
-                        value={selectedMonth}
-                        onChange={handleMonthChange}
-                        allowClear={false}
-                        style={{ width: 150, borderRadius: '8px' }}
-                    />
-                    <Select
-                        value={selectedDepartment}
-                        onChange={handleDepartmentChange}
-                        loading={loadingTeams}
-                        style={{ width: 180, borderRadius: '12px' }}
-                        options={[
-                            { value: 'all', label: '所有部门' },
-                            ...teams.map(team => ({
-                                value: team.id,
-                                label: team.teamName,
-                            })),
-                        ]}
-                    />
-                    <Button
-                        icon={<SettingOutlined />}
-                        onClick={() => setConfigVisible(true)}
-                        size="small"
-                    >
-                        配置
-                    </Button>
+        <div className="solver-v4-tab-panel">
+            <div className="solver-v4-info-panel">
+                <WxbIcon name="hold-time" size={18} />
+                <div>
+                    <strong>区间求解模式</strong>
+                    <p>仅重新优化指定日期范围内的排班。区间外的已有排班数据会被冻结，整月约束仍然参与校验。</p>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Text strong style={{ whiteSpace: 'nowrap' }}>求解区间：</Text>
-                    <Tooltip title="选择需要重新优化的日期范围。区间外的排班将被冻结保留。">
-                        <RangePicker
+            </div>
+
+            <WxbFilterBar
+                resultCount={filteredData.length}
+                resultLabel="个批次"
+                filters={(
+                    <>
+                        <WxbDatePicker
+                            picker="month"
+                            value={selectedMonth}
+                            onChange={handleMonthChange}
+                            allowClear={false}
+                            className="solver-v4-month-picker"
+                        />
+                        <WxbSelect
+                            value={selectedDepartment}
+                            onChange={handleDepartmentChange}
+                            loading={loadingTeams}
+                            className="solver-v4-filter-select"
+                            options={[
+                                { value: 'all', label: '所有部门' },
+                                ...teams.map(team => ({
+                                    value: team.id,
+                                    label: team.teamName,
+                                })),
+                            ]}
+                        />
+                        <WxbRangePicker
                             value={solveRange}
                             onChange={(dates) => setSolveRange(dates as [Dayjs, Dayjs] | null)}
                             disabledDate={(current) => {
                                 return current < selectedMonth.startOf('month') || current > selectedMonth.endOf('month');
                             }}
-                            style={{ borderRadius: 8 }}
                             placeholder={['区间开始', '区间结束']}
+                            className="solver-v4-range-picker"
                         />
-                    </Tooltip>
-                </div>
-            </div>
+                    </>
+                )}
+                actions={(
+                    <WxbButton type="button" variant="secondary" size="sm" onClick={() => setConfigVisible(true)}>
+                        <WxbIcon name="cip-system" size={14} />
+                        配置
+                    </WxbButton>
+                )}
+            />
 
-            {/* Solve Range Visual Indicator */}
             {solveRange && solveRange[0] && solveRange[1] && (
-                <div style={{
-                    background: 'linear-gradient(135deg, #fef3cd 0%, #fff8e1 100%)',
-                    border: '1px solid #ffc107',
-                    borderRadius: 8,
-                    padding: '10px 16px',
-                    marginBottom: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                }}>
-                    <ThunderboltOutlined style={{ color: '#ff9800', fontSize: 18 }} />
+                <div className="solver-v4-range-summary">
+                    <WxbIcon name="hold-time" size={18} />
                     <div>
-                        <Text strong style={{ color: '#e65100' }}>
-                            求解区间: {solveRange[0].format('MM-DD')} ~ {solveRange[1].format('MM-DD')}
-                        </Text>
-                        <Text type="secondary" style={{ marginLeft: 12, fontSize: 12 }}>
+                        <strong>求解区间: {solveRange[0].format('MM-DD')} ~ {solveRange[1].format('MM-DD')}</strong>
+                        <span>
                             冻结区域:
                             {solveRange[0].isAfter(selectedMonth.startOf('month'))
                                 ? ` ${selectedMonth.startOf('month').format('MM-DD')} ~ ${solveRange[0].subtract(1, 'day').format('MM-DD')}`
@@ -368,12 +356,12 @@ const IntervalSolveTab: React.FC = () => {
                                 ? ` | ${solveRange[1].add(1, 'day').format('MM-DD')} ~ ${selectedMonth.endOf('month').format('MM-DD')}`
                                 : ' | 无 (右侧)'
                             }
-                        </Text>
+                        </span>
                     </div>
                 </div>
             )}
 
-            <Table
+            <WxbDataTable<BatchPlan>
                 rowSelection={{
                     selectedRowKeys,
                     onChange: (keys) => setSelectedRowKeys(keys),
@@ -382,6 +370,8 @@ const IntervalSolveTab: React.FC = () => {
                 dataSource={filteredData}
                 rowKey="id"
                 loading={loading}
+                density="compact"
+                emptyState={{ description: '当前筛选条件下没有可求解批次' }}
                 pagination={{
                     total: filteredData.length,
                     pageSize: 10,
@@ -391,55 +381,53 @@ const IntervalSolveTab: React.FC = () => {
                 size="small"
             />
 
-            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#86868B', fontSize: 13 }}>
-                    已选 <strong style={{ color: '#1D1D1F' }}>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
+            <div className="solver-v4-action-footer">
+                <span className="solver-v4-selection-text">
+                    已选 <strong>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
                 </span>
-                <Space>
-                    <Button
+                <div className="solver-v4-action-group">
+                    <WxbButton
+                        type="button"
+                        variant="secondary"
                         onClick={handlePrecheck}
-                        loading={precheckLoading}
-                        disabled={!solveRange || selectedRowKeys.length === 0}
+                        disabled={!solveRange || selectedRowKeys.length === 0 || precheckLoading}
+                        aria-busy={precheckLoading || undefined}
                     >
-                        预检
-                    </Button>
-                    <Button
-                        type="primary"
-                        icon={<ThunderboltOutlined />}
+                        {precheckLoading ? '预检中...' : '预检'}
+                    </WxbButton>
+                    <WxbButton
+                        type="button"
+                        variant="primary"
                         onClick={handleIntervalSolve}
-                        loading={solving}
-                        disabled={!solveRange || selectedRowKeys.length === 0}
-                        style={{
-                            background: solveRange ? 'linear-gradient(135deg, var(--v4-accent-amber) 0%, var(--v4-color-warning) 100%)' : undefined,
-                            borderColor: solveRange ? 'var(--v4-accent-amber)' : undefined,
-                            borderRadius: 8,
-                        }}
+                        disabled={!solveRange || selectedRowKeys.length === 0 || solving}
+                        aria-busy={solving || undefined}
                     >
-                        启动区间求解
-                    </Button>
-                </Space>
+                        <WxbIcon name="hold-time" size={15} />
+                        {solving ? '启动中...' : '启动区间求解'}
+                    </WxbButton>
+                </div>
             </div>
 
-            {/* Precheck Results */}
             {precheckResults && (
-                <Alert
-                    type={precheckResults.status === 'PASS' ? 'success' : precheckResults.status === 'WARNING' ? 'warning' : 'error'}
-                    message={`预检${precheckResults.status === 'PASS' ? '通过' : precheckResults.status === 'WARNING' ? '有警告' : '有错误'}`}
-                    description={
-                        <div style={{ maxHeight: 120, overflowY: 'auto' }}>
-                            {precheckResults.checks.filter(c => c.status !== 'PASS').map((c, i) => (
-                                <div key={i}>{c.status === 'ERROR' ? '🔴' : '⚠️'} {c.message}</div>
-                            ))}
-                            {precheckResults.checks.every(c => c.status === 'PASS') && (
-                                <div>✅ 所有 {precheckResults.checks.length} 项检查均通过</div>
-                            )}
-                        </div>
-                    }
-                    showIcon
-                    closable
-                    onClose={() => setPrecheckResults(null)}
-                    style={{ marginTop: 16 }}
-                />
+                <div
+                    className={`solver-v4-precheck-summary solver-v4-precheck-${precheckResults.status.toLowerCase()}`}
+                    role="status"
+                >
+                    <strong>
+                        预检{precheckResults.status === 'PASS' ? '通过' : precheckResults.status === 'WARNING' ? '有警告' : '有错误'}
+                    </strong>
+                    <div>
+                        {precheckResults.checks.filter(c => c.status !== 'PASS').map((c, i) => (
+                            <p key={i}>{c.status === 'ERROR' ? '错误' : '警告'}：{c.message}</p>
+                        ))}
+                        {precheckResults.checks.every(c => c.status === 'PASS') && (
+                            <p>所有 {precheckResults.checks.length} 项检查均通过</p>
+                        )}
+                    </div>
+                    <WxbButton type="button" variant="ghost" size="sm" onClick={() => setPrecheckResults(null)}>
+                        关闭
+                    </WxbButton>
+                </div>
             )}
 
             {/* Modals */}
@@ -465,7 +453,7 @@ const IntervalSolveTab: React.FC = () => {
                 runId={currentRunId}
                 onClose={() => setResultVis(false)}
             />
-        </>
+        </div>
     );
 };
 

@@ -11,7 +11,7 @@
  *   - ESC to cancel, Ctrl+Z to undo
  */
 import { useRef, useCallback, useEffect, useState } from 'react';
-import type { GanttTask, GanttGroup, DragState } from './types';
+import type { GanttTask, GanttGroup, DragState, GanttTimeScale } from './types';
 import { SNAP_HOURS, MAX_UNDO } from './constants';
 import { snapHour, clamp } from './ganttUtils';
 
@@ -52,6 +52,7 @@ export interface UseGanttDragProps {
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   onAutoScroll?: (dx: number) => void;
   canvasWidth: number;
+  timeScale?: GanttTimeScale;
 }
 
 export interface UseGanttDragResult {
@@ -103,6 +104,7 @@ export function useGanttDrag({
   onGroupDragEnd,
   onAutoScroll,
   canvasWidth,
+  timeScale,
 }: UseGanttDragProps): UseGanttDragResult {
   const dragRef = useRef<DragState | null>(null);
   const undoStack = useRef<UndoEntry[]>([]);
@@ -112,8 +114,8 @@ export function useGanttDrag({
   const rafId = useRef(0);
 
   // Keep props in refs for event handlers
-  const propsRef = useRef({ hourWidth, startHour, endHour, tasks, groups, taskRowMap, selectedTaskIds, canvasWidth });
-  propsRef.current = { hourWidth, startHour, endHour, tasks, groups, taskRowMap, selectedTaskIds, canvasWidth };
+  const propsRef = useRef({ hourWidth, startHour, endHour, tasks, groups, taskRowMap, selectedTaskIds, canvasWidth, timeScale });
+  propsRef.current = { hourWidth, startHour, endHour, tasks, groups, taskRowMap, selectedTaskIds, canvasWidth, timeScale };
 
   const cleanup = useCallback(() => {
     dragRef.current = null;
@@ -134,7 +136,7 @@ export function useGanttDrag({
     cancelAnimationFrame(rafId.current);
     rafId.current = requestAnimationFrame(() => {
       if (!dragRef.current) return;
-      const { hourWidth: hw, startHour: sh, endHour: eh, canvasWidth: cw } = propsRef.current;
+      const { hourWidth: hw, startHour: sh, endHour: eh, canvasWidth: cw, timeScale: scale } = propsRef.current;
       const dx = e.clientX - state.startMouseX;
 
       // Check threshold
@@ -145,7 +147,13 @@ export function useGanttDrag({
       }
 
       // Convert pixel delta to hour delta
-      const rawDeltaHours = dx / hw;
+      const primaryOrig = state.originals.get(state.primaryId);
+      const deltaOrigin = state.type === 'resize-end'
+        ? primaryOrig?.end
+        : primaryOrig?.start;
+      const rawDeltaHours = scale && deltaOrigin !== undefined
+        ? scale.pixelDeltaToHourDelta(deltaOrigin, dx)
+        : dx / hw;
       let deltaHours = snapHour(rawDeltaHours, SNAP_HOURS);
 
       if (state.type === 'move' && !state.isGroupDrag && state.affectedTaskIds.length === 1) {

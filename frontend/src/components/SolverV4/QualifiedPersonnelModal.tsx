@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Tag, message, Empty } from 'antd';
+import { message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { WxbDataTable, WxbEmpty, WxbModal, WxbTag } from '../wxb-ui';
 
 interface QualifiedPersonnelModalProps {
     visible: boolean;
@@ -66,9 +67,9 @@ const QualifiedPersonnelModal: React.FC<QualifiedPersonnelModalProps> = ({
             title: 'Name',
             key: 'name',
             render: (_, record) => (
-                <div>
-                    <span style={{ fontWeight: 500 }}>{record.employee_name}</span>
-                    <span style={{ color: '#999', marginLeft: 8, fontSize: '12px' }}>{record.employee_code}</span>
+                <div className="solver-v4-person-cell">
+                    <span>{record.employee_name}</span>
+                    <small>{record.employee_code}</small>
                 </div>
             ),
         },
@@ -87,9 +88,9 @@ const QualifiedPersonnelModal: React.FC<QualifiedPersonnelModalProps> = ({
                 // Backend returns "QualName(Level)" string
                 const quals = record.qualifications.split(', ');
                 return (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    <div className="solver-v4-tag-list">
                         {quals.map((q, idx) => (
-                            <Tag key={idx} style={{ margin: 0, fontSize: '11px' }}>{q}</Tag>
+                            <WxbTag key={idx}>{q}</WxbTag>
                         ))}
                     </div>
                 );
@@ -98,39 +99,40 @@ const QualifiedPersonnelModal: React.FC<QualifiedPersonnelModalProps> = ({
     ];
 
     return (
-        <Modal
-            title={`Qualified Personnel - Position ${positionNumber}`}
+        <WxbModal
+            title={`合格人员 - 岗位 ${positionNumber}`}
             open={visible}
             onCancel={onCancel}
             footer={null}
             width={700}
-            bodyStyle={{ padding: '0 24px 24px' }}
+            className="solver-v4-qualified-modal"
         >
-            <div style={{ marginBottom: 16, color: '#666', fontSize: '13px' }}>
-                Showing personnel who meet all mandatory requirements for this position.
+            <div className="solver-v4-modal-note">
+                展示满足该岗位所有必需资质要求的人员。
                 {requirements && requirements.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                        <strong>Requirements: </strong>
+                    <div className="solver-v4-tag-list">
+                        <strong>资质要求：</strong>
                         {requirements.map((r, i) => (
-                            <Tag key={i} color={r.is_mandatory ? 'red' : 'default'} style={{ fontSize: '11px' }}>
+                            <WxbTag key={i} color={r.is_mandatory ? 'red' : 'neutral'}>
                                 {r.qualification_name} (Lv{r.required_level})
-                            </Tag>
+                            </WxbTag>
                         ))}
                     </div>
                 )}
             </div>
 
-            <Table
+            <WxbDataTable<Personnel>
                 columns={columns}
                 dataSource={data}
                 rowKey="employee_id"
                 loading={loading}
                 pagination={false}
                 size="small"
+                density="compact"
                 scroll={{ y: 400 }}
-                locale={{ emptyText: <Empty description="No qualified personnel found" /> }}
+                locale={{ emptyText: <WxbEmpty description="未找到合格人员" /> }}
             />
-        </Modal>
+        </WxbModal>
     );
 };
 

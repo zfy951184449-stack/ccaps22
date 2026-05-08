@@ -540,6 +540,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
               </div>
             </div>
           )}
+          collapseEmptyNightShifts
           enableFullscreen
           style={{ width: '100%', height: '100%' }}
         />

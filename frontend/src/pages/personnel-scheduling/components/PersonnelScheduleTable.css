@@ -1,0 +1,250 @@
+.personnel-schedule-state {
+  height: 100%;
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-bg);
+  box-shadow: var(--wx-sh-1);
+}
+
+.personnel-schedule-empty-help {
+  display: block;
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+}
+
+.personnel-schedule-table-shell.wxb-table-wrapper {
+  height: 100%;
+  overflow: auto;
+  background: var(--wx-bg);
+  scroll-behavior: smooth;
+}
+
+.personnel-schedule-table-shell.wxb-table-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.personnel-schedule-table-shell.wxb-table-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.personnel-schedule-table-shell.wxb-table-wrapper::-webkit-scrollbar-thumb {
+  background: var(--wx-border-strong);
+  border-radius: var(--wx-radius-4);
+}
+
+.personnel-schedule-table-shell .wxb-table {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.personnel-schedule-employee-col {
+  width: 164px;
+}
+
+.personnel-schedule-day-col {
+  width: 38px;
+}
+
+.personnel-schedule-table-shell .wxb-table thead th,
+.personnel-schedule-table-shell .wxb-table tbody th,
+.personnel-schedule-table-shell .wxb-table tbody td {
+  height: 34px;
+  padding: 0;
+  border-right: 1px solid var(--wx-divider);
+  border-bottom: 1px solid var(--wx-divider);
+  box-sizing: border-box;
+}
+
+.personnel-schedule-table-shell .wxb-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 48px;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
+  background: var(--wx-bg);
+}
+
+.personnel-schedule-employee-header {
+  left: 0;
+  z-index: 5;
+  color: var(--wx-fg-3);
+  font: 600 var(--wx-fs-12)/1.2 var(--wx-font-sans);
+}
+
+.personnel-schedule-day-header.is-weekend,
+.personnel-schedule-cell.is-weekend {
+  background: var(--wx-surface-1);
+}
+
+.personnel-schedule-day-chip {
+  width: 26px;
+  height: 36px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border-radius: var(--wx-radius-6);
+  color: var(--wx-fg-3);
+}
+
+.personnel-schedule-day-chip.is-today {
+  background: var(--wx-blue-500);
+  color: var(--wx-bg);
+  box-shadow: var(--wx-sh-1);
+}
+
+.personnel-schedule-day-number {
+  font: 700 11px/1 var(--wx-font-sans);
+}
+
+.personnel-schedule-weekday {
+  font: 500 9px/1 var(--wx-font-sans);
+  color: var(--wx-fg-4);
+}
+
+.personnel-schedule-day-chip.is-today .personnel-schedule-weekday {
+  color: var(--wx-blue-100);
+}
+
+.personnel-schedule-table-shell .wxb-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--wx-bg);
+}
+
+.personnel-schedule-table-shell .wxb-table tbody tr:hover th,
+.personnel-schedule-table-shell .wxb-table tbody tr:hover td {
+  background: var(--wx-surface-1);
+}
+
+.personnel-schedule-employee-cell {
+  padding: 0 var(--wx-space-12) !important;
+  text-align: left;
+}
+
+.personnel-schedule-employee-name,
+.personnel-schedule-employee-team {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.personnel-schedule-employee-name {
+  color: var(--wx-ink);
+  font: 600 var(--wx-fs-13)/1.2 var(--wx-font-sans);
+}
+
+.personnel-schedule-employee-team {
+  margin-top: 2px;
+  color: var(--wx-fg-4);
+  font: 400 10px/1.2 var(--wx-font-sans);
+}
+
+.personnel-schedule-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.personnel-schedule-shift-wrap {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 3px;
+  box-sizing: border-box;
+}
+
+.personnel-schedule-shift.wxb-badge-outline {
+  width: 100%;
+  height: 22px;
+  border-radius: var(--wx-radius-2);
+  font: 600 10px/1 var(--wx-font-sans);
+  justify-content: center;
+  box-shadow: none;
+}
+
+.personnel-schedule-shift.wxb-badge-outline .v {
+  flex: 1;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.personnel-schedule-shift.is-standard-day,
+.personnel-schedule-shift.is-long-day,
+.personnel-schedule-shift.is-night {
+  color: var(--wx-bg);
+}
+
+.personnel-schedule-shift.is-standard-day {
+  border-color: var(--wx-green-500);
+  background: var(--wx-green-500);
+}
+
+.personnel-schedule-shift.is-long-day {
+  border-color: var(--wx-blue-600);
+  background: var(--wx-blue-600);
+}
+
+.personnel-schedule-shift.is-night {
+  border-color: var(--wx-red-500);
+  background: var(--wx-red-500);
+}
+
+.personnel-schedule-shift.is-zero,
+.personnel-schedule-shift.is-rest {
+  border-color: var(--wx-border);
+  background: var(--wx-surface-2);
+  color: var(--wx-fg-4);
+  font-weight: 500;
+}
+
+.personnel-schedule-shift.is-zero {
+  transform: scale(0.92);
+}
+
+.personnel-schedule-shift.is-leave {
+  border-color: var(--wx-amber-500);
+  background: var(--wx-amber-100);
+  color: var(--wx-amber-700);
+}
+
+.personnel-schedule-special-dot {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid var(--wx-bg);
+  border-radius: 50%;
+  background: var(--wx-amber-500);
+  box-sizing: border-box;
+}
+
+.personnel-schedule-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

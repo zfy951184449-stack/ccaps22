@@ -3,7 +3,7 @@
  * Given canvas coordinates, find which task or group bar is under the cursor
  */
 import { useCallback, useMemo } from 'react';
-import type { GanttTask, GanttGroup, FlatRow, HitTestResult } from './types';
+import type { GanttTask, GanttGroup, FlatRow, HitTestResult, GanttTimeScale } from './types';
 import { ROW_HEIGHT, HEADER_HEIGHT, BAR_HEIGHT, STAGE_BAR_HEIGHT, HEATMAP_HEIGHT } from './constants';
 
 const EDGE_THRESHOLD = 6; // px from edge to trigger resize
@@ -14,7 +14,8 @@ export function useGanttHitTest(
   flatRows: FlatRow[],
   taskRowMap: Map<string, number>,
   startHour: number,
-  hourWidth: number
+  hourWidth: number,
+  timeScale?: GanttTimeScale
 ) {
   // Build row→tasks index via useMemo (auto-syncs with data changes)
   const rowTasksMap = useMemo(() => {
@@ -94,8 +95,11 @@ export function useGanttHitTest(
         // Check Y bounds
         if (worldY < barTop || worldY > barBottom) continue;
 
-        const taskX = (task.start - startHour) * hourWidth;
-        const taskW = Math.max((task.end - task.start) * hourWidth, 4);
+        const taskX = timeScale ? timeScale.hourToX(task.start) : (task.start - startHour) * hourWidth;
+        const taskW = Math.max(
+          timeScale ? timeScale.widthBetween(task.start, task.end) : (task.end - task.start) * hourWidth,
+          4,
+        );
 
         // Check X bounds
         if (worldX < taskX || worldX > taskX + taskW) continue;
@@ -125,8 +129,11 @@ export function useGanttHitTest(
           const barBottom = barTop + barH;
 
           if (worldY >= barTop && worldY <= barBottom) {
-            const groupX = (span.min - startHour) * hourWidth;
-            const groupW = Math.max((span.max - span.min) * hourWidth, 4);
+            const groupX = timeScale ? timeScale.hourToX(span.min) : (span.min - startHour) * hourWidth;
+            const groupW = Math.max(
+              timeScale ? timeScale.widthBetween(span.min, span.max) : (span.max - span.min) * hourWidth,
+              4,
+            );
 
             if (worldX >= groupX && worldX <= groupX + groupW) {
               // Create a synthetic "group task" for the hit result
@@ -153,7 +160,7 @@ export function useGanttHitTest(
     }
 
     return null;
-  }, [startHour, hourWidth, rowTasksMap, groupSpanMap, flatRows, groupById]);
+  }, [startHour, hourWidth, timeScale, rowTasksMap, groupSpanMap, flatRows, groupById]);
 
   return { hitTest };
 }

@@ -1,229 +1,332 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Form, Space, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Qualification } from '../types';
 import { qualificationApi } from '../services/api';
-import { 
-  WxbCard, 
-  WxbButton, 
-  WxbInput, 
-  WxbTableWrapper, 
-  WxbModal, 
-  WxbBadge 
+import {
+  WxbButton,
+  WxbDataTable,
+  WxbFilterBar,
+  WxbInput,
+  WxbModal,
+  WxbPageHeader,
+  WxbPageSection,
+  WxbPageShell,
+  WxbTableActionCell,
+  WxbTag,
+  wxbToast,
 } from './wxb-ui';
+import './QualificationTable.css';
+
+type QualificationIconName = 'plus' | 'refresh';
+
+interface QualificationFormState {
+  qualification_name: string;
+}
+
+type FormErrors = Partial<Record<keyof QualificationFormState, string>>;
+
+const DEFAULT_FORM_STATE: QualificationFormState = {
+  qualification_name: '',
+};
+
+const validateForm = (formState: QualificationFormState): FormErrors => {
+  const nextErrors: FormErrors = {};
+  const qualificationName = formState.qualification_name.trim();
+
+  if (!qualificationName) {
+    nextErrors.qualification_name = '请输入资质名称';
+  } else if (qualificationName.length < 2) {
+    nextErrors.qualification_name = '资质名称至少 2 个字符';
+  } else if (qualificationName.length > 100) {
+    nextErrors.qualification_name = '资质名称不能超过 100 个字符';
+  }
+
+  return nextErrors;
+};
+
+const QualificationIcon: React.FC<{ name: QualificationIconName }> = ({ name }) => {
+  const paths: Record<QualificationIconName, React.ReactNode> = {
+    plus: (
+      <>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 12a8 8 0 0 1-13.5 5.8" />
+        <path d="M4 12A8 8 0 0 1 17.5 6.2" />
+        <path d="M17 3v4h-4" />
+        <path d="M7 21v-4h4" />
+      </>
+    ),
+  };
+
+  return (
+    <svg className="qualification-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      {paths[name]}
+    </svg>
+  );
+};
 
 const QualificationTable: React.FC = () => {
   const [qualifications, setQualifications] = useState<Qualification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingQualification, setEditingQualification] = useState<Qualification | null>(null);
-  const [deleteRecordId, setDeleteRecordId] = useState<number | null>(null);
-  const [form] = Form.useForm();
+  const [searchText, setSearchText] = useState('');
+  const [formState, setFormState] = useState<QualificationFormState>(DEFAULT_FORM_STATE);
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const fetchQualifications = async () => {
+  const fetchQualifications = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
+
     try {
       const response = await qualificationApi.getAll();
-      setQualifications(response.data);
-    } catch (error) {
-      message.error('获取资质数据失败');
+      setQualifications(response.data || []);
+    } catch {
+      setLoadError(true);
+      wxbToast.error('获取资质数据失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchQualifications();
+  }, [fetchQualifications]);
+
+  const resetForm = useCallback(() => {
+    setFormState(DEFAULT_FORM_STATE);
+    setFormErrors({});
   }, []);
 
-  const handleAdd = () => {
+  const handleAdd = useCallback(() => {
     setEditingQualification(null);
-    form.resetFields();
+    resetForm();
     setModalVisible(true);
-  };
+  }, [resetForm]);
 
-  const handleEdit = (record: Qualification) => {
+  const handleEdit = useCallback((record: Qualification) => {
     setEditingQualification(record);
-    form.setFieldsValue(record);
+    setFormState({ qualification_name: record.qualification_name });
+    setFormErrors({});
     setModalVisible(true);
-  };
+  }, []);
 
-  const handleConfirmDelete = async () => {
-    if (!deleteRecordId) return;
+  const handleDelete = useCallback(async (record: Qualification) => {
+    if (!record.id) return;
+
     try {
-      await qualificationApi.delete(deleteRecordId);
-      message.success('删除成功');
-      setDeleteRecordId(null);
-      fetchQualifications();
-    } catch (error) {
-      message.error('删除失败');
+      await qualificationApi.delete(record.id);
+      wxbToast.success('删除成功');
+      await fetchQualifications();
+    } catch {
+      wxbToast.error('删除失败');
     }
-  };
+  }, [fetchQualifications]);
 
-  const handleSubmit = async (values: Qualification) => {
+  const handleSubmit = useCallback(async () => {
+    const nextErrors = validateForm(formState);
+    setFormErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) return;
+
+    const payload: Qualification = {
+      qualification_name: formState.qualification_name.trim(),
+    };
+
+    setSubmitting(true);
+
     try {
-      if (editingQualification) {
-        await qualificationApi.update(editingQualification.id!, values);
-        message.success('更新成功');
+      if (editingQualification?.id) {
+        await qualificationApi.update(editingQualification.id, payload);
+        wxbToast.success('更新成功');
       } else {
-        await qualificationApi.create(values);
-        message.success('创建成功');
+        await qualificationApi.create(payload);
+        wxbToast.success('创建成功');
       }
-      setModalVisible(false);
-      fetchQualifications();
-    } catch (error) {
-      message.error(editingQualification ? '更新失败' : '创建失败');
-    }
-  };
 
-  const columns = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-      sorter: (a: Qualification, b: Qualification) => (a.id || 0) - (b.id || 0),
-    },
-    {
-      title: '资质名称',
-      dataIndex: 'qualification_name',
-      key: 'qualification_name',
-      sorter: (a: Qualification, b: Qualification) => 
-        a.qualification_name.localeCompare(b.qualification_name),
-      filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }: any) => (
-        <div style={{ padding: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <WxbInput
-            placeholder="搜索资质名称"
-            value={selectedKeys[0]}
-            onChange={(e: any) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-            onKeyDown={(e: any) => e.key === 'Enter' && confirm()}
+      setModalVisible(false);
+      setEditingQualification(null);
+      resetForm();
+      await fetchQualifications();
+    } catch {
+      wxbToast.error(editingQualification ? '更新失败' : '创建失败');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [editingQualification, fetchQualifications, formState, resetForm]);
+
+  const handleCancel = useCallback(() => {
+    if (submitting) return;
+
+    setModalVisible(false);
+    setEditingQualification(null);
+    resetForm();
+  }, [resetForm, submitting]);
+
+  const normalizedSearch = searchText.trim().toLowerCase();
+
+  const filteredQualifications = useMemo(() => {
+    if (!normalizedSearch) return qualifications;
+
+    return qualifications.filter((item) =>
+      item.qualification_name.toLowerCase().includes(normalizedSearch),
+    );
+  }, [normalizedSearch, qualifications]);
+
+  const columns = useMemo(
+    () => [
+      {
+        title: 'ID',
+        dataIndex: 'id',
+        key: 'id',
+        width: 88,
+        sorter: (a: Qualification, b: Qualification) => (a.id || 0) - (b.id || 0),
+      },
+      {
+        title: '资质名称',
+        dataIndex: 'qualification_name',
+        key: 'qualification_name',
+        sorter: (a: Qualification, b: Qualification) =>
+          a.qualification_name.localeCompare(b.qualification_name),
+      },
+      {
+        title: '操作',
+        key: 'action',
+        width: 148,
+        render: (_: unknown, record: Qualification) => (
+          <WxbTableActionCell
+            actions={[
+              { key: 'edit', label: '编辑', onClick: () => handleEdit(record) },
+              {
+                key: 'delete',
+                label: '删除',
+                variant: 'danger',
+                disabled: !record.id,
+                onClick: () => handleDelete(record),
+                confirm: {
+                  title: '确认删除',
+                  description: `确定要删除资质【${record.qualification_name}】吗？删除后相关的人员资质和操作要求也会受到影响。`,
+                  okText: '确定删除',
+                  cancelText: '取消',
+                },
+              },
+            ]}
           />
-          <Space>
-            <WxbButton
-              variant="primary"
-              onClick={() => confirm()}
-              size="sm"
-            >
-              <SearchOutlined style={{ marginRight: 4 }} />搜索
-            </WxbButton>
-            <WxbButton
-              variant="secondary"
-              onClick={() => clearFilters()}
-              size="sm"
-            >
-              重置
-            </WxbButton>
-          </Space>
-        </div>
-      ),
-      onFilter: (value: any, record: Qualification) =>
-        record.qualification_name.toLowerCase().includes(String(value).toLowerCase()),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 150,
-      render: (_: any, record: Qualification) => (
-        <Space size="small">
-          <WxbButton
-            variant="ghost"
-            size="sm"
-            onClick={() => handleEdit(record)}
-          >
-            <EditOutlined style={{ marginRight: 4 }} />编辑
-          </WxbButton>
-          <WxbButton
-            variant="ghost"
-            size="sm"
-            style={{ color: 'var(--wx-color-error)' }}
-            onClick={() => setDeleteRecordId(record.id!)}
-          >
-            <DeleteOutlined style={{ marginRight: 4 }} />删除
-          </WxbButton>
-        </Space>
-      ),
-    },
-  ];
+        ),
+      },
+    ],
+    [handleDelete, handleEdit],
+  );
 
   return (
-    <div className="dashboard-page" style={{ padding: 24 }}>
-      <WxbCard>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <WxbButton
-              variant="primary"
-              onClick={handleAdd}
-            >
-              <PlusOutlined style={{ marginRight: 8 }} />新增资质
+    <WxbPageShell size="full" gap="lg" className="qualification-page">
+      <WxbPageHeader
+        eyebrow="Master Data"
+        title="资质管理"
+        description="维护人员能力资质字典，供人员资质矩阵、操作要求和排班求解复用。"
+        meta={<WxbTag color="blue">共 {qualifications.length} 项</WxbTag>}
+        actions={(
+          <>
+            <WxbButton type="button" variant="secondary" onClick={fetchQualifications} disabled={loading}>
+              <QualificationIcon name="refresh" />
+              {loading ? '刷新中...' : '刷新'}
             </WxbButton>
-          </div>
-          <WxbBadge 
-            variant="outline" 
-            status="info" 
-            label={`共 ${qualifications.length} 项资质`} 
-          />
-        </div>
+            <WxbButton type="button" variant="primary" onClick={handleAdd}>
+              <QualificationIcon name="plus" />
+              新增资质
+            </WxbButton>
+          </>
+        )}
+      />
 
-        <WxbTableWrapper>
-          <Table
-            columns={columns}
-            dataSource={qualifications}
-            rowKey="id"
-            loading={loading}
-            pagination={{
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
-              pageSize: 10,
-              pageSizeOptions: ['10', '20', '50', '100'],
-            }}
-            size="middle"
-          />
-        </WxbTableWrapper>
-      </WxbCard>
+      <WxbPageSection variant="framed" density="compact" className="qualification-section">
+        <WxbFilterBar
+          search={{
+            value: searchText,
+            onChange: setSearchText,
+            placeholder: '搜索资质名称',
+            width: 320,
+          }}
+          resultCount={filteredQualifications.length}
+          resultLabel="项资质"
+        />
+
+        <WxbDataTable<Qualification>
+          density="compact"
+          columns={columns}
+          dataSource={filteredQualifications}
+          rowKey="id"
+          loading={loading}
+          emptyState={{
+            description: searchText ? '未找到匹配资质' : '暂无资质数据',
+            action: searchText ? (
+              <WxbButton type="button" variant="secondary" size="sm" onClick={() => setSearchText('')}>
+                清除搜索
+              </WxbButton>
+            ) : (
+              <WxbButton type="button" variant="primary" size="sm" onClick={handleAdd}>
+                新增资质
+              </WxbButton>
+            ),
+          }}
+          errorState={loadError ? {
+            title: '资质数据加载失败',
+            description: '请检查后端服务或稍后重试。',
+            action: (
+              <WxbButton type="button" variant="secondary" size="sm" onClick={fetchQualifications}>
+                重新加载
+              </WxbButton>
+            ),
+          } : undefined}
+          pagination={{
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条记录`,
+            pageSize: 10,
+            pageSizeOptions: ['10', '20', '50', '100'],
+          }}
+          scroll={{ x: 640 }}
+        />
+      </WxbPageSection>
 
       <WxbModal
         title={editingQualification ? '编辑资质' : '新增资质'}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
-        onOk={() => form.submit()}
+        onCancel={handleCancel}
+        onOk={handleSubmit}
+        okText={editingQualification ? '保存修改' : '创建资质'}
+        cancelText="取消"
+        confirmLoading={submitting}
+        destroyOnClose
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
+        <form
+          className="qualification-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSubmit();
+          }}
         >
-          <Form.Item
+          <WxbInput
             label="资质名称"
-            name="qualification_name"
-            rules={[
-              { required: true, message: '请输入资质名称' },
-              { min: 2, message: '资质名称至少2个字符' },
-              { max: 100, message: '资质名称不能超过100个字符' }
-            ]}
-          >
-            <WxbInput 
-              placeholder="请输入资质名称，如：操作员证书、安全证书等" 
-            />
-          </Form.Item>
-        </Form>
+            value={formState.qualification_name}
+            placeholder="请输入资质名称，如：操作员证书、安全证书等"
+            error={formErrors.qualification_name}
+            onChange={(event) => {
+              setFormState({ qualification_name: event.target.value });
+              if (formErrors.qualification_name) {
+                setFormErrors({});
+              }
+            }}
+            autoFocus
+          />
+        </form>
       </WxbModal>
-
-      <WxbModal
-        title="确认删除"
-        open={!!deleteRecordId}
-        onCancel={() => setDeleteRecordId(null)}
-        onOk={handleConfirmDelete}
-        okText="确定删除"
-        okVariant="danger"
-        width={400}
-      >
-        <p className="wxb-body" style={{ margin: '16px 0' }}>
-          确定要删除这个资质吗？<br/>
-          <span style={{ color: 'var(--wx-color-error)', fontSize: '12px' }}>删除后相关的人员资质和操作要求也会受到影响。</span>
-        </p>
-      </WxbModal>
-    </div>
+    </WxbPageShell>
   );
 };
 
