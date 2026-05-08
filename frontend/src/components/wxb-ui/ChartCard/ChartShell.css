@@ -10,6 +10,9 @@
   overflow: hidden;
   font-family: var(--wx-font-sans, Inter, sans-serif);
   transition: box-shadow 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .wxb-chart-shell:hover {
@@ -101,4 +104,12 @@
 /* ── Body ── */
 .wxb-cs-body {
   position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure child content fills body (WxbOverlay, empty states, charts) */
+.wxb-cs-body > * {
+  flex: 1;
 }
