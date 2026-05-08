@@ -61,6 +61,8 @@ export interface GanttGroup {
   type?: 'batch' | 'stage' | 'template';
   /** Whether to draw an aggregate summary bar on the group row. Defaults to true. */
   showSummaryBar?: boolean;
+  /** Whether this group is a conflict lane under a resource row. */
+  isSubRow?: boolean;
 }
 
 export interface GanttDependency {

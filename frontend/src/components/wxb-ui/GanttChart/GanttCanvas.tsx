@@ -111,12 +111,16 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     startHour, endHour,
     showGrid, showToday, showProgress, showHeatmap,
     personnelPeaks,
+    highlightedLinkIds,
+    shareColorMap,
   });
   dataRef.current = {
     tasks, groups, flatRows, taskRowMap, dependencies, links,
     startHour, endHour,
     showGrid, showToday, showProgress, showHeatmap,
     personnelPeaks,
+    highlightedLinkIds,
+    shareColorMap,
   };
 
   // Share-hover debounce state
@@ -233,7 +237,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           // Share-group visual fields
           hoveredShareTaskIds: hoveredShareRef.current?.taskIds,
           hoveredShareColor: hoveredShareRef.current?.color,
-          shareColorMap: shareColorMap ? new Map(Array.from(shareColorMap.entries()).map(([k, v]) => [k, v.color])) : undefined,
+          shareColorMap: d.shareColorMap ? new Map(Array.from(d.shareColorMap.entries()).map(([k, v]) => [k, v.color])) : undefined,
         };
 
         // L0: Grid (row bg + hover highlight + grid lines)
@@ -242,12 +246,12 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         // L1: Time Axis Header (drawn on top of grid, below clip)
         drawTimeAxis(ctx, cfg, d.personnelPeaks);
 
-        // L2-L4: Bars, Dependencies, Links — clipped below header
+        // L2-L4: connectors below bars, then visible bars on top.
         clipBelowHeader(ctx, cfg);
+        drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
+        drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links, d.highlightedLinkIds);
         drawGroupBars(ctx, cfg, d.flatRows, d.groups, d.tasks, d.taskRowMap);
         drawBars(ctx, cfg, d.tasks, d.taskRowMap);
-        drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
-        drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links, highlightedLinkIds);
 
         // L5: Drag overlay (ghost bars, window highlight, warning badges)
         drawDragOverlay(ctx, cfg, dragStateRef.current, d.tasks, d.taskRowMap);
@@ -267,7 +271,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   // Mark dirty when data changes
   useEffect(() => {
     dispatch({ type: 'MARK_DIRTY' });
-  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, dispatch]);
+  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, highlightedLinkIds, shareColorMap, dispatch]);
 
   // Compute scroll limits when row count or canvas size changes
   useEffect(() => {

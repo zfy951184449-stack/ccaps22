@@ -80,7 +80,7 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                 width: '100%',
                 height: totalHeight,
                 pointerEvents: 'none',
-                zIndex: 6
+                zIndex: 3
             }}
             data-testid="constraint-lines-svg"
         >
@@ -147,17 +147,17 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                 const isActiveConstraint = activeConstraintSet.has(constraint.constraint_id);
 
                 let strokeColor = baseStyle.color;
-                let strokeWidth = 2.5;
+                let strokeWidth = 1.5;
                 const dashArray = baseStyle.dashArray || (isSoft ? '5,4' : 'none');
 
                 if (isConflictConstraint) {
                     strokeColor = '#fa8c16';
-                    strokeWidth = 3;
+                    strokeWidth = 2;
                 }
 
                 if (isActiveConstraint) {
                     strokeColor = '#ff4d4f';
-                    strokeWidth = 3.6;
+                    strokeWidth = 2.4;
                 }
 
                 const sameRow = predecessorRowIndex === successorRowIndex;
@@ -177,7 +177,7 @@ export const ConstraintLayer: React.FC<ConstraintLayerProps> = ({
                 // (Legacy: Removed isPureSharePersonnel logic)
                 const isPureSharePersonnel = false;
 
-                const arrowSize = 9;
+                const arrowSize = 6;
                 let arrowPoints = '';
                 let arrowPoints2 = '';
                 let pathD = '';

@@ -77,7 +77,7 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
             let path: string;
             let arrowPoints: string;
             let arrowPoints2: string;
-            const arrowSize = 9;
+            const arrowSize = 6;
 
             if (sameRow) {
                 // 同一行：水平虚线，使用索引偏移避免重叠
@@ -136,7 +136,7 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
                 width: containerWidth,
                 height: containerHeight,
                 pointerEvents: 'none',
-                zIndex: 5
+                zIndex: 3
             }}
         >
             <defs>
@@ -174,21 +174,21 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
                         d={link.path}
                         fill="none"
                         stroke={link.color}
-                        strokeWidth={3}
-                        strokeDasharray="6 4"
+                        strokeWidth={1.4}
+                        strokeDasharray="4 4"
                         strokeLinecap="round"
-                        opacity={0.85}
+                        opacity={0.45}
                     />
                     {/* 双向箭头 */}
                     <polygon
                         points={link.arrowPoints}
                         fill={link.color}
-                        opacity={0.85}
+                        opacity={0.45}
                     />
                     <polygon
                         points={link.arrowPoints2}
                         fill={link.color}
-                        opacity={0.85}
+                        opacity={0.45}
                     />
                 </g>
             ))}
@@ -202,8 +202,8 @@ export const ShareLinkLayer: React.FC<ShareLinkLayerProps> = ({
                         x2={drawingLine.currentX}
                         y2={drawingLine.currentY}
                         stroke="#1890ff"
-                        strokeWidth={2}
-                        strokeDasharray="8 4"
+                        strokeWidth={1.5}
+                        strokeDasharray="4 4"
                         opacity={0.6}
                     />
                     <circle

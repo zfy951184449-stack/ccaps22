@@ -22,14 +22,69 @@ import GanttSelectionPanel from './GanttSelectionPanel';
 import GanttSharePanel from './GanttSharePanel';
 import type { ShareHoverTask } from './GanttSharePanel';
 import type { GanttLink } from './types';
+import { THEME } from './constants';
 import './GanttChart.css';
 
-// Palette for share-group transitive components
-const SHARE_PALETTE = ['#1890FF', '#52C41A', '#FA8C16', '#722ED1', '#EB2F96', '#13C2C2'];
+// Shared-operation body colors are derived from WXB tokens. Red is intentionally
+// excluded because it is reserved for conflict/error states in the Gantt.
+const SHARE_COMPONENT_TOKENS: Array<[string, string]> = [
+  ['--wx-blue-500', THEME.blue500],
+  ['--wx-green-500', THEME.green500],
+  ['--wx-amber-500', THEME.amber500],
+  ['--wx-blue-700', THEME.primary],
+  ['--wx-blue-400', THEME.blue400],
+  ['--wx-green-300', THEME.green300],
+  ['--wx-fg-3', THEME.fg3],
+  ['--wx-blue-300', THEME.blue300],
+  ['--wx-green-700', THEME.green500],
+  ['--wx-amber-700', THEME.amber500],
+  ['--wx-blue-600', THEME.blue500],
+  ['--wx-fg-4', THEME.fg4],
+];
+
+function readWxbToken(name: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return value || fallback;
+}
+
+function mixHexColor(a: string, b: string, bWeight: number): string {
+  if (!/^#[0-9a-f]{6}$/i.test(a) || !/^#[0-9a-f]{6}$/i.test(b)) return a;
+  const weight = Math.max(0, Math.min(1, bWeight));
+  const mix = (start: number, end: number) => Math.round(start * (1 - weight) + end * weight);
+  const ar = parseInt(a.slice(1, 3), 16);
+  const ag = parseInt(a.slice(3, 5), 16);
+  const ab = parseInt(a.slice(5, 7), 16);
+  const br = parseInt(b.slice(1, 3), 16);
+  const bg = parseInt(b.slice(3, 5), 16);
+  const bb = parseInt(b.slice(5, 7), 16);
+  return `#${mix(ar, br).toString(16).padStart(2, '0')}${mix(ag, bg).toString(16).padStart(2, '0')}${mix(ab, bb).toString(16).padStart(2, '0')}`;
+}
+
+function getShareComponentColor(index: number): string {
+  const [token, fallback] = SHARE_COMPONENT_TOKENS[index % SHARE_COMPONENT_TOKENS.length];
+  const color = readWxbToken(token, fallback);
+  const round = Math.floor(index / SHARE_COMPONENT_TOKENS.length);
+  if (round === 0) return color;
+
+  // Rare overflow path: keep colors WXB-derived by nudging the same token
+  // toward ink instead of introducing unrelated hues.
+  const weight = Math.min(0.24, round * 0.08);
+  return mixHexColor(color, THEME.ink, weight);
+}
+
+function getCoveredDays(start: number, end: number): number[] {
+  const startDay = Math.floor(start / 24);
+  const endDay = Math.max(startDay, Math.ceil(end / 24) - 1);
+  const days: number[] = [];
+  for (let day = startDay; day <= endDay; day++) days.push(day);
+  return days;
+}
 
 /** Union-Find to compute transitive closure of share group links */
 function buildShareColorMap(
-  links: GanttLink[]
+  links: GanttLink[],
+  tasks: GanttTask[]
 ): Map<string, { peers: Set<string>; color: string }> {
   if (!links || links.length === 0) return new Map();
 
@@ -52,23 +107,69 @@ function buildShareColorMap(
     }
   }
 
-  // Build components
-  const components = new Map<string, Set<string>>();
+  const taskMap = new Map(tasks.map(task => [task.id, task]));
+
+  // Build components with task timing, so colors only need to be unique locally by day.
+  const components = new Map<string, {
+    root: string;
+    members: Set<string>;
+    minStart: number;
+    maxEnd: number;
+    days: number[];
+  }>();
   Array.from(parent.keys()).forEach(id => {
+    const task = taskMap.get(id);
+    if (!task) return;
     const root = find(id);
-    if (!components.has(root)) components.set(root, new Set());
-    components.get(root)!.add(id);
+    if (!components.has(root)) {
+      components.set(root, {
+        root,
+        members: new Set(),
+        minStart: task.start,
+        maxEnd: task.end,
+        days: [],
+      });
+    }
+    const component = components.get(root)!;
+    component.members.add(id);
+    component.minStart = Math.min(component.minStart, task.start);
+    component.maxEnd = Math.max(component.maxEnd, task.end);
   });
 
-  // Assign colors and build result
+  const orderedComponents = Array.from(components.values())
+    .filter(component => component.members.size >= 2)
+    .map(component => ({
+      ...component,
+      days: getCoveredDays(component.minStart, component.maxEnd),
+    }))
+    .sort((a, b) => a.minStart - b.minStart || a.root.localeCompare(b.root));
+
+  const usedColorByDay = new Map<number, Set<number>>();
+
+  // Assign day-local unique colors and build result
   const result = new Map<string, { peers: Set<string>; color: string }>();
-  let colorIdx = 0;
-  Array.from(components.values()).forEach(members => {
-    if (members.size < 2) return; // solo tasks don't need coloring
-    const color = SHARE_PALETTE[colorIdx % SHARE_PALETTE.length];
-    colorIdx++;
-    Array.from(members).forEach(id => {
-      result.set(id, { peers: members, color });
+  orderedComponents.forEach(component => {
+    let colorIndex = 0;
+    while (true) {
+      let colorUsed = false;
+      for (const day of component.days) {
+        if (usedColorByDay.get(day)?.has(colorIndex)) {
+          colorUsed = true;
+          break;
+        }
+      }
+      if (!colorUsed) break;
+      colorIndex += 1;
+    }
+
+    component.days.forEach(day => {
+      if (!usedColorByDay.has(day)) usedColorByDay.set(day, new Set());
+      usedColorByDay.get(day)!.add(colorIndex);
+    });
+
+    const color = getShareComponentColor(colorIndex);
+    Array.from(component.members).forEach(id => {
+      result.set(id, { peers: component.members, color });
     });
   });
   return result;
@@ -158,7 +259,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   }, []);
 
   // ===== Share Color Map (Union-Find transitive closure) =====
-  const shareColorMap = useMemo(() => buildShareColorMap(links), [links]);
+  const shareColorMap = useMemo(() => buildShareColorMap(links, tasks), [links, tasks]);
 
   // Share hover panel state
   const [shareHoverState, setShareHoverState] = useState<{

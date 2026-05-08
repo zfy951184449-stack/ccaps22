@@ -171,6 +171,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                       fontSize: 11,
                       fontStyle: 'italic',
                       opacity: 0.6,
+                      minWidth: 0,
                     }}
                   >
                     <span
@@ -182,12 +183,20 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                         flexShrink: 0,
                       }}
                     />
-                    ┊
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.label}
+                    </span>
                   </span>
                 ) : (
                   <>
                     {/* Expand/collapse arrow */}
-                    {row.hasChildren && (
+                    {canToggleGroup && (
                       <span
                         style={{
                           width: 16,
@@ -205,10 +214,10 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
                         ▶
                       </span>
                     )}
-                    {!row.hasChildren && <span style={{ width: 20 }} />}
+                    {!canToggleGroup && <span style={{ width: 20 }} />}
 
                     {/* Drag handle for group rows */}
-                    {isGroup && row.hasChildren && (
+                    {canToggleGroup && (
                       <span
                         style={{
                           fontSize: 10,

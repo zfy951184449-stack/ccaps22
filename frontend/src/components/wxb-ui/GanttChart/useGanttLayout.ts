@@ -76,6 +76,7 @@ export function useGanttLayout(
           color: group.color,
           groupType: group.type,
           groupId: group.parentId,
+          isSubRow: group.isSubRow,
         });
         for (const task of inlineTasks) {
           taskRowMap.set(task.id, groupRowIndex);

@@ -1,6 +1,6 @@
 /**
  * WxbGanttChart v2 — Canvas Rendering Engine
- * 5-layer drawing pipeline: Grid → TimeAxis → Bars → Dependencies → Links
+ * 5-layer drawing pipeline: Grid → TimeAxis → Connectors → Bars → DragOverlay
  */
 import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme, DragState } from './types';
 import {
@@ -51,6 +51,33 @@ export function clipBelowHeader(ctx: CanvasRenderingContext2D, cfg: DrawConfig):
   ctx.beginPath();
   ctx.rect(0, totalHeaderH, cfg.canvasW, cfg.canvasH - totalHeaderH);
   ctx.clip();
+}
+
+function colorWithAlpha(color: string | undefined, alpha: number, fallback: string): string {
+  if (!color) return fallback;
+  const value = color.trim();
+  if (/^#[0-9a-f]{6}$/i.test(value)) {
+    return hexToRgba(value, alpha);
+  }
+
+  const rgbMatch = value.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbMatch) {
+    const channels = rgbMatch[1].split(',').map(part => part.trim()).slice(0, 3);
+    if (channels.length === 3 && channels.every(channel => channel.length > 0)) {
+      return `rgba(${channels.join(',')},${alpha})`;
+    }
+  }
+
+  return fallback;
+}
+
+function canvasColor(color: string | undefined, fallback: string): string {
+  if (!color) return fallback;
+  const value = color.trim();
+  if (/^#[0-9a-f]{6}$/i.test(value) || /^rgba?\([^)]+\)$/i.test(value)) {
+    return value;
+  }
+  return fallback;
 }
 
 // ===== L0: Grid =====
@@ -505,6 +532,8 @@ export function drawBars(
     const barR = 4;  // WXB standard radius
     const y = totalHeaderH + row * rowHeight + (rowHeight - barH) / 2 - scrollY;
     const color = task.color || STAGE_COLORS[0];
+    const stageAccentColor = canvasColor(color, THEME.fg3);
+    const shareColor = cfg.shareColorMap?.get(task.id);
 
     if (isTimeWindow) {
       // Time window: diagonal stripe pattern — unchanged (already distinct)
@@ -553,6 +582,12 @@ export function drawBars(
       }
     } else {
       // ===== WXB Operation Bar: Left-accent + tinted fill =====
+      const bodyFill = shareColor
+        ? colorWithAlpha(shareColor, 0.22, THEME.surface2)
+        : THEME.bg;
+      const bodyBorder = shareColor
+        ? colorWithAlpha(shareColor, 0.45, THEME.border)
+        : THEME.border;
 
       // --- Window background layer (semi-transparent, behind operation) ---
       if (task.windowStart !== undefined && task.windowEnd !== undefined
@@ -561,13 +596,13 @@ export function drawBars(
         const ww = Math.max((task.windowEnd - task.windowStart) * hourWidth, 4);
 
         // 1. Solid tinted fill (10% opacity)
-        ctx.fillStyle = hexToRgba(color, 0.07);
+        ctx.fillStyle = colorWithAlpha(stageAccentColor, 0.07, THEME.surface2);
         roundRect(ctx, wx, y, ww, barH, barR);
         ctx.fill();
 
         // 2. Dashed border (20% opacity)
         ctx.save();
-        ctx.strokeStyle = hexToRgba(color, 0.22);
+        ctx.strokeStyle = colorWithAlpha(stageAccentColor, 0.22, THEME.border);
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 3]);
         roundRect(ctx, wx, y, ww, barH, barR);
@@ -576,18 +611,18 @@ export function drawBars(
         ctx.restore();
       }
 
-      // Background fill — tinted, not solid
-      ctx.fillStyle = hexToRgba(color, 0.14);
+      // Body fill: share component color only. Non-shared tasks stay neutral.
+      ctx.fillStyle = bodyFill;
       roundRect(ctx, x, y, w, barH, barR);
       ctx.fill();
 
-      // Left accent border — 3px solid (wxb-badge-bar signature)
-      ctx.fillStyle = color;
+      // Left accent remains available for stage/process identity.
+      ctx.fillStyle = stageAccentColor;
       roundRect(ctx, x, y, 3, barH, [barR, 0, 0, barR]);
       ctx.fill();
 
       // Subtle outer border — 1px hairline
-      ctx.strokeStyle = hexToRgba(color, 0.3);
+      ctx.strokeStyle = bodyBorder;
       ctx.lineWidth = 1;
       roundRect(ctx, x, y, w, barH, barR);
       ctx.stroke();
@@ -595,13 +630,13 @@ export function drawBars(
       // Progress — darker tinted fill, not opaque overlay
       if (showProgress && task.progress && task.progress > 0) {
         const pw = w * Math.min(task.progress, 100) / 100;
-        ctx.fillStyle = hexToRgba(color, 0.22);
+        ctx.fillStyle = colorWithAlpha(shareColor || stageAccentColor, 0.22, THEME.surface3);
         roundRect(ctx, x, y, pw, barH, barR);
         ctx.fill();
         // Progress accent line at edge
         const edgeX = x + pw;
         if (pw > 4 && pw < w - 2) {
-          ctx.strokeStyle = hexToRgba(color, 0.5);
+          ctx.strokeStyle = colorWithAlpha(shareColor || stageAccentColor, 0.5, THEME.border);
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(edgeX, y + 2);
@@ -632,7 +667,7 @@ export function drawBars(
       // Hover — wxb surface-1 lift + focus ring
       if (task.id === cfg.hoveredTaskId) {
         // Stronger tint on hover
-        ctx.fillStyle = hexToRgba(color, 0.08);
+        ctx.fillStyle = colorWithAlpha(shareColor || THEME.blue400, 0.08, hexToRgba(THEME.blue100, 0.35));
         roundRect(ctx, x, y, w, barH, barR);
         ctx.fill();
         // Blue focus ring (wxb-blue-400 with 25% opacity)
@@ -664,7 +699,6 @@ export function drawBars(
       }
 
       // Share component visual markers — left-side vertical bar + right-upper dot
-      const shareColor = cfg.shareColorMap?.get(task.id);
       if (shareColor && w > 40) {
         // Left vertical color bar (3px wide, inset right of type accent)
         const barInset = 2;
@@ -744,10 +778,11 @@ export function drawDependencies(
     // Style
     const style = DEP_STYLES[dep.type] || DEP_STYLES.FS;
     let strokeColor = dep.color || style.color;
-    let lineWidth = 2.5;
+    let lineWidth = 1.5;
+    const depArrowSize = ARROW_SIZE - 3;
     const dash = dep.level && dep.level > 1 ? [5, 4] : style.dash;
-    if (dep.isConflict) { strokeColor = '#fa8c16'; lineWidth = 3; }
-    if (dep.isActive) { strokeColor = '#ff4d4f'; lineWidth = 3.6; }
+    if (dep.isConflict) { strokeColor = '#fa8c16'; lineWidth = 2; }
+    if (dep.isActive) { strokeColor = '#ff4d4f'; lineWidth = 2.4; }
 
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = lineWidth;
@@ -778,8 +813,8 @@ export function drawDependencies(
     ctx.fillStyle = strokeColor;
     ctx.beginPath();
     ctx.moveTo(toX, arrY);
-    ctx.lineTo(toX - arrDir * ARROW_SIZE, arrY - ARROW_SIZE / 2);
-    ctx.lineTo(toX - arrDir * ARROW_SIZE, arrY + ARROW_SIZE / 2);
+    ctx.lineTo(toX - arrDir * depArrowSize, arrY - depArrowSize / 2);
+    ctx.lineTo(toX - arrDir * depArrowSize, arrY + depArrowSize / 2);
     ctx.closePath();
     ctx.fill();
 
@@ -824,8 +859,9 @@ export function drawLinks(
 
     // Highlight logic: emphasized vs dimmed
     const isHighlighted = hasHighlight && highlightedLinkIds!.includes(link.id);
-    const opacity = hasHighlight ? (isHighlighted ? 1.0 : 0.12) : 0.85;
-    const lineWidth = isHighlighted ? 4.5 : 3;
+    const opacity = hasHighlight ? (isHighlighted ? 0.78 : 0.08) : 0.45;
+    const lineWidth = isHighlighted ? 2.2 : 1.4;
+    const linkArrowSize = ARROW_SIZE - 3;
 
     ctx.globalAlpha = opacity;
 
@@ -845,7 +881,7 @@ export function drawLinks(
 
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
-      ctx.setLineDash([6, 4]);
+      ctx.setLineDash([4, 4]);
       ctx.lineCap = 'round';
 
       // Orthogonal path
@@ -863,16 +899,16 @@ export function drawLinks(
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.moveTo(bxCenter, byCenter);
-      ctx.lineTo(bxCenter - arrDir * ARROW_SIZE, byCenter - ARROW_SIZE / 2);
-      ctx.lineTo(bxCenter - arrDir * ARROW_SIZE, byCenter + ARROW_SIZE / 2);
+      ctx.lineTo(bxCenter - arrDir * linkArrowSize, byCenter - linkArrowSize / 2);
+      ctx.lineTo(bxCenter - arrDir * linkArrowSize, byCenter + linkArrowSize / 2);
       ctx.closePath();
       ctx.fill();
 
       const arrDir2 = axCenter <= midX ? 1 : -1;
       ctx.beginPath();
       ctx.moveTo(axCenter, ayCenter);
-      ctx.lineTo(axCenter + arrDir2 * ARROW_SIZE, ayCenter - ARROW_SIZE / 2);
-      ctx.lineTo(axCenter + arrDir2 * ARROW_SIZE, ayCenter + ARROW_SIZE / 2);
+      ctx.lineTo(axCenter + arrDir2 * linkArrowSize, ayCenter - linkArrowSize / 2);
+      ctx.lineTo(axCenter + arrDir2 * linkArrowSize, ayCenter + linkArrowSize / 2);
       ctx.closePath();
       ctx.fill();
     }

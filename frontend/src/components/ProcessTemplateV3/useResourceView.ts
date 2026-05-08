@@ -8,8 +8,8 @@
  * 1. Load resource bindings (operation → equipment) from API
  * 2. Build Stage▸Equipment / pure Equipment group hierarchies
  * 3. Remap task.groupId to point to new equipment-based groups
- * 4. Detect overlapping tasks on same equipment & split into sub-rows (via extra groups)
- * 5. Mark overlapping tasks with conflictType='OVERLAP' for red highlighting
+ * 4. Render non-overlapping operations inline on equipment rows
+ * 5. Split overlapping operations into conflict lanes and mark them
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -102,6 +102,22 @@ function splitIntoLayers(tasks: GanttTask[]): GanttTask[][] {
   }
 
   return layers.map(l => l.tasks);
+}
+
+/** Return the task IDs whose time range overlaps at least one sibling task. */
+function findOverlappingTaskIds(tasks: GanttTask[]): Set<string> {
+  const overlappingIds = new Set<string>();
+  for (let i = 0; i < tasks.length; i++) {
+    for (let j = i + 1; j < tasks.length; j++) {
+      const a = tasks[i];
+      const b = tasks[j];
+      if (a.start < b.end && b.start < a.end) {
+        overlappingIds.add(a.id);
+        overlappingIds.add(b.id);
+      }
+    }
+  }
+  return overlappingIds;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,17 +220,39 @@ function buildStageEquipmentGroups(
         id: fullEquipGroupId,
         label: equipLabel,
         parentId: `res-stage-${stage.id}`,
-        color: isUnbound ? 'var(--wx-fg-4, #8898A8)' : stageColor,
+        color: isUnbound ? 'var(--wx-fg-4)' : stageColor,
         showSummaryBar: false,
       });
 
-      const hasOverlap = !isUnbound && splitIntoLayers(eqTasks).length > 1;
-      for (const task of eqTasks) {
-        taskUpdates.set(task.id, {
-          groupId: fullEquipGroupId,
-          conflictType: hasOverlap ? 'OVERLAP' : undefined,
-          renderOnGroupRow: true,
+      const layers = splitIntoLayers(eqTasks);
+      const overlappingTaskIds = findOverlappingTaskIds(eqTasks);
+      if (overlappingTaskIds.size > 0 && layers.length > 1) {
+        layers.forEach((layerTasks, index) => {
+          const laneGroupId = `${fullEquipGroupId}__lane-${index + 1}`;
+          groups.push({
+            id: laneGroupId,
+            label: `轨道 ${index + 1}`,
+            parentId: fullEquipGroupId,
+            color: isUnbound ? 'var(--wx-fg-4)' : stageColor,
+            showSummaryBar: false,
+            isSubRow: true,
+          });
+
+          for (const task of layerTasks) {
+            taskUpdates.set(task.id, {
+              groupId: laneGroupId,
+              conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : undefined,
+              renderOnGroupRow: true,
+            });
+          }
         });
+      } else {
+        for (const task of eqTasks) {
+          taskUpdates.set(task.id, {
+            groupId: fullEquipGroupId,
+            renderOnGroupRow: true,
+          });
+        }
       }
     }
   }
@@ -265,23 +303,53 @@ function buildEquipmentGroups(
     groups.push({
       id: `res-${equipKey}`,
       label: equipLabel,
-      color: isUnbound ? 'var(--wx-fg-4, #8898A8)' : 'var(--wx-blue-800, #0B3D7F)',
+      color: isUnbound ? 'var(--wx-fg-4)' : 'var(--wx-blue-800)',
       showSummaryBar: false,
     });
 
-    const hasOverlap = !isUnbound && splitIntoLayers(eqTasks).length > 1;
-    for (const task of eqTasks) {
-      // Color by stage
-      const stageId = task.data?.stageId;
-      const stageFullId = stageId !== undefined ? `stage_${stageId}` : undefined;
-      const color = stageFullId ? stageColorMap.get(stageFullId) : undefined;
+    const groupId = `res-${equipKey}`;
+    const layers = splitIntoLayers(eqTasks);
+    const overlappingTaskIds = findOverlappingTaskIds(eqTasks);
 
-      taskUpdates.set(task.id, {
-        groupId: `res-${equipKey}`,
-        conflictType: hasOverlap ? 'OVERLAP' : undefined,
-        color,
-        renderOnGroupRow: true,
+    if (overlappingTaskIds.size > 0 && layers.length > 1) {
+      layers.forEach((layerTasks, index) => {
+        const laneGroupId = `${groupId}__lane-${index + 1}`;
+        groups.push({
+          id: laneGroupId,
+          label: `轨道 ${index + 1}`,
+          parentId: groupId,
+          color: isUnbound ? 'var(--wx-fg-4)' : 'var(--wx-blue-800)',
+          showSummaryBar: false,
+          isSubRow: true,
+        });
+
+        for (const task of layerTasks) {
+          // Color by stage
+          const stageId = task.data?.stageId;
+          const stageFullId = stageId !== undefined ? `stage_${stageId}` : undefined;
+          const color = stageFullId ? stageColorMap.get(stageFullId) : undefined;
+
+          taskUpdates.set(task.id, {
+            groupId: laneGroupId,
+            conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : undefined,
+            color,
+            renderOnGroupRow: true,
+          });
+        }
       });
+    } else {
+      for (const task of eqTasks) {
+        // Color by stage
+        const stageId = task.data?.stageId;
+        const stageFullId = stageId !== undefined ? `stage_${stageId}` : undefined;
+        const color = stageFullId ? stageColorMap.get(stageFullId) : undefined;
+
+        taskUpdates.set(task.id, {
+          groupId,
+          color,
+          renderOnGroupRow: true,
+        });
+      }
     }
   }
 
