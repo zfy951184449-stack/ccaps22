@@ -5,7 +5,7 @@
  * antd Table 自动通过 children 字段展开树形结构。
  */
 import React from 'react';
-import { WxbDataTable, WxbTag, WxbButton, WxbPopconfirm } from '../wxb-ui';
+import { WxbBulkActionBar, WxbDataTable, WxbTableActionCell, WxbTag } from '../wxb-ui';
 import type { ResourceNode } from '../ProcessTemplateV2/types';
 import { NODE_CLASS_LABEL, NODE_CLASS_COLOR } from './resourceNodeConstants';
 
@@ -121,25 +121,31 @@ const EquipmentTableView: React.FC<EquipmentTableViewProps> = ({
     {
       title: '操作',
       key: 'actions',
-      width: 260,
+      width: 220,
+      fixed: 'right' as const,
       render: (_: any, record: ResourceNode) => (
-        <span className="equip-table-actions" onClick={(e) => e.stopPropagation()}>
-          <WxbButton size="sm" variant="ghost" onClick={() => onEdit(record)}>编辑</WxbButton>
-          <WxbButton size="sm" variant="ghost" onClick={() => onCreateChild(record)}>新增子节点</WxbButton>
-          <WxbButton size="sm" variant="ghost" onClick={() => onToggleActive(record)}>
-            {record.isActive ? '停用' : '启用'}
-          </WxbButton>
-          <WxbPopconfirm
-            title="确定删除此节点？"
-            description={record.childCount > 0 ? '该节点有子节点，请先删除子节点。' : undefined}
-            onConfirm={() => onDelete(record)}
-            disabled={record.childCount > 0}
-          >
-            <WxbButton size="sm" variant="danger" disabled={record.childCount > 0}>
-              删除
-            </WxbButton>
-          </WxbPopconfirm>
-        </span>
+        <WxbTableActionCell
+          actions={[
+            { key: 'edit', label: '编辑', onClick: () => onEdit(record) },
+            { key: 'create-child', label: '新增子节点', onClick: () => onCreateChild(record) },
+            {
+              key: 'toggle-active',
+              label: record.isActive ? '停用' : '启用',
+              onClick: () => onToggleActive(record),
+            },
+            {
+              key: 'delete',
+              label: '删除',
+              variant: 'danger',
+              disabled: record.childCount > 0,
+              onClick: () => onDelete(record),
+              confirm: {
+                title: '确定删除此节点？',
+                description: record.childCount > 0 ? '该节点有子节点，请先删除子节点。' : undefined,
+              },
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -152,31 +158,40 @@ const EquipmentTableView: React.FC<EquipmentTableViewProps> = ({
 
   return (
     <div className="equip-table-view">
-      {/* Batch bar */}
-      {selectedIds.length > 0 && (
-        <div className="equip-batch-bar">
-          <span>已选 {selectedIds.length} 项</span>
-          <WxbButton size="sm" variant="secondary" onClick={() => onBatchToggleActive(selectedIds, true)}>
-            批量启用
-          </WxbButton>
-          <WxbButton size="sm" variant="secondary" onClick={() => onBatchToggleActive(selectedIds, false)}>
-            批量停用
-          </WxbButton>
-          <WxbPopconfirm
-            title={`确定批量删除 ${selectedIds.length} 个节点？`}
-            description="此操作不可撤销。"
-            onConfirm={() => onBatchDelete(selectedIds)}
-          >
-            <WxbButton size="sm" variant="secondary" className="wxb-btn-danger-text">
-              批量删除
-            </WxbButton>
-          </WxbPopconfirm>
-        </div>
-      )}
+      <WxbBulkActionBar
+        selectedCount={selectedIds.length}
+        onClear={() => onSelectionChange([])}
+        actions={[
+          {
+            key: 'batch-enable',
+            label: '批量启用',
+            variant: 'secondary',
+            onClick: () => onBatchToggleActive(selectedIds, true),
+          },
+          {
+            key: 'batch-disable',
+            label: '批量停用',
+            variant: 'secondary',
+            onClick: () => onBatchToggleActive(selectedIds, false),
+          },
+          {
+            key: 'batch-delete',
+            label: '批量删除',
+            variant: 'danger',
+            onClick: () => onBatchDelete(selectedIds),
+            confirm: {
+              title: `确定批量删除 ${selectedIds.length} 个节点？`,
+              description: '此操作不可撤销。',
+            },
+          },
+        ]}
+      />
 
       <WxbDataTable
+        density="compact"
         columns={columns}
         dataSource={nodes}
+        emptyState={{ description: '暂无资源节点' }}
         rowKey="id"
         rowSelection={rowSelection}
         pagination={false}

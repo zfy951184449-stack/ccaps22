@@ -357,15 +357,15 @@
 .equip-table-name {
   cursor: pointer;
   font-weight: 500;
-  color: var(--wx-gray-800, #1f2937);
+  color: var(--wx-fg-1);
 }
 
 .equip-table-name.is-selected {
-  color: var(--wx-blue-600, #2563eb);
+  color: var(--wx-blue-600);
 }
 
 .equip-table-name:hover {
-  color: var(--wx-blue-500, #3b82f6);
+  color: var(--wx-blue-500);
 }
 
 .equip-table-name-text {
@@ -374,30 +374,11 @@
 
 .equip-table-unbound {
   font-size: 12px;
-  color: var(--wx-gray-300, #d1d5db);
-}
-
-.equip-table-actions {
-  display: flex;
-  gap: 4px;
-  align-items: center;
+  color: var(--wx-fg-4);
 }
 
 .equip-table-row-selected {
-  background: var(--wx-blue-50, #eff6ff) !important;
-}
-
-.equip-batch-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: var(--wx-blue-50, #eff6ff);
-  border-radius: 8px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: var(--wx-blue-700, #1d4ed8);
-  font-weight: 500;
+  background: var(--wx-blue-50) !important;
 }
 
 /* ── Tree View ───────────────────────────────────────── */

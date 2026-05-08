@@ -15,6 +15,8 @@ export * from './Icon/Icon';
 export * from './Icon/Logo';
 export * from './Modal/WxbModal';
 export * from './Switch/Switch';
+export * from './PageLayout/PageLayout';
+export * from './FilterBar/FilterBar';
 
 // ── 表单控件 (14 个) ──
 export * from './Select/Select';

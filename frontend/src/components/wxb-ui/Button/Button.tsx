@@ -6,23 +6,26 @@ export interface WxbButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEle
   size?: 'sm' | 'md' | 'lg';
 }
 
-export const WxbButton: React.FC<WxbButtonProps> = ({ 
-  variant = 'primary', 
-  size = 'md', 
-  className = '', 
-  children, 
-  ...props 
-}) => {
+export const WxbButton = React.forwardRef<HTMLButtonElement, WxbButtonProps>(({
+  variant = 'primary',
+  size = 'md',
+  className = '',
+  children,
+  ...props
+}, ref) => {
   const baseClass = 'wxb-btn';
   const variantClass = `wxb-btn-${variant}`;
   const sizeClass = `wxb-btn-${size}`;
 
   return (
-    <button 
+    <button
+      ref={ref}
       className={`${baseClass} ${variantClass} ${sizeClass} ${className}`}
       {...props}
     >
       {children}
     </button>
   );
-};
+});
+
+WxbButton.displayName = 'WxbButton';

@@ -3,12 +3,14 @@ import {
   WxbButton, WxbCard, WxbBadge, WxbKpiCard, WxbInput, 
   WxbAlert, WxbStepper, WxbTableWrapper, WxbChartCard,
   WxbSideNav, WxbTopNav, WxbIcon, WxbLogo, WxbSwitch, WxbModal,
+  WxbPageShell, WxbPageHeader, WxbPageSection, WxbPageGrid,
+  WxbFilterBar, WxbToolbarActions, WxbSelectionSummary,
   // ── 新增表单控件 ──
   WxbSelect, WxbDatePicker, WxbTimePicker, WxbInputNumber,
   WxbTextarea, WxbSearchInput, WxbCheckbox, WxbRadioGroup,
   WxbSlider, WxbUpload, WxbFormField,
   // ── 新增数据展示 ──
-  WxbDataTable, WxbTag, WxbTooltip, WxbPopover,
+  WxbBulkActionBar, WxbDataTable, WxbTableActionCell, WxbTag, WxbTooltip, WxbPopover,
   WxbAvatar, WxbAvatarGroup, WxbDescriptions, WxbTimeline,
   WxbList, WxbTree, WxbSkeleton, WxbEmpty, WxbDivider,
   // ── 新增导航 ──
@@ -36,11 +38,26 @@ const MOCK_CHART_DATA = [
   {used:88, avail:23, label:'W24', date:'2026-06-16'},
 ];
 
+interface UiKitBatchRow {
+  key: string;
+  id: string;
+  product: string;
+  status: string;
+  progress: number;
+}
+
+const MOCK_TABLE_ROWS: UiKitBatchRow[] = [
+  { key: '1', id: 'BAT-001', product: '贝伐珠单抗', status: '进行中', progress: 67 },
+  { key: '2', id: 'BAT-002', product: '阿达木单抗', status: '已完成', progress: 100 },
+  { key: '3', id: 'BAT-003', product: 'ADC-X01', status: '待排程', progress: 0 },
+];
+
 const UiKitShowcasePage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
   const [paginationPage, setPaginationPage] = useState(3);
+  const [tableSelectedRowKeys, setTableSelectedRowKeys] = useState<React.Key[]>(['1']);
 
   // Gantt drag demo state
   const [ganttTasks, setGanttTasks] = useState([
@@ -62,6 +79,111 @@ const UiKitShowcasePage: React.FC = () => {
   return (
     <div style={{ padding: 24, fontFamily: 'var(--wx-font-sans)', background: '#F5F8FB', minHeight: '100vh' }}>
       <h1 className="wxb-h2" style={{ marginBottom: 24 }}>WuXi Biologics UI Kit Showcase</h1>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 className="wxb-h4" style={{ marginBottom: 16 }}>0. Page Layout</h2>
+        <WxbPageShell size="full">
+          <WxbPageHeader
+            eyebrow="Production Workspace"
+            title="生产计划工作台"
+            description="页面布局组件提供标题区、吸顶工具栏、内容分区和响应式网格，适合列表、调度和运行业务页面。"
+            meta={(
+              <>
+                <WxbTag color="blue">MFG18</WxbTag>
+                <WxbTag color="green">GMP Live</WxbTag>
+              </>
+            )}
+            actions={(
+              <>
+                <WxbButton variant="secondary">导入计划</WxbButton>
+                <WxbButton>新建批次</WxbButton>
+              </>
+            )}
+          />
+          <WxbFilterBar
+            search={{
+              placeholder: '搜索批次 / 产品',
+              width: 220,
+            }}
+            filters={(
+              <>
+                <WxbSelect
+                  defaultValue="all"
+                  style={{ width: 150 }}
+                  options={[
+                    { value: 'all', label: '状态：全部' },
+                    { value: 'risk', label: '仅看风险' },
+                  ]}
+                />
+              </>
+            )}
+            view={(
+              <WxbSegmented
+                size="sm"
+                defaultValue="week"
+                options={[
+                  { label: '日', value: 'day' },
+                  { label: '周', value: 'week' },
+                  { label: '月', value: 'month' },
+                ]}
+              />
+            )}
+            selection={(
+              <WxbSelectionSummary
+                selectedCount={2}
+                label="2 个已选批次"
+                onClear={() => undefined}
+              />
+            )}
+            resultCount={24}
+            resultLabel="个批次"
+            actions={(
+              <WxbToolbarActions
+                items={[
+                  { key: 'refresh', label: '刷新' },
+                  { key: 'export', label: '导出' },
+                ]}
+              />
+            )}
+          />
+          <WxbPageGrid minItemWidth="220px">
+            <WxbKpiCard title="待排程批次" value="12" trend="up" trendText="3 new" />
+            <WxbKpiCard title="资源冲突" value="4" trend="down" trendText="2 resolved" />
+            <WxbKpiCard title="本周产能" value="78" unit="%" trend="neutral" trendText="stable" />
+          </WxbPageGrid>
+          <WxbPageSection
+            variant="framed"
+            title="今日重点"
+            description="用分区承载页面主任务，不把页面结构继续塞进普通卡片。"
+            actions={<WxbButton variant="ghost" size="sm">查看全部</WxbButton>}
+          >
+            <WxbTableWrapper>
+              <thead>
+                <tr>
+                  <th>批次</th>
+                  <th>阶段</th>
+                  <th>负责人</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="mono-cell">BAT-2026-001</td>
+                  <td>上游培养</td>
+                  <td>张工</td>
+                  <td><WxbTag color="green">运行中</WxbTag></td>
+                </tr>
+                <tr>
+                  <td className="mono-cell">BAT-2026-002</td>
+                  <td>纯化准备</td>
+                  <td>李工</td>
+                  <td><WxbTag color="amber">待确认</WxbTag></td>
+                </tr>
+              </tbody>
+            </WxbTableWrapper>
+          </WxbPageSection>
+        </WxbPageShell>
+      </section>
       
       {/* 顶部导航展示 (纯 UI 组件) */}
       <section style={{ marginBottom: 32 }}>
@@ -336,8 +458,71 @@ const UiKitShowcasePage: React.FC = () => {
       <section style={{ marginBottom: 32 }}>
         <h2 className="wxb-h4" style={{ marginBottom: 16 }}>8. Data Display</h2>
         <WxbCard title="8a. 数据表格 DataTable">
-          <WxbDataTable size="small" dataSource={[{ key: '1', id: 'BAT-001', product: '贝伐珠单抗', status: '进行中', progress: 67 }, { key: '2', id: 'BAT-002', product: '阿达木单抗', status: '已完成', progress: 100 }, { key: '3', id: 'BAT-003', product: 'ADC-X01', status: '待排程', progress: 0 }]}
-            columns={[{ title: '批次号', dataIndex: 'id', key: 'id', sorter: (a: any, b: any) => a.id.localeCompare(b.id) }, { title: '产品', dataIndex: 'product', key: 'product' }, { title: '状态', dataIndex: 'status', key: 'status' }, { title: '进度', dataIndex: 'progress', key: 'progress', render: (v: number) => <WxbProgress percent={v} /> }]} pagination={false} />
+          <WxbBulkActionBar
+            selectedCount={tableSelectedRowKeys.length}
+            onClear={() => setTableSelectedRowKeys([])}
+            actions={[
+              { key: 'export', label: '导出选中', variant: 'secondary', onClick: () => console.log('export selected') },
+              {
+                key: 'archive',
+                label: '批量归档',
+                variant: 'danger',
+                onClick: () => console.log('archive selected'),
+                confirm: { title: `确定归档 ${tableSelectedRowKeys.length} 个批次？` },
+              },
+            ]}
+          />
+          <WxbDataTable
+            density="compact"
+            dataSource={MOCK_TABLE_ROWS}
+            columns={[
+              { title: '批次号', dataIndex: 'id', key: 'id', sorter: (a: any, b: any) => a.id.localeCompare(b.id) },
+              { title: '产品', dataIndex: 'product', key: 'product' },
+              { title: '状态', dataIndex: 'status', key: 'status', render: (status: string) => <WxbTag color={status === '已完成' ? 'green' : status === '待排程' ? 'amber' : 'blue'}>{status}</WxbTag> },
+              { title: '进度', dataIndex: 'progress', key: 'progress', render: (v: number) => <WxbProgress percent={v} /> },
+              {
+                title: '操作',
+                key: 'actions',
+                width: 180,
+                render: (_: any, record: UiKitBatchRow) => (
+                  <WxbTableActionCell
+                    actions={[
+                      { key: 'view', label: '查看', onClick: () => console.log('view', record.id) },
+                      { key: 'copy', label: '复制', onClick: () => console.log('copy', record.id) },
+                      {
+                        key: 'delete',
+                        label: '删除',
+                        variant: 'danger',
+                        onClick: () => console.log('delete', record.id),
+                        confirm: { title: `确定删除 ${record.id}？` },
+                      },
+                    ]}
+                  />
+                ),
+              },
+            ]}
+            rowSelection={{
+              selectedRowKeys: tableSelectedRowKeys,
+              onChange: setTableSelectedRowKeys,
+            }}
+            emptyState={{ description: '暂无匹配批次' }}
+            pagination={false}
+          />
+          <WxbDivider label="EMPTY" />
+          <WxbDataTable
+            density="compact"
+            dataSource={[]}
+            columns={[
+              { title: '批次号', dataIndex: 'id', key: 'id' },
+              { title: '产品', dataIndex: 'product', key: 'product' },
+              { title: '状态', dataIndex: 'status', key: 'status' },
+            ]}
+            emptyState={{
+              description: '暂无匹配批次',
+              action: <WxbButton variant="secondary" size="sm">重置筛选</WxbButton>,
+            }}
+            pagination={false}
+          />
         </WxbCard>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

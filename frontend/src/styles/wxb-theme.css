@@ -67,6 +67,35 @@
   --wx-fs-22: 22px;
   --wx-fs-28: 28px;
   --wx-fs-36: 36px;
+
+  /* ---------- Layout scale ---------- */
+  --wx-space-2: 2px;
+  --wx-space-4: 4px;
+  --wx-space-6: 6px;
+  --wx-space-8: 8px;
+  --wx-space-10: 10px;
+  --wx-space-12: 12px;
+  --wx-space-16: 16px;
+  --wx-space-20: 20px;
+  --wx-space-24: 24px;
+  --wx-space-32: 32px;
+  --wx-space-48: 48px;
+  --wx-space-64: 64px;
+
+  --wx-radius-2: 2px;
+  --wx-radius-4: 4px;
+  --wx-radius-6: 6px;
+  --wx-radius-8: 8px;
+  --wx-radius-12: 12px;
+
+  --wx-sh-1: 0 1px 2px rgba(15, 27, 45, 0.04);
+  --wx-sh-2: 0 4px 16px rgba(15, 27, 45, 0.10);
+  --wx-sh-3: 0 8px 24px rgba(15, 27, 45, 0.12);
+  --wx-sh-focus: 0 0 0 2px rgba(31, 111, 235, 0.28);
+
+  --wx-z-sticky: 20;
+  --wx-z-popover: 1050;
+  --wx-z-modal: 1100;
 }
 
 /* ============================================================

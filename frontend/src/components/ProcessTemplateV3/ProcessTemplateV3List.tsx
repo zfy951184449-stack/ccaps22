@@ -17,7 +17,6 @@ import TemplateWorkbookImportModal from '../TemplateWorkbookImportModal';
 import {
   WxbButton,
   WxbCard,
-  WxbSearchInput,
   WxbSelect,
   WxbSegmented,
   WxbTabs,
@@ -30,8 +29,16 @@ import {
   WxbInput,
   WxbTextarea,
   WxbCheckbox,
+  WxbPageShell,
+  WxbPageHeader,
+  WxbPageGrid,
+  WxbPageSection,
+  WxbFilterBar,
+  WxbSelectionSummary,
+  WxbToolbarActions,
 } from '../wxb-ui';
 import type { WxbTabItem } from '../wxb-ui/Tabs/Tabs';
+import './ProcessTemplateV3List.css';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -252,42 +259,23 @@ const ProcessTemplateV3List: React.FC = () => {
   const renderCard = (t: TemplateSummary) => (
     <WxbCard
       key={t.id}
-      style={{
-        cursor: 'pointer',
-        transition: 'box-shadow 200ms, transform 200ms',
-        border: selectedId === t.id ? '1px solid var(--wx-blue-500, #1F6FEB)' : undefined,
-      }}
-      className="v3-template-card"
+      className={`v3-template-card ${selectedId === t.id ? 'is-selected' : ''}`}
       onClick={() => goEditor(t)}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <WxbTag color="blue" style={{ marginBottom: 8 }}>{t.template_code}</WxbTag>
-          <h3 style={{
-            margin: '8px 0 0', fontSize: 16, fontWeight: 600,
-            color: 'var(--wx-ink, #0F1B2D)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {t.template_name}
-          </h3>
+      <div className="v3-template-card-head">
+        <div className="v3-template-title-block">
+          <WxbTag color="blue">{t.template_code}</WxbTag>
+          <h3 className="v3-template-title">{t.template_name}</h3>
         </div>
-        <div style={{
-          textAlign: 'right', background: 'var(--wx-bg-alt, #FAFCFE)',
-          borderRadius: 8, padding: '6px 10px', flexShrink: 0,
-        }}>
-          <div style={{ fontSize: 10, color: 'var(--wx-fg-4, #8898A8)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            周期
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--wx-ink, #0F1B2D)' }}>
-            {t.total_days} 天
-          </div>
+        <div className="v3-template-cycle">
+          <div className="v3-template-cycle-label">周期</div>
+          <div className="v3-template-cycle-value">{t.total_days} 天</div>
         </div>
       </div>
 
-      <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--wx-fg-3, #5A6B7E)', lineHeight: 1.5, minHeight: 40 }}>
-        {t.description || '暂无工艺描述'}
-      </p>
+      <p className="v3-template-description">{t.description || '暂无工艺描述'}</p>
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', fontSize: 12, color: 'var(--wx-fg-3, #5A6B7E)' }}>
+      <div className="v3-template-meta">
         <span>{t.team_name || '未分配单元'}</span>
         <span>·</span>
         <span>更新 {fmtDate(t.updated_at)}</span>
@@ -295,19 +283,19 @@ const ProcessTemplateV3List: React.FC = () => {
       </div>
 
       {hasRisk(t) && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        <div className="v3-template-risks">
           {riskBadges(t)}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 14, borderTop: '1px solid var(--wx-border, #E4EAF1)', paddingTop: 12 }}>
+      <div className="v3-template-actions">
         <WxbButton size="sm" onClick={(e) => { e.stopPropagation(); goEditor(t); }}>
           进入编辑器
         </WxbButton>
         <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>
           复制
         </WxbButton>
-        <div style={{ flex: 1 }} />
+        <div className="v3-template-actions-spacer" />
         <WxbCheckbox
           checked={selectedId === t.id}
           onChange={() => setSelectedId(t.id)}
@@ -321,22 +309,20 @@ const ProcessTemplateV3List: React.FC = () => {
     <WxbCard
       key={t.id}
       noPadding
-      style={{ cursor: 'pointer', border: selectedId === t.id ? '1px solid var(--wx-blue-500, #1F6FEB)' : undefined }}
+      className={`v3-template-row ${selectedId === t.id ? 'is-selected' : ''}`}
       onClick={() => goEditor(t)}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
+      <div className="v3-template-row-inner">
         <WxbCheckbox
           checked={selectedId === t.id}
           onChange={() => setSelectedId(t.id)}
         />
         <WxbTag color="blue">{t.template_code}</WxbTag>
-        <span style={{ fontWeight: 600, color: 'var(--wx-ink, #0F1B2D)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {t.template_name}
-        </span>
-        <span style={{ fontSize: 12, color: 'var(--wx-fg-3, #5A6B7E)' }}>{t.team_name || '未分配'}</span>
-        <span style={{ fontSize: 12, color: 'var(--wx-fg-4, #8898A8)' }}>{t.total_days} 天</span>
+        <span className="v3-template-row-title">{t.template_name}</span>
+        <span className="v3-template-row-subtle">{t.team_name || '未分配'}</span>
+        <span className="v3-template-row-muted">{t.total_days} 天</span>
         {hasRisk(t) && riskBadges(t)}
-        <div style={{ flex: 1 }} />
+        <div className="v3-template-row-spacer" />
         <WxbButton size="sm" onClick={(e) => { e.stopPropagation(); goEditor(t); }}>编辑</WxbButton>
         <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>复制</WxbButton>
       </div>
@@ -354,52 +340,53 @@ const ProcessTemplateV3List: React.FC = () => {
   // ---- Main render ----
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 'calc(100vh - 120px)' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 600, color: 'var(--wx-ink, #0F1B2D)' }}>
-              工艺模版 V3
-            </h1>
-            <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--wx-fg-3, #5A6B7E)' }}>
-              甘特图可视化编辑器
-            </p>
-          </div>
-          <WxbButton onClick={() => setCreateOpen(true)}>+ 新建模板</WxbButton>
-        </div>
+      <WxbPageShell size="full" minHeight="calc(100vh - 120px)">
+        <WxbPageHeader
+          title="工艺模版 V3"
+          description="甘特图可视化编辑器"
+          actions={<WxbButton onClick={() => setCreateOpen(true)}>+ 新建模板</WxbButton>}
+        />
 
         {/* Team Tabs */}
         <WxbTabs items={tabItems} activeKey={activeTeamId} onChange={setActiveTeamId} />
 
         {/* Toolbar */}
-        <WxbCard noPadding style={{ position: 'sticky', top: 80, zIndex: 20, backdropFilter: 'blur(8px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', flexWrap: 'wrap' }}>
-            <WxbSearchInput
-              placeholder="搜索模板名 / 编码"
-              value={searchValue}
-              onChange={setSearchValue}
-              style={{ width: 240 }}
-            />
+        <WxbFilterBar
+          sticky
+          stickyTop={80}
+          search={{
+            className: 'v3-list-filter-search',
+            placeholder: '搜索模板名 / 编码',
+            value: searchValue,
+            onChange: setSearchValue,
+          }}
+          filters={(
+            <>
+              <WxbSelect
+                className="v3-list-filter-select"
+                value={statusFilter}
+                onChange={(v) => setStatusFilter(v as StatusFilter)}
+                options={[
+                  { value: 'all', label: '状态：全部' },
+                  { value: 'risk', label: '状态：有风险' },
+                  { value: 'recent', label: '状态：最近更新' },
+                ]}
+              />
+            </>
+          )}
+          sort={(
             <WxbSelect
-              value={statusFilter}
-              onChange={(v) => setStatusFilter(v as StatusFilter)}
-              style={{ width: 160 }}
-              options={[
-                { value: 'all', label: '状态：全部' },
-                { value: 'risk', label: '状态：有风险' },
-                { value: 'recent', label: '状态：最近更新' },
-              ]}
-            />
-            <WxbSelect
+              className="v3-list-filter-select"
               value={sortBy}
               onChange={(v) => setSortBy(v as SortBy)}
-              style={{ width: 160 }}
               options={[
                 { value: 'updated', label: '排序：最近更新' },
                 { value: 'cycle', label: '排序：周期最长' },
                 { value: 'name', label: '排序：名称' },
               ]}
             />
+          )}
+          view={(
             <WxbSegmented
               value={density}
               onChange={(v) => setDensity(v as ViewDensity)}
@@ -408,44 +395,57 @@ const ProcessTemplateV3List: React.FC = () => {
                 { label: '紧凑', value: 'compact' },
               ]}
             />
-            <div style={{ flex: 1 }} />
-            {selectedTemplate && (
-              <WxbTag color="blue" closable onClose={() => setSelectedId(null)}>
-                已选: {selectedTemplate.template_code}
-              </WxbTag>
-            )}
-            <span style={{ fontSize: 12, color: 'var(--wx-fg-3, #5A6B7E)' }}>共 {displayed.length} 个</span>
-            <WxbButton variant="ghost" size="sm" onClick={() => setImportOpen(true)}>导入</WxbButton>
-            <WxbDropdown menu={exportMenu} placement="bottomRight">
-              <WxbButton variant="ghost" size="sm">导出 ▾</WxbButton>
-            </WxbDropdown>
-          </div>
-        </WxbCard>
+          )}
+          selection={(
+            <WxbSelectionSummary
+              selectedCount={selectedTemplate ? 1 : 0}
+              label={selectedTemplate?.template_code}
+              onClear={() => setSelectedId(null)}
+            />
+          )}
+          resultCount={displayed.length}
+          resultLabel="个"
+          actions={(
+            <WxbToolbarActions
+              items={[
+                { key: 'import', label: '导入', onClick: () => setImportOpen(true) },
+                {
+                  key: 'export',
+                  render: (
+                    <WxbDropdown menu={exportMenu} placement="bottomRight">
+                      <WxbButton variant="ghost" size="sm">导出 ▾</WxbButton>
+                    </WxbDropdown>
+                  ),
+                },
+              ]}
+            />
+          )}
+        />
 
         {/* Content */}
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+          <WxbPageGrid>
             {Array.from({ length: 6 }, (_, i) => (
               <WxbCard key={`sk-${i}`}><WxbSkeleton rows={4} /></WxbCard>
             ))}
-          </div>
+          </WxbPageGrid>
         ) : displayed.length === 0 ? (
-          <WxbCard style={{ padding: 64 }}>
+          <WxbPageSection variant="framed" className="v3-list-empty">
             <WxbEmpty
               description={searchValue || statusFilter !== 'all' ? '当前筛选无匹配模版' : '暂无工艺模版'}
               action={<WxbButton onClick={() => setCreateOpen(true)}>新建第一个模板</WxbButton>}
             />
-          </WxbCard>
+          </WxbPageSection>
         ) : density === 'card' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+          <WxbPageGrid>
             {displayed.map(renderCard)}
-          </div>
+          </WxbPageGrid>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <WxbPageSection density="compact">
             {displayed.map(renderRow)}
-          </div>
+          </WxbPageSection>
         )}
-      </div>
+      </WxbPageShell>
 
       {/* Create Modal */}
       <WxbModal
@@ -456,13 +456,12 @@ const ProcessTemplateV3List: React.FC = () => {
         onOk={handleCreate}
         onCancel={() => { setCreateOpen(false); setCreateName(''); setCreateTeamId(null); setCreateDesc(''); }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="v3-create-form">
           <WxbInput
             label="模板名称"
             placeholder="输入模板名称"
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
-            style={{ width: '100%' }}
           />
           <WxbFormField label="所属团队">
             <WxbSelect
@@ -480,7 +479,6 @@ const ProcessTemplateV3List: React.FC = () => {
             value={createDesc}
             onChange={(e) => setCreateDesc(e.target.value)}
             rows={3}
-            style={{ width: '100%' }}
           />
         </div>
       </WxbModal>
@@ -492,13 +490,6 @@ const ProcessTemplateV3List: React.FC = () => {
         onImported={() => { setSelectedId(null); void loadTemplates(activeTeamId); }}
         title="导入 Excel"
       />
-
-      <style>{`
-        .v3-template-card:hover {
-          box-shadow: 0 4px 16px rgba(15, 27, 45, 0.10) !important;
-          transform: translateY(-1px);
-        }
-      `}</style>
     </>
   );
 };
