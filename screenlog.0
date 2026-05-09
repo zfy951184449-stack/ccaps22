@@ -17547,3 +17547,216 @@ webpack compiled with 2 errors and 1 warning
 [0mGET / [32m200[0m 5.414 ms - 500[0m
 127.0.0.1 - - [08/May/2026:23:16:12 +0800] "GET / HTTP/1.1" 404 207 "-" "Codex local server discovery"
 [0mGET /static/css/main.e0d74688.css [32m200[0m 1.322 ms - 214927[0m
+[2J[3J[HCompiling...
+[2J[3J[H[33mCompiled with warnings.[39m
+[33m[39m
+[eslint] 
+src/components/SolverV4/OperationReviewModal.tsx
+  [1mLine 77:8:[22m  React Hook useEffect has a missing dependency: 'fetchOperations'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/QualifiedPersonnelModal.tsx
+  [1mLine 42:8:[22m  React Hook useEffect has a missing dependency: 'fetchPersonnel'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/SolveProgressV4Modal.tsx
+  [1mLine 69:8:[22m  React Hook useEffect has a missing dependency: 'startListening'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/GanttCanvas.tsx
+  [1mLine 8:71:[22m    'BAR_HEIGHT' is defined but never used                                                                                                                                                                                                                           [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:56:[22m  'isDragging' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:68:[22m  'cancelDrag' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 154:16:[22m  'dismissToast' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 337:11:[22m  'totalHeaderH' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 363:6:[22m   React Hook useCallback has a missing dependency: 'startResize'. Either include it or remove the dependency array                                                                                                                                                 [33m[4mreact-hooks/exhaustive-deps[24m[39m
+  [1mLine 441:6:[22m   React Hook useCallback has missing dependencies: 'onShareHover' and 'shareColorMap'. Either include them or remove the dependency array. If 'onShareHover' changes too often, find the parent component that defines it and wrap that definition in useCallback  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttDrag.ts
+  [1mLine 139:71:[22m  'cw' is assigned a value but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttRenderer.ts
+  [1mLine 5:75:[22m   'GanttTheme' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 7:10:[22m   'ROW_HEIGHT' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 8:45:[22m   'STAGE_BAR_RADIUS' is defined but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 13:34:[22m  'darken' is defined but never used            [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+Search for the [4m[33mkeywords[39m[24m to learn more about each warning.
+To ignore, add [36m// eslint-disable-next-line[39m to the line before.
+
+WARNING in [eslint] 
+src/components/SolverV4/OperationReviewModal.tsx
+  [1mLine 77:8:[22m  React Hook useEffect has a missing dependency: 'fetchOperations'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/QualifiedPersonnelModal.tsx
+  [1mLine 42:8:[22m  React Hook useEffect has a missing dependency: 'fetchPersonnel'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/SolveProgressV4Modal.tsx
+  [1mLine 69:8:[22m  React Hook useEffect has a missing dependency: 'startListening'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/GanttCanvas.tsx
+  [1mLine 8:71:[22m    'BAR_HEIGHT' is defined but never used                                                                                                                                                                                                                           [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:56:[22m  'isDragging' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:68:[22m  'cancelDrag' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 154:16:[22m  'dismissToast' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 337:11:[22m  'totalHeaderH' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 363:6:[22m   React Hook useCallback has a missing dependency: 'startResize'. Either include it or remove the dependency array                                                                                                                                                 [33m[4mreact-hooks/exhaustive-deps[24m[39m
+  [1mLine 441:6:[22m   React Hook useCallback has missing dependencies: 'onShareHover' and 'shareColorMap'. Either include them or remove the dependency array. If 'onShareHover' changes too often, find the parent component that defines it and wrap that definition in useCallback  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttDrag.ts
+  [1mLine 139:71:[22m  'cw' is assigned a value but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttRenderer.ts
+  [1mLine 5:75:[22m   'GanttTheme' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 7:10:[22m   'ROW_HEIGHT' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 8:45:[22m   'STAGE_BAR_RADIUS' is defined but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 13:34:[22m  'darken' is defined but never used            [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+webpack compiled with 1 warning
+[32mNo issues found.[39m
+[0mGET /api/dashboard/shifts [36m304[0m 18.062 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 24.550 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-05 [36m304[0m 13.848 ms - -[0m
+[0mGET /api/dashboard/shifts [36m304[0m 7.820 ms - -[0m
+[0mGET /api/org-structure/tree [36m304[0m 8.235 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-05 [36m304[0m 2.522 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-05-08 [36m304[0m 16.987 ms - -[0m
+[0mGET /api/dashboard/daily-assignments?date=2026-05-08 [36m304[0m 7.691 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-05 [36m304[0m 63.605 ms - -[0m
+[0mGET /api/dashboard/work-hours-curve?granularity=day&year_month=2026-05 [36m304[0m 2.410 ms - -[0m
+[0mGET /api/dashboard/manpower-curve?year_month=2026-05 [36m304[0m 26.474 ms - -[0m
+[2J[3J[HCompiling...
+[2J[3J[H[33mCompiled with warnings.[39m
+[33m[39m
+[eslint] 
+src/components/SolverV4/OperationReviewModal.tsx
+  [1mLine 77:8:[22m  React Hook useEffect has a missing dependency: 'fetchOperations'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/QualifiedPersonnelModal.tsx
+  [1mLine 42:8:[22m  React Hook useEffect has a missing dependency: 'fetchPersonnel'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/SolveProgressV4Modal.tsx
+  [1mLine 69:8:[22m  React Hook useEffect has a missing dependency: 'startListening'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/GanttCanvas.tsx
+  [1mLine 8:71:[22m    'BAR_HEIGHT' is defined but never used                                                                                                                                                                                                                           [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:56:[22m  'isDragging' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:68:[22m  'cancelDrag' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 154:16:[22m  'dismissToast' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 337:11:[22m  'totalHeaderH' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 363:6:[22m   React Hook useCallback has a missing dependency: 'startResize'. Either include it or remove the dependency array                                                                                                                                                 [33m[4mreact-hooks/exhaustive-deps[24m[39m
+  [1mLine 441:6:[22m   React Hook useCallback has missing dependencies: 'onShareHover' and 'shareColorMap'. Either include them or remove the dependency array. If 'onShareHover' changes too often, find the parent component that defines it and wrap that definition in useCallback  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttDrag.ts
+  [1mLine 139:71:[22m  'cw' is assigned a value but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttRenderer.ts
+  [1mLine 5:75:[22m   'GanttTheme' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 7:10:[22m   'ROW_HEIGHT' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 8:45:[22m   'STAGE_BAR_RADIUS' is defined but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 13:34:[22m  'darken' is defined but never used            [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+Search for the [4m[33mkeywords[39m[24m to learn more about each warning.
+To ignore, add [36m// eslint-disable-next-line[39m to the line before.
+
+WARNING in [eslint] 
+src/components/SolverV4/OperationReviewModal.tsx
+  [1mLine 77:8:[22m  React Hook useEffect has a missing dependency: 'fetchOperations'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/QualifiedPersonnelModal.tsx
+  [1mLine 42:8:[22m  React Hook useEffect has a missing dependency: 'fetchPersonnel'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/SolveProgressV4Modal.tsx
+  [1mLine 69:8:[22m  React Hook useEffect has a missing dependency: 'startListening'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/GanttCanvas.tsx
+  [1mLine 8:71:[22m    'BAR_HEIGHT' is defined but never used                                                                                                                                                                                                                           [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:56:[22m  'isDragging' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:68:[22m  'cancelDrag' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 154:16:[22m  'dismissToast' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 337:11:[22m  'totalHeaderH' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 363:6:[22m   React Hook useCallback has a missing dependency: 'startResize'. Either include it or remove the dependency array                                                                                                                                                 [33m[4mreact-hooks/exhaustive-deps[24m[39m
+  [1mLine 441:6:[22m   React Hook useCallback has missing dependencies: 'onShareHover' and 'shareColorMap'. Either include them or remove the dependency array. If 'onShareHover' changes too often, find the parent component that defines it and wrap that definition in useCallback  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttDrag.ts
+  [1mLine 139:71:[22m  'cw' is assigned a value but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttRenderer.ts
+  [1mLine 5:75:[22m   'GanttTheme' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 7:10:[22m   'ROW_HEIGHT' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 8:45:[22m   'STAGE_BAR_RADIUS' is defined but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 13:34:[22m  'darken' is defined but never used            [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+webpack compiled with 1 warning
+[32mNo issues found.[39m
+[2J[3J[HCompiling...
+[2J[3J[H[33mCompiled with warnings.[39m
+[33m[39m
+[eslint] 
+src/components/SolverV4/OperationReviewModal.tsx
+  [1mLine 77:8:[22m  React Hook useEffect has a missing dependency: 'fetchOperations'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/QualifiedPersonnelModal.tsx
+  [1mLine 42:8:[22m  React Hook useEffect has a missing dependency: 'fetchPersonnel'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/SolveProgressV4Modal.tsx
+  [1mLine 69:8:[22m  React Hook useEffect has a missing dependency: 'startListening'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/GanttCanvas.tsx
+  [1mLine 8:71:[22m    'BAR_HEIGHT' is defined but never used                                                                                                                                                                                                                           [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:56:[22m  'isDragging' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:68:[22m  'cancelDrag' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 154:16:[22m  'dismissToast' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 337:11:[22m  'totalHeaderH' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 363:6:[22m   React Hook useCallback has a missing dependency: 'startResize'. Either include it or remove the dependency array                                                                                                                                                 [33m[4mreact-hooks/exhaustive-deps[24m[39m
+  [1mLine 441:6:[22m   React Hook useCallback has missing dependencies: 'onShareHover' and 'shareColorMap'. Either include them or remove the dependency array. If 'onShareHover' changes too often, find the parent component that defines it and wrap that definition in useCallback  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttDrag.ts
+  [1mLine 139:71:[22m  'cw' is assigned a value but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttRenderer.ts
+  [1mLine 5:75:[22m   'GanttTheme' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 7:10:[22m   'ROW_HEIGHT' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 8:45:[22m   'STAGE_BAR_RADIUS' is defined but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 13:34:[22m  'darken' is defined but never used            [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+Search for the [4m[33mkeywords[39m[24m to learn more about each warning.
+To ignore, add [36m// eslint-disable-next-line[39m to the line before.
+
+WARNING in [eslint] 
+src/components/SolverV4/OperationReviewModal.tsx
+  [1mLine 77:8:[22m  React Hook useEffect has a missing dependency: 'fetchOperations'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/QualifiedPersonnelModal.tsx
+  [1mLine 42:8:[22m  React Hook useEffect has a missing dependency: 'fetchPersonnel'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/SolverV4/SolveProgressV4Modal.tsx
+  [1mLine 69:8:[22m  React Hook useEffect has a missing dependency: 'startListening'. Either include it or remove the dependency array  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/GanttCanvas.tsx
+  [1mLine 8:71:[22m    'BAR_HEIGHT' is defined but never used                                                                                                                                                                                                                           [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:56:[22m  'isDragging' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 153:68:[22m  'cancelDrag' is assigned a value but never used                                                                                                                                                                                                                  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 154:16:[22m  'dismissToast' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 337:11:[22m  'totalHeaderH' is assigned a value but never used                                                                                                                                                                                                                [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 363:6:[22m   React Hook useCallback has a missing dependency: 'startResize'. Either include it or remove the dependency array                                                                                                                                                 [33m[4mreact-hooks/exhaustive-deps[24m[39m
+  [1mLine 441:6:[22m   React Hook useCallback has missing dependencies: 'onShareHover' and 'shareColorMap'. Either include them or remove the dependency array. If 'onShareHover' changes too often, find the parent component that defines it and wrap that definition in useCallback  [33m[4mreact-hooks/exhaustive-deps[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttDrag.ts
+  [1mLine 139:71:[22m  'cw' is assigned a value but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+src/components/wxb-ui/GanttChart/useGanttRenderer.ts
+  [1mLine 5:75:[22m   'GanttTheme' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 7:10:[22m   'ROW_HEIGHT' is defined but never used        [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 8:45:[22m   'STAGE_BAR_RADIUS' is defined but never used  [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+  [1mLine 13:34:[22m  'darken' is defined but never used            [33m[4m@typescript-eslint/no-unused-vars[24m[39m
+
+webpack compiled with 1 warning
+[32mNo issues found.[39m
+[0mGET /api/organization/solver-teams [36m304[0m 3.452 ms - -[0m
+[0mGET /api/organization/solver-teams [36m304[0m 1.023 ms - -[0m
+[0mGET /api/batch-plans?start_date=2026-05-01&end_date=2026-05-31 [36m304[0m 11.565 ms - -[0m
+[0mGET /api/batch-plans?start_date=2026-05-01&end_date=2026-05-31 [36m304[0m 1.138 ms - -[0m
+[0mGET /api/batch-plans?start_date=2026-10-01&end_date=2026-10-31 [36m304[0m 23.677 ms - -[0m
+[0mGET /api/organization/solver-teams [36m304[0m 2.646 ms - -[0m
+[0mGET /api/batch-plans?start_date=2026-05-01&end_date=2026-05-31 [36m304[0m 6.826 ms - -[0m
+[0mGET /api/organization/solver-teams [36m304[0m 2.076 ms - -[0m
+[0mGET /api/batch-plans?start_date=2026-05-01&end_date=2026-05-31 [36m304[0m 4.721 ms - -[0m
+[0mGET /api/batch-plans?start_date=2026-10-01&end_date=2026-10-31 [36m304[0m 6.394 ms - -[0m

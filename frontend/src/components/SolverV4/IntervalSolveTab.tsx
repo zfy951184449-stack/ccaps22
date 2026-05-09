@@ -6,6 +6,12 @@ import SolveProgressV4Modal from './SolveProgressV4Modal';
 import SolveResultV4Page from './SolveResultV4Page';
 import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from './SolverConfigurationModal';
 import {
+    DepartmentFilterValue,
+    filterBatchesByDepartment,
+    getDefaultSelectedBatchIds,
+    getVisibleSelectedBatchIds,
+} from './batchSelection';
+import {
     WxbButton,
     WxbDataTable,
     WxbDatePicker,
@@ -47,7 +53,7 @@ const IntervalSolveTab: React.FC = () => {
 
     // Department Filter
     const [teams, setTeams] = useState<Team[]>([]);
-    const [selectedDepartment, setSelectedDepartment] = useState<'all' | number>('all');
+    const [selectedDepartment, setSelectedDepartment] = useState<DepartmentFilterValue>('all');
     const [loadingTeams, setLoadingTeams] = useState(false);
 
     // Solver Config
@@ -97,16 +103,8 @@ const IntervalSolveTab: React.FC = () => {
 
             if (result.success && Array.isArray(result.data)) {
                 setData(result.data);
-                const activatedIds = result.data
-                    .filter((batch: BatchPlan) => batch.plan_status === 'ACTIVATED')
-                    .map((batch: BatchPlan) => batch.id);
-                setSelectedRowKeys(activatedIds);
             } else if (Array.isArray(result)) {
                 setData(result);
-                const activatedIds = result
-                    .filter((batch: BatchPlan) => batch.plan_status === 'ACTIVATED')
-                    .map((batch: BatchPlan) => batch.id);
-                setSelectedRowKeys(activatedIds);
             } else {
                 message.error('加载批次数据失败');
             }
@@ -120,9 +118,12 @@ const IntervalSolveTab: React.FC = () => {
 
     useEffect(() => {
         fetchData(selectedMonth);
-        // Note: selectedRowKeys reset is handled inside fetchData
         setSolveRange(null);
     }, [selectedMonth]);
+
+    useEffect(() => {
+        setSelectedRowKeys(getDefaultSelectedBatchIds(data, selectedDepartment));
+    }, [data, selectedDepartment]);
 
     const handleMonthChange = (date: Dayjs | null) => {
         if (date) {
@@ -130,7 +131,7 @@ const IntervalSolveTab: React.FC = () => {
         }
     };
 
-    const handleDepartmentChange = (value: 'all' | number) => {
+    const handleDepartmentChange = (value: DepartmentFilterValue) => {
         setSelectedDepartment(value);
         if (value === 'all') {
             setSolverConfig((prev) => ({ ...prev, team_ids: [] }));
@@ -140,16 +141,13 @@ const IntervalSolveTab: React.FC = () => {
                 team_ids: [value],
             }));
         }
-        const filtered = data.filter(item => value === 'all' || item.team_id === value);
-        const activatedIds = filtered
-            .filter(batch => batch.plan_status === 'ACTIVATED')
-            .map(batch => batch.id);
-        setSelectedRowKeys(activatedIds);
+        setSelectedRowKeys(getDefaultSelectedBatchIds(data, value));
     };
 
     const filteredData = Array.isArray(data)
-        ? data.filter(item => selectedDepartment === 'all' || item.team_id === selectedDepartment)
+        ? filterBatchesByDepartment(data, selectedDepartment)
         : [];
+    const visibleSelectedRowKeys = getVisibleSelectedBatchIds(selectedRowKeys, filteredData);
 
     const getPlanStatusColor = (status?: string): WxbTagColor => {
         if (status === 'IN PROGRESS' || status === 'ACTIVATED') return 'blue';
@@ -159,7 +157,7 @@ const IntervalSolveTab: React.FC = () => {
     };
 
     const handleIntervalSolve = async () => {
-        if (selectedRowKeys.length === 0) {
+        if (visibleSelectedRowKeys.length === 0) {
             message.warning('请至少选择一个批次进行排班。');
             return;
         }
@@ -185,7 +183,7 @@ const IntervalSolveTab: React.FC = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    batch_ids: selectedRowKeys,
+                    batch_ids: visibleSelectedRowKeys,
                     start_date: monthStart,
                     end_date: monthEnd,
                     solve_start_date: solveStart,
@@ -214,7 +212,7 @@ const IntervalSolveTab: React.FC = () => {
     };
 
     const handlePrecheck = async () => {
-        if (selectedRowKeys.length === 0 || !solveRange) return;
+        if (visibleSelectedRowKeys.length === 0 || !solveRange) return;
         setPrecheckLoading(true);
         try {
             const monthStart = selectedMonth.startOf('month').format('YYYY-MM-DD');
@@ -223,7 +221,7 @@ const IntervalSolveTab: React.FC = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    batch_ids: selectedRowKeys,
+                    batch_ids: visibleSelectedRowKeys,
                     start_date: monthStart,
                     end_date: monthEnd,
                     config: { ...solverConfig },
@@ -363,7 +361,7 @@ const IntervalSolveTab: React.FC = () => {
 
             <WxbDataTable<BatchPlan>
                 rowSelection={{
-                    selectedRowKeys,
+                    selectedRowKeys: visibleSelectedRowKeys,
                     onChange: (keys) => setSelectedRowKeys(keys),
                 }}
                 columns={columns}
@@ -383,14 +381,14 @@ const IntervalSolveTab: React.FC = () => {
 
             <div className="solver-v4-action-footer">
                 <span className="solver-v4-selection-text">
-                    已选 <strong>{selectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
+                    已选 <strong>{visibleSelectedRowKeys.length}</strong> / 共 {filteredData.length} 个批次
                 </span>
                 <div className="solver-v4-action-group">
                     <WxbButton
                         type="button"
                         variant="secondary"
                         onClick={handlePrecheck}
-                        disabled={!solveRange || selectedRowKeys.length === 0 || precheckLoading}
+                        disabled={!solveRange || visibleSelectedRowKeys.length === 0 || precheckLoading}
                         aria-busy={precheckLoading || undefined}
                     >
                         {precheckLoading ? '预检中...' : '预检'}
@@ -399,7 +397,7 @@ const IntervalSolveTab: React.FC = () => {
                         type="button"
                         variant="primary"
                         onClick={handleIntervalSolve}
-                        disabled={!solveRange || selectedRowKeys.length === 0 || solving}
+                        disabled={!solveRange || visibleSelectedRowKeys.length === 0 || solving}
                         aria-busy={solving || undefined}
                     >
                         <WxbIcon name="hold-time" size={15} />
