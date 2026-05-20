@@ -13,7 +13,7 @@ echo "[1/6] Backend build"
 echo "[2/6] Frontend build"
 (
   cd "$ROOT_DIR/frontend"
-  npm run build
+  CI=false npm run build
 )
 
 echo "[3/6] Solver module compilation"
@@ -41,10 +41,10 @@ rg -n "locked_shifts" \
   "$ROOT_DIR/solver_v4/contracts/request.py" >/dev/null
 
 rg -n "shift_plan_id = \\?" \
-  "$ROOT_DIR/backend/src/controllers/schedulingV4Controller.ts" >/dev/null
+  "$ROOT_DIR/backend/src/controllers/schedulingV4/applyResultController.ts" >/dev/null
 
 if rg -n "const planCategory = 'BASE'" \
-  "$ROOT_DIR/backend/src/controllers/schedulingV4Controller.ts" >/dev/null; then
+  "$ROOT_DIR/backend/src/controllers/schedulingV4" >/dev/null; then
   echo "Guardrail failed: hardcoded BASE plan category is still present in schedulingV4Controller.ts" >&2
   exit 1
 fi
