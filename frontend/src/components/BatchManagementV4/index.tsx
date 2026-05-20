@@ -1,7 +1,18 @@
 import React, { Suspense, useCallback, useMemo } from 'react';
-import { Typography, Empty, Button, Segmented, Modal } from 'antd';
-import { PlusOutlined, AppstoreOutlined, FileTextOutlined, RocketOutlined, CopyOutlined, BarsOutlined, BarChartOutlined, ExclamationCircleFilled } from '@ant-design/icons';
-import { message } from 'antd';
+import {
+    WxbBadge,
+    WxbButton,
+    WxbEmpty,
+    WxbIcon,
+    WxbModal,
+    WxbPageGrid,
+    WxbPageHeader,
+    WxbPageSection,
+    WxbPageShell,
+    WxbSegmented,
+    WxbSpinner,
+    wxbToast,
+} from '../wxb-ui';
 import StatsCardV4 from './StatsCardV4';
 import BatchListV4 from './BatchListV4';
 import BatchFilterBar from './BatchFilterBar';
@@ -9,60 +20,55 @@ import CreateBatchModalV4 from './CreateBatchModalV4';
 import BulkCreateModalV4 from './BulkCreateModalV4';
 import { batchPlanApi, processTemplateApi } from '../../services/api';
 import type { BatchStatistics, BatchPlan, BatchTemplateSummary, ProcessTemplate } from '../../types';
+import './BatchManagementV4.css';
 
-const { Title, Text } = Typography;
-const BatchGanttV4 = React.lazy(() => import('./BatchGanttV4'));
+const BatchGanttV4 = React.lazy(() => import('./BatchGanttV4/index'));
 
-/**
- * BatchManagementV4
- * 
- * A completely new implementation of Batch Management interface following Apple HIG.
- * Features:
- * - Glassmorphism effects (backdrop-filter)
- * - Large rounded corners (Squircle-like)
- * - Minimalist design
- * - Fluid animations
- * - Dual-Mode View: List vs Gantt
- * - Multi-select filtering by Team, Template, and Batch
- */
+const getInitialViewMode = (): 'list' | 'gantt' => {
+    if (typeof window === 'undefined') {
+        return 'list';
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return params.has('gantt_from') || params.has('gantt_to') ? 'gantt' : 'list';
+};
 
 const BatchManagementV4: React.FC = () => {
-    // State
-    const [viewMode, setViewMode] = React.useState<'list' | 'gantt'>('list');
+    const [viewMode, setViewMode] = React.useState<'list' | 'gantt'>(getInitialViewMode);
     const [stats, setStats] = React.useState<BatchStatistics>({
         total_batches: 0,
         draft_count: 0,
-        activated_count: 0
+        activated_count: 0,
     });
     const [batches, setBatches] = React.useState<BatchPlan[]>([]);
     const [templates, setTemplates] = React.useState<ProcessTemplate[]>([]);
     const [loading, setLoading] = React.useState(false);
+    const [deleteTarget, setDeleteTarget] = React.useState<BatchPlan | null>(null);
+    const [deleteLoading, setDeleteLoading] = React.useState(false);
 
-    // Modal states
     const [createModalVisible, setCreateModalVisible] = React.useState(false);
     const [bulkModalVisible, setBulkModalVisible] = React.useState(false);
     const [editingBatch, setEditingBatch] = React.useState<BatchPlan | null>(null);
 
-    // Filter states
     const [selectedBatchIds, setSelectedBatchIds] = React.useState<number[]>([]);
     const [selectedTemplateIds, setSelectedTemplateIds] = React.useState<number[]>([]);
     const [selectedTeamCodes, setSelectedTeamCodes] = React.useState<string[]>([]);
+    const [selectedTableRowKeys, setSelectedTableRowKeys] = React.useState<React.Key[]>([]);
 
-    // Initial data load
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const [statsData, batchesData, templatesData] = await Promise.all([
                 batchPlanApi.getStatistics(),
                 batchPlanApi.list(),
-                processTemplateApi.getAll().then(res => res.data)
+                processTemplateApi.getAll().then((res) => res.data),
             ]);
             setStats(statsData);
             setBatches(batchesData);
             setTemplates(templatesData);
         } catch (error) {
             console.error('Failed to load data', error);
-            message.error('加载数据失败');
+            wxbToast.error('加载数据失败');
         } finally {
             setLoading(false);
         }
@@ -92,40 +98,57 @@ const BatchManagementV4: React.FC = () => {
             }));
     }, [templates]);
 
-    // Filtered batches based on filter criteria
     const filteredBatches = useMemo(() => {
-        return batches.filter(batch => {
-            // Filter by batch IDs
+        return batches.filter((batch) => {
             if (selectedBatchIdSet.size > 0 && !selectedBatchIdSet.has(batch.id)) {
                 return false;
             }
-            // Filter by template IDs
+
             if (selectedTemplateIdSet.size > 0 && !selectedTemplateIdSet.has(batch.template_id)) {
                 return false;
             }
-            // Filter by team codes (via batch's team_code or template lookup)
+
             if (selectedTeamCodeSet.size > 0) {
                 const batchTeamCode = batch.team_code ?? templateTeamCodeById.get(batch.template_id);
                 if (!batchTeamCode || !selectedTeamCodeSet.has(batchTeamCode)) {
                     return false;
                 }
             }
+
             return true;
         });
     }, [batches, selectedBatchIdSet, selectedTemplateIdSet, selectedTeamCodeSet, templateTeamCodeById]);
 
     const hasActiveFilters = selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0;
     const filteredBatchIds = useMemo(() => filteredBatches.map((batch) => batch.id), [filteredBatches]);
+    const filteredBatchIdSet = useMemo(() => new Set(filteredBatchIds), [filteredBatchIds]);
     const ganttFilteredBatchIds = hasActiveFilters ? filteredBatchIds : undefined;
+    const selectedTableBatchIds = useMemo(() => (
+        new Set(selectedTableRowKeys.map((key) => Number(key)).filter(Number.isFinite))
+    ), [selectedTableRowKeys]);
+    const selectedTableBatches = useMemo(() => (
+        batches.filter((batch) => selectedTableBatchIds.has(batch.id))
+    ), [batches, selectedTableBatchIds]);
+    const selectedDraftCount = useMemo(() => (
+        selectedTableBatches.filter((batch) => batch.plan_status === 'DRAFT').length
+    ), [selectedTableBatches]);
+    const selectedActivatedCount = useMemo(() => (
+        selectedTableBatches.filter((batch) => batch.plan_status === 'ACTIVATED').length
+    ), [selectedTableBatches]);
 
-    // Clear all filters
+    React.useEffect(() => {
+        setSelectedTableRowKeys((previousKeys) => {
+            const visibleKeys = previousKeys.filter((key) => filteredBatchIdSet.has(Number(key)));
+            return visibleKeys.length === previousKeys.length ? previousKeys : visibleKeys;
+        });
+    }, [filteredBatchIdSet]);
+
     const handleClearFilters = useCallback(() => {
         setSelectedBatchIds([]);
         setSelectedTemplateIds([]);
         setSelectedTeamCodes([]);
     }, []);
 
-    // Handlers
     const handleCreate = useCallback(() => {
         setEditingBatch(null);
         setCreateModalVisible(true);
@@ -146,209 +169,160 @@ const BatchManagementV4: React.FC = () => {
     const executeDelete = useCallback(async (batch: BatchPlan) => {
         try {
             await batchPlanApi.remove(batch.id, { force: true });
-            message.success(`批次 ${batch.batch_code} 已删除`);
+            wxbToast.success(`批次 ${batch.batch_code} 已删除`);
             loadData();
         } catch (error: any) {
             const serverMsg = error?.response?.data?.error;
             if (error?.response?.status === 404) {
-                message.warning('批次不存在或已被删除');
+                wxbToast.warning('批次不存在或已被删除');
                 loadData();
             } else {
-                message.error(serverMsg || '删除批次失败');
+                wxbToast.error(serverMsg || '删除批次失败');
             }
+            throw error;
         }
     }, [loadData]);
 
     const handleDelete = useCallback((batch: BatchPlan) => {
         if (batch.plan_status === 'ACTIVATED') {
-            Modal.confirm({
-                title: '删除已激活批次',
-                icon: <ExclamationCircleFilled style={{ color: '#FF3B30' }} />,
-                content: (
-                    <div style={{ marginTop: 8 }}>
-                        <p style={{ margin: '0 0 8px', fontWeight: 500 }}>
-                            批次 <strong>{batch.batch_code}</strong> 当前处于激活状态。
-                        </p>
-                        <p style={{ margin: '0 0 4px', color: '#666' }}>
-                            删除将同时执行以下操作：
-                        </p>
-                        <ul style={{ margin: '4px 0 0', paddingLeft: 20, color: '#666', fontSize: 13 }}>
-                            <li>撤销批次激活状态</li>
-                            <li>清除人员排班分配数据</li>
-                            <li>清除关联的班次计划</li>
-                            <li>删除所有操作计划和约束</li>
-                        </ul>
-                        <p style={{ margin: '12px 0 0', color: '#FF3B30', fontSize: 13, fontWeight: 500 }}>
-                            此操作不可撤销。
-                        </p>
-                    </div>
-                ),
-                okText: '确认删除',
-                okButtonProps: { danger: true },
-                cancelText: '取消',
-                onOk: () => executeDelete(batch),
-                width: 440,
-            });
-        } else {
-            // DRAFT 批次由 BatchListV4 的 Popconfirm 处理确认，到这里直接执行
-            executeDelete(batch);
+            setDeleteTarget(batch);
+            return;
         }
+
+        executeDelete(batch).catch(() => undefined);
     }, [executeDelete]);
+
+    const handleConfirmActivatedDelete = useCallback(async () => {
+        if (!deleteTarget) {
+            return;
+        }
+
+        setDeleteLoading(true);
+        try {
+            await executeDelete(deleteTarget);
+            setDeleteTarget(null);
+        } catch {
+            // Toast is handled in executeDelete.
+        } finally {
+            setDeleteLoading(false);
+        }
+    }, [deleteTarget, executeDelete]);
 
     const handleActivate = useCallback(async (batch: BatchPlan) => {
         try {
             await batchPlanApi.activate(batch.id);
-            message.success('批次已激活');
+            wxbToast.success('批次已激活');
             loadData();
         } catch (error) {
-            message.error('激活失败');
+            console.error('Failed to activate batch', error);
+            wxbToast.error('激活失败');
         }
     }, [loadData]);
 
     const handleDeactivate = useCallback(async (batch: BatchPlan) => {
         try {
             await batchPlanApi.deactivate(batch.id);
-            message.success('批次已撤销激活');
+            wxbToast.success('批次已撤销激活');
             loadData();
         } catch (error) {
-            message.error('撤销激活失败');
+            console.error('Failed to deactivate batch', error);
+            wxbToast.error('撤销激活失败');
         }
     }, [loadData]);
 
-    // Apple HIG style constants that override/extend the base tokens for this specific new look
-    const styles = {
-        container: {
-            height: '100%',
-            width: '100%',
-            backgroundColor: 'rgba(255, 255, 255, 0.6)', // Translucent background
-            backdropFilter: 'blur(20px)', // Heavy blur for glass effect
-            WebkitBackdropFilter: 'blur(20px)',
-            borderRadius: '24px', // Large rounded corners (approx. rounded-3xl)
-            boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.07)', // Soft, diffused shadow
-            border: '1px solid rgba(255, 255, 255, 0.18)', // Subtle white border
-            padding: '24px',
-            display: 'flex',
-            flexDirection: 'column' as const,
-            overflow: 'hidden',
-        },
-        header: {
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px',
-            padding: '0 8px', // Slight padding for alignment
-        },
-        statsRow: {
-            display: 'flex',
-            gap: '20px',
-            marginBottom: '16px',
-            flexShrink: 0, // Ensure stats don't shrink
-        },
-        content: {
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column' as const,
-            background: 'rgba(245, 245, 247, 0.3)',
-            borderRadius: '16px',
-            overflow: 'hidden',
-            opacity: 1,
-            // For Gantt view, we want to remove extra padding/margin so it fits perfectly
-            position: 'relative' as const,
+    const runBulkMutation = useCallback(async (
+        targets: BatchPlan[],
+        mutation: (batch: BatchPlan) => Promise<unknown>,
+        successMessage: string,
+        failureMessage: string,
+    ) => {
+        if (targets.length === 0) {
+            wxbToast.info('没有符合条件的批次');
+            return;
         }
-    };
+
+        try {
+            await Promise.all(targets.map(mutation));
+            wxbToast.success(successMessage);
+            setSelectedTableRowKeys([]);
+        } catch (error) {
+            console.error(failureMessage, error);
+            wxbToast.error(failureMessage);
+        } finally {
+            loadData();
+        }
+    }, [loadData]);
+
+    const handleBulkActivate = useCallback(() => {
+        const targets = selectedTableBatches.filter((batch) => batch.plan_status === 'DRAFT');
+        void runBulkMutation(
+            targets,
+            (batch) => batchPlanApi.activate(batch.id),
+            `已激活 ${targets.length} 个批次`,
+            '批量激活失败',
+        );
+    }, [runBulkMutation, selectedTableBatches]);
+
+    const handleBulkDeactivate = useCallback(() => {
+        const targets = selectedTableBatches.filter((batch) => batch.plan_status === 'ACTIVATED');
+        void runBulkMutation(
+            targets,
+            (batch) => batchPlanApi.deactivate(batch.id),
+            `已撤销 ${targets.length} 个批次`,
+            '批量撤销失败',
+        );
+    }, [runBulkMutation, selectedTableBatches]);
+
+    const handleBulkDelete = useCallback(() => {
+        void runBulkMutation(
+            selectedTableBatches,
+            (batch) => batchPlanApi.remove(batch.id, { force: true }),
+            `已删除 ${selectedTableBatches.length} 个批次`,
+            '批量删除失败',
+        );
+    }, [runBulkMutation, selectedTableBatches]);
 
     return (
-        <div style={styles.container}>
-            <div style={styles.header}>
-                <div>
-                    <Title level={2} style={{ margin: 0, fontWeight: 600, letterSpacing: '-0.5px' }}>
-                        批次管理
-                    </Title>
-                    <Text type="secondary" style={{ fontSize: '15px' }}>
-                        管理您的生产批次与排程
-                    </Text>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {/* View Switcher */}
-                    <Segmented
-                        options={[
-                            { label: '列表视图', value: 'list', icon: <BarsOutlined /> },
-                            { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
-                        ]}
-                        value={viewMode}
-                        onChange={(val) => setViewMode(val as 'list' | 'gantt')}
-                        style={{ background: 'rgba(118, 118, 128, 0.12)', fontWeight: 500 }}
-                    />
+        <WxbPageShell className="batch-management-v4" size="full" gap="sm" minHeight="100%">
+            <WxbPageHeader
+                eyebrow="生产计划"
+                title="批次管理"
+                description="管理生产批次、计划日期、激活状态与排程甘特视图。"
+                meta={<WxbBadge status="info" variant="outline" code="BATCH" label={`${filteredBatches.length} / ${batches.length}`} />}
+                actions={(
+                    <div className="batch-management-v4__header-actions">
+                        <WxbSegmented
+                            size="md"
+                            value={viewMode}
+                            onChange={(value) => setViewMode(value as 'list' | 'gantt')}
+                            options={[
+                                { label: '列表视图', value: 'list', icon: <WxbIcon name="kanban" size={14} /> },
+                                { label: '甘特图', value: 'gantt', icon: <WxbIcon name="hold-time" size={14} /> },
+                            ]}
+                        />
+                        <WxbButton
+                            type="button"
+                            variant="secondary"
+                            size="lg"
+                            onClick={() => setBulkModalVisible(true)}
+                        >
+                            <WxbIcon name="receipt" size={16} />
+                            批量创建
+                        </WxbButton>
+                        <WxbButton type="button" variant="primary" size="lg" onClick={handleCreate}>
+                            <WxbIcon name="batch-record" size={16} />
+                            新建批次
+                        </WxbButton>
+                    </div>
+                )}
+            />
 
-                    <div style={{ width: 1, height: 24, backgroundColor: 'rgba(0,0,0,0.1)' }}></div>
+            <WxbPageGrid minItemWidth="240px" gap="md">
+                <StatsCardV4 title="总批次" value={stats.total_batches} iconName="kanban" tone="blue" />
+                <StatsCardV4 title="草稿" value={stats.draft_count} iconName="batch-record" tone="neutral" />
+                <StatsCardV4 title="已激活" value={stats.activated_count} iconName="release" tone="success" />
+            </WxbPageGrid>
 
-                    <Button
-                        type="default"
-                        size="large"
-                        icon={<CopyOutlined />}
-                        onClick={() => setBulkModalVisible(true)}
-                        style={{
-                            borderRadius: '12px',
-                            height: '44px',
-                            padding: '0 20px',
-                            fontWeight: 500,
-                            border: 'none',
-                            background: 'rgba(255,255,255,0.5)',
-                            backdropFilter: 'blur(10px)',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                        }}
-                    >
-                        批量创建
-                    </Button>
-                    <Button
-                        type="primary"
-                        size="large"
-                        icon={<PlusOutlined />}
-                        style={{
-                            borderRadius: '12px',
-                            height: '44px',
-                            padding: '0 24px',
-                            fontWeight: 500,
-                            boxShadow: '0 4px 14px 0 rgba(0, 118, 255, 0.2)',
-                            backgroundColor: '#007AFF', // Force Apple Blue
-                            border: 'none',
-                            color: '#ffffff'
-                        }}
-                        onClick={handleCreate}
-                    >
-                        新建批次
-                    </Button>
-                </div>
-            </div>
-
-            <div style={styles.statsRow}>
-                <div style={{ flex: 1 }}>
-                    <StatsCardV4
-                        title="总批次"
-                        value={stats.total_batches}
-                        icon={<AppstoreOutlined />}
-                        color="#007AFF"
-                    />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <StatsCardV4
-                        title="草稿"
-                        value={stats.draft_count}
-                        icon={<FileTextOutlined />}
-                        color="#8E8E93"
-                    />
-                </div>
-                <div style={{ flex: 1 }}>
-                    <StatsCardV4
-                        title="已激活"
-                        value={stats.activated_count}
-                        icon={<RocketOutlined />}
-                        color="#34C759"
-                    />
-                </div>
-            </div>
-
-            {/* Filter Bar */}
             <BatchFilterBar
                 batches={batches}
                 templates={templates}
@@ -361,7 +335,7 @@ const BatchManagementV4: React.FC = () => {
                 onClear={handleClearFilters}
             />
 
-            <div style={styles.content}>
+            <WxbPageSection className="batch-management-v4__content" variant="framed" density="compact">
                 {viewMode === 'list' ? (
                     loading || filteredBatches.length > 0 ? (
                         <BatchListV4
@@ -371,52 +345,36 @@ const BatchManagementV4: React.FC = () => {
                             onDelete={handleDelete}
                             onActivate={handleActivate}
                             onDeactivate={handleDeactivate}
+                            selectedRowKeys={selectedTableRowKeys}
+                            selectedDraftCount={selectedDraftCount}
+                            selectedActivatedCount={selectedActivatedCount}
+                            onSelectionChange={setSelectedTableRowKeys}
+                            onBulkActivate={handleBulkActivate}
+                            onBulkDeactivate={handleBulkDeactivate}
+                            onBulkDelete={handleBulkDelete}
                         />
                     ) : (
-                        <div style={{
-                            flex: 1,
-                            display: 'flex',
-                            justifyContent: 'center',
-                            alignItems: 'center',
-                            height: '100%'
-                        }}>
-                            <Empty
-                                image={<div style={{
-                                    fontSize: '64px',
-                                    color: 'rgba(0,0,0,0.1)',
-                                    marginBottom: '16px',
-                                    display: 'flex',
-                                    justifyContent: 'center'
-                                }}>
-                                    <AppstoreOutlined />
-                                </div>}
-                                description={
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        <Text strong style={{ fontSize: '18px', color: '#1d1d1f' }}>
-                                            {selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0
-                                                ? '没有匹配的批次'
-                                                : '暂无批次数据'}
-                                        </Text>
-                                        <Text type="secondary">
-                                            {selectedBatchIds.length > 0 || selectedTemplateIds.length > 0 || selectedTeamCodes.length > 0
-                                                ? '请尝试调整筛选条件'
-                                                : '点击右上角的按钮开始创建一个新的生产批次'}
-                                        </Text>
-                                    </div>
-                                }
+                        <div className="batch-management-v4__empty">
+                            <WxbEmpty
+                                image={<WxbIcon className="batch-management-v4__empty-icon" name="batch-record" size={54} />}
+                                description={hasActiveFilters ? '没有匹配的批次' : '暂无批次数据'}
+                                action={(
+                                    <WxbButton type="button" size="sm" onClick={hasActiveFilters ? handleClearFilters : handleCreate}>
+                                        {hasActiveFilters ? '清除筛选' : '新建批次'}
+                                    </WxbButton>
+                                )}
                             />
                         </div>
                     )
                 ) : (
-                    // Gantt View
-                    <Suspense fallback={<div style={{ padding: 24, color: '#8E8E93' }}>甘特图加载中...</div>}>
+                    <Suspense fallback={<WxbSpinner tip="甘特图加载中" />}>
                         <BatchGanttV4
                             filteredBatchIds={ganttFilteredBatchIds}
                             onCreateBatch={handleCreate}
                         />
                     </Suspense>
                 )}
-            </div>
+            </WxbPageSection>
 
             {createModalVisible && (
                 <CreateBatchModalV4
@@ -439,7 +397,37 @@ const BatchManagementV4: React.FC = () => {
                     onSuccess={handleSuccess}
                 />
             )}
-        </div>
+
+            <WxbModal
+                open={!!deleteTarget}
+                title="删除已激活批次"
+                okText="确认删除"
+                cancelText="取消"
+                okVariant="danger"
+                confirmLoading={deleteLoading}
+                onOk={handleConfirmActivatedDelete}
+                onCancel={() => setDeleteTarget(null)}
+                width={480}
+                centered
+            >
+                <div className="batch-modal-v4__body">
+                    <div>
+                        <div className="batch-modal-v4__section-title">
+                            批次 {deleteTarget?.batch_code} 当前处于激活状态。
+                        </div>
+                        <p className="batch-modal-v4__delete-copy">
+                            删除将同时撤销激活状态并清理关联排班数据，此操作不可撤销。
+                        </p>
+                        <ul className="batch-modal-v4__danger-list">
+                            <li>撤销批次激活状态</li>
+                            <li>清除人员排班分配数据</li>
+                            <li>清除关联的班次计划</li>
+                            <li>删除所有操作计划和约束</li>
+                        </ul>
+                    </div>
+                </div>
+            </WxbModal>
+        </WxbPageShell>
     );
 };
 

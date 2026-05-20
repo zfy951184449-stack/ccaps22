@@ -14,12 +14,15 @@ import OperationTypesPage from './pages/OperationTypesPage';
 import ProcessTemplatesPage from './pages/ProcessTemplatesPage';
 import ProcessTemplatesV2Page from './pages/ProcessTemplatesV2Page';
 import BatchManagementV4Page from './pages/BatchManagementV4Page';
+import BatchManagementWorkbenchV2Page from './pages/BatchManagementWorkbenchV2Page';
 import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
 import SolverV4Page from './pages/SolverV4Page';
 import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
 import UiKitShowcasePage from './pages/UiKitShowcasePage';
 import ProcessTemplatesV3Page from './pages/ProcessTemplatesV3Page';
 import EquipmentManagementPage from './pages/EquipmentManagementPage';
+import RosterLeadershipCockpitPage from './pages/roster/RosterLeadershipCockpitPage';
+import RosterExceptionRepairPage from './pages/roster/RosterExceptionRepairPage';
 
 const { Content } = Layout;
 
@@ -84,7 +87,10 @@ const AppLayout: React.FC = () => (
           <Route path="/process-templates-v2" element={<ProcessTemplatesV2Page />} />
           <Route path="/process-templates-v2/:templateId" element={<ProcessTemplatesV2Page />} />
           <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
+          <Route path="/batch-management-workbench-v2" element={<BatchManagementWorkbenchV2Page />} />
           <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
+          <Route path="/roster/leadership-cockpit" element={<RosterLeadershipCockpitPage />} />
+          <Route path="/roster/exceptions" element={<RosterExceptionRepairPage />} />
           <Route path="/solver-v4" element={<SolverV4Page />} />
           <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
           <Route path="/process-templates-v3" element={<ProcessTemplatesV3Page />} />

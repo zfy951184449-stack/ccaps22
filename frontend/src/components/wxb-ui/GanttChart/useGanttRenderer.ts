@@ -2,6 +2,7 @@
  * WxbGanttChart v2 — Canvas Rendering Engine
  * 5-layer drawing pipeline: Grid → TimeAxis → Connectors → Bars → DragOverlay
  */
+import dayjs from 'dayjs';
 import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow, GanttTheme, DragState, GanttTimeScale } from './types';
 import {
   THEME, ROW_HEIGHT, HEADER_HEIGHT, HEATMAP_HEIGHT,
@@ -37,6 +38,8 @@ export interface DrawConfig {
   viewMode: string;
   dpr: number;
   timeScale?: GanttTimeScale;
+  /** Real calendar date represented by hour 0. Without it, labels stay relative Day N. */
+  timelineOriginDate?: string;
   /** Task IDs in the same share-group transitive component as hovered task */
   hoveredShareTaskIds?: Set<string>;
   /** Color of the hovered share component */
@@ -57,6 +60,30 @@ function scaledWidth(start: number, end: number, cfg: DrawConfig): number {
 
 function isRangeVisible(start: number, end: number, cfg: DrawConfig): boolean {
   return cfg.timeScale ? cfg.timeScale.isRangeVisible(start, end) : end > start;
+}
+
+function getCalendarDateForDay(cfg: DrawConfig, day: number) {
+  if (!cfg.timelineOriginDate) return null;
+  const origin = dayjs(cfg.timelineOriginDate);
+  return origin.isValid() ? origin.add(day, 'day') : null;
+}
+
+function formatDayLabel(cfg: DrawConfig, day: number, dayWidth: number): string {
+  const date = getCalendarDateForDay(cfg, day);
+  if (!date) return `Day ${day}`;
+  return dayWidth >= 88 ? date.format('YYYY-MM-DD') : date.format('MM-DD');
+}
+
+function formatWeekLabel(cfg: DrawConfig, startDay: number, endDay: number): string {
+  const startDate = getCalendarDateForDay(cfg, startDay);
+  const endDate = getCalendarDateForDay(cfg, endDay);
+  if (!startDate || !endDate) return `Day ${startDay}-${endDay}`;
+  return `${startDate.format('YYYY-MM-DD')} - ${endDate.format('MM-DD')}`;
+}
+
+function formatExpandedDayLabel(cfg: DrawConfig, day: number): string {
+  const date = getCalendarDateForDay(cfg, day);
+  return date ? date.format('YYYY-MM-DD') : `Day ${day}`;
 }
 
 /** Clip rendering to below-header area. Must call ctx.restore() after. */
@@ -137,7 +164,8 @@ export function drawGrid(
     if (x < -dayW || x > canvasW + dayW) continue;
 
     // Weekend shading (simplified: d%7 == 5 or 6 for Sat/Sun)
-    const dow = (startDay + d) % 7;
+    const calendarDate = getCalendarDateForDay(cfg, startDay + d);
+    const dow = calendarDate ? calendarDate.day() : (startDay + d) % 7;
     if (dow === 0 || dow === 6) {
       ctx.fillStyle = hexToRgba(THEME.blue100, 0.35);
       ctx.fillRect(x, totalHeaderH, dayW, canvasH - totalHeaderH);
@@ -274,7 +302,7 @@ export function drawTimeAxis(
       ctx.fillStyle = THEME.ink;
       ctx.font = `600 12px ${FONT_SANS}`;
       ctx.textAlign = 'center';
-      ctx.fillText(`Day ${weekStartDay}-${weekStartDay + weekSize - 1}`, wx + ww / 2, 18);
+      ctx.fillText(formatWeekLabel(cfg, weekStartDay, weekStartDay + weekSize - 1), wx + ww / 2, 18);
 
       // Week separator
       ctx.strokeStyle = THEME.border;
@@ -311,7 +339,7 @@ export function drawTimeAxis(
     ctx.fillStyle = THEME.ink;
     ctx.font = `700 14px ${FONT_SANS}`;
     ctx.textAlign = 'center';
-    ctx.fillText(`Day ${expDay}`, centerX, 16);
+    ctx.fillText(formatExpandedDayLabel(cfg, expDay), centerX, 16);
 
     // ▸ Next arrow
     ctx.fillStyle = THEME.primary;
@@ -365,7 +393,7 @@ export function drawTimeAxis(
       ctx.fillStyle = THEME.ink;
       ctx.font = `600 12px ${FONT_SANS}`;
       ctx.textAlign = 'center';
-      ctx.fillText(`Day ${startDay + d}`, x + currentDayW / 2, 18);
+      ctx.fillText(formatDayLabel(cfg, startDay + d, dayW), x + currentDayW / 2, 18);
 
       // Hour sub-labels: adaptive density based on zoom
       if (showHourSubs) {
@@ -528,15 +556,21 @@ export function drawGroupBars(
     if (x + w < 0 || x > canvasW) continue;
 
     const y = totalHeaderH + r * rowHeight - scrollY;
-    const color = row.color || STAGE_COLORS[row.depth % STAGE_COLORS.length];
+    const color = canvasColor(row.color, STAGE_COLORS[row.depth % STAGE_COLORS.length]);
     const barH = BAR_HEIGHT;
     const barR = 4;  // WXB standard radius
     const barY = y + (rowHeight - barH) / 2;
     const isTopLevel = row.depth === 0;
+    const isStageGroup = row.groupType === 'stage';
+    const isEquipmentGroup = row.groupType === 'equipment';
+    const stageBandColor = isStageGroup ? darken(color, 0.08) : color;
 
-    // Flat tinted fill — low opacity, enterprise feel
-    const fillAlpha = isTopLevel ? 0.10 : 0.07;
-    ctx.fillStyle = hexToRgba(color, fillAlpha);
+    const fillAlpha = isStageGroup
+      ? 0.78
+      : isEquipmentGroup
+        ? 0.16
+        : isTopLevel ? 0.16 : 0.09;
+    ctx.fillStyle = hexToRgba(stageBandColor, fillAlpha);
     roundRect(ctx, x, barY, w, barH, barR);
     ctx.fill();
 
@@ -546,15 +580,15 @@ export function drawGroupBars(
     ctx.fill();
 
     // Subtle bottom border
-    ctx.strokeStyle = hexToRgba(color, 0.25);
+    ctx.strokeStyle = hexToRgba(stageBandColor, isStageGroup ? 0.72 : isEquipmentGroup ? 0.24 : 0.25);
     ctx.lineWidth = 1;
     roundRect(ctx, x, barY, w, barH, barR);
     ctx.stroke();
 
     // Group label — dark text, uppercase tracking (wxb-badge-tracked style)
     if (w > 40) {
-      ctx.fillStyle = hexToRgba(color, 0.85);
-      ctx.font = `600 ${isTopLevel ? 10.5 : 10}px ${FONT_SANS}`;
+      ctx.fillStyle = isStageGroup ? THEME.bg : hexToRgba(color, 0.88);
+      ctx.font = `600 ${isTopLevel || isStageGroup ? 10.5 : 10}px ${FONT_SANS}`;
       ctx.textAlign = 'left';
       const label = truncateText(ctx, row.label.toUpperCase(), w - 20);
       ctx.fillText(label, x + 10, barY + barH / 2 + 3.5);
@@ -590,7 +624,7 @@ export function drawBars(
     const barH = isStage ? STAGE_BAR_HEIGHT : BAR_HEIGHT;
     const barR = 4;  // WXB standard radius
     const y = totalHeaderH + row * rowHeight + (rowHeight - barH) / 2 - scrollY;
-    const color = task.color || STAGE_COLORS[0];
+    const color = canvasColor(task.color, STAGE_COLORS[0]);
     const stageAccentColor = canvasColor(color, THEME.fg3);
     const shareColor = cfg.shareColorMap?.get(task.id);
 
@@ -619,22 +653,23 @@ export function drawBars(
       ctx.stroke();
       ctx.setLineDash([]);
     } else if (isStage) {
-      // Stage: subtle tinted fill + solid thin border
-      ctx.fillStyle = hexToRgba(color, 0.06);
+      // Stage: dark structural band; equipment summary rows stay translucent.
+      const stageColor = darken(stageAccentColor, 0.08);
+      ctx.fillStyle = hexToRgba(stageColor, 0.86);
       roundRect(ctx, x, y, w, barH, barR);
       ctx.fill();
-      ctx.strokeStyle = hexToRgba(color, 0.35);
+      ctx.strokeStyle = hexToRgba(stageColor, 0.92);
       ctx.lineWidth = 1;
       roundRect(ctx, x, y, w, barH, barR);
       ctx.stroke();
       // Left accent
-      ctx.fillStyle = hexToRgba(color, 0.5);
+      ctx.fillStyle = THEME.bg;
       roundRect(ctx, x, y, 2.5, barH, [barR, 0, 0, barR]);
       ctx.fill();
       // Stage label
       if (w > 30) {
-        ctx.fillStyle = hexToRgba(color, 0.75);
-        ctx.font = `500 10px ${FONT_SANS}`;
+        ctx.fillStyle = THEME.bg;
+        ctx.font = `600 10px ${FONT_SANS}`;
         ctx.textAlign = 'left';
         const label = truncateText(ctx, task.label, w - 12);
         ctx.fillText(label, x + 8, y + barH / 2 + 3);

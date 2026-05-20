@@ -19,3 +19,37 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+.wxb-template-delete-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--wx-fg-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wxb-template-delete-confirm p {
+  margin: 0;
+}
+
+.wxb-template-delete-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.wxb-template-delete-confirm-item,
+.wxb-template-delete-confirm-more {
+  padding: 7px 10px;
+  border: 1px solid var(--wx-border);
+  border-radius: 6px;
+  background: var(--wx-bg-2);
+  color: var(--wx-fg-1);
+}
+
+.wxb-template-delete-confirm-more {
+  color: var(--wx-fg-3);
+}

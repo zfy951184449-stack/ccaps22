@@ -12,6 +12,7 @@ import GanttToolbar from './GanttToolbar';
 import GanttSidebar from './GanttSidebar';
 import GanttCanvas from './GanttCanvas';
 import GanttTooltip from './GanttTooltip';
+import type { GanttAvoidRect } from './GanttTooltip';
 import GanttMinimap from './GanttMinimap';
 import GanttContextMenu, {
   DEFAULT_TASK_MENU_ITEMS,
@@ -181,6 +182,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   dependencies = [],
   links = [],
   timeRange,
+  timelineOriginDate,
   timeUnit = 'day',
   rowHeight = 32,
   sidebarWidth = SIDEBAR_WIDTH,
@@ -204,6 +206,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   // Business callbacks
   onTaskEdit,
   onTaskDelete,
+  onTasksDelete,
   onTaskDuplicate,
   onContextAction,
   onGroupDragEnd,
@@ -222,6 +225,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { state, dispatch, stateRef } = useGanttStore(initialDayWidth);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Compute time range
   const { startHour, endHour } = useMemo(() => {
@@ -243,15 +247,42 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
 
   // Tooltip state
   const [tooltipState, setTooltipState] = useState<{
-    task: GanttTask | null; x: number; y: number; visible: boolean
-  }>({ task: null, x: 0, y: 0, visible: false });
+    task: GanttTask | null; x: number; y: number; visible: boolean; avoidRects: GanttAvoidRect[]
+  }>({ task: null, x: 0, y: 0, visible: false, avoidRects: [] });
 
-  const handleTooltipShow = useCallback((task: GanttTask, x: number, y: number) => {
-    setTooltipState({ task, x, y, visible: true });
+  const handleTooltipShow = useCallback((task: GanttTask, x: number, y: number, avoidRects: GanttAvoidRect[] = []) => {
+    setTooltipState({ task, x, y, visible: true, avoidRects });
   }, []);
   const handleTooltipHide = useCallback(() => {
     setTooltipState(prev => ({ ...prev, visible: false }));
   }, []);
+
+  const handleFullscreenToggle = useCallback(async () => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    try {
+      if (document.fullscreenElement === el) {
+        await document.exitFullscreen();
+      } else {
+        await el.requestFullscreen();
+      }
+    } catch (error) {
+      // Keep toolbar responsive even when the browser denies Fullscreen API.
+      setIsFullscreen(prev => !prev);
+      setTimeout(() => dispatch({ type: 'MARK_DIRTY' }), 0);
+    }
+  }, [dispatch]);
+
+  React.useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === containerRef.current);
+      setTimeout(() => dispatch({ type: 'MARK_DIRTY' }), 0);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [dispatch]);
 
   // Undo toast state (forwarded from GanttCanvas drag system)
   const [undoToast, setUndoToast] = useState<UndoToastData | null>(null);
@@ -314,6 +345,36 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     setCtxMenu(prev => ({ ...prev, visible: false }));
   }, []);
 
+  const collectDeletableTasks = useCallback((fallbackTask: GanttTask | null = null): GanttTask[] => {
+    const selectedIds = stateRef.current.selectedTaskIds;
+    const useSelection = selectedIds.size > 0 && (!fallbackTask || selectedIds.has(fallbackTask.id));
+    const candidates = useSelection
+      ? tasks.filter(task => selectedIds.has(task.id))
+      : fallbackTask
+        ? [fallbackTask]
+        : [];
+    const seen = new Set<string>();
+
+    return candidates.filter(task => {
+      if (task.readOnly || task.type === 'stage' || task.type === 'timeWindow') return false;
+      if (seen.has(task.id)) return false;
+      seen.add(task.id);
+      return true;
+    });
+  }, [tasks, stateRef]);
+
+  const requestTaskDeletion = useCallback((fallbackTask: GanttTask | null = null) => {
+    if (readOnly) return;
+    const targets = collectDeletableTasks(fallbackTask);
+    if (targets.length === 0) return;
+
+    if (onTasksDelete) {
+      onTasksDelete(targets);
+    } else if (targets.length === 1 && onTaskDelete) {
+      onTaskDelete(targets[0]);
+    }
+  }, [readOnly, collectDeletableTasks, onTasksDelete, onTaskDelete]);
+
   // Dynamic menu items based on context
   const activeMenuItems = useMemo(() => {
     if (ctxMenu.contextType === 'group') return groupMenuItems || DEFAULT_GROUP_MENU_ITEMS;
@@ -340,6 +401,8 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   }, [groups]);
 
   const handleCtxAction = useCallback((key: string, task: GanttTask | null) => {
+    let handled = true;
+
     // ===== Built-in view actions =====
     if (key === 'expand-all') {
       dispatch({ type: 'EXPAND_ALL' });
@@ -371,16 +434,19 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     // ===== Route to business callbacks =====
     else if (key === 'edit' && task && onTaskEdit) {
       onTaskEdit(task);
-    } else if (key === 'delete' && task && onTaskDelete) {
-      onTaskDelete(task);
+    } else if (key === 'delete') {
+      requestTaskDeletion(task);
     } else if (key === 'duplicate' && task && onTaskDuplicate) {
       onTaskDuplicate(task);
+    } else {
+      handled = false;
     }
+
     // Catch-all: forward to consumer's generic handler
-    if (onContextAction) {
+    if (!handled && onContextAction) {
       onContextAction(key, task);
     }
-  }, [dispatch, groups, tasks, ctxMenu.groupId, collectDescendantGroupIds, onTaskEdit, onTaskDelete, onTaskDuplicate, onContextAction]);
+  }, [dispatch, groups, tasks, ctxMenu.groupId, collectDescendantGroupIds, onTaskEdit, requestTaskDeletion, onTaskDuplicate, onContextAction]);
 
   // ===== Selection Panel Handlers =====
   const handleDeselectTask = useCallback((taskId: string) => {
@@ -414,21 +480,34 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
       .map(t => ({ id: t.id, label: t.label }));
   }, [currentDay, tasks]);
 
-  // ESC handler for expanded day
+  // Keyboard shortcuts
   React.useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tagName = target?.tagName.toLowerCase();
+      const isEditingText = tagName === 'input' || tagName === 'textarea' || tagName === 'select' || target?.isContentEditable;
+      if (isEditingText || target?.closest('[role="dialog"], .wxb-modal, .ant-modal')) return;
+
       if (e.key === 'Escape' && state.expandedDay !== null) {
         dispatch({ type: 'EXPAND_DAY', day: null });
+        return;
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        const targets = collectDeletableTasks();
+        if (targets.length === 0) return;
+        e.preventDefault();
+        requestTaskDeletion();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [state.expandedDay, dispatch]);
+  }, [state.expandedDay, dispatch, collectDeletableTasks, requestTaskDeletion]);
 
   return (
     <div
       ref={containerRef}
-      className={`wxb-gantt-chart ${className || ''}`}
+      className={`wxb-gantt-chart ${isFullscreen ? 'wxb-gantt-chart-fullscreen' : ''} ${className || ''}`}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -446,12 +525,13 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         viewMode={state.viewMode}
         dispatch={dispatch}
         enableFullscreen={enableFullscreen}
-        containerRef={containerRef}
+        isFullscreen={isFullscreen}
+        onFullscreenToggle={handleFullscreenToggle}
         onViewModeChange={onViewModeChange}
       />
 
       {/* Body: Sidebar + Canvas */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div className="wxb-gantt-body" style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
         <GanttSidebar
           flatRows={flatRows}
           scrollY={state.scrollY}
@@ -478,6 +558,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           dispatch={dispatch}
           startHour={startHour}
           endHour={endHour}
+          timelineOriginDate={timelineOriginDate}
           showGrid={showGrid}
           showToday={showToday}
           showProgress={showProgress}
@@ -539,6 +620,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         x={tooltipState.x}
         y={tooltipState.y}
         visible={tooltipState.visible}
+        avoidRects={tooltipState.avoidRects}
       />
 
       {/* Context menu overlay */}

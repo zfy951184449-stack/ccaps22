@@ -63,6 +63,7 @@ const navGroups: NavGroup[] = [
       { key: 'process-templates-v2', icon: <ProjectOutlined />, label: '工艺模版 V2', path: '/process-templates-v2' },
       { key: 'process-templates-v3', icon: <ProjectOutlined />, label: '工艺模版 V3', path: '/process-templates-v3' },
       { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
+      { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2' },
     ],
   },
   {
@@ -73,6 +74,8 @@ const navGroups: NavGroup[] = [
     children: [
       { key: 'organization-workbench', icon: <ApartmentOutlined />, label: '组织与人员', path: '/organization-workbench' },
       { key: 'personnel-scheduling', icon: <ClockCircleOutlined />, label: '人员排班', path: '/personnel-scheduling' },
+      { key: 'roster-leadership-cockpit', icon: <DashboardOutlined />, label: '工厂人力韧性驾驶舱', path: '/roster/leadership-cockpit' },
+      { key: 'roster-exceptions', icon: <ScheduleOutlined />, label: '异常排班快速修复', path: '/roster/exceptions' },
       { key: 'solver-v4', icon: <RocketOutlined />, label: 'V4 自动排班', path: '/solver-v4' },
       { key: 'shift-definitions', icon: <ScheduleOutlined />, label: '班次定义', path: '/shift-definitions' },
     ],

@@ -1,0 +1,400 @@
+.roster-cockpit-page {
+  color: var(--wx-fg-1);
+}
+
+.roster-cockpit-loading {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 420px;
+}
+
+.roster-cockpit-header-tags,
+.roster-cockpit-actions,
+.roster-cockpit-tag-row,
+.roster-cockpit-chart-legend,
+.roster-cockpit-focus-title,
+.roster-cockpit-readonly-note {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wx-space-8);
+}
+
+.roster-cockpit-button-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.roster-cockpit-custom-range {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wx-space-8);
+}
+
+.roster-cockpit-custom-range .wxb-field {
+  margin: 0;
+}
+
+.roster-cockpit-custom-range .wxb-input {
+  min-width: 148px;
+}
+
+.roster-cockpit-custom-range span {
+  color: var(--wx-fg-3);
+  font: 500 var(--wx-fs-13)/1 var(--wx-font-sans);
+}
+
+.roster-cockpit-data-warning {
+  display: grid;
+  gap: var(--wx-space-8);
+}
+
+.roster-cockpit-data-warning ul,
+.roster-cockpit-reason-list {
+  margin: 0;
+  padding-left: var(--wx-space-20);
+}
+
+.roster-cockpit-data-warning li,
+.roster-cockpit-reason-list li {
+  margin: var(--wx-space-4) 0;
+}
+
+.roster-cockpit-overview {
+  display: grid;
+  gap: var(--wx-space-20);
+  grid-template-columns: minmax(320px, 0.75fr) minmax(0, 1.25fr);
+}
+
+.roster-cockpit-score-card {
+  align-items: center;
+  display: grid;
+  gap: var(--wx-space-20);
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 210px;
+}
+
+.roster-cockpit-score-copy {
+  display: grid;
+  gap: var(--wx-space-8);
+}
+
+.roster-cockpit-score-copy strong {
+  color: var(--wx-ink);
+  font: 700 54px/1 var(--wx-font-sans);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.roster-cockpit-score-copy span:last-child {
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-13)/1.5 var(--wx-font-sans);
+}
+
+.roster-cockpit-section-eyebrow {
+  color: var(--wx-fg-3);
+  font: 700 var(--wx-fs-12)/1.2 var(--wx-font-sans);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.roster-cockpit-kpi-grid {
+  display: grid;
+  gap: var(--wx-space-12);
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+}
+
+.roster-cockpit-insight-grid {
+  display: grid;
+  gap: var(--wx-space-12);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.roster-cockpit-insight-card {
+  display: grid;
+  gap: var(--wx-space-10);
+  min-height: 132px;
+}
+
+.roster-cockpit-insight-card p,
+.roster-cockpit-focus-card p,
+.roster-cockpit-quadrant-card p,
+.roster-cockpit-action-item p {
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-14)/1.55 var(--wx-font-sans);
+  margin: 0;
+}
+
+.roster-cockpit-insight-index {
+  color: var(--wx-blue-700);
+  font: 700 var(--wx-fs-12)/1 var(--wx-font-mono);
+}
+
+.roster-cockpit-trend-chart {
+  display: grid;
+  gap: var(--wx-space-12);
+  min-width: 0;
+}
+
+.roster-cockpit-chart-legend {
+  color: var(--wx-fg-3);
+  font: 500 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+}
+
+.roster-cockpit-legend-item {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--wx-space-6);
+}
+
+.roster-cockpit-legend-swatch {
+  background: currentColor;
+  border-radius: var(--wx-radius-2);
+  display: inline-flex;
+  height: var(--wx-space-8);
+  width: var(--wx-space-16);
+}
+
+.roster-cockpit-trend-chart svg {
+  display: block;
+  overflow: visible;
+  width: 100%;
+}
+
+.roster-cockpit-chart-grid {
+  stroke: var(--wx-divider);
+  stroke-width: 1;
+}
+
+.roster-cockpit-chart-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+}
+
+.roster-cockpit-chart-axis,
+.roster-cockpit-chart-unit {
+  fill: var(--wx-fg-3);
+  font: 500 11px/1 var(--wx-font-sans);
+}
+
+.roster-cockpit-bottleneck-layout {
+  display: grid;
+  gap: var(--wx-space-16);
+  grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr);
+}
+
+.roster-cockpit-focus-card {
+  align-content: start;
+  display: grid;
+  gap: var(--wx-space-16);
+}
+
+.roster-cockpit-focus-title strong {
+  color: var(--wx-ink);
+  font: 700 var(--wx-fs-22)/1.25 var(--wx-font-sans);
+}
+
+.roster-cockpit-collapse-panel {
+  min-width: 0;
+}
+
+.roster-cockpit-collapse-label {
+  align-items: center;
+  display: grid;
+  gap: var(--wx-space-8);
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+.roster-cockpit-qualification-title {
+  align-items: center;
+  color: var(--wx-ink);
+  display: inline-flex;
+  font: 700 var(--wx-fs-14)/1.3 var(--wx-font-sans);
+  gap: var(--wx-space-8);
+  min-width: 0;
+}
+
+.roster-cockpit-qualification-title > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-cockpit-collapse-meta {
+  color: var(--wx-fg-3);
+  font: 500 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+}
+
+.roster-cockpit-qualification-detail {
+  display: grid;
+  gap: var(--wx-space-16);
+}
+
+.roster-cockpit-detail-metrics,
+.roster-cockpit-resilience-grid {
+  display: grid;
+  gap: var(--wx-space-12);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.roster-cockpit-mini-metric {
+  background: var(--wx-surface-1);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  display: grid;
+  gap: var(--wx-space-6);
+  padding: var(--wx-space-12);
+}
+
+.roster-cockpit-mini-label {
+  color: var(--wx-fg-3);
+  font: 600 var(--wx-fs-12)/1.25 var(--wx-font-sans);
+}
+
+.roster-cockpit-mini-value {
+  color: var(--wx-ink);
+  font: 700 var(--wx-fs-22)/1.1 var(--wx-font-sans);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.roster-cockpit-mini-caption {
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-12)/1.35 var(--wx-font-sans);
+}
+
+.roster-cockpit-reason-grid {
+  display: grid;
+  gap: var(--wx-space-20);
+  grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+}
+
+.roster-cockpit-subtitle {
+  color: var(--wx-ink);
+  font: 700 var(--wx-fs-13)/1.3 var(--wx-font-sans);
+  margin-bottom: var(--wx-space-8);
+}
+
+.roster-cockpit-quadrant-grid {
+  display: grid;
+  gap: var(--wx-space-16);
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+}
+
+.roster-cockpit-quadrant-card {
+  display: grid;
+  gap: var(--wx-space-12);
+}
+
+.roster-cockpit-quadrant-header {
+  align-items: center;
+  display: flex;
+  gap: var(--wx-space-12);
+  justify-content: space-between;
+}
+
+.roster-cockpit-quadrant-header strong {
+  color: var(--wx-ink);
+  font: 700 var(--wx-fs-16)/1.25 var(--wx-font-sans);
+}
+
+.roster-cockpit-quadrant-items {
+  display: grid;
+  gap: var(--wx-space-8);
+}
+
+.roster-cockpit-quadrant-item {
+  align-items: center;
+  color: var(--wx-fg-2);
+  display: inline-flex;
+  font: 500 var(--wx-fs-13)/1.3 var(--wx-font-sans);
+  gap: var(--wx-space-8);
+  min-width: 0;
+}
+
+.roster-cockpit-muted {
+  color: var(--wx-fg-4);
+  font: 400 var(--wx-fs-13)/1.4 var(--wx-font-sans);
+}
+
+.roster-cockpit-person-cell {
+  display: grid;
+  gap: var(--wx-space-4);
+}
+
+.roster-cockpit-person-name {
+  color: var(--wx-ink);
+  font: 700 var(--wx-fs-14)/1.25 var(--wx-font-sans);
+}
+
+.roster-cockpit-person-code {
+  color: var(--wx-fg-3);
+  font: 500 var(--wx-fs-12)/1.2 var(--wx-font-mono);
+}
+
+.roster-cockpit-action-list {
+  display: grid;
+  gap: var(--wx-space-12);
+}
+
+.roster-cockpit-action-item {
+  align-items: start;
+  display: grid;
+  gap: var(--wx-space-12);
+  grid-template-columns: 28px minmax(0, 1fr);
+}
+
+.roster-cockpit-action-item span {
+  align-items: center;
+  background: var(--wx-blue-100);
+  border-radius: var(--wx-radius-8);
+  color: var(--wx-blue-700);
+  display: inline-flex;
+  font: 700 var(--wx-fs-13)/1 var(--wx-font-sans);
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.roster-cockpit-readonly-note {
+  color: var(--wx-fg-2);
+  font: 700 var(--wx-fs-13)/1.3 var(--wx-font-sans);
+}
+
+@media (max-width: 1280px) {
+  .roster-cockpit-overview,
+  .roster-cockpit-bottleneck-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .roster-cockpit-kpi-grid {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .roster-cockpit-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .roster-cockpit-score-card,
+  .roster-cockpit-collapse-label,
+  .roster-cockpit-reason-grid,
+  .roster-cockpit-quadrant-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .roster-cockpit-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .roster-cockpit-collapse-meta {
+    display: block;
+  }
+}

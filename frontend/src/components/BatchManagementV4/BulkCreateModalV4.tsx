@@ -1,12 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, DatePicker, Select, InputNumber, message, Row, Col, Card, Typography, Space, Divider, Badge, Button } from 'antd';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
+import {
+    WxbBadge,
+    WxbButton,
+    WxbDatePicker,
+    WxbEmpty,
+    WxbIcon,
+    WxbInput,
+    WxbInputNumber,
+    WxbModal,
+    WxbSelect,
+    wxbToast,
+} from '../wxb-ui';
 import { batchPlanApi } from '../../services/api';
 import type { BatchTemplateSummary } from '../../types';
-import { CalendarOutlined } from '@ant-design/icons';
-import dayjs from 'dayjs';
-
-const { RangePicker } = DatePicker;
-const { Title, Text } = Typography;
 
 interface BulkCreateModalV4Props {
     visible: boolean;
@@ -15,13 +22,74 @@ interface BulkCreateModalV4Props {
     templates?: BatchTemplateSummary[];
 }
 
-const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({ visible, onCancel, onSuccess, templates: templateOptions }) => {
-    const [form] = Form.useForm();
+interface BulkCreateValues {
+    template_id?: number;
+    start_date?: Dayjs;
+    batch_count: number;
+    interval_days: number;
+    batch_prefix: string;
+    start_number: number;
+    batch_number_length: number;
+}
+
+type BulkCreateErrors = Partial<Record<keyof BulkCreateValues, string>>;
+
+const PREVIEW_LIMIT = 50;
+
+const defaultBulkValues = (): BulkCreateValues => ({
+    template_id: undefined,
+    start_date: undefined,
+    batch_count: 4,
+    interval_days: 7,
+    batch_prefix: 'GMP',
+    start_number: 1,
+    batch_number_length: 3,
+});
+
+const getLastDay0Date = (values: BulkCreateValues) => {
+    if (!values.start_date || !values.batch_count || !values.interval_days) {
+        return undefined;
+    }
+
+    return dayjs(values.start_date).add((values.batch_count - 1) * values.interval_days, 'day');
+};
+
+const buildPreview = (values: BulkCreateValues) => {
+    if (!values.start_date || !values.batch_count || !values.interval_days || !values.batch_prefix.trim()) {
+        return [];
+    }
+
+    const list: Array<{ code: string; date: string; name: string }> = [];
+    let current = dayjs(values.start_date);
+    let num = values.start_number || 1;
+
+    for (let index = 0; index < values.batch_count && list.length < PREVIEW_LIMIT; index += 1) {
+        const numStr = String(num).padStart(values.batch_number_length || 3, '0');
+        const code = `${values.batch_prefix.trim()}${numStr}`;
+
+        list.push({
+            code,
+            date: current.format('YYYY-MM-DD'),
+            name: `${code} (Bulk)`,
+        });
+
+        current = current.add(values.interval_days, 'day');
+        num += 1;
+    }
+
+    return list;
+};
+
+const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
+    visible,
+    onCancel,
+    onSuccess,
+    templates: templateOptions,
+}) => {
     const [loading, setLoading] = useState(false);
     const [templates, setTemplates] = useState<BatchTemplateSummary[]>(templateOptions ?? []);
-
-    // Preview state
-    const [previewList, setPreviewList] = useState<Array<{ code: string; date: string; name: string }>>([]);
+    const [values, setValues] = useState<BulkCreateValues>(defaultBulkValues);
+    const [errors, setErrors] = useState<BulkCreateErrors>({});
 
     useEffect(() => {
         if (templateOptions && templateOptions.length > 0) {
@@ -33,260 +101,237 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({ visible, onCancel
             return;
         }
 
-        batchPlanApi.getTemplates().then(setTemplates).catch(console.error);
+        batchPlanApi.getTemplates().then(setTemplates).catch((error) => {
+            console.error('Failed to load templates', error);
+            wxbToast.error('加载工艺模板失败');
+        });
     }, [templateOptions, visible]);
 
     useEffect(() => {
-        if (visible) {
-            form.resetFields();
-            form.setFieldsValue({
-                interval_days: 7,
-                start_number: 1,
-                batch_number_length: 3,
-                batch_prefix: 'GMP'
-            });
-            setPreviewList([]);
+        if (!visible) {
+            return;
         }
-    }, [form, visible]);
 
-    const updatePreview = () => {
-        const values = form.getFieldsValue();
-        if (values.date_range && values.interval_days && values.batch_prefix) {
-            const [start, end] = values.date_range;
-            if (!start || !end) return;
+        setValues(defaultBulkValues());
+        setErrors({});
+    }, [visible]);
 
-            const list: Array<{ code: string; date: string; name: string }> = [];
-            let current = dayjs(start);
-            const endDate = dayjs(end);
-            let num = values.start_number || 1;
+    const previewList = useMemo(() => buildPreview(values), [values]);
+    const lastDay0Date = useMemo(() => getLastDay0Date(values), [values]);
 
-            // Limit preview to e.g. 50 items to avoid freezing on massive ranges
-            while ((current.isBefore(endDate) || current.isSame(endDate, 'day')) && list.length < 50) {
-                const numStr = String(num).padStart(values.batch_number_length || 3, '0');
-                const code = `${values.batch_prefix}${numStr}`;
+    const updateValue = useCallback(<K extends keyof BulkCreateValues>(
+        key: K,
+        value: BulkCreateValues[K],
+    ) => {
+        setValues((current) => ({ ...current, [key]: value }));
+        setErrors((current) => ({ ...current, [key]: undefined }));
+    }, []);
 
-                list.push({
-                    code,
-                    date: current.format('YYYY-MM-DD'),
-                    name: `${code} (Bulk)`
-                });
+    const validate = useCallback(() => {
+        const nextErrors: BulkCreateErrors = {};
 
-                current = current.add(values.interval_days, 'day');
-                num++;
-            }
-            setPreviewList(list);
-        } else {
-            setPreviewList([]);
+        if (!values.template_id) {
+            nextErrors.template_id = '请选择模板';
         }
-    };
+        if (!values.start_date) {
+            nextErrors.start_date = '请选择 Day0 开始日期';
+        }
+        if (!values.batch_count || values.batch_count < 1) {
+            nextErrors.batch_count = '批次数量必须大于 0';
+        }
+        if (!values.interval_days || values.interval_days < 1) {
+            nextErrors.interval_days = '间隔必须大于 0';
+        }
+        if (!values.batch_prefix.trim()) {
+            nextErrors.batch_prefix = '请输入前缀';
+        }
+        if (!values.start_number || values.start_number < 1) {
+            nextErrors.start_number = '起始序号必须大于 0';
+        }
 
-    const handleSubmit = async () => {
+        setErrors(nextErrors);
+        return Object.keys(nextErrors).length === 0;
+    }, [values]);
+
+    const handleSubmit = useCallback(async () => {
+        const day0EndDate = getLastDay0Date(values);
+        if (!validate() || !values.template_id || !values.start_date || !day0EndDate) {
+            return;
+        }
+
+        setLoading(true);
         try {
-            const values = await form.validateFields();
-            setLoading(true);
-
             const payload = {
                 template_id: values.template_id,
-                day0_start_date: values.date_range[0].format('YYYY-MM-DD'),
-                day0_end_date: values.date_range[1].format('YYYY-MM-DD'),
+                day0_start_date: values.start_date.format('YYYY-MM-DD'),
+                day0_end_date: day0EndDate.format('YYYY-MM-DD'),
                 interval_days: values.interval_days,
-                batch_prefix: values.batch_prefix,
+                batch_prefix: values.batch_prefix.trim(),
                 start_number: values.start_number,
-                // Add padding handling in backend if needed, or assume backend handles formatting
-                // For now backend likely just concatenates, so we match logic
             };
 
             const result = await batchPlanApi.createBulk(payload);
-            message.success(result.message || '批量创建成功');
+            wxbToast.success(result.message || '批量创建成功');
             onSuccess();
         } catch (error) {
-            console.error(error);
+            console.error('Failed to bulk create batches', error);
+            wxbToast.error('批量创建失败');
         } finally {
             setLoading(false);
         }
-    };
+    }, [onSuccess, validate, values]);
 
     return (
-        <Modal
+        <WxbModal
             open={visible}
-            title={null} // Custom header
-            footer={null} // Custom footer
+            title="批量创建批次"
+            footer={null}
             onCancel={onCancel}
-            width={900}
+            width={920}
             centered
-            className="glass-modal-bulk"
-            styles={{
-                content: {
-                    borderRadius: '24px',
-                    padding: '0',
-                    overflow: 'hidden',
-                    background: 'rgba(255, 255, 255, 0.85)',
-                    backdropFilter: 'blur(20px)',
-                    boxShadow: '0 20px 50px rgba(0,0,0,0.1)',
-                },
-                body: { padding: 0 }
-            }}
         >
-            <div style={{ display: 'flex', height: '600px' }}>
-                {/* Left Side: Configuration */}
-                <div style={{ flex: 1, padding: '32px', borderRight: '1px solid rgba(0,0,0,0.06)', overflowY: 'auto' }}>
-                    <Title level={3} style={{ marginBottom: 8 }}>批量创建批次</Title>
-                    <Text type="secondary" style={{ display: 'block', marginBottom: 24 }}>设定规则以自动快速生成生产计划</Text>
+            <div className="batch-modal-v4__bulk-layout">
+                <div className="batch-modal-v4__bulk-config">
+                    <div className="batch-modal-v4__body">
+                        <p className="batch-modal-v4__intro">
+                            设定模板、Day0 开始日期、批次数量和命名规则，系统会按间隔自动推算结束日期。
+                        </p>
 
-                    <Form
-                        form={form}
-                        layout="vertical"
-                        onValuesChange={updatePreview}
-                    >
-                        <Form.Item
-                            label="工艺模板"
-                            name="template_id"
-                            rules={[{ required: true }]}
-                        >
-                            <Select
+                        <div className="batch-modal-v4__section">
+                            <h3 className="batch-modal-v4__section-title">生产规则</h3>
+                            <WxbSelect
+                                label="工艺模板"
                                 placeholder="选择标准生产流程"
-                                size="large"
-                                options={templates.map(t => ({ label: t.template_name, value: t.id }))}
+                                value={values.template_id}
+                                error={errors.template_id}
+                                options={templates.map((template) => ({
+                                    label: template.template_name,
+                                    value: template.id,
+                                }))}
+                                onChange={(value) => updateValue('template_id', value as number)}
                             />
-                        </Form.Item>
-
-                        <div style={{ background: 'rgba(0,0,0,0.02)', padding: '16px', borderRadius: '12px', marginBottom: '24px' }}>
-                            <Form.Item
-                                label="Day0 日期范围"
-                                name="date_range"
-                                rules={[{ required: true }]}
-                                style={{ marginBottom: 16 }}
-                            >
-                                <RangePicker size="large" style={{ width: '100%' }} />
-                            </Form.Item>
-                            <Form.Item
-                                label="生成间隔"
-                                name="interval_days"
-                                rules={[{ required: true }]}
-                                style={{ marginBottom: 0 }}
-                                help="每隔多少天开始一个新的批次"
-                            >
-                                <InputNumber
-                                    min={1}
-                                    size="large"
-                                    addonBefore="每"
-                                    addonAfter="天"
-                                    style={{ width: '100%' }}
+                            <div className="batch-modal-v4__grid">
+                                <WxbDatePicker
+                                    label="Day0 开始日期"
+                                    value={values.start_date as any}
+                                    error={errors.start_date}
+                                    onChange={(date) => updateValue('start_date', (date as Dayjs | null) || undefined)}
                                 />
-                            </Form.Item>
+                                <WxbInputNumber
+                                    label="批次数量"
+                                    min={1}
+                                    precision={0}
+                                    value={values.batch_count}
+                                    error={errors.batch_count}
+                                    addonAfter="批"
+                                    onChange={(value) => updateValue('batch_count', Number(value) || 1)}
+                                />
+                            </div>
+                            <WxbInputNumber
+                                label="生成间隔"
+                                min={1}
+                                precision={0}
+                                value={values.interval_days}
+                                error={errors.interval_days}
+                                addonBefore="每"
+                                addonAfter="天"
+                                onChange={(value) => updateValue('interval_days', Number(value) || 1)}
+                            />
+                            {lastDay0Date && previewList.length > 0 && (
+                                <p className="batch-modal-v4__rule-note">
+                                    将生成 {values.batch_count} 个批次，最后一个 Day0 为 {lastDay0Date.format('YYYY-MM-DD')}。
+                                </p>
+                            )}
                         </div>
 
-                        <Title level={5} style={{ marginTop: 24, marginBottom: 16 }}>命名规则</Title>
-                        <Row gutter={16}>
-                            <Col span={12}>
-                                <Form.Item
+                        <div className="batch-modal-v4__section">
+                            <h3 className="batch-modal-v4__section-title">命名规则</h3>
+                            <div className="batch-modal-v4__grid">
+                                <WxbInput
                                     label="前缀"
-                                    name="batch_prefix"
-                                    rules={[{ required: true }]}
-                                >
-                                    <Input size="large" placeholder="GMP" prefix={<span style={{ color: '#ccc' }}>Tx</span>} />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item
+                                    placeholder="GMP"
+                                    value={values.batch_prefix}
+                                    error={errors.batch_prefix}
+                                    onChange={(event) => updateValue('batch_prefix', event.target.value)}
+                                />
+                                <WxbInputNumber
                                     label="起始序号"
-                                    name="start_number"
-                                    rules={[{ required: true }]}
-                                >
-                                    <InputNumber size="large" min={1} style={{ width: '100%' }} />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Form.Item label="序号长度" name="batch_number_length">
-                            <Select size="large" options={[
-                                { label: '3位 (001)', value: 3 },
-                                { label: '4位 (0001)', value: 4 },
-                            ]} />
-                        </Form.Item>
-                    </Form>
+                                    min={1}
+                                    value={values.start_number}
+                                    error={errors.start_number}
+                                    onChange={(value) => updateValue('start_number', Number(value) || 1)}
+                                />
+                            </div>
+                            <WxbSelect
+                                label="序号长度"
+                                value={values.batch_number_length}
+                                options={[
+                                    { label: '3位 (001)', value: 3 },
+                                    { label: '4位 (0001)', value: 4 },
+                                ]}
+                                onChange={(value) => updateValue('batch_number_length', value as number)}
+                            />
+                        </div>
+                    </div>
                 </div>
 
-                {/* Right Side: Preview */}
-                <div style={{ width: '380px', background: 'rgba(240, 242, 245, 0.4)', padding: '32px', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Title level={4} style={{ margin: 0 }}>预览</Title>
-                        <Badge count={previewList.length} style={{ backgroundColor: '#52c41a' }} />
+                <div className="batch-modal-v4__bulk-preview">
+                    <div className="batch-modal-v4__preview-header">
+                        <h3 className="batch-modal-v4__preview-title">预览</h3>
+                        <WxbBadge
+                            status="success"
+                            variant="outline"
+                            code="COUNT"
+                            label={previewList.length > 0 ? `${values.batch_count}` : '0'}
+                        />
                     </div>
 
-                    <div style={{
-                        flex: 1,
-                        overflowY: 'auto',
-                        paddingRight: '4px',
-                        maskImage: 'linear-gradient(to bottom, black 90%, transparent 100%)',
-                        WebkitMaskImage: 'linear-gradient(to bottom, black 90%, transparent 100%)'
-                    }}>
+                    <div className="batch-modal-v4__preview-list">
                         {previewList.length > 0 ? (
-                            <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                                {previewList.map((item, index) => (
-                                    <Card
-                                        key={index}
-                                        size="small"
-                                        bordered={false}
-                                        style={{
-                                            borderRadius: '12px',
-                                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            <div>
-                                                <Text strong style={{ fontSize: '15px', color: '#007AFF' }}>{item.code}</Text>
-                                                <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
-                                                    <CalendarOutlined style={{ marginRight: 4 }} />
-                                                    {item.date}
-                                                </div>
+                            <>
+                                {previewList.map((item) => (
+                                    <div key={`${item.code}-${item.date}`} className="batch-modal-v4__preview-card">
+                                        <div>
+                                            <div className="batch-modal-v4__preview-code">{item.code}</div>
+                                            <div className="batch-modal-v4__preview-date">
+                                                <WxbIcon name="hold-time" size={13} />
+                                                {item.date}
                                             </div>
-                                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#52c41a' }}></div>
                                         </div>
-                                    </Card>
+                                        <WxbIcon name="batch-record" size={18} />
+                                    </div>
                                 ))}
-                                {previewList.length === 50 && (
-                                    <Text type="secondary" style={{ textAlign: 'center', display: 'block', fontSize: '12px' }}>
-                                        显示前 50 个...
-                                    </Text>
+                                {values.batch_count > PREVIEW_LIMIT && (
+                                    <div className="batch-modal-v4__preview-note">仅显示前 50 个批次</div>
                                 )}
-                            </Space>
+                            </>
                         ) : (
-                            <div style={{
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                color: '#ccc',
-                                flexDirection: 'column'
-                            }}>
-                                <div style={{ fontSize: '48px', marginBottom: '16px', opacity: 0.5 }}>📝</div>
-                                <div>配置规则以查看预览</div>
+                            <div className="batch-modal-v4__preview-empty">
+                                <WxbEmpty
+                                    image={<WxbIcon name="batch-record" size={52} />}
+                                    description="配置规则以查看预览"
+                                />
                             </div>
                         )}
                     </div>
 
-                    <Divider style={{ margin: '16px 0' }} />
-
-                    <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-                        <Button size="large" onClick={onCancel} style={{ borderRadius: '12px' }}>取消</Button>
-                        <Button
-                            type="primary"
-                            size="large"
+                    <div className="batch-modal-v4__actions">
+                        <WxbButton type="button" variant="ghost" onClick={onCancel}>
+                            取消
+                        </WxbButton>
+                        <WxbButton
+                            type="button"
+                            variant="primary"
+                            disabled={loading || previewList.length === 0}
+                            aria-busy={loading || undefined}
                             onClick={handleSubmit}
-                            loading={loading}
-                            disabled={previewList.length === 0}
-                            style={{
-                                borderRadius: '12px',
-                                background: '#007AFF',
-                                boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)'
-                            }}
                         >
-                            生成批次
-                        </Button>
-                    </Space>
+                            {loading ? '生成中...' : '生成批次'}
+                        </WxbButton>
+                    </div>
                 </div>
             </div>
-        </Modal>
+        </WxbModal>
     );
 };
 

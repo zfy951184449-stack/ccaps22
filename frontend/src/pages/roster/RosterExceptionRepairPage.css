@@ -1,0 +1,500 @@
+.roster-exception-page {
+  color: var(--wx-fg-1);
+}
+
+.roster-exception-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  gap: var(--wx-space-12);
+  align-items: end;
+}
+
+.roster-exception-form .wxb-field {
+  min-width: 0;
+}
+
+.roster-exception-window-picker {
+  min-width: 100%;
+}
+
+.roster-exception-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wx-space-12);
+  margin-top: var(--wx-space-16);
+}
+
+.roster-exception-action-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--wx-space-6);
+}
+
+.roster-exception-action-hint {
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-12)/1.4 var(--wx-font-sans);
+}
+
+.roster-exception-control-group {
+  display: grid;
+  gap: var(--wx-space-6);
+}
+
+.roster-exception-control-label {
+  color: var(--wx-fg-2);
+  font: 500 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+}
+
+.roster-exception-progress-panel {
+  display: grid;
+  gap: var(--wx-space-12);
+  margin-top: var(--wx-space-16);
+  padding: var(--wx-space-16);
+  border: 1px solid var(--wx-blue-200);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-blue-50);
+}
+
+.roster-exception-progress-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-10);
+}
+
+.roster-exception-progress-title {
+  color: var(--wx-fg-1);
+  font: 700 var(--wx-fs-15)/1.3 var(--wx-font-sans);
+}
+
+.roster-exception-progress-subtitle,
+.roster-exception-progress-note {
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-12)/1.45 var(--wx-font-sans);
+}
+
+.roster-exception-progress-note {
+  margin: 0;
+}
+
+.roster-exception-feedback {
+  display: grid;
+  gap: var(--wx-space-8);
+  margin-top: var(--wx-space-16);
+  padding: var(--wx-space-12) var(--wx-space-16);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+  color: var(--wx-fg-1);
+}
+
+.roster-exception-feedback-success {
+  border-color: var(--wx-green-300);
+  background: var(--wx-green-100);
+}
+
+.roster-exception-feedback-warning {
+  border-color: var(--wx-amber-500);
+  background: var(--wx-amber-100);
+}
+
+.roster-exception-feedback-error {
+  border-color: var(--wx-red-500);
+  background: var(--wx-red-100);
+}
+
+.roster-exception-feedback-info {
+  border-color: var(--wx-blue-200);
+  background: var(--wx-blue-50);
+}
+
+.roster-exception-feedback-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wx-space-8);
+  font: 700 var(--wx-fs-14)/1.35 var(--wx-font-sans);
+}
+
+.roster-exception-feedback p {
+  margin: 0;
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-13)/1.45 var(--wx-font-sans);
+}
+
+.roster-exception-feedback ul {
+  display: grid;
+  gap: var(--wx-space-4);
+  margin: 0;
+  padding-left: var(--wx-space-16);
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-12)/1.45 var(--wx-font-sans);
+}
+
+.roster-exception-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--wx-space-8);
+}
+
+.roster-exception-progress-step {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-6);
+  min-width: 0;
+  padding: var(--wx-space-8);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-6);
+  background: var(--wx-surface-1);
+  color: var(--wx-fg-3);
+  font: 500 var(--wx-fs-12)/1.35 var(--wx-font-sans);
+}
+
+.roster-exception-progress-step > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--wx-surface-3);
+  color: var(--wx-fg-2);
+  font: 700 var(--wx-fs-11)/1 var(--wx-font-sans);
+}
+
+.roster-exception-progress-step.is-active {
+  border-color: var(--wx-blue-500);
+  color: var(--wx-blue-800);
+}
+
+.roster-exception-progress-step.is-active > span:first-child {
+  background: var(--wx-blue-600);
+  color: var(--wx-bg);
+}
+
+.roster-exception-progress-step.is-done {
+  border-color: var(--wx-green-300);
+  color: var(--wx-green-700);
+}
+
+.roster-exception-progress-step.is-done > span:first-child {
+  background: var(--wx-green-600);
+  color: var(--wx-bg);
+}
+
+.roster-exception-impact-grid,
+.roster-exception-applied-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--wx-space-12);
+}
+
+.roster-exception-calendar {
+  display: grid;
+  gap: var(--wx-space-8);
+}
+
+.roster-exception-calendar-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wx-space-8);
+}
+
+.roster-exception-calendar-title {
+  color: var(--wx-fg-1);
+  font: 700 var(--wx-fs-15)/1.3 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-subtitle {
+  margin-top: var(--wx-space-4);
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-12)/1.4 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wx-space-10);
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-12)/1.4 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wx-space-4);
+}
+
+.roster-exception-calendar-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--wx-blue-500);
+}
+
+.roster-exception-calendar-dot.is-locked {
+  background: var(--wx-red-500);
+}
+
+.roster-exception-calendar-months {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 380px));
+  align-items: start;
+  gap: var(--wx-space-12);
+}
+
+.roster-exception-calendar-month {
+  display: grid;
+  min-width: 0;
+  gap: var(--wx-space-6);
+  padding: var(--wx-space-10);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+}
+
+.roster-exception-calendar-month-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wx-space-8);
+}
+
+.roster-exception-calendar-month-header strong {
+  color: var(--wx-fg-1);
+  font: 700 var(--wx-fs-13)/1.3 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-month-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wx-space-4);
+}
+
+.roster-exception-calendar-month-meta .wxb-tag {
+  padding: var(--wx-space-2) var(--wx-space-6);
+  font: 600 var(--wx-fs-12)/1.2 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-weekdays,
+.roster-exception-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--wx-space-2);
+}
+
+.roster-exception-calendar-weekdays span {
+  text-align: center;
+  color: var(--wx-fg-3);
+  font: 600 var(--wx-fs-12)/1.2 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-day {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 40px;
+  padding: var(--wx-space-4);
+  overflow: hidden;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-6);
+  background: var(--wx-bg);
+}
+
+.roster-exception-calendar-day.is-outside-month {
+  background: var(--wx-surface-2);
+  color: var(--wx-fg-4);
+}
+
+.roster-exception-calendar-day.has-shift {
+  border-color: var(--wx-blue-200);
+  background: var(--wx-bg);
+}
+
+.roster-exception-calendar-day.has-locked-shift {
+  border-color: var(--wx-red-500);
+}
+
+.roster-exception-calendar-date {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 16px;
+  gap: var(--wx-space-2);
+  color: var(--wx-fg-2);
+  font: 700 var(--wx-fs-12)/1.1 var(--wx-font-sans);
+}
+
+.roster-exception-calendar-lock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--wx-red-500);
+}
+
+.roster-exception-calendar-shifts {
+  display: grid;
+  gap: var(--wx-space-2);
+  margin-top: var(--wx-space-2);
+}
+
+.roster-exception-calendar-shift {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 26px;
+  gap: var(--wx-space-2);
+  padding: var(--wx-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--wx-radius-6);
+  background: var(--wx-green-100);
+  color: var(--wx-green-700);
+}
+
+.roster-exception-calendar-shift.is-base,
+.roster-exception-calendar-shift.is-day {
+  background: var(--wx-green-100);
+  color: var(--wx-green-700);
+}
+
+.roster-exception-calendar-shift.is-night {
+  background: var(--wx-red-100);
+  color: var(--wx-red-700);
+}
+
+.roster-exception-calendar-shift.is-rest {
+  background: var(--wx-surface-3);
+  color: var(--wx-fg-3);
+}
+
+.roster-exception-calendar-shift.is-locked {
+  border-color: var(--wx-red-500);
+}
+
+.roster-exception-calendar-shift-label {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font: 700 10px/1.05 var(--wx-font-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-exception-calendar-shift-time {
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font: 500 9px/1 var(--wx-font-mono);
+  opacity: 0.82;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roster-exception-calendar-tip {
+  display: grid;
+  gap: var(--wx-space-2);
+  font: 400 var(--wx-fs-12)/1.4 var(--wx-font-sans);
+}
+
+.roster-exception-proposal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wx-space-8);
+}
+
+.roster-exception-strategy {
+  margin: var(--wx-space-12) 0 0;
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-13)/1.5 var(--wx-font-sans);
+}
+
+.roster-exception-gap-list {
+  display: grid;
+  gap: var(--wx-space-12);
+  margin-top: var(--wx-space-12);
+}
+
+.roster-exception-apply-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wx-space-12);
+  margin-top: var(--wx-space-16);
+}
+
+.roster-exception-apply-note {
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-13)/1.4 var(--wx-font-sans);
+}
+
+.roster-exception-before-after {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wx-space-6);
+  min-width: 240px;
+}
+
+.roster-exception-arrow {
+  color: var(--wx-blue-600);
+  font-weight: 700;
+}
+
+.roster-exception-candidate-notes {
+  display: grid;
+  gap: var(--wx-space-4);
+  min-width: 220px;
+}
+
+.roster-exception-warning-inline {
+  color: var(--wx-amber-700);
+  font: 400 var(--wx-fs-12)/1.35 var(--wx-font-sans);
+}
+
+.roster-exception-warning-list {
+  display: grid;
+  gap: var(--wx-space-12);
+}
+
+.roster-exception-confirm {
+  display: grid;
+  gap: var(--wx-space-8);
+  color: var(--wx-fg-1);
+  font: 400 var(--wx-fs-14)/1.5 var(--wx-font-sans);
+}
+
+.roster-exception-confirm p {
+  margin: 0;
+}
+
+@media (max-width: 1280px) {
+  .roster-exception-form {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .roster-exception-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roster-exception-calendar-months {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .roster-exception-calendar-day {
+    min-height: 38px;
+  }
+
+  .roster-exception-progress-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

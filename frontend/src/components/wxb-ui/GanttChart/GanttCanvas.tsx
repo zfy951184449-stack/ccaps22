@@ -2,14 +2,23 @@
  * WxbGanttChart v2 — Single Canvas Container + RAF Loop
  */
 import React, { useRef, useEffect, useCallback } from 'react';
+import dayjs from 'dayjs';
 import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow } from './types';
 import type { GanttState } from './useGanttStore';
 import type { GanttAction } from './useGanttStore';
-import { HEADER_HEIGHT, HEATMAP_HEIGHT, ZOOM_SENSITIVITY, ROW_HEIGHT, BAR_HEIGHT } from './constants';
-import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, drawLinks, drawDragOverlay, clipBelowHeader } from './useGanttRenderer';
+import {
+  HEADER_HEIGHT,
+  HEATMAP_HEIGHT,
+  ZOOM_SENSITIVITY,
+  ROW_HEIGHT,
+  BAR_HEIGHT,
+  STAGE_BAR_HEIGHT,
+} from './constants';
+import { drawGrid, drawTimeAxis, drawGroupBars, drawBars, drawDependencies, drawDragOverlay, clipBelowHeader } from './useGanttRenderer';
 import { useGanttHitTest } from './useGanttHitTest';
 import { useGanttDrag } from './useGanttDrag';
 import type { UseGanttDragResult } from './useGanttDrag';
+import type { GanttAvoidRect } from './GanttTooltip';
 import { buildGanttTimeScale, clamp } from './ganttUtils';
 
 interface GanttCanvasProps {
@@ -24,6 +33,7 @@ interface GanttCanvasProps {
   dispatch: React.Dispatch<GanttAction>;
   startHour: number;
   endHour: number;
+  timelineOriginDate?: string;
   showGrid: boolean;
   showToday: boolean;
   showProgress: boolean;
@@ -37,7 +47,7 @@ interface GanttCanvasProps {
   onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
-  onTooltipShow?: (task: GanttTask, x: number, y: number) => void;
+  onTooltipShow?: (task: GanttTask, x: number, y: number, avoidRects?: GanttAvoidRect[]) => void;
   onTooltipHide?: () => void;
   onContextMenu?: (task: GanttTask | null, x: number, y: number, hitType?: 'task' | 'group', groupId?: string) => void;
   onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
@@ -51,7 +61,7 @@ interface GanttCanvasProps {
 const GanttCanvas: React.FC<GanttCanvasProps> = ({
   tasks, groups, flatRows, taskRowMap, dependencies, links,
   state, stateRef, dispatch,
-  startHour, endHour,
+  startHour, endHour, timelineOriginDate,
   showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, readOnly, zoomRange,
   personnelPeaks,
   onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
@@ -121,10 +131,61 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const timeScaleRef = useRef(timeScale);
   timeScaleRef.current = timeScale;
 
+  const getTaskScreenRect = useCallback((
+    task: GanttTask,
+    row: number,
+    canvasRect: DOMRect,
+    s: GanttState,
+  ): GanttAvoidRect | null => {
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+    const barH = task.type === 'stage' ? STAGE_BAR_HEIGHT : BAR_HEIGHT;
+    const effectiveScrollX = s.expandedDay === null ? s.scrollX : 0;
+    const effectiveScale = s.expandedDay === null
+      ? timeScaleRef.current
+      : buildGanttTimeScale(s.expandedDay * 24, (s.expandedDay + 1) * 24, s.dayWidth / 24);
+    const left = canvasRect.left + effectiveScale.hourToX(task.start) - effectiveScrollX;
+    const width = Math.max(effectiveScale.widthBetween(task.start, task.end), 4);
+    const top = canvasRect.top + totalHeaderH + row * ROW_HEIGHT + (ROW_HEIGHT - barH) / 2 - s.scrollY;
+
+    if (left + width < canvasRect.left || left > canvasRect.right) return null;
+    return {
+      left,
+      top,
+      right: left + width,
+      bottom: top + barH,
+    };
+  }, [showHeatmap]);
+
+  const getTooltipAvoidRects = useCallback((
+    task: GanttTask,
+    row: number,
+    canvasRect: DOMRect,
+    s: GanttState,
+  ): GanttAvoidRect[] => {
+    const rects: GanttAvoidRect[] = [];
+    const hoveredRect = getTaskScreenRect(task, row, canvasRect, s);
+    if (hoveredRect) rects.push(hoveredRect);
+
+    const peerIds = shareColorMap?.get(task.id)?.peers;
+    if (peerIds) {
+      const taskById = new Map(dataRef.current.tasks.map((item) => [item.id, item]));
+      peerIds.forEach((peerId) => {
+        if (peerId === task.id) return;
+        const peerTask = taskById.get(peerId);
+        const peerRow = taskRowMap.get(peerId);
+        if (!peerTask || peerRow === undefined) return;
+        const peerRect = getTaskScreenRect(peerTask, peerRow, canvasRect, s);
+        if (peerRect) rects.push(peerRect);
+      });
+    }
+
+    return rects;
+  }, [getTaskScreenRect, shareColorMap, taskRowMap]);
+
   // ===== DATA REFS: mirror props into refs so RAF closure always reads latest =====
   const dataRef = useRef({
     tasks, groups, flatRows, taskRowMap, dependencies, links,
-    startHour, endHour, timeScale,
+    startHour, endHour, timelineOriginDate, timeScale,
     showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts,
     personnelPeaks,
     highlightedLinkIds,
@@ -132,7 +193,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   });
   dataRef.current = {
     tasks, groups, flatRows, taskRowMap, dependencies, links,
-    startHour, endHour, timeScale,
+    startHour, endHour, timelineOriginDate, timeScale,
     showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts,
     personnelPeaks,
     highlightedLinkIds,
@@ -150,8 +211,8 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   }, [dispatch]);
 
   const {
-    startDrag, startGroupDrag, startResize, dragState, isDragging, cancelDrag,
-    undoToast, dismissToast,
+    startDrag, startGroupDrag, startResize, dragState,
+    undoToast,
   }: UseGanttDragResult = useGanttDrag({
     hourWidth,
     startHour: effectiveStartHour,
@@ -245,9 +306,12 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           hoveredRow: s.hoveredRow,
           hoveredColX: s.hoveredColX,
           expandedDay: s.expandedDay,
-          todayHour: null as number | null,
+          todayHour: d.timelineOriginDate
+            ? dayjs().diff(dayjs(d.timelineOriginDate).startOf('day'), 'hour', true)
+            : null,
           viewMode: s.viewMode,
           dpr,
+          timelineOriginDate: d.timelineOriginDate,
           // Share-group visual fields
           hoveredShareTaskIds: hoveredShareRef.current?.taskIds,
           hoveredShareColor: hoveredShareRef.current?.color,
@@ -261,10 +325,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         // L1: Time Axis Header (drawn on top of grid, below clip)
         drawTimeAxis(ctx, cfg, d.personnelPeaks);
 
-        // L2-L4: connectors below bars, then visible bars on top.
+        // L2-L4: dependency connectors stay below structural bars and task bars.
+        // Share-group links are intentionally not drawn; color and hover affordances carry that state.
         clipBelowHeader(ctx, cfg);
         drawDependencies(ctx, cfg, d.tasks, d.taskRowMap, d.dependencies);
-        drawLinks(ctx, cfg, d.tasks, d.taskRowMap, d.links, d.highlightedLinkIds);
         drawGroupBars(ctx, cfg, d.flatRows, d.groups, d.tasks, d.taskRowMap);
         drawBars(ctx, cfg, d.tasks, d.taskRowMap);
 
@@ -286,7 +350,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   // Mark dirty when data changes
   useEffect(() => {
     dispatch({ type: 'MARK_DIRTY' });
-  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, timeScale, highlightedLinkIds, shareColorMap, dispatch]);
+  }, [tasks, flatRows, dependencies, links, personnelPeaks, showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, timeScale, timelineOriginDate, highlightedLinkIds, shareColorMap, dispatch]);
 
   // Compute scroll limits when row count or canvas size changes
   useEffect(() => {
@@ -334,7 +398,6 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const cx = e.clientX - rect.left;
     const cy = e.clientY - rect.top;
     const s = stateRef.current;
-    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
 
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
 
@@ -384,13 +447,19 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
 
     const hit = hitTest(cx, cy, s.scrollX, s.scrollY, showHeatmap);
     const newHover = hit?.taskId ?? null;
+    if (hit && onTooltipShow) {
+      onTooltipShow(
+        hit.task,
+        e.clientX,
+        e.clientY,
+        getTooltipAvoidRects(hit.task, hit.row, rect, s),
+      );
+    } else if (!hit && onTooltipHide) {
+      onTooltipHide();
+    }
+
     if (newHover !== s.hoveredTaskId) {
       dispatch({ type: 'HOVER', taskId: newHover });
-      if (hit && onTooltipShow) {
-        onTooltipShow(hit.task, e.clientX, e.clientY);
-      } else if (!hit && onTooltipHide) {
-        onTooltipHide();
-      }
 
       // Share-group hover debounce (150ms)
       if (shareHoverTimerRef.current) {
@@ -438,7 +507,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
         canvas.style.cursor = isPanning.current ? 'grabbing' : 'grab';
       }
     }
-  }, [dispatch, hitTest, stateRef, showHeatmap, readOnly, onTooltipShow, onTooltipHide]);
+  }, [dispatch, hitTest, stateRef, showHeatmap, readOnly, onTooltipShow, onTooltipHide, getTooltipAvoidRects]);
 
   const handleMouseUp = useCallback(() => {
     if (isPanning.current) {
@@ -541,7 +610,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   }, [onContextMenu, hitTest, stateRef, showHeatmap]);
 
   return (
-    <div ref={containerRef} className="wxb-gantt-canvas-container" style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+    <div ref={containerRef} className="wxb-gantt-canvas-container" style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
       <canvas
         ref={canvasRef}
         className="wxb-gantt-canvas"

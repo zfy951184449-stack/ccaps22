@@ -4,14 +4,15 @@
 import React, { useCallback } from 'react';
 import type { ViewMode } from './types';
 import type { GanttAction } from './useGanttStore';
-import { THEME, FONT_SANS, MIN_DAY_WIDTH, MAX_DAY_WIDTH } from './constants';
+import { MIN_DAY_WIDTH, MAX_DAY_WIDTH } from './constants';
 
 interface GanttToolbarProps {
   dayWidth: number;
   viewMode: ViewMode;
   dispatch: React.Dispatch<GanttAction>;
   enableFullscreen: boolean;
-  containerRef: React.RefObject<HTMLDivElement | null>;
+  isFullscreen?: boolean;
+  onFullscreenToggle?: () => void;
   onViewModeChange?: (mode: ViewMode) => void;
 }
 
@@ -23,7 +24,7 @@ const VIEW_MODES: { key: ViewMode; label: string }[] = [
 ];
 
 const GanttToolbar: React.FC<GanttToolbarProps> = ({
-  dayWidth, viewMode, dispatch, enableFullscreen, containerRef, onViewModeChange,
+  dayWidth, viewMode, dispatch, enableFullscreen, isFullscreen, onFullscreenToggle, onViewModeChange,
 }) => {
   const handleViewChange = useCallback((mode: ViewMode) => {
     dispatch({ type: 'SET_VIEW', mode });
@@ -33,16 +34,6 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
   const handleZoom = useCallback((delta: number) => {
     dispatch({ type: 'ZOOM', dayWidth: dayWidth + delta });
   }, [dispatch, dayWidth]);
-
-  const handleFullscreen = useCallback(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      el.requestFullscreen();
-    }
-  }, [containerRef]);
 
   const handleScrollToToday = useCallback(() => {
     dispatch({ type: 'SET_SCROLL', x: 0, y: 0 });
@@ -78,8 +69,13 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
           ⟳
         </button>
         {enableFullscreen && (
-          <button className="wxb-gantt-toolbar-btn" onClick={handleFullscreen} title="全屏">
-            ⤢
+          <button
+            className="wxb-gantt-toolbar-btn"
+            onClick={onFullscreenToggle}
+            title={isFullscreen ? '退出全屏' : '全屏'}
+            aria-pressed={isFullscreen || undefined}
+          >
+            {isFullscreen ? '⤡' : '⤢'}
           </button>
         )}
       </div>

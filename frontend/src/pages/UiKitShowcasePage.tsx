@@ -89,7 +89,7 @@ const UiKitShowcasePage: React.FC = () => {
             description="页面布局组件提供标题区、吸顶工具栏、内容分区和响应式网格，适合列表、调度和运行业务页面。"
             meta={(
               <>
-                <WxbTag color="blue">MFG18</WxbTag>
+                <WxbTag color="blue">MFG8</WxbTag>
                 <WxbTag color="green">GMP Live</WxbTag>
               </>
             )}
@@ -355,7 +355,7 @@ const UiKitShowcasePage: React.FC = () => {
               <div style={{ flex: 2 }}>
                 <WxbChartCard 
                   title="Capacity Utilization" 
-                  subtitle="13-week trend · Wuxi MFG18" 
+                  subtitle="13-week trend · Wuxi MFG8" 
                   data={MOCK_CHART_DATA} 
                 />
               </div>

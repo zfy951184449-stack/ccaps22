@@ -1,23 +1,37 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { GanttProvider, useGantt } from './GanttContext';
-import GanttSidebar from './GanttSidebar';
-import GanttTimeline from './GanttTimeline';
-import GanttMinimap from './GanttMinimap';
-import EditOperationModal from './EditOperationModal';
-import { GanttBatch, GanttDependency, GanttShareGroup, OffScreenOperation, GanttOperation, LayoutMode, DatePreset } from './types';
-import { calculateRowLayout } from './rowUtils';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import dayjs from 'dayjs';
-import { DatePicker, Tooltip, Slider, message, Tag, Segmented } from 'antd';
-import { ShareAltOutlined, ZoomInOutlined, ZoomOutOutlined, ArrowLeftOutlined, LeftOutlined, RightOutlined, PlusCircleOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
-import './BatchGanttV4.css';
+import dayjs, { Dayjs } from 'dayjs';
+import { message } from 'antd';
+import {
+    WxbButton,
+    WxbEmpty,
+    WxbGanttChart,
+    WxbIcon,
+    WxbRangePicker,
+    WxbSegmented,
+    WxbSpinner,
+    WxbSwitch,
+    WxbTag,
+    WxbTooltip,
+} from '../../wxb-ui';
+import type { GanttTask, YAxisMode } from '../../wxb-ui/GanttChart/types';
+import type { ContextMenuItem } from '../../wxb-ui/GanttChart/GanttContextMenu';
+import EditOperationModal from './EditOperationModal';
+import type { DatePreset, GanttBatch, GanttDependency, GanttOperation, GanttShareGroup } from './types';
+import {
+    buildBatchGanttModel,
+    buildBatchGanttRenderModel,
+    getBatchDateExtent,
+    hourOffsetToDate,
+} from './batchGanttAdapter';
+import './BatchGanttWxb.css';
 
-const { RangePicker } = DatePicker;
-
-/** Auto-fit 探测半径常量（月）——覆盖未来和过去各 12 个月内的批次 */
 const AUTOFIT_PROBE_MONTHS = 12;
+const GANTT_FROM_PARAM = 'gantt_from';
+const GANTT_TO_PARAM = 'gantt_to';
+const BATCH_STATUS_FILTER = 'DRAFT,ACTIVATED,PLANNED';
 
-/** 日期预设选项 */
 const DATE_PRESET_OPTIONS: Array<{ label: string; value: DatePreset }> = [
     { label: '本周', value: 'thisWeek' },
     { label: '2周', value: 'next2Weeks' },
@@ -26,238 +40,211 @@ const DATE_PRESET_OPTIONS: Array<{ label: string; value: DatePreset }> = [
     { label: '适应数据', value: 'autoFit' },
 ];
 
-interface BatchGanttV4ContentProps {
+const Y_AXIS_OPTIONS: Array<{ label: string; value: YAxisMode }> = [
+    { label: '操作', value: 'operation' },
+    { label: '阶段·设备', value: 'stage-equipment' },
+    { label: '设备', value: 'equipment' },
+];
+
+interface BatchGanttV4Props {
     filteredBatchIds?: number[];
     onCreateBatch?: () => void;
 }
 
-const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatchIds, onCreateBatch }) => {
-    const {
-        startDate,
-        endDate,
-        viewMode,
-        setLayoutMode,
-        layoutMode,
-        setStartDate,
-        setEndDate,
-        showShareGroupLines,
-        setShowShareGroupLines,
-        zoomLevel,
-        setZoomLevel,
-        exitSingleDayMode,
-        navigateSingleDay,
-        expandAll,
-        expandedBatches,
-        expandedStages,
-        applyDatePreset,
-        markUserInteracted,
-        hasUserInteracted,
-    } = useGantt();
-    const [batches, setBatches] = useState<GanttBatch[]>([]);
-    const [dependencies, setDependencies] = useState<GanttDependency[]>([]);
-    const [shareGroups, setShareGroups] = useState<GanttShareGroup[]>([]);
-    const [offScreenOps, setOffScreenOps] = useState<OffScreenOperation[]>([]);
-    const [loading, setLoading] = useState(false);
+function readDateFromUrl(param: string): Dayjs | null {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    const value = new URLSearchParams(window.location.search).get(param);
+    if (!value) {
+        return null;
+    }
+    const parsed = dayjs(value);
+    return parsed.isValid() ? parsed : null;
+}
+
+function writeDatesToUrl(from: Dayjs, to: Dayjs) {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set(GANTT_FROM_PARAM, from.format('YYYY-MM-DD'));
+    url.searchParams.set(GANTT_TO_PARAM, to.format('YYYY-MM-DD'));
+    window.history.replaceState(null, '', url.toString());
+}
+
+function getInitialDates(): { start: Dayjs; end: Dayjs; fromUrl: boolean } {
+    const urlFrom = readDateFromUrl(GANTT_FROM_PARAM);
+    const urlTo = readDateFromUrl(GANTT_TO_PARAM);
+
+    if (urlFrom && urlTo && urlTo.isAfter(urlFrom)) {
+        return { start: urlFrom.startOf('day'), end: urlTo.endOf('day'), fromUrl: true };
+    }
+
+    return {
+        start: dayjs().startOf('week'),
+        end: dayjs().add(4, 'week').endOf('week'),
+        fromUrl: false,
+    };
+}
+
+function computeDatePreset(preset: Exclude<DatePreset, 'autoFit'>): { start: Dayjs; end: Dayjs } {
+    const today = dayjs();
+    switch (preset) {
+        case 'thisWeek':
+            return { start: today.startOf('week'), end: today.endOf('week') };
+        case 'next2Weeks':
+            return { start: today.startOf('week'), end: today.add(2, 'week').endOf('week') };
+        case 'thisMonth':
+            return { start: today.startOf('month'), end: today.endOf('month') };
+        case 'next3Months':
+            return { start: today.startOf('week'), end: today.add(3, 'month').endOf('week') };
+    }
+}
+
+function formatApiDate(value: Dayjs): string {
+    return value.format('YYYY-MM-DD HH:mm:ss');
+}
+
+const TASK_MENU_ITEMS: ContextMenuItem[] = [
+    { key: 'edit', label: '编辑操作' },
+];
+
+const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateBatch }) => {
+    const navigate = useNavigate();
+    const initialDates = useMemo(getInitialDates, []);
+    const [startDate, setStartDate] = useState(initialDates.start);
+    const [endDate, setEndDate] = useState(initialDates.end);
+    const [yAxisMode, setYAxisMode] = useState<YAxisMode>('operation');
+    const [showTimeWindows, setShowTimeWindows] = useState(false);
+    const [hasUserInteracted, setHasUserInteracted] = useState(initialDates.fromUrl);
     const [hasAutoFit, setHasAutoFit] = useState(false);
     const [reloadVersion, setReloadVersion] = useState(0);
 
-    // Editing Operation State
+    const [batches, setBatches] = useState<GanttBatch[]>([]);
+    const [dependencies, setDependencies] = useState<GanttDependency[]>([]);
+    const [shareGroups, setShareGroups] = useState<GanttShareGroup[]>([]);
+    const [loading, setLoading] = useState(false);
     const [editingOperation, setEditingOperation] = useState<GanttOperation | null>(null);
+    const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // 快捷创建共享组模式状态
-    const [isShareGroupMode, setIsShareGroupMode] = useState(false);
-    const [selectedOperationIds, setSelectedOperationIds] = useState<number[]>([]);
+    const hasExplicitBatchFilter = filteredBatchIds !== undefined;
+    const filterBatchIdsKey = useMemo(
+        () => (filteredBatchIds ? filteredBatchIds.join(',') : ''),
+        [filteredBatchIds],
+    );
+    const filteredBatchIdSet = useMemo(
+        () => new Set(filteredBatchIds ?? []),
+        [filteredBatchIds],
+    );
+
+    const originDate = useMemo(() => startDate.startOf('day'), [startDate]);
+    const model = useMemo(
+        () => buildBatchGanttModel(batches, dependencies, shareGroups, originDate),
+        [batches, dependencies, shareGroups, originDate],
+    );
+    const renderModel = useMemo(
+        () => buildBatchGanttRenderModel(model, yAxisMode, showTimeWindows),
+        [model, showTimeWindows, yAxisMode],
+    );
+
+    const rangeHours = useMemo(
+        () => Math.max(24, endDate.endOf('day').diff(originDate, 'hour', true)),
+        [endDate, originDate],
+    );
+
+    const selectedRangeLabel = `${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}`;
+
+    const requestReload = useCallback(() => {
+        setReloadVersion((version) => version + 1);
+    }, []);
+
+    const requestReloadSoon = useCallback(() => {
+        if (reloadTimerRef.current) {
+            clearTimeout(reloadTimerRef.current);
+        }
+        reloadTimerRef.current = setTimeout(() => {
+            requestReload();
+        }, 120);
+    }, [requestReload]);
+
+    useEffect(() => {
+        return () => {
+            if (reloadTimerRef.current) {
+                clearTimeout(reloadTimerRef.current);
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        writeDatesToUrl(startDate, endDate);
+    }, [startDate, endDate]);
+
+    useEffect(() => {
+        if (!hasUserInteracted) {
+            setHasAutoFit(false);
+        }
+    }, [filterBatchIdsKey, hasUserInteracted]);
+
+    const markUserInteracted = useCallback(() => {
+        setHasUserInteracted(true);
+    }, []);
 
     const clearGanttData = useCallback(() => {
         setBatches([]);
         setDependencies([]);
         setShareGroups([]);
-        setOffScreenOps([]);
     }, []);
 
-    const requestReload = useCallback(() => {
-        setReloadVersion(prev => prev + 1);
-    }, []);
-
-    const handleEditOperation = useCallback((operation: GanttOperation) => {
-        setEditingOperation(operation);
-    }, []);
-
-    const handleEditCancel = useCallback(() => {
-        setEditingOperation(null);
-    }, []);
-
-    const handleSaveOperation = useCallback(async (id: number, values: any) => {
-        try {
-            await axios.put(`/api/v5/gantt/operations/${id}`, values);
-            message.success('操作更新成功');
-            requestReload();
-        } catch (error) {
-            console.error('Failed to update operation:', error);
-            message.error('更新失败，请重试');
-        }
-    }, [requestReload]);
-
-    const handleDeleteOperation = useCallback(async (id: number) => {
-        try {
-            await axios.delete(`/api/v5/gantt/operations/${id}`);
-            message.success('操作删除成功');
-            setEditingOperation(null);
-            requestReload();
-        } catch (error) {
-            console.error('Failed to delete operation:', error);
-            message.error('删除失败，请重试');
-        }
-    }, [requestReload]);
-
-    // 快捷创建共享组处理函数
-    const handleEnterShareGroupMode = useCallback(() => {
-        setIsShareGroupMode(true);
-        setSelectedOperationIds([]);
-    }, []);
-
-    const handleCancelShareGroup = useCallback(() => {
-        setIsShareGroupMode(false);
-        setSelectedOperationIds([]);
-    }, []);
-
-    const handleOperationCheck = useCallback((operationId: number, checked: boolean) => {
-        setSelectedOperationIds(prev =>
-            checked
-                ? [...prev, operationId]
-                : prev.filter(id => id !== operationId)
-        );
-    }, []);
-
-    // Full Screen State
-    const [isFullScreen, setIsFullScreen] = useState(false);
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    // Scroll Sync Ref
-    const sidebarBodyRef = useRef<HTMLDivElement>(null);
-
-    // Minimap Visibility State
-    const [minimapVisible, setMinimapVisible] = useState(false);
-    const minimapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const currentScrollLeftRef = useRef(0);
-    const currentVisibleDayIndexRef = useRef(0);
-    const [minimapDate, setMinimapDate] = useState(startDate);
-    const filterBatchIdsKey = useMemo(() => (filteredBatchIds ? filteredBatchIds.join(',') : ''), [filteredBatchIds]);
-    const filteredBatchIdSet = useMemo(() => new Set(filteredBatchIds ?? []), [filteredBatchIds]);
-    const hasExplicitBatchFilter = filteredBatchIds !== undefined;
-    const rowHeight = 32;
-    const rowLayout = useMemo(
-        () => calculateRowLayout(batches, expandedBatches, expandedStages, layoutMode),
-        [batches, expandedBatches, expandedStages, layoutMode]
-    );
-
-    const handleScrollInteraction = useCallback(() => {
-        setMinimapVisible(true);
-        if (minimapTimeoutRef.current) {
-            clearTimeout(minimapTimeoutRef.current);
-        }
-        minimapTimeoutRef.current = setTimeout(() => {
-            setMinimapVisible(false);
-        }, 2000);
-    }, []);
-
-    const handleHorizontalScroll = useCallback((scrollLeft: number) => {
-        currentScrollLeftRef.current = scrollLeft;
-        const nextDayIndex = Math.max(0, Math.floor(scrollLeft / Math.max(zoomLevel, 1)));
-        if (nextDayIndex !== currentVisibleDayIndexRef.current) {
-            currentVisibleDayIndexRef.current = nextDayIndex;
-            setMinimapDate(startDate.add(nextDayIndex, 'day'));
-        }
-    }, [startDate, zoomLevel]);
-
-    const handleTimelineScroll = useCallback((scrollTop: number) => {
-        if (sidebarBodyRef.current) {
-            sidebarBodyRef.current.scrollTop = scrollTop;
-        }
-        // Also trigger visibility on vertical scroll from sidebar sync (if needed, but mainly Timeline drives it)
-    }, []);
-
-    useEffect(() => {
-        const handleFullScreenChange = () => {
-            setIsFullScreen(!!document.fullscreenElement);
-        };
-
-        document.addEventListener('fullscreenchange', handleFullScreenChange);
-        return () => {
-            document.removeEventListener('fullscreenchange', handleFullScreenChange);
-        };
-    }, []);
-
-    useEffect(() => {
-        currentVisibleDayIndexRef.current = Math.max(0, Math.floor(currentScrollLeftRef.current / Math.max(zoomLevel, 1)));
-        setMinimapDate(startDate.add(currentVisibleDayIndexRef.current, 'day'));
-    }, [startDate, zoomLevel]);
-
-    useEffect(() => {
-        return () => {
-            if (minimapTimeoutRef.current) {
-                clearTimeout(minimapTimeoutRef.current);
-            }
-        };
-    }, []);
-
-    useEffect(() => {
-        if (layoutMode !== 'standard' && isShareGroupMode) {
-            handleCancelShareGroup();
-        }
-    }, [layoutMode, isShareGroupMode, handleCancelShareGroup]);
-
-    const handleLayoutModeChange = useCallback((mode: LayoutMode) => {
-        if (mode !== 'standard') {
-            setIsShareGroupMode(false);
-            setSelectedOperationIds([]);
-        }
-        setLayoutMode(mode);
-    }, [setLayoutMode]);
-
-    const toggleFullScreen = () => {
-        if (!document.fullscreenElement) {
-            containerRef.current?.requestFullscreen().catch(err => {
-                console.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
-            });
-        } else {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            }
-        }
-    };
-
-    const fetchHierarchy = useCallback(async (rangeStart: dayjs.Dayjs, rangeEnd: dayjs.Dayjs) => {
+    const fetchHierarchy = useCallback(async (rangeStart: Dayjs, rangeEnd: Dayjs) => {
         const hierarchyParams: Record<string, string> = {
-            start_date: rangeStart.format('YYYY-MM-DD HH:mm:ss'),
-            end_date: rangeEnd.format('YYYY-MM-DD HH:mm:ss'),
-            status: 'DRAFT,ACTIVATED,PLANNED'
+            start_date: formatApiDate(rangeStart),
+            end_date: formatApiDate(rangeEnd),
+            status: BATCH_STATUS_FILTER,
         };
 
         if (filterBatchIdsKey) {
             hierarchyParams.batch_ids = filterBatchIdsKey;
         }
 
-        const res = await axios.get('/api/v5/gantt/hierarchy', {
-            params: hierarchyParams
-        });
+        const res = await axios.get('/api/v5/gantt/hierarchy', { params: hierarchyParams });
+        const fetchedBatches = (res.data?.batches || res.data || []) as GanttBatch[];
 
-        const { batches: fetchedBatches, offScreenOperations: fetchedOffScreen } = res.data;
+        return hasExplicitBatchFilter
+            ? fetchedBatches.filter((batch) => filteredBatchIdSet.has(batch.id))
+            : fetchedBatches;
+    }, [filterBatchIdsKey, filteredBatchIdSet, hasExplicitBatchFilter]);
 
-        return {
-            batches: (fetchedBatches || res.data) as GanttBatch[],
-            offScreenOperations: (fetchedOffScreen || []) as OffScreenOperation[],
-        };
-    }, [filterBatchIdsKey]);
-
-    useEffect(() => {
-        if (hasAutoFit) {
+    const loadConnections = useCallback(async (
+        visibleBatches: GanttBatch[],
+        rangeStart: Dayjs,
+        rangeEnd: Dayjs,
+    ) => {
+        if (visibleBatches.length === 0) {
+            setDependencies([]);
+            setShareGroups([]);
             return;
         }
 
-        // 用户已通过 URL 参数或手动操作指定了日期范围，跳过 auto-fit
-        if (hasUserInteracted) {
-            setHasAutoFit(true);
+        const batchIdsParam = visibleBatches.map((batch) => batch.id).join(',');
+        const rangeParams = {
+            batch_ids: batchIdsParam,
+            start_date: formatApiDate(rangeStart),
+            end_date: formatApiDate(rangeEnd),
+            status: BATCH_STATUS_FILTER,
+        };
+
+        const [shareGroupRes, dependencyRes] = await Promise.all([
+            axios.get('/api/share-groups/batches/gantt', { params: rangeParams }),
+            axios.get('/api/v5/gantt/dependencies', { params: rangeParams }),
+        ]);
+
+        setShareGroups(shareGroupRes.data || []);
+        setDependencies(dependencyRes.data || []);
+    }, []);
+
+    useEffect(() => {
+        if (hasAutoFit) {
             return;
         }
 
@@ -272,74 +259,35 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         const autoFit = async () => {
             setLoading(true);
             try {
-                const probeStart = dayjs().subtract(AUTOFIT_PROBE_MONTHS, 'month');
-                const probeEnd = dayjs().add(AUTOFIT_PROBE_MONTHS, 'month');
-                const { batches: fetchedData, offScreenOperations: fetchedOffScreen } = await fetchHierarchy(probeStart, probeEnd);
+                const probeStart = dayjs().subtract(AUTOFIT_PROBE_MONTHS, 'month').startOf('day');
+                const probeEnd = dayjs().add(AUTOFIT_PROBE_MONTHS, 'month').endOf('day');
+                const fetchedBatches = await fetchHierarchy(probeStart, probeEnd);
 
                 if (cancelled) {
                     return;
                 }
 
-                if (fetchedData.length === 0) {
+                const extent = getBatchDateExtent(fetchedBatches);
+                if (!extent) {
                     clearGanttData();
                     setHasAutoFit(true);
                     return;
                 }
 
-                let minDate = dayjs(fetchedData[0].startDate);
-                let maxDate = dayjs(fetchedData[0].endDate);
+                const fittedStart = extent.start.startOf('day');
+                const fittedEnd = extent.end.add(1, 'week').endOf('week');
 
-                fetchedData.forEach(batch => {
-                    const batchStart = dayjs(batch.startDate);
-                    const batchEnd = dayjs(batch.endDate);
-
-                    if (batchStart.isBefore(minDate)) {
-                        minDate = batchStart;
-                    }
-
-                    if (batchEnd.isAfter(maxDate)) {
-                        maxDate = batchEnd;
-                    }
-                });
-
-                // 直接复用探测数据渲染，避免二次 API 请求
-                const displayBatches = hasExplicitBatchFilter
-                    ? fetchedData.filter(batch => filteredBatchIdSet.has(batch.id))
-                    : fetchedData;
-
-                setBatches(displayBatches);
-                setOffScreenOps(fetchedOffScreen);
-
-                // 设置日期范围（绕过 markUserInteracted 以保持 auto-fit 可重入）
+                setBatches(fetchedBatches);
+                setStartDate(fittedStart);
+                setEndDate(fittedEnd);
                 setHasAutoFit(true);
-                setStartDate(minDate.startOf('day'));
-                setEndDate(maxDate.add(1, 'week').endOf('week'));
-
-                // 加载共享组和依赖关系
-                if (displayBatches.length > 0) {
-                    const batchIdsParam = displayBatches.map(batch => batch.id).join(',');
-                    const rangeParams = {
-                        start_date: minDate.format('YYYY-MM-DD HH:mm:ss'),
-                        end_date: maxDate.add(1, 'week').endOf('week').format('YYYY-MM-DD HH:mm:ss'),
-                    };
-
-                    const [sgRes, depRes] = await Promise.all([
-                        axios.get('/api/share-groups/batches/gantt', {
-                            params: { batch_ids: batchIdsParam, ...rangeParams }
-                        }),
-                        axios.get('/api/v5/gantt/dependencies', {
-                            params: { batch_ids: batchIdsParam, ...rangeParams }
-                        })
-                    ]);
-
-                    if (!cancelled) {
-                        setShareGroups(sgRes.data);
-                        setDependencies(depRes.data);
-                    }
-                }
+                await loadConnections(fetchedBatches, fittedStart, fittedEnd);
             } catch (error) {
                 if (!cancelled) {
-                    console.error('Failed to auto-fit gantt data', error);
+                    console.error('Failed to auto-fit batch gantt data', error);
+                    message.error('加载甘特图数据失败');
+                    clearGanttData();
+                    setHasAutoFit(true);
                 }
             } finally {
                 if (!cancelled) {
@@ -348,12 +296,19 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
             }
         };
 
-        autoFit();
+        void autoFit();
 
         return () => {
             cancelled = true;
         };
-    }, [clearGanttData, fetchHierarchy, filteredBatchIdSet, hasAutoFit, hasExplicitBatchFilter, hasUserInteracted, setEndDate, setStartDate]);
+    }, [
+        clearGanttData,
+        fetchHierarchy,
+        filteredBatchIdSet,
+        hasAutoFit,
+        hasExplicitBatchFilter,
+        loadConnections,
+    ]);
 
     useEffect(() => {
         if (!hasAutoFit) {
@@ -371,68 +326,26 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         const loadData = async () => {
             setLoading(true);
             try {
-                const { batches: fetchedData, offScreenOperations: fetchedOffScreen } = await fetchHierarchy(startDate, endDate);
-
+                const fetchedBatches = await fetchHierarchy(startDate.startOf('day'), endDate.endOf('day'));
                 if (cancelled) {
                     return;
                 }
-
-                const displayBatches = hasExplicitBatchFilter
-                    ? fetchedData.filter(batch => filteredBatchIdSet.has(batch.id))
-                    : fetchedData;
-
-                setBatches(displayBatches);
-                setOffScreenOps(fetchedOffScreen);
-
-                if (displayBatches.length === 0) {
-                    setShareGroups([]);
-                    setDependencies([]);
-                    return;
-                }
-
-                const batchIdsParam = displayBatches.map(batch => batch.id).join(',');
-                const rangeParams = {
-                    start_date: startDate.format('YYYY-MM-DD HH:mm:ss'),
-                    end_date: endDate.format('YYYY-MM-DD HH:mm:ss')
-                };
-
-                const [sgRes, depRes] = await Promise.all([
-                    axios.get('/api/share-groups/batches/gantt', {
-                        params: {
-                            batch_ids: batchIdsParam,
-                            ...rangeParams
-                        }
-                    }),
-                    axios.get('/api/v5/gantt/dependencies', {
-                        params: {
-                            batch_ids: batchIdsParam,
-                            ...rangeParams
-                        }
-                    })
-                ]);
-
-                if (cancelled) {
-                    return;
-                }
-
-                setShareGroups(sgRes.data);
-                setDependencies(depRes.data);
+                setBatches(fetchedBatches);
+                await loadConnections(fetchedBatches, startDate.startOf('day'), endDate.endOf('day'));
             } catch (error) {
                 if (!cancelled) {
-                    console.error('Failed to fetch gantt data', error);
-                    setShareGroups([]);
-                    setDependencies([]);
+                    console.error('Failed to fetch batch gantt data', error);
+                    message.error('加载甘特图数据失败');
+                    clearGanttData();
                 }
             } finally {
                 if (!cancelled) {
-                    // ⚡ 关键修复：先关闭 loading，再展开行（避免 expandAll 的 setState 阻塞 loading 消失）
-                    // expandAll 使用了 startTransition，属于低优先级更新，不会卡住 loading 状态
                     setLoading(false);
                 }
             }
         };
 
-        loadData();
+        void loadData();
 
         return () => {
             cancelled = true;
@@ -444,360 +357,293 @@ const BatchGanttV4Content: React.FC<BatchGanttV4ContentProps> = ({ filteredBatch
         filteredBatchIdSet,
         hasAutoFit,
         hasExplicitBatchFilter,
+        loadConnections,
         reloadVersion,
         startDate,
     ]);
 
-    // ⚡ 单日模式展开逻辑（与加载解耦）
-    // 监听 batches + viewMode：当单日模式下数据带入后，自动展开所有行
-    // 这里lLoading 已经关闭，展开使用 startTransition 不会卡住 UI
-    useEffect(() => {
-        if (viewMode === 'day' && batches.length > 0) {
-            expandAll(batches);
+    const handlePresetChange = useCallback((preset: string) => {
+        if (preset === 'autoFit') {
+            setHasUserInteracted(false);
+            setHasAutoFit(false);
+            return;
         }
-    }, [viewMode, batches, expandAll]);
 
-    const handleConfirmShareGroup = useCallback(async () => {
-        if (selectedOperationIds.length < 2) {
-            message.warning('请至少选择2个操作');
+        const { start, end } = computeDatePreset(preset as Exclude<DatePreset, 'autoFit'>);
+        markUserInteracted();
+        setStartDate(start.startOf('day'));
+        setEndDate(end.endOf('day'));
+    }, [markUserInteracted]);
+
+    const handleRangeChange = useCallback((dates: null | [Dayjs | null, Dayjs | null]) => {
+        if (!dates?.[0] || !dates?.[1]) {
+            return;
+        }
+        markUserInteracted();
+        setStartDate(dates[0].startOf('day'));
+        setEndDate(dates[1].endOf('day'));
+    }, [markUserInteracted]);
+
+    const handleEditTask = useCallback((task: GanttTask) => {
+        const operation = model.operationByTaskId.get(task.id);
+        if (operation) {
+            setEditingOperation(operation);
+        }
+    }, [model.operationByTaskId]);
+
+    const handleSaveOperation = useCallback(async (id: number, values: any) => {
+        try {
+            await axios.put(`/api/v5/gantt/operations/${id}`, values);
+            message.success('操作更新成功');
+            setEditingOperation(null);
+            requestReload();
+        } catch (error: any) {
+            console.error('Failed to update operation:', error);
+            message.error(error?.response?.data?.error || '更新失败，请重试');
+        }
+    }, [requestReload]);
+
+    const handleDeleteOperation = useCallback(async (id: number) => {
+        try {
+            await axios.delete(`/api/v5/gantt/operations/${id}`);
+            message.success('操作删除成功');
+            setEditingOperation(null);
+            requestReload();
+        } catch (error: any) {
+            console.error('Failed to delete operation:', error);
+            message.error(error?.response?.data?.error || '删除失败，请重试');
+        }
+    }, [requestReload]);
+
+    const persistTaskTime = useCallback(async (
+        taskId: string,
+        newStart: number,
+        newEnd: number,
+        reloadMode: 'immediate' | 'debounced' = 'debounced',
+    ) => {
+        const operation = model.operationByTaskId.get(taskId);
+        if (!operation) {
+            return false;
+        }
+
+        try {
+            await axios.put(`/api/v5/gantt/operations/${operation.id}`, {
+                startDate: formatApiDate(hourOffsetToDate(originDate, newStart)),
+                endDate: formatApiDate(hourOffsetToDate(originDate, newEnd)),
+                windowStartDate: operation.windowStartDate,
+                windowEndDate: operation.windowEndDate,
+            });
+            if (reloadMode === 'immediate') {
+                requestReload();
+            } else {
+                requestReloadSoon();
+            }
+            return true;
+        } catch (error: any) {
+            console.error('Failed to persist task timing', error);
+            message.error(error?.response?.data?.error || '时间调整失败');
+            return false;
+        }
+    }, [model.operationByTaskId, originDate, requestReload, requestReloadSoon]);
+
+    const handleTaskDragEnd = useCallback(async (taskId: string, newStart: number, newEnd: number) => {
+        return persistTaskTime(taskId, newStart, newEnd);
+    }, [persistTaskTime]);
+
+    const handleGroupDragEnd = useCallback(async (
+        _groupId: string,
+        deltaHours: number,
+        affectedTaskIds: string[],
+    ) => {
+        try {
+            for (const taskId of affectedTaskIds) {
+                const operation = model.operationByTaskId.get(taskId);
+                if (!operation) {
+                    continue;
+                }
+                const currentStart = dayjs(operation.startDate).diff(originDate, 'hour', true);
+                const currentEnd = dayjs(operation.endDate).diff(originDate, 'hour', true);
+                const ok = await persistTaskTime(
+                    taskId,
+                    currentStart + deltaHours,
+                    currentEnd + deltaHours,
+                    'debounced',
+                );
+                if (ok === false) {
+                    return false;
+                }
+            }
+            message.success(`已移动 ${affectedTaskIds.length} 个操作`);
+            return true;
+        } catch (error) {
+            console.error('Failed to persist group timing', error);
+            message.error('批量调整失败');
+            return false;
+        }
+    }, [model.operationByTaskId, originDate, persistTaskTime]);
+
+    const handleCreateShareGroup = useCallback(async (selectedTaskIds: string[]) => {
+        const operationIds = selectedTaskIds
+            .map((taskId) => model.operationByTaskId.get(taskId)?.id)
+            .filter((id): id is number => typeof id === 'number');
+
+        if (operationIds.length < 2) {
+            message.warning('至少选择 2 个操作才能创建共享组');
             return;
         }
 
         try {
-            const groupName = `共享组-${shareGroups.length + 1}`;
-
             await axios.post('/api/share-groups/batch-operations/bulk', {
-                operation_ids: selectedOperationIds,
-                group_name: groupName,
-                share_mode: 'SAME_TEAM'
+                operation_ids: operationIds,
+                group_name: `共享组-${shareGroups.length + 1}`,
+                share_mode: 'SAME_TEAM',
             });
-
-            message.success(`${groupName} 创建成功`);
-            handleCancelShareGroup();
+            message.success('共享组创建成功');
             requestReload();
-        } catch (error) {
-            console.error('创建共享组失败:', error);
-            message.error('创建共享组失败');
+        } catch (error: any) {
+            console.error('Failed to create share group', error);
+            message.error(error?.response?.data?.error || '创建共享组失败');
         }
-    }, [handleCancelShareGroup, requestReload, selectedOperationIds, shareGroups.length]);
+    }, [model.operationByTaskId, requestReload, shareGroups.length]);
+
+    const handleAutoSchedule = useCallback(() => {
+        message.info('真实批次的自动排班请在 V4 自动排班中运行；当前甘特图保留生产日期编辑。');
+        navigate('/solver-v4');
+    }, [navigate]);
+
+    const hasData = model.tasks.length > 0;
 
     return (
-        <div
-            ref={containerRef}
-            className={`gantt-flex-col gantt-h-full gantt-w-full gantt-overflow-hidden gantt-relative ${isFullScreen ? 'gantt-fullscreen' : ''}`}
-            style={{
-                backgroundColor: '#fff',
-                borderRadius: isFullScreen ? 0 : 16,
-                border: isFullScreen ? 'none' : '1px solid #F3F4F6',
-                boxShadow: isFullScreen ? 'none' : '0 1px 2px rgba(0,0,0,0.05)'
-            }}
-        >
-            {/* Toolbar Area */}
-            <div className="gantt-toolbar">
-                <div className="gantt-btn-group">
-                    {viewMode === 'day' && (
-                        <div style={{ display: 'flex', alignItems: 'center', marginRight: 12 }}>
-                            <button
-                                onClick={exitSingleDayMode}
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    padding: '6px 12px',
-                                    borderRadius: 8,
-                                    border: 'none',
-                                    backgroundColor: 'rgba(0, 122, 255, 0.1)',
-                                    color: '#007AFF',
-                                    fontSize: 13,
-                                    fontWeight: 500,
-                                    cursor: 'pointer',
-                                    marginRight: 8,
-                                    transition: 'all 0.2s ease'
-                                }}
-                                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(0, 122, 255, 0.2)'}
-                                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(0, 122, 255, 0.1)'}
-                            >
-                                <ArrowLeftOutlined style={{ fontSize: 12 }} />
-                                Exit Day View
-                            </button>
-
-                            <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 8, padding: 2 }}>
-                                <button
-                                    onClick={() => navigateSingleDay('prev', batches)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: 28,
-                                        height: 28,
-                                        borderRadius: 6,
-                                        border: 'none',
-                                        backgroundColor: 'transparent',
-                                        color: '#374151',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fff'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    title="Previous Day"
-                                >
-                                    <LeftOutlined style={{ fontSize: 12 }} />
-                                </button>
-                                <div style={{ fontSize: 13, fontWeight: 500, color: '#1F2937', padding: '0 8px', minWidth: 100, textAlign: 'center' }}>
-                                    {startDate.format('MMM D, YYYY')}
-                                </div>
-                                <button
-                                    onClick={() => navigateSingleDay('next', batches)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        width: 28,
-                                        height: 28,
-                                        borderRadius: 6,
-                                        border: 'none',
-                                        backgroundColor: 'transparent',
-                                        color: '#374151',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#fff'}
-                                    onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                                    title="Next Day"
-                                >
-                                    <RightOutlined style={{ fontSize: 12 }} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
-                    <h2 style={{ fontSize: 18, fontWeight: 600, color: '#1F2937' }}>Batch Schedule</h2>
-                    <span style={{ color: '#D1D5DB', padding: '0 8px' }}>|</span>
-                    <Tooltip title="密集模式适合快速浏览整体排程">
-                        <button
-                            onClick={() => handleLayoutModeChange('dense')}
-                            className={`gantt-btn-mode ${layoutMode === 'dense' ? 'gantt-btn-mode-active' : ''}`}
-                        >
-                            密集
-                        </button>
-                    </Tooltip>
-                    <Tooltip title="明细模式适合逐操作检查与共享组选择">
-                        <button
-                            onClick={() => handleLayoutModeChange('standard')}
-                            className={`gantt-btn-mode ${layoutMode === 'standard' ? 'gantt-btn-mode-active' : ''}`}
-                        >
-                            明细
-                        </button>
-                    </Tooltip>
-                    <button
-                        onClick={() => handleLayoutModeChange('compact')}
-                        className={`gantt-btn-mode ${layoutMode === 'compact' ? 'gantt-btn-mode-active' : ''}`}
-                    >
-                        概览
-                    </button>
-                    <Tooltip title={showShareGroupLines ? '隐藏共享组连接线' : '显示共享组连接线'}>
-                        <button
-                            onClick={() => setShowShareGroupLines(!showShareGroupLines)}
-                            className={`gantt-btn-mode ${showShareGroupLines ? 'gantt-btn-mode-active' : ''}`}
-                        >
-                            <ShareAltOutlined style={{ fontSize: 14 }} />
-                        </button>
-                    </Tooltip>
-
-                    {/* 快捷创建共享组（仅 Standard 模式） */}
-                    {layoutMode === 'standard' && (
-                        !isShareGroupMode ? (
-                            <Tooltip title="快捷创建共享组">
-                                <button
-                                    onClick={handleEnterShareGroupMode}
-                                    className="gantt-btn-mode"
-                                    style={{ borderColor: '#52c41a', color: '#52c41a' }}
-                                >
-                                    <PlusCircleOutlined style={{ fontSize: 14, marginRight: 4 }} />
-                                    添加共享组
-                                </button>
-                            </Tooltip>
-                        ) : (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Tag color="processing" style={{ margin: 0, padding: '4px 8px' }}>选择操作加入共享组</Tag>
-                                <button
-                                    onClick={handleConfirmShareGroup}
-                                    disabled={selectedOperationIds.length < 2}
-                                    className="gantt-btn-mode"
-                                    style={{
-                                        backgroundColor: selectedOperationIds.length >= 2 ? '#1890ff' : '#d9d9d9',
-                                        color: selectedOperationIds.length >= 2 ? '#fff' : '#999',
-                                        border: 'none'
-                                    }}
-                                >
-                                    <CheckOutlined style={{ fontSize: 12, marginRight: 4 }} />
-                                    确认创建 ({selectedOperationIds.length})
-                                </button>
-                                <button
-                                    onClick={handleCancelShareGroup}
-                                    className="gantt-btn-mode"
-                                >
-                                    <CloseOutlined style={{ fontSize: 12, marginRight: 4 }} />
-                                    取消
-                                </button>
-                            </div>
-                        )
-                    )}
-                </div>
-
-                {/* Zoom Controls (Middle) */}
-                <div className="gantt-btn-group" style={{ flex: 1, maxWidth: 300, minWidth: 200, padding: '0 12px' }}>
-                    <ZoomOutOutlined style={{ color: '#9CA3AF', fontSize: 14 }} />
-                    <Slider
-                        min={viewMode === 'day' ? 720 : 60}
-                        max={viewMode === 'day' ? 2880 : 600}
-                        value={zoomLevel}
-                        onChange={setZoomLevel}
-                        step={1}
-                        tooltip={{ formatter: (val) => `${val}%` }}
-                        style={{ flex: 1, margin: '0 12px' }}
+        <div className="batch-gantt-wxb">
+            <div className="batch-gantt-wxb__toolbar">
+                <div className="batch-gantt-wxb__toolbar-left">
+                    <WxbSegmented
+                        size="sm"
+                        defaultValue="autoFit"
+                        options={DATE_PRESET_OPTIONS}
+                        onChange={handlePresetChange}
                     />
-                    <ZoomInOutlined style={{ color: '#9CA3AF', fontSize: 14 }} />
+                    <WxbRangePicker
+                        className="batch-gantt-wxb__range"
+                        value={[startDate, endDate]}
+                        allowClear={false}
+                        onChange={handleRangeChange as any}
+                    />
+                    <div className="batch-gantt-wxb__summary">
+                        <WxbTag color="blue">{selectedRangeLabel}</WxbTag>
+                        <span><strong>{batches.length}</strong> 批次</span>
+                        <span><strong>{model.stageCount}</strong> 阶段</span>
+                        <span><strong>{model.operationCount}</strong> 操作</span>
+                    </div>
                 </div>
 
-                <div className="gantt-btn-group">
-                    <button className="gantt-btn-mode" onClick={toggleFullScreen} title={isFullScreen ? "Exit Full Screen" : "Full Screen"}>
-                        {isFullScreen ? (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                            </svg>
-                        )}
-                    </button>
-                    <button className="gantt-btn-mode" title="Refresh" onClick={requestReload}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                    </button>
-                    <div style={{ height: 32, width: 1, backgroundColor: '#E5E5E5', margin: '0 8px' }}></div>
-                    <button
-                        onClick={onCreateBatch}
-                        style={{
-                        padding: '6px 16px',
-                        backgroundColor: '#000',
-                        color: 'white',
-                        fontSize: 14,
-                        fontWeight: 500,
-                        borderRadius: 8,
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-                        border: 'none',
-                        cursor: 'pointer'
-                    }}
-                    >
-                        新建批次
-                    </button>
-                    {/* 日期快捷预设按钮 */}
-                    {viewMode !== 'day' && (
-                        <Segmented
-                            options={DATE_PRESET_OPTIONS}
-                            onChange={(value) => applyDatePreset(value as DatePreset)}
-                            size="small"
-                            style={{
-                                backgroundColor: '#F3F4F6',
-                                borderRadius: 8,
-                                fontSize: 12,
-                                fontWeight: 500,
-                            }}
-                        />
-                    )}
-                    <div style={{ marginRight: 12 }}>
-                        <RangePicker
-                            value={[startDate, endDate]}
-                            onChange={(dates) => {
-                                if (dates && dates[0] && dates[1]) {
-                                    markUserInteracted();
-                                    setStartDate(dates[0]);
-                                    setEndDate(dates[1]);
-                                }
-                            }}
-                            allowClear={false}
-                            bordered={false}
-                            style={{ backgroundColor: '#F9FAFB', borderRadius: 8, padding: '4px 12px' }}
+                <div className="batch-gantt-wxb__toolbar-right">
+                    <WxbSegmented
+                        size="sm"
+                        value={yAxisMode}
+                        options={Y_AXIS_OPTIONS}
+                        onChange={(value) => setYAxisMode(value as YAxisMode)}
+                    />
+                    <div className="batch-gantt-wxb__separator" />
+                    <div className="batch-gantt-wxb__switch">
+                        <span>时间窗口</span>
+                        <WxbSwitch
+                            size="sm"
+                            checked={showTimeWindows}
+                            onChange={setShowTimeWindows}
                         />
                     </div>
+                    <div className="batch-gantt-wxb__separator" />
+                    <WxbTooltip title="真实批次的人员自动排班由 V4 自动排班求解器执行">
+                        <span className="batch-gantt-wxb__tooltip-anchor">
+                            <WxbButton
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="batch-gantt-wxb__action"
+                                onClick={handleAutoSchedule}
+                            >
+                                自动排程
+                            </WxbButton>
+                        </span>
+                    </WxbTooltip>
+                    <WxbButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="batch-gantt-wxb__action"
+                        onClick={requestReload}
+                    >
+                        <WxbIcon name="capa" size={14} />
+                        刷新
+                    </WxbButton>
+                    <WxbButton
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        className="batch-gantt-wxb__action"
+                        onClick={onCreateBatch}
+                    >
+                        <WxbIcon name="batch-record" size={14} />
+                        新建批次
+                    </WxbButton>
                 </div>
             </div>
 
-            {/* Main Content Split View */}
-            <div className="gantt-flex-row gantt-overflow-hidden gantt-relative" style={{ flex: 1 }}>
-                {loading && (
-                    <div className="gantt-relative" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(4px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{ width: 32, height: 32, borderRadius: '50%', borderBottom: '2px solid #000', animation: 'spin 1s linear infinite' }}></div>
-                        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+            <div className="batch-gantt-wxb__body">
+                {hasData ? (
+                    <WxbGanttChart
+                        className="batch-gantt-wxb__chart"
+                        tasks={renderModel.tasks}
+                        groups={renderModel.groups}
+                        dependencies={renderModel.dependencies}
+                        links={renderModel.links}
+                        timeRange={{ start: 0, end: rangeHours }}
+                        timelineOriginDate={originDate.format('YYYY-MM-DD')}
+                        rowHeight={32}
+                        sidebarWidth={300}
+                        initialDayWidth={120}
+                        taskMenuItems={TASK_MENU_ITEMS}
+                        onTaskDoubleClick={handleEditTask}
+                        onTaskEdit={handleEditTask}
+                        onTaskDragEnd={handleTaskDragEnd}
+                        onTaskResizeEnd={handleTaskDragEnd}
+                        onGroupDragEnd={handleGroupDragEnd}
+                        onCreateShareGroup={handleCreateShareGroup}
+                        collapseEmptyNightShifts
+                        enableFullscreen
+                        showSelectionPanel
+                    />
+                ) : (
+                    <div className="batch-gantt-wxb__empty">
+                        <WxbEmpty
+                            description={hasExplicitBatchFilter ? '没有匹配的批次排程' : '暂无批次排程数据'}
+                            action={(
+                                <WxbButton type="button" size="sm" onClick={onCreateBatch}>
+                                    新建批次
+                                </WxbButton>
+                            )}
+                        />
                     </div>
                 )}
 
-                <GanttSidebar
-                    ref={sidebarBodyRef}
-                    data={rowLayout.rows}
-                    rowLayout={rowLayout}
-                    rowHeight={rowHeight}
-                    onOperationDoubleClick={handleEditOperation}
-                    isShareGroupMode={isShareGroupMode}
-                    selectedOperationIds={selectedOperationIds}
-                    onOperationCheck={handleOperationCheck}
-                />
-                <GanttTimeline
-                    batches={batches}
-                    rows={rowLayout.rows}
-                    rowLayout={rowLayout}
-                    rowHeight={rowHeight}
-                    shareGroups={shareGroups}
-                    dependencies={dependencies}
-                    offScreenOperations={offScreenOps}
-                    onVerticalScroll={handleTimelineScroll}
-                    onScrollInteraction={handleScrollInteraction}
-                    onHorizontalScroll={handleHorizontalScroll}
-                    onOperationDoubleClick={handleEditOperation}
-                />
-
-                {/* MiniMap integrated here */}
-                <GanttMinimap
-                    data={batches}
-                    visible={minimapVisible}
-                    currentDate={minimapDate}
-                    onMouseEnter={() => {
-                        if (minimapTimeoutRef.current) clearTimeout(minimapTimeoutRef.current);
-                        setMinimapVisible(true);
-                    }}
-                    onMouseLeave={() => {
-                        minimapTimeoutRef.current = setTimeout(() => {
-                            setMinimapVisible(false);
-                        }, 2000);
-                    }}
-                />
+                {loading && (
+                    <div className="batch-gantt-wxb__loading">
+                        <WxbSpinner tip="甘特图加载中" />
+                    </div>
+                )}
             </div>
 
-            {/* Edit Modal */}
-            <EditOperationModal
-                visible={!!editingOperation}
-                operation={editingOperation}
-                onClose={handleEditCancel}
-                onSave={handleSaveOperation}
-                onDelete={handleDeleteOperation}
-                getContainer={() => containerRef.current || document.body}
-            />
+            {editingOperation && (
+                <EditOperationModal
+                    visible
+                    operation={editingOperation}
+                    onClose={() => setEditingOperation(null)}
+                    onSave={handleSaveOperation}
+                    onDelete={handleDeleteOperation}
+                />
+            )}
         </div>
-    );
-};
-
-interface BatchGanttV4Props {
-    filteredBatchIds?: number[];
-    onCreateBatch?: () => void;
-}
-
-const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateBatch }) => {
-    return (
-        <GanttProvider>
-            <BatchGanttV4Content filteredBatchIds={filteredBatchIds} onCreateBatch={onCreateBatch} />
-        </GanttProvider>
     );
 };
 

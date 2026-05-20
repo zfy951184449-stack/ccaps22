@@ -26,7 +26,7 @@ export const WxbTopNav: React.FC<WxbTopNavProps> = ({
   activeId,
   onLinkClick,
   onSearchSubmit,
-  envText = 'GMP · Wuxi MFG18',
+  envText = 'GMP · Wuxi MFG8',
   avatarInitials = 'LZ'
 }) => {
   const navRef = useRef<HTMLElement>(null);

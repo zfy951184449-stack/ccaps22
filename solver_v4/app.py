@@ -120,9 +120,12 @@ def solve_endpoint():
         if not payload:
             return jsonify({"error": "Empty payload"}), 400
 
-        # 🔧 FIX: Prioritize config.metadata.run_id (set by Backend) over payload.request_id
+        # Preview-only requests are synchronous proposals and must not attach the
+        # normal run/progress/result callback path, because there is no persisted
+        # scheduling_runs record to update.
         config = payload.get('config', {})
         metadata = config.get('metadata', {})
+        preview_only = bool(metadata.get('preview_only') or config.get('preview_only') or payload.get('preview_only'))
         request_id = str(metadata.get('run_id') or payload.get('request_id', 'N/A'))
         
         # Create run-specific logger
@@ -166,16 +169,17 @@ def solve_endpoint():
         # Easier approach: Pass a callback_registry dict to SolverV4.solve
         solver = SolverV4()
         
-        # Pass registry so Solver can register its callback
-        # We need to ensure 'request_id' (run_id) is consistent
-        # SolverV4 extracts run_id from config['metadata']['run_id'] usually.
-        # Let's verify metadata matches
         if not req.config:
             req.config = {}
         if "metadata" not in req.config:
             req.config["metadata"] = {}
-        req.config["metadata"]["registry"] = ACTIVE_CALLBACKS # Injection!
-        req.config["metadata"]["run_id"] = request_id # Ensure ID matches
+        if preview_only:
+            req.config["metadata"].pop("registry", None)
+            req.config["metadata"].pop("run_id", None)
+        else:
+            # Pass registry so Solver can register its callback.
+            req.config["metadata"]["registry"] = ACTIVE_CALLBACKS # Injection!
+            req.config["metadata"]["run_id"] = request_id # Ensure ID matches
         
         try:
             result = solver.solve(req)

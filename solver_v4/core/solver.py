@@ -705,6 +705,7 @@ class SolverV4:
                         logger.warning(f"⚠️ Flexible Task {op_id} assigned to Emp {emp_id} but NO matching Placement Shift found! (Orphaned Task)")
                         unassigned_tasks.append({
                             "operation_id": op_id,
+                            "position_number": pos_num,
                             "employee_id": emp_id,
                             "reason": "No covering placement shift assigned"
                         })
@@ -733,6 +734,7 @@ class SolverV4:
                         logger.warning(f"⚠️ Task {op_id} assigned to Emp {emp_id} but NO matching Shift found! (Orphaned Task)")
                         unassigned_tasks.append({
                             "operation_id": op_id,
+                            "position_number": pos_num,
                             "employee_id": emp_id,
                             "reason": "No covering shift assigned"
                         })

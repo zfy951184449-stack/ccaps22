@@ -74,6 +74,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
       style={{
         width: sidebarWidth,
         flexShrink: 0,
+        minHeight: 0,
         borderRight: `1px solid ${THEME.border}`,
         display: 'flex',
         flexDirection: 'column',
@@ -104,6 +105,7 @@ const GanttSidebar: React.FC<GanttSidebarProps> = ({
         onScroll={handleScroll}
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
         }}

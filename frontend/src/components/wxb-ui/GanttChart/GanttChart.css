@@ -132,10 +132,22 @@
 }
 
 /* ===== Fullscreen ===== */
-.wxb-gantt-chart:fullscreen {
+.wxb-gantt-chart:fullscreen,
+.wxb-gantt-chart.wxb-gantt-chart-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
   background: var(--wx-bg, #fff);
-  border-radius: 0;
-  border: none;
+  border-radius: 0 !important;
+  border: none !important;
+  z-index: var(--wx-z-modal, 1000);
+}
+
+.wxb-gantt-chart:fullscreen .wxb-gantt-body,
+.wxb-gantt-chart.wxb-gantt-chart-fullscreen .wxb-gantt-body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* ===== Context Menu ===== */
@@ -433,4 +445,3 @@
   from { opacity: 0; transform: translateX(8px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-

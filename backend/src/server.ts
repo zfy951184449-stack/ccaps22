@@ -37,6 +37,7 @@ import operationTypesRoutes from './routes/operationTypes';
 import batchConstraintsRoutes from './routes/batchConstraints';
 import batchGanttV4Routes from './routes/batchGanttV4';
 import batchGanttV5Routes from './routes/batchGanttV5';
+import batchWorkbenchV2Routes from './routes/batchWorkbenchV2';
 import personnelSchedulesV2Routes from './routes/personnelSchedulesV2';
 import unavailabilityRoutes from './routes/unavailabilityRoutes';
 import resourceNodeRoutes from './routes/resourceNodes';
@@ -46,6 +47,8 @@ import templateStageOperationResourceRoutes from './routes/templateStageOperatio
 import batchOperationResourceRoutes from './routes/batchOperationResources';
 import v3BioprocessRoutes from './routes/v3Bioprocess';
 import standaloneTaskRoutes from './routes/standaloneTaskRoutes';
+import rosterExceptionRoutes from './routes/rosterExceptions';
+import rosterLeadershipCockpitRoutes from './routes/rosterLeadershipCockpit';
 
 dotenv.config();
 
@@ -117,6 +120,7 @@ app.use('/api/stage-operations', stageOperationRoutes);
 
 app.use('/api/personnel-schedules', personnelScheduleRoutes);
 app.use('/api/batch-plans', batchPlanningRoutes);
+app.use('/api/batch-workbench-v2', batchWorkbenchV2Routes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/constraints', constraintRoutes);
 app.use('/api/share-groups', shareGroupRoutes);
@@ -137,6 +141,8 @@ app.use('/api/template-stage-operations', templateStageOperationResourceRoutes);
 app.use('/api/batch-operations', batchOperationResourceRoutes);
 app.use('/api/v3/bioprocess', v3BioprocessRoutes);
 app.use('/api/standalone-tasks', standaloneTaskRoutes);
+app.use('/api/roster-exceptions', rosterExceptionRoutes);
+app.use('/api/roster-leadership-cockpit', rosterLeadershipCockpitRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

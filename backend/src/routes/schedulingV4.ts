@@ -73,5 +73,12 @@ router.post('/runs/:runId/apply', schedulingV4Controller.applySolveResultV4);
  */
 router.post('/precheck', schedulingV4Controller.runPrecheckV4);
 
-export default router;
+// 9. Preview-only Proposal
+/**
+ * @route POST /api/v4/scheduling/preview-proposal
+ * @desc Run a preview-only solver proposal with in-memory operation time overrides
+ * @access Private
+ */
+router.post('/preview-proposal', schedulingV4Controller.createPreviewProposalV4);
 
+export default router;

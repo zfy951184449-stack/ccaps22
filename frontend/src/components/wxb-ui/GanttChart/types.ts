@@ -58,7 +58,7 @@ export interface GanttGroup {
   /** Group accent color */
   color?: string;
   /** Semantic type marker */
-  type?: 'batch' | 'stage' | 'template';
+  type?: 'batch' | 'stage' | 'template' | 'equipment';
   /** Whether to draw an aggregate summary bar on the group row. Defaults to true. */
   showSummaryBar?: boolean;
   /** Whether this group is a conflict lane under a resource row. */
@@ -119,6 +119,8 @@ export interface WxbGanttChartProps {
   links?: GanttLink[];
   /** Time range override (hours, auto-detected if omitted) */
   timeRange?: { start: number; end: number };
+  /** Real calendar date represented by hour 0. When omitted, the axis uses relative Day N labels. */
+  timelineOriginDate?: string;
   /** Time axis unit (default: 'day') */
   timeUnit?: ViewMode;
   /** Row height in pixels (default: 32) */
@@ -169,6 +171,8 @@ export interface WxbGanttChartProps {
   onTaskEdit?: (task: GanttTask) => void;
   /** Task delete request */
   onTaskDelete?: (task: GanttTask) => void;
+  /** Multi-task delete request */
+  onTasksDelete?: (tasks: GanttTask[]) => void;
   /** Task duplicate request */
   onTaskDuplicate?: (task: GanttTask) => void;
   /** Context menu action handler (catch-all for custom actions) */
@@ -208,7 +212,7 @@ export interface FlatRow {
   groupId?: string;
   taskId?: string;
   color?: string;
-  groupType?: 'batch' | 'stage' | 'template';
+  groupType?: 'batch' | 'stage' | 'template' | 'equipment';
   /** Whether this row is a sub-row created by overlap splitting (Sidebar shows connector, not label) */
   isSubRow?: boolean;
   /** Equipment type label for equipment rows in resource view */

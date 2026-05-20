@@ -1,15 +1,14 @@
 import React, { useMemo } from 'react';
-import { Table, Space, Button, Typography, Tooltip, Popconfirm } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
-    EditOutlined,
-    DeleteOutlined,
-    PlayCircleOutlined,
-    StopOutlined,
-    CalendarOutlined
-} from '@ant-design/icons';
+    WxbBadge,
+    WxbBulkActionBar,
+    WxbDataTable,
+    WxbIcon,
+    WxbTableActionCell,
+    WxbTooltip,
+} from '../wxb-ui';
 import type { BatchPlan } from '../../types';
-
-const { Text } = Typography;
 
 interface BatchListV4Props {
     data: BatchPlan[];
@@ -18,7 +17,25 @@ interface BatchListV4Props {
     onDelete: (batch: BatchPlan) => void;
     onActivate: (batch: BatchPlan) => void;
     onDeactivate: (batch: BatchPlan) => void;
+    selectedRowKeys: React.Key[];
+    selectedDraftCount: number;
+    selectedActivatedCount: number;
+    onSelectionChange: (keys: React.Key[]) => void;
+    onBulkActivate: () => void;
+    onBulkDeactivate: () => void;
+    onBulkDelete: () => void;
 }
+
+const getStatusConfig = (status: BatchPlan['plan_status'] | string) => {
+    switch (status) {
+        case 'ACTIVATED':
+            return { status: 'success' as const, label: 'Activated' };
+        case 'DRAFT':
+            return { status: 'neutral' as const, label: 'Draft' };
+        default:
+            return { status: 'info' as const, label: status };
+    }
+};
 
 const BatchListV4: React.FC<BatchListV4Props> = ({
     data,
@@ -26,27 +43,24 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
     onEdit,
     onDelete,
     onActivate,
-    onDeactivate
+    onDeactivate,
+    selectedRowKeys,
+    selectedDraftCount,
+    selectedActivatedCount,
+    onSelectionChange,
+    onBulkActivate,
+    onBulkDeactivate,
+    onBulkDelete,
 }) => {
-    const getStatusConfig = (status: string) => {
-        switch (status) {
-            case 'ACTIVATED': return { color: '#34C759', bg: 'rgba(52, 199, 89, 0.1)', text: 'Activated' };
-            case 'DRAFT': return { color: '#8E8E93', bg: 'rgba(142, 142, 147, 0.1)', text: 'Draft' };
-            case 'PAUSED': return { color: '#FF9500', bg: 'rgba(255, 149, 0, 0.1)', text: 'Paused' };
-            case 'COMPLETED': return { color: '#007AFF', bg: 'rgba(0, 122, 255, 0.1)', text: 'Completed' };
-            default: return { color: '#8E8E93', bg: 'rgba(142, 142, 147, 0.1)', text: status };
-        }
-    };
-
-    const columns = useMemo(() => [
+    const columns = useMemo<ColumnsType<BatchPlan>>(() => [
         {
             title: '批次编码',
             dataIndex: 'batch_code',
             key: 'batch_code',
-            render: (text: string, record: BatchPlan) => (
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <Text strong style={{ fontSize: '15px', color: '#1d1d1f' }}>{text}</Text>
-                    <Text type="secondary" style={{ fontSize: '13px' }}>{record.batch_name}</Text>
+            render: (text: string, record) => (
+                <div className="batch-list-v4__identity">
+                    <span className="batch-list-v4__code">{text}</span>
+                    <span className="batch-list-v4__name">{record.batch_name}</span>
                 </div>
             ),
         },
@@ -54,162 +68,151 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
             title: '工艺模板',
             dataIndex: 'template_name',
             key: 'template_name',
-            render: (text: string) => (
-                <Text style={{ fontSize: '14px', color: '#1d1d1f' }}>{text || '—'}</Text>
+            render: (text: string | undefined) => (
+                <span className="batch-list-v4__template">{text || '-'}</span>
             ),
         },
         {
             title: '计划日期',
             key: 'dates',
-            render: (_: unknown, record: BatchPlan) => (
-                <div style={{ display: 'flex', alignItems: 'center', color: '#666' }}>
-                    <CalendarOutlined style={{ marginRight: 6 }} />
-                    <Text style={{ fontSize: '13px' }}>
-                        {record.planned_start_date}
-                        {record.planned_end_date ? ` - ${record.planned_end_date}` : ''}
-                    </Text>
-                </div>
+            render: (_, record) => (
+                <span className="batch-list-v4__date">
+                    <WxbIcon name="hold-time" size={14} />
+                    {record.planned_start_date}
+                    {record.planned_end_date ? ` - ${record.planned_end_date}` : ''}
+                </span>
             ),
         },
         {
             title: '状态',
             key: 'status',
             dataIndex: 'plan_status',
-            render: (status: string) => {
+            render: (status: BatchPlan['plan_status']) => {
                 const config = getStatusConfig(status);
-                return (
-                    <span style={{
-                        display: 'inline-block',
-                        padding: '4px 12px',
-                        borderRadius: '100px',
-                        backgroundColor: config.bg,
-                        color: config.color,
-                        fontSize: '12px',
-                        fontWeight: 600,
-                    }}>
-                        {config.text}
-                    </span>
-                );
+                return <WxbBadge status={config.status} variant="bar" label={config.label} />;
             },
         },
         {
             title: '操作',
             key: 'actions',
-            width: 150,
-            render: (_: unknown, record: BatchPlan) => (
-                <Space size="small" className="batch-actions">
-                    {record.plan_status === 'DRAFT' ? (
-                        <Tooltip title="激活">
-                            <Button
-                                type="text"
-                                shape="circle"
-                                icon={<PlayCircleOutlined style={{ color: '#34C759' }} />}
-                                onClick={() => onActivate(record)}
-                            />
-                        </Tooltip>
-                    ) : record.plan_status === 'ACTIVATED' ? (
-                        <Tooltip title="撤销激活">
-                            <Button
-                                type="text"
-                                shape="circle"
-                                icon={<StopOutlined style={{ color: '#FF9500' }} />}
-                                onClick={() => onDeactivate(record)}
-                            />
-                        </Tooltip>
-                    ) : null}
-
-                    <Tooltip title="编辑">
-                        <Button
-                            type="text"
-                            shape="circle"
-                            icon={<EditOutlined style={{ color: '#007AFF' }} />}
-                            onClick={() => onEdit(record)}
-                        />
-                    </Tooltip>
-
-                    {record.plan_status === 'DRAFT' ? (
-                        <Popconfirm
-                            title="删除批次"
-                            description={`确定要删除草稿批次 ${record.batch_code} 吗？`}
-                            onConfirm={() => onDelete(record)}
-                            okText="删除"
-                            cancelText="取消"
-                            okButtonProps={{ danger: true }}
-                        >
-                            <Tooltip title="删除">
-                                <Button
-                                    type="text"
-                                    shape="circle"
-                                    icon={<DeleteOutlined style={{ color: '#FF3B30' }} />}
-                                />
-                            </Tooltip>
-                        </Popconfirm>
-                    ) : (
-                        <Tooltip title="删除（将清理排班数据）">
-                            <Button
-                                type="text"
-                                shape="circle"
-                                icon={<DeleteOutlined style={{ color: '#FF3B30' }} />}
-                                onClick={() => onDelete(record)}
-                            />
-                        </Tooltip>
-                    )}
-                </Space>
+            width: 240,
+            render: (_, record) => (
+                <WxbTableActionCell
+                    maxInline={3}
+                    actions={[
+                        record.plan_status === 'DRAFT'
+                            ? {
+                                key: 'activate',
+                                label: (
+                                    <WxbTooltip title="激活批次">
+                                        <span><WxbIcon name="release" size={13} /> 激活</span>
+                                    </WxbTooltip>
+                                ),
+                                onClick: () => onActivate(record),
+                            }
+                            : {
+                                key: 'deactivate',
+                                label: (
+                                    <WxbTooltip title="撤销激活">
+                                        <span><WxbIcon name="quarantine" size={13} /> 撤销</span>
+                                    </WxbTooltip>
+                                ),
+                                onClick: () => onDeactivate(record),
+                            },
+                        {
+                            key: 'edit',
+                            label: (
+                                <WxbTooltip title="编辑批次">
+                                    <span><WxbIcon name="batch-record" size={13} /> 编辑</span>
+                                </WxbTooltip>
+                            ),
+                            onClick: () => onEdit(record),
+                        },
+                        {
+                            key: 'delete',
+                            label: (
+                                <WxbTooltip title={record.plan_status === 'DRAFT' ? '删除草稿批次' : '删除并清理排班数据'}>
+                                    <span><WxbIcon name="rejected" size={13} /> 删除</span>
+                                </WxbTooltip>
+                            ),
+                            variant: 'danger',
+                            onClick: () => onDelete(record),
+                            confirm: record.plan_status === 'DRAFT'
+                                ? {
+                                    title: '删除批次',
+                                    description: `确定要删除草稿批次 ${record.batch_code} 吗？`,
+                                    okText: '删除',
+                                    cancelText: '取消',
+                                }
+                                : undefined,
+                        },
+                    ]}
+                />
             ),
         },
     ], [onActivate, onDeactivate, onDelete, onEdit]);
 
     return (
-        <div className="batch-list-v4-container">
-            <style>
-                {`
-                    .batch-list-v4 .ant-table {
-                        background: transparent !important;
-                    }
-                    .batch-list-v4 .ant-table-thead > tr > th {
-                        background: rgba(255, 255, 255, 0.5) !important;
-                        border-bottom: 1px solid rgba(0,0,0,0.05) !important;
-                        color: #8E8E93 !important;
-                        font-weight: 500 !important;
-                        font-size: 13px !important;
-                        text-transform: uppercase !important;
-                        letter-spacing: 0.5px !important;
-                    }
-                    .batch-list-v4 .ant-table-tbody > tr > td {
-                        border-bottom: 1px solid rgba(0,0,0,0.03) !important;
-                        transition: background 0.2s;
-                    }
-                    .batch-list-v4 .ant-table-tbody > tr:hover > td {
-                        background: rgba(255, 255, 255, 0.4) !important;
-                    }
-                    .batch-list-v4 .batch-actions {
-                        opacity: 0.6;
-                        transition: opacity 0.2s;
-                    }
-                    .batch-list-v4 .ant-table-tbody > tr:hover .batch-actions {
-                        opacity: 1;
-                    }
-                    .batch-list-v4 .ant-pagination-item-active {
-                        border-color: transparent !important;
-                        background: #007AFF !important;
-                    }
-                     .batch-list-v4 .ant-pagination-item-active a {
-                        color: white !important;
-                    }
-                `}
-            </style>
-            <Table
+        <>
+            <WxbBulkActionBar
+                className="batch-list-v4__bulk-actions"
+                selectedCount={selectedRowKeys.length}
+                clearLabel="清除选择"
+                onClear={() => onSelectionChange([])}
+                actions={[
+                    {
+                        key: 'activate',
+                        label: (
+                            <span><WxbIcon name="release" size={13} /> 批量激活</span>
+                        ),
+                        disabled: selectedDraftCount === 0,
+                        onClick: onBulkActivate,
+                    },
+                    {
+                        key: 'deactivate',
+                        label: (
+                            <span><WxbIcon name="quarantine" size={13} /> 批量撤销</span>
+                        ),
+                        disabled: selectedActivatedCount === 0,
+                        onClick: onBulkDeactivate,
+                    },
+                    {
+                        key: 'delete',
+                        label: (
+                            <span><WxbIcon name="rejected" size={13} /> 批量删除</span>
+                        ),
+                        variant: 'danger',
+                        onClick: onBulkDelete,
+                        confirm: {
+                            title: '批量删除批次',
+                            description: `确定删除已选择的 ${selectedRowKeys.length} 个批次吗？已激活批次会同步清理排班数据。`,
+                            okText: '删除',
+                            cancelText: '取消',
+                        },
+                    },
+                ]}
+            />
+            <WxbDataTable<BatchPlan>
                 className="batch-list-v4"
+                density="standard"
                 columns={columns}
                 dataSource={data}
                 rowKey="id"
                 loading={loading}
+                rowSelection={{
+                    selectedRowKeys,
+                    onChange: onSelectionChange,
+                    columnWidth: 44,
+                }}
                 pagination={{
                     pageSize: 8,
                     size: 'small',
                 }}
+                emptyState={{
+                    description: '暂无批次数据',
+                }}
             />
-        </div>
+        </>
     );
 };
 

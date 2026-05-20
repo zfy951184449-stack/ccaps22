@@ -31,7 +31,7 @@ export interface WxbSideNavProps {
 
 export const WxbSideNav: React.FC<WxbSideNavProps> = ({
   siteType = 'Site',
-  siteName = 'Wuxi MFG18 · GMP',
+  siteName = 'Wuxi MFG8 · GMP',
   statusText = 'Live',
   groups,
   activeId,

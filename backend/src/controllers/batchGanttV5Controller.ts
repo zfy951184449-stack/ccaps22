@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 
 interface GanttOperation {
     id: number;
+    templateScheduleId?: number | null;
     stage_id: number;
     name: string;
     startDate: string;
@@ -18,6 +19,11 @@ interface GanttOperation {
     duration: number;
     requiredPeople: number;
     assignedPeople: number;
+    resourceNodeId?: number | null;
+    resourceName?: string | null;
+    resourceNodeClass?: string | null;
+    resourceSystemType?: string | null;
+    resourceEquipmentClass?: string | null;
     // Off-screen metadata for connection lines
     isOffScreen?: boolean;
     offScreenDirection?: 'left' | 'right';
@@ -110,6 +116,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         ps.id AS stage_order, -- simplified ordering
         -- Operation Info
         bop.id AS operation_id,
+        bop.template_schedule_id,
         o.operation_name,
         bop.planned_start_datetime,
         bop.planned_end_datetime,
@@ -117,6 +124,11 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         bop.window_end_datetime,   -- NEW
         bop.planned_duration,
         bop.required_people,
+        MAX(tsb.resource_node_id) AS resource_node_id,
+        MAX(rn.node_name) AS resource_name,
+        MAX(rn.node_class) AS resource_node_class,
+        MAX(rn.equipment_system_type) AS resource_system_type,
+        MAX(rn.equipment_class) AS resource_equipment_class,
         -- Assignment Status
         COUNT(bpa.employee_id) AS assigned_people
       FROM production_batch_plans pbp
@@ -125,6 +137,10 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
       -- Stage Mapping (Try to get from template schedule if exists, or fallback)
       LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
       LEFT JOIN process_stages ps ON sos.stage_id = ps.id
+      LEFT JOIN template_stage_operation_resource_bindings tsb
+        ON tsb.template_schedule_id = bop.template_schedule_id
+        AND (tsb.binding_role = 'PRIMARY' OR tsb.binding_role IS NULL)
+      LEFT JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
       -- Assignments
       LEFT JOIN batch_personnel_assignments bpa ON bop.id = bpa.batch_operation_plan_id 
         AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')
@@ -180,6 +196,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
 
             stage.operations.push({
                 id: row.operation_id,
+                templateScheduleId: row.template_schedule_id ? Number(row.template_schedule_id) : null,
                 stage_id: stageId,
                 name: row.operation_name,
                 startDate: row.planned_start_datetime,
@@ -191,7 +208,12 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
                 progress: 0,
                 duration: row.planned_duration,
                 requiredPeople: row.required_people,
-                assignedPeople: row.assigned_people
+                assignedPeople: row.assigned_people,
+                resourceNodeId: row.resource_node_id ? Number(row.resource_node_id) : null,
+                resourceName: row.resource_name || null,
+                resourceNodeClass: row.resource_node_class || null,
+                resourceSystemType: row.resource_system_type || null,
+                resourceEquipmentClass: row.resource_equipment_class || null
             });
 
             // Update Stage Times (Expand specific stage range)

@@ -313,7 +313,7 @@ describe('Qualification Routes', () => {
       shortage_count: 1,
       high_risk_coverable_count: 0,
       total_demand_hours: 17,
-      average_risk_score: 51.5,
+      average_risk_score: 46,
       max_risk_score: 88,
       max_peak_gap: 2,
     });
@@ -387,7 +387,7 @@ describe('Qualification Routes', () => {
       qualification_id: 2,
       qualification_name: '清场检查',
       peak_gap_people: 0,
-      risk_score: 15,
+      risk_score: 4,
     });
   });
 

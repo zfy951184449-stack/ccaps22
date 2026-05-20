@@ -5,6 +5,7 @@ export type LayoutMode = 'dense' | 'standard' | 'compact';
 
 export interface GanttOperation {
     id: number;
+    templateScheduleId?: number | null;
     stage_id: number;
     name: string;
     startDate: string;
@@ -15,8 +16,13 @@ export interface GanttOperation {
     duration: number;
     requiredPeople: number;
     assignedPeople: number;
-    windowStartDate?: string;
-    windowEndDate?: string;
+    windowStartDate?: string | null;
+    windowEndDate?: string | null;
+    resourceNodeId?: number | null;
+    resourceName?: string | null;
+    resourceNodeClass?: string | null;
+    resourceSystemType?: string | null;
+    resourceEquipmentClass?: string | null;
     // Off-screen metadata for connection lines
     isOffScreen?: boolean;
     offScreenDirection?: 'left' | 'right';

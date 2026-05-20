@@ -78,6 +78,16 @@ function collectOperations(
   return result;
 }
 
+function getScheduleIdFromTask(task: GanttTask): number | null {
+  const explicit = task.data?.scheduleId;
+  if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit > 0) return explicit;
+
+  const match = task.id.match(/(\d+)$/);
+  if (!match) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -98,6 +108,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [newEquipSystemType, setNewEquipSystemType] = useState<string>('SUS');
   const [newEquipClass, setNewEquipClass] = useState('');
   const [pendingBindTask, setPendingBindTask] = useState<GanttTask | null>(null);
+  const [deleteTargets, setDeleteTargets] = useState<GanttTask[]>([]);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,12 +246,73 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     message.info(`编辑 ${task.label} (ID: ${task.id})`);
   }, []);
 
-  const handleTaskDelete = useCallback(
-    async (task: GanttTask) => {
-      await actions.handleDeleteTask(task.id);
-    },
-    [actions],
-  );
+  const openDeleteConfirm = useCallback((targets: GanttTask[]) => {
+    const seen = new Set<number>();
+    const deletableTargets = targets.filter(task => {
+      if (task.readOnly || task.type !== 'operation') return false;
+      const scheduleId = getScheduleIdFromTask(task);
+      if (!scheduleId || seen.has(scheduleId)) return false;
+      seen.add(scheduleId);
+      return true;
+    });
+
+    if (deletableTargets.length === 0) {
+      message.warning('请选择可删除的操作');
+      return;
+    }
+
+    setDeleteTargets(deletableTargets);
+  }, []);
+
+  const handleTaskDelete = useCallback((task: GanttTask) => {
+    openDeleteConfirm([task]);
+  }, [openDeleteConfirm]);
+
+  const handleTasksDelete = useCallback((targets: GanttTask[]) => {
+    openDeleteConfirm(targets);
+  }, [openDeleteConfirm]);
+
+  const handleCancelDelete = useCallback(() => {
+    if (deleteSubmitting) return;
+    setDeleteTargets([]);
+  }, [deleteSubmitting]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    const scheduleIds = deleteTargets
+      .map(getScheduleIdFromTask)
+      .filter((id): id is number => typeof id === 'number');
+    if (scheduleIds.length === 0) {
+      message.error('未找到可删除的排程操作');
+      return;
+    }
+
+    try {
+      setDeleteSubmitting(true);
+      const results = await Promise.allSettled(
+        scheduleIds.map(scheduleId => processTemplateV2Api.deleteStageOperation(scheduleId)),
+      );
+      const failed = results.filter(result => result.status === 'rejected');
+      const deletedCount = results.length - failed.length;
+
+      if (deletedCount > 0) {
+        message.success(deletedCount === 1 ? '操作已删除' : `已删除 ${deletedCount} 个操作`);
+      }
+      if (failed.length > 0) {
+        const firstError = failed[0] as PromiseRejectedResult;
+        const detail = firstError.reason?.response?.data?.error || '部分操作删除失败';
+        message.error(detail);
+      }
+
+      await ganttData.refreshData();
+      await actions.refreshAll();
+      await resourceView.refreshBindings();
+      setDeleteTargets([]);
+    } catch (err: any) {
+      message.error(err?.response?.data?.error || '删除操作失败');
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  }, [deleteTargets, ganttData, actions, resourceView]);
 
   const handleContextAction = useCallback(
     async (action: string, task: GanttTask | null) => {
@@ -289,7 +362,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           handleTaskEdit(task);
           break;
         case 'delete':
-          void handleTaskDelete(task);
+          handleTaskDelete(task);
           break;
         default:
           break;
@@ -502,6 +575,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onTaskResizeEnd={actions.handleResizeEnd}
           onTaskEdit={handleTaskEdit}
           onTaskDelete={handleTaskDelete}
+          onTasksDelete={handleTasksDelete}
           onContextAction={handleContextAction}
           showSelectionPanel
           onCreateShareGroup={handleQuickLink}
@@ -603,6 +677,37 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
               提示：创建后将自动绑定到操作「{pendingBindTask.label}」
             </div>
           )}
+        </div>
+      </WxbModal>
+
+      <WxbModal
+        open={deleteTargets.length > 0}
+        title="删除操作"
+        okText={deleteTargets.length > 1 ? `删除 ${deleteTargets.length} 个操作` : '删除操作'}
+        cancelText="取消"
+        okVariant="danger"
+        confirmLoading={deleteSubmitting}
+        onOk={() => void handleConfirmDelete()}
+        onCancel={handleCancelDelete}
+        width={440}
+        destroyOnClose
+      >
+        <div className="wxb-template-delete-confirm">
+          <p>
+            删除后将移除排程操作及其设备绑定、人员共享组成员关系。此操作不会删除操作定义本身。
+          </p>
+          <div className="wxb-template-delete-confirm-list">
+            {deleteTargets.slice(0, 6).map(task => (
+              <div key={task.id} className="wxb-template-delete-confirm-item">
+                {task.label}
+              </div>
+            ))}
+            {deleteTargets.length > 6 && (
+              <div className="wxb-template-delete-confirm-more">
+                另有 {deleteTargets.length - 6} 个操作
+              </div>
+            )}
+          </div>
         </div>
       </WxbModal>
     </div>
