@@ -19,7 +19,7 @@ function FloorView() {
       <div className="page-head">
         <div>
           <div className="crumb">Operations · Floor View</div>
-          <h1>Bioreactor Floor · Wuxi MFG18</h1>
+          <h1>Bioreactor Floor · Wuxi MFG8</h1>
         </div>
         <div className="actions">
           <button className="btn btn-secondary"><Icon.filter/>500 L · 2,000 L · 12,400 L</button>

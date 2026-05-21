@@ -27,7 +27,7 @@ function TopNav({ route, setRoute }) {
             <Icon.search/>
             <input placeholder="Search lots, deviations, BR…"/>
           </div>
-          <span className="env">GMP · Wuxi MFG18</span>
+          <span className="env">GMP · Wuxi MFG8</span>
           <span style={{color:"var(--wx-fg-3)"}}><Icon.bell/></span>
           <span className="ava">LZ</span>
         </div>

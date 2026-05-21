@@ -43,7 +43,7 @@ function Dashboard({ goBatch, goFloor, goDev }) {
     <div>
       <div className="page-head">
         <div>
-          <div className="crumb">Wuxi MFG18 · GMP</div>
+          <div className="crumb">Wuxi MFG8 · GMP</div>
           <h1>Operations Overview</h1>
         </div>
         <div className="actions">
