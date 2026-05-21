@@ -31,6 +31,8 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 60s;
         proxy_read_timeout 600s;
 
         # SSE (Server-Sent Events) support: disable buffering
@@ -47,6 +49,8 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 60s;
         proxy_read_timeout 600s;
     }
 
@@ -58,8 +62,8 @@ server {
 NGINX_CONF
 
 ENV PORT=8080
-ENV BACKEND_URL=http://localhost:3001
+ENV BACKEND_URL=
 
 EXPOSE 8080
 
-CMD ["/bin/sh", "-c", "envsubst '$PORT $BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "if [ -z \"$BACKEND_URL\" ]; then echo 'ERROR: BACKEND_URL must point to the backend service, e.g. http://<backend-private-host>:3001' >&2; exit 1; fi; case \"$BACKEND_URL\" in http://localhost:*|https://localhost:*|http://127.*|https://127.*) echo \"ERROR: BACKEND_URL points to loopback ($BACKEND_URL). In Zeabur this must be the backend service private URL.\" >&2; exit 1;; esac; envsubst '$PORT $BACKEND_URL' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
