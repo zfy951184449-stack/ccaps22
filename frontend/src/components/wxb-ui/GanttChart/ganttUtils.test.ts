@@ -1,4 +1,4 @@
-import { buildGanttTimeScale } from './ganttUtils';
+import { buildGanttTimeScale, formatHour } from './ganttUtils';
 import type { GanttTask } from './types';
 
 const task = (id: string, start: number, end: number): GanttTask => ({
@@ -33,5 +33,17 @@ describe('buildGanttTimeScale', () => {
     expect(scale.collapsedIntervals).toEqual([]);
     expect(scale.totalWidth).toBe(360);
     expect(scale.widthBetween(21, 33)).toBe(120);
+  });
+});
+
+describe('formatHour', () => {
+  it('normalizes negative template offsets into local day time', () => {
+    expect(formatHour(-5 * 24 + 9)).toBe('Day -5 09:00');
+    expect(formatHour(-5 * 24 + 10)).toBe('Day -5 10:00');
+  });
+
+  it('rounds fractional hours without leaking 60-minute labels', () => {
+    expect(formatHour(23.999)).toBe('Day 1 00:00');
+    expect(formatHour(-0.25)).toBe('Day -1 23:45');
   });
 });

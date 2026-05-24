@@ -246,9 +246,11 @@ export function clamp(value: number, min: number, max: number): number {
  * Format hour offset to "Day N HH:MM" string
  */
 export function formatHour(hour: number): string {
-  const day = Math.floor(hour / 24);
-  const h = Math.floor(hour % 24);
-  const m = Math.round((hour % 1) * 60);
+  const totalMinutes = Math.round(hour * 60);
+  const day = Math.floor(totalMinutes / (24 * 60));
+  const minuteOfDay = totalMinutes - day * 24 * 60;
+  const h = Math.floor(minuteOfDay / 60);
+  const m = minuteOfDay % 60;
   return `Day ${day} ${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
 }
 

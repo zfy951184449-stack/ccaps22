@@ -11,6 +11,7 @@ import { message } from 'antd';
 import { processTemplateV2Api } from '../../services';
 import type { GanttConstraint, ShareGroup, GanttNode, StageOperation } from '../ProcessTemplateGantt/types';
 import type { TemplateConstraintLink, TemplateShareGroupSummary } from '../ProcessTemplateV2/types';
+import { buildDraggedOperationTimingUpdate } from './dragTiming';
 
 const API = '/api';
 
@@ -189,34 +190,11 @@ export function useV3EditorActions({
       const originalDayOffset = opData.recommended_day_offset ?? 0;
       const stageStartDay = originalAbsoluteDay - originalOpDay - originalDayOffset;
 
-      const newAbsoluteDay = Math.floor(newStart / 24);
-      const newRecommendedTime = newStart - newAbsoluteDay * 24; // 0-24 range
-      const newOperationDay = Math.max(0, newAbsoluteDay - stageStartDay);
-      const newDayOffset = newAbsoluteDay - stageStartDay - newOperationDay;
-
-      // Compute window fields relative to the new position
-      const duration = newEnd - newStart;
-      const windowPadding = 2; // hours of padding around operation
-      const windowStartAbsolute = newStart - windowPadding;
-      const windowEndAbsolute = newStart + Math.max(duration, windowPadding);
-      const windowStartDay = Math.floor(windowStartAbsolute / 24);
-      const windowEndDay = Math.floor(windowEndAbsolute / 24);
-
-      const toHourValue = (v: number) => {
-        const rem = v % 24;
-        return rem < 0 ? rem + 24 : rem;
-      };
-
       try {
-        await processTemplateV2Api.updateStageOperation(scheduleId, {
-          operationDay: newOperationDay,
-          recommendedTime: newRecommendedTime,
-          recommendedDayOffset: newDayOffset,
-          windowStartTime: toHourValue(windowStartAbsolute),
-          windowStartDayOffset: windowStartDay - stageStartDay - newOperationDay,
-          windowEndTime: toHourValue(windowEndAbsolute),
-          windowEndDayOffset: windowEndDay - stageStartDay - newOperationDay,
-        });
+        await processTemplateV2Api.updateStageOperation(
+          scheduleId,
+          buildDraggedOperationTimingUpdate(newStart, newEnd, stageStartDay),
+        );
         await refreshData();
         return true;
       } catch (err: any) {
