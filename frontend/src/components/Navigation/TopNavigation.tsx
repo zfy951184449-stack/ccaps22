@@ -60,8 +60,6 @@ const navGroups: NavGroup[] = [
     icon: <ProjectOutlined />,
     children: [
       { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
-      { key: 'process-templates-v2', icon: <ProjectOutlined />, label: '工艺模版 V2', path: '/process-templates-v2' },
-      { key: 'process-templates-v3', icon: <ProjectOutlined />, label: '工艺模版 V3', path: '/process-templates-v3' },
       { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
       { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2' },
     ],

@@ -5,11 +5,12 @@ import {
     WxbIcon,
     WxbInput,
     WxbModal,
+    WxbSegmented,
     WxbSelect,
     wxbToast,
 } from '../wxb-ui';
 import { batchPlanApi } from '../../services/api';
-import type { BatchPlan, BatchTemplateSummary } from '../../types';
+import type { BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary } from '../../types';
 
 interface CreateBatchModalV4Props {
     visible: boolean;
@@ -17,10 +18,13 @@ interface CreateBatchModalV4Props {
     onSuccess: () => void;
     initialValues?: BatchPlan | null;
     templates?: BatchTemplateSummary[];
+    mfgPackages?: MfgTemplatePackageSummary[];
 }
 
 interface CreateBatchFormValues {
+    source_kind: 'template' | 'package';
     template_id?: number;
+    mfg_package_id?: number;
     planned_start_date: Dayjs;
     batch_code: string;
     batch_name: string;
@@ -30,7 +34,9 @@ interface CreateBatchFormValues {
 type CreateBatchErrors = Partial<Record<keyof CreateBatchFormValues, string>>;
 
 const createDefaultValues = (): CreateBatchFormValues => ({
+    source_kind: 'template',
     template_id: undefined,
+    mfg_package_id: undefined,
     planned_start_date: dayjs(),
     batch_code: '',
     batch_name: '',
@@ -43,6 +49,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     onSuccess,
     initialValues,
     templates: templateOptions,
+    mfgPackages = [],
 }) => {
     const [loading, setLoading] = useState(false);
     const [templates, setTemplates] = useState<BatchTemplateSummary[]>(templateOptions ?? []);
@@ -91,7 +98,9 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
 
         if (initialValues) {
             const nextValues: CreateBatchFormValues = {
+                source_kind: initialValues.mfg_package_id ? 'package' : 'template',
                 template_id: initialValues.template_id,
+                mfg_package_id: initialValues.mfg_package_id ?? undefined,
                 planned_start_date: initialValues.planned_start_date ? dayjs(initialValues.planned_start_date) : dayjs(),
                 batch_code: initialValues.batch_code,
                 batch_name: initialValues.batch_name,
@@ -112,6 +121,11 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         return values.planned_start_date.add(day0Offset.offset, 'day').format('YYYY-MM-DD');
     }, [day0Offset, values.planned_start_date]);
 
+    const selectedPackage = useMemo(
+        () => mfgPackages.find((item) => item.id === values.mfg_package_id) ?? null,
+        [mfgPackages, values.mfg_package_id],
+    );
+
     const updateValue = useCallback(<K extends keyof CreateBatchFormValues>(
         key: K,
         value: CreateBatchFormValues[K],
@@ -123,8 +137,11 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     const validate = useCallback(() => {
         const nextErrors: CreateBatchErrors = {};
 
-        if (!values.template_id) {
+        if (values.source_kind === 'template' && !values.template_id) {
             nextErrors.template_id = '请选择模板';
+        }
+        if (values.source_kind === 'package' && !values.mfg_package_id) {
+            nextErrors.mfg_package_id = '请选择总包';
         }
         if (!values.planned_start_date?.isValid()) {
             nextErrors.planned_start_date = '请选择日期';
@@ -141,13 +158,29 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     }, [values]);
 
     const handleSubmit = useCallback(async () => {
-        if (!validate() || !values.template_id) {
+        if (!validate()) {
             return;
         }
 
         setLoading(true);
         try {
-            const templateId = values.template_id;
+            if (!initialValues && values.source_kind === 'package') {
+                await batchPlanApi.createFromPackage({
+                    mfg_package_id: Number(values.mfg_package_id),
+                    batch_code: values.batch_code.trim(),
+                    batch_name: values.batch_name.trim(),
+                    planned_start_date: values.planned_start_date.format('YYYY-MM-DD'),
+                });
+                wxbToast.success('总包批次已创建');
+                onSuccess();
+                return;
+            }
+
+            const templateId = values.template_id ?? initialValues?.template_id;
+            if (!templateId) {
+                wxbToast.error('请选择模板');
+                return;
+            }
             const actualStartDate = day0Offset && day0Offset.offset < 0
                 ? values.planned_start_date.add(day0Offset.offset, 'day')
                 : values.planned_start_date;
@@ -190,33 +223,80 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         >
             <div className="batch-modal-v4__body">
                 <p className="batch-modal-v4__intro">
-                    选择工艺模板和 Day 0 日期后，系统会按模板规则生成批次计划。
+                    选择标准模板或 MFG 总包和 Day 0 日期后，系统会生成批次计划。
                 </p>
 
                 <div className="batch-modal-v4__section">
-                    <h3 className="batch-modal-v4__section-title">模板与计划日期</h3>
-                    <WxbSelect
-                        label="工艺模板"
-                        placeholder="选择一个标准生产流程"
-                        value={values.template_id}
-                        error={errors.template_id}
-                        options={templates.map((template) => ({
-                            label: template.template_name,
-                            value: template.id,
-                        }))}
-                        onChange={(value) => {
-                            const templateId = value as number;
-                            updateValue('template_id', templateId);
-                            handleTemplateChange(templateId);
-                        }}
-                    />
+                    <h3 className="batch-modal-v4__section-title">计划来源与日期</h3>
+                    {!initialValues && (
+                        <WxbSegmented
+                            size="md"
+                            value={values.source_kind}
+                            onChange={(value) => {
+                                const sourceKind = value as CreateBatchFormValues['source_kind'];
+                                updateValue('source_kind', sourceKind);
+                                setDay0Offset(null);
+                            }}
+                            options={[
+                                { label: '工艺模板', value: 'template', icon: <WxbIcon name="recipe" size={14} /> },
+                                { label: 'MFG 总包', value: 'package', icon: <WxbIcon name="batch-record" size={14} /> },
+                            ]}
+                        />
+                    )}
+
+                    {values.source_kind === 'template' ? (
+                        <WxbSelect
+                            label="工艺模板"
+                            placeholder="选择一个标准生产流程"
+                            value={values.template_id}
+                            error={errors.template_id}
+                            options={templates.map((template) => ({
+                                label: template.template_name,
+                                value: template.id,
+                            }))}
+                            onChange={(value) => {
+                                const templateId = value as number;
+                                updateValue('template_id', templateId);
+                                handleTemplateChange(templateId);
+                            }}
+                        />
+                    ) : (
+                        <WxbSelect
+                            label="MFG 总包"
+                            placeholder="选择一个生产联动总包"
+                            value={values.mfg_package_id}
+                            error={errors.mfg_package_id}
+                            disabled={Boolean(initialValues)}
+                            options={mfgPackages.map((item) => ({
+                                label: `${item.package_code} · ${item.package_name}`,
+                                value: item.id,
+                            }))}
+                            onChange={(value) => updateValue('mfg_package_id', value as number)}
+                        />
+                    )}
                     <WxbDatePicker
-                        label="基准日期 (Day 0)"
+                        label={values.source_kind === 'package' ? '总包基准日期 (Day 0)' : '基准日期 (Day 0)'}
                         format="YYYY-MM-DD"
                         value={values.planned_start_date}
                         error={errors.planned_start_date}
+                        disabled={Boolean(initialValues?.mfg_package_id)}
                         onChange={(date) => updateValue('planned_start_date', (date ?? dayjs()) as Dayjs)}
                     />
+                    {selectedPackage && (
+                        <div className="batch-modal-v4__info" role="status">
+                            <WxbIcon name="kanban" size={18} />
+                            <div>
+                                <div className="batch-modal-v4__warning-title">总包生成范围</div>
+                                <p className="batch-modal-v4__warning-copy">
+                                    {selectedPackage.package_name}
+                                    {selectedPackage.total_days ? `，预计 ${selectedPackage.total_days} 天` : ''}
+                                    {selectedPackage.min_day !== null && selectedPackage.min_day !== undefined
+                                        ? `，覆盖 Day ${selectedPackage.min_day} 到 Day ${selectedPackage.max_day}`
+                                        : ''}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     {day0Offset?.has_pre_day0 && (
                         <div className="batch-modal-v4__warning" role="status">
                             <WxbIcon name="oos-clock" size={18} />

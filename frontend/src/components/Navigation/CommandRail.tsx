@@ -48,7 +48,6 @@ const CommandRail: React.FC<CommandRailProps> = ({ width = 64 }) => {
             label: '生产计划',
             children: [
                 { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
-                { key: 'process-templates-v2', icon: <ProjectOutlined />, label: '工艺模版 V2', path: '/process-templates-v2' },
                 { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
             ],
         },

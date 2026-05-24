@@ -65,11 +65,13 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
             ),
         },
         {
-            title: '工艺模板',
+            title: '计划来源',
             dataIndex: 'template_name',
             key: 'template_name',
-            render: (text: string | undefined) => (
-                <span className="batch-list-v4__template">{text || '-'}</span>
+            render: (text: string | undefined, record) => (
+                <span className="batch-list-v4__template">
+                    {record.mfg_package_name ? `总包 · ${record.mfg_package_name}` : text || '-'}
+                </span>
             ),
         },
         {

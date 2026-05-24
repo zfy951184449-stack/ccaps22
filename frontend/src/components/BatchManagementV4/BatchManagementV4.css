@@ -186,7 +186,8 @@
     gap: var(--wx-space-8);
 }
 
-.batch-modal-v4__warning {
+.batch-modal-v4__warning,
+.batch-modal-v4__info {
     display: flex;
     align-items: flex-start;
     gap: var(--wx-space-10);

@@ -18,8 +18,8 @@ import BatchListV4 from './BatchListV4';
 import BatchFilterBar from './BatchFilterBar';
 import CreateBatchModalV4 from './CreateBatchModalV4';
 import BulkCreateModalV4 from './BulkCreateModalV4';
-import { batchPlanApi, processTemplateApi } from '../../services/api';
-import type { BatchStatistics, BatchPlan, BatchTemplateSummary, ProcessTemplate } from '../../types';
+import { batchPlanApi, mfgTemplatePackageApi, processTemplateApi } from '../../services/api';
+import type { BatchStatistics, BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary, ProcessTemplate } from '../../types';
 import './BatchManagementV4.css';
 
 const BatchGanttV4 = React.lazy(() => import('./BatchGanttV4/index'));
@@ -42,6 +42,7 @@ const BatchManagementV4: React.FC = () => {
     });
     const [batches, setBatches] = React.useState<BatchPlan[]>([]);
     const [templates, setTemplates] = React.useState<ProcessTemplate[]>([]);
+    const [mfgPackages, setMfgPackages] = React.useState<MfgTemplatePackageSummary[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [deleteTarget, setDeleteTarget] = React.useState<BatchPlan | null>(null);
     const [deleteLoading, setDeleteLoading] = React.useState(false);
@@ -58,14 +59,16 @@ const BatchManagementV4: React.FC = () => {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [statsData, batchesData, templatesData] = await Promise.all([
+            const [statsData, batchesData, templatesData, packageData] = await Promise.all([
                 batchPlanApi.getStatistics(),
                 batchPlanApi.list(),
                 processTemplateApi.getAll().then((res) => res.data),
+                mfgTemplatePackageApi.list().catch(() => [] as MfgTemplatePackageSummary[]),
             ]);
             setStats(statsData);
             setBatches(batchesData);
             setTemplates(templatesData);
+            setMfgPackages(packageData);
         } catch (error) {
             console.error('Failed to load data', error);
             wxbToast.error('加载数据失败');
@@ -380,6 +383,7 @@ const BatchManagementV4: React.FC = () => {
                 <CreateBatchModalV4
                     visible={createModalVisible}
                     templates={templateSummaries}
+                    mfgPackages={mfgPackages}
                     initialValues={editingBatch}
                     onCancel={() => {
                         setCreateModalVisible(false);

@@ -11,7 +11,8 @@ import {
   deactivateBatchPlan,
   getTemplateDay0Offset,
   createBatchPlansInBulk,
-  getBatchOperationsTree
+  getBatchOperationsTree,
+  createBatchPlanFromMfgPackage
 } from '../controllers/batchPlanningController';
 
 const router = express.Router();
@@ -27,6 +28,9 @@ router.get('/templates/:templateId/day0-offset', getTemplateDay0Offset);
 
 // Bulk create batches (新增：批量创建批次)
 router.post('/bulk', createBatchPlansInBulk);
+
+// Create batch from a MFG day-anchor package.
+router.post('/from-package', createBatchPlanFromMfgPackage);
 
 // CRUD operations
 router.get('/', getAllBatchPlans);

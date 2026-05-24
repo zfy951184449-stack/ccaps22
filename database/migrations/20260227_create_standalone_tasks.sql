@@ -9,9 +9,10 @@ CREATE TABLE IF NOT EXISTS standalone_tasks (
     duration_minutes INT NOT NULL COMMENT '预计工时(分钟)',
     team_id INT DEFAULT NULL COMMENT '所属部门',
     -- 时间约束
-    earliest_start DATE DEFAULT NULL COMMENT '最早开始日期',
-    deadline DATE NOT NULL COMMENT '截止日期',
+    earliest_start DATETIME DEFAULT NULL COMMENT '最早开始时间；FLEXIBLE/周期实例可使用日期 00:00:00',
+    deadline DATETIME NOT NULL COMMENT '截止/结束时间；AD_HOC 表示固定结束时间',
     preferred_shift_ids JSON DEFAULT NULL COMMENT '偏好班次',
+    allowed_employee_ids JSON DEFAULT NULL COMMENT '指定候选/指定人员ID列表',
     -- 关联
     related_batch_id INT DEFAULT NULL COMMENT '关联批次',
     trigger_operation_plan_id INT DEFAULT NULL COMMENT '触发钩子：批次中具体操作计划ID',

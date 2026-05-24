@@ -248,7 +248,6 @@ const MonthlyBatchSelector: React.FC = () => {
                 eyebrow="Solver V4"
                 title="排班调度"
                 description="选择月度批次、区间求解或值班任务后启动 V4 自动排班。"
-                meta={<WxbTag color="blue">白色 wxb-ui 主题</WxbTag>}
                 actions={(
                     <WxbButton
                         type="button"

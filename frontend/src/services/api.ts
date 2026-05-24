@@ -22,6 +22,9 @@ import {
   BatchPlan,
   BatchTemplateSummary,
   BatchStatistics,
+  MfgTemplatePackageDetail,
+  MfgTemplatePackagePreview,
+  MfgTemplatePackageSummary,
   HolidayServiceStatus,
   SchedulingSettings,
   SpecialShiftOccurrence,
@@ -145,11 +148,55 @@ type BatchPlanPayload = {
   notes?: string | null;
 };
 
+export type MfgTemplatePackagePayload = {
+  package_code?: string | null;
+  package_name: string;
+  description?: string | null;
+  package_status?: 'DRAFT' | 'ACTIVE' | 'RETIRED';
+  modules: Array<{
+    role_code: string;
+    role_name?: string | null;
+    template_id: number;
+    start_offset_days?: number | null;
+    is_anchor?: boolean;
+    sort_order?: number;
+  }>;
+  day_links?: Array<{
+    source_role_code: string;
+    target_role_code: string;
+    source_anchor_day: number;
+    target_anchor_day: number;
+    lag_days?: number;
+    description?: string | null;
+    is_active?: boolean;
+  }>;
+};
+
+export const mfgTemplatePackageApi = {
+  list: () => api.get<MfgTemplatePackageSummary[]>('/mfg-template-packages').then((res) => res.data),
+  get: (id: number) => api.get<MfgTemplatePackageDetail>(`/mfg-template-packages/${id}`).then((res) => res.data),
+  preview: (id: number) => api.get<MfgTemplatePackagePreview>(`/mfg-template-packages/${id}/preview`).then((res) => res.data),
+  create: (payload: MfgTemplatePackagePayload) =>
+    api.post<MfgTemplatePackageDetail>('/mfg-template-packages', payload).then((res) => res.data),
+  update: (id: number, payload: MfgTemplatePackagePayload) =>
+    api.put<MfgTemplatePackageDetail>(`/mfg-template-packages/${id}`, payload).then((res) => res.data),
+  remove: (id: number) => api.delete(`/mfg-template-packages/${id}`).then((res) => res.data),
+};
+
 export const batchPlanApi = {
   list: () => api.get<any>('/batch-plans').then((res) => (res.data.data ? res.data.data : res.data)),
   getTemplates: () => api.get<BatchTemplateSummary[]>('/batch-plans/templates').then((res) => res.data),
   getStatistics: () => api.get<BatchStatistics>('/batch-plans/statistics').then((res) => res.data),
   create: (payload: BatchPlanPayload) => api.post<BatchPlan>('/batch-plans', payload).then((res) => res.data),
+  createFromPackage: (payload: {
+    mfg_package_id: number;
+    batch_code: string;
+    batch_name: string;
+    planned_start_date: string;
+    project_code?: string | null;
+    description?: string | null;
+    notes?: string | null;
+  }) => api.post<BatchPlan>('/batch-plans/from-package', payload).then((res) => res.data),
   update: (id: number, payload: BatchPlanPayload) =>
     api.put<BatchPlan>(`/batch-plans/${id}`, payload).then((res) => res.data),
   remove: (id: number, options?: { force?: boolean }) =>

@@ -12,6 +12,95 @@ import dayjs from 'dayjs';
 import { isBatchResourceSnapshotsEnabled, isRuntimeResourceSnapshotReadEnabled } from '../../utils/featureFlags';
 import SpecialShiftWindowService from '../specialShiftWindowService';
 
+const FACTORY_TIME_OFFSET = '+08:00';
+
+const pad2 = (value: number): string => value.toString().padStart(2, '0');
+
+const formatLocalDateTime = (value: Date): string => (
+    `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}` +
+    `T${pad2(value.getHours())}:${pad2(value.getMinutes())}:${pad2(value.getSeconds())}`
+);
+
+const normalizeMysqlDateTimeText = (value: string): string | null => {
+    const trimmed = value.trim();
+    if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(trimmed)) {
+        return null;
+    }
+
+    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?/);
+    if (!match) {
+        return null;
+    }
+
+    return `${match[1]}T${match[2]}:${match[3] ?? '00'}`;
+};
+
+export const toFactoryIsoDateTime = (value: string | Date): string => {
+    const localDateTime = value instanceof Date
+        ? formatLocalDateTime(value)
+        : normalizeMysqlDateTimeText(value);
+
+    const parsed = localDateTime
+        ? dayjs(`${localDateTime}${FACTORY_TIME_OFFSET}`)
+        : dayjs(value);
+
+    if (!parsed.isValid()) {
+        throw new Error(`Invalid factory datetime: ${String(value)}`);
+    }
+
+    return parsed.toISOString();
+};
+
+const toFactoryDateOnlyIso = (value: string | Date | null | undefined, fallbackDate: string): string => {
+    if (!value) {
+        return toFactoryIsoDateTime(`${fallbackDate} 00:00:00`);
+    }
+
+    if (value instanceof Date) {
+        return toFactoryIsoDateTime(value);
+    }
+
+    const trimmed = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return toFactoryIsoDateTime(`${trimmed} 00:00:00`);
+    }
+
+    return toFactoryIsoDateTime(trimmed);
+};
+
+export const buildStandaloneDemandTiming = (
+    task: {
+        task_type: string;
+        earliest_start?: string | Date | null;
+        deadline?: string | Date | null;
+        duration_minutes?: number;
+    },
+    fallbackStartDate: string,
+    fallbackEndDate: string,
+) => {
+    if (task.task_type === 'FLEXIBLE') {
+        return {
+            schedulingMode: 'FLEXIBLE' as const,
+            plannedStart: toFactoryDateOnlyIso(task.earliest_start, fallbackStartDate),
+            plannedEnd: toFactoryDateOnlyIso(task.deadline, fallbackEndDate),
+            earliestStart: task.earliest_start ? dayjs(task.earliest_start).format('YYYY-MM-DD') : undefined,
+            deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : undefined,
+        };
+    }
+
+    return {
+        schedulingMode: 'FIXED' as const,
+        plannedStart: task.earliest_start
+            ? toFactoryIsoDateTime(task.earliest_start)
+            : toFactoryIsoDateTime(`${fallbackStartDate} 00:00:00`),
+        plannedEnd: task.deadline
+            ? toFactoryIsoDateTime(task.deadline)
+            : toFactoryIsoDateTime(`${fallbackEndDate} 23:59:59`),
+        earliestStart: undefined,
+        deadline: undefined,
+    };
+};
+
 // --- Interfaces matching Solver V4 Contracts (to be defined in Python) ---
 
 export interface V4SolverRequest {
@@ -325,11 +414,11 @@ export class DataAssemblerV4 {
     private static async fetchAndEnrichStandaloneTasks(startDate: string, endDate: string, employees: V4EmployeeProfile[]): Promise<V4OperationDemand[]> {
         // Fetch valid standalone tasks that overlap with the scheduling window
         const [taskRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT id, task_code, task_name, task_type, earliest_start, deadline, duration_minutes, required_people, preferred_shift_ids, related_batch_id
+            SELECT id, task_code, task_name, task_type, earliest_start, deadline, duration_minutes, required_people, preferred_shift_ids, allowed_employee_ids, related_batch_id
             FROM standalone_tasks
             WHERE status IN ('PENDING', 'SCHEDULED')
               AND earliest_start <= ? AND deadline >= ?
-        `, [endDate, startDate]);
+        `, [`${endDate} 23:59:59`, `${startDate} 00:00:00`]);
 
         if (taskRows.length === 0) return [];
 
@@ -352,6 +441,12 @@ export class DataAssemblerV4 {
         for (const task of taskRows) {
             const reqs = qualMap.get(task.id) || [];
             const posQuals: V4PositionQualification[] = [];
+            const allowedEmployeeIds: number[] = task.allowed_employee_ids
+                ? (typeof task.allowed_employee_ids === 'string'
+                    ? JSON.parse(task.allowed_employee_ids)
+                    : task.allowed_employee_ids)
+                : [];
+            const allowedEmployeeSet = new Set(allowedEmployeeIds.map(Number).filter(Number.isFinite));
 
             const numPositions = task.required_people || 1;
 
@@ -369,6 +464,9 @@ export class DataAssemblerV4 {
             for (let i = 1; i <= numPositions; i++) {
                 const specificReqs = posReqMap.get(i) || [];
                 const candidates = employees.filter(emp => {
+                    if (allowedEmployeeSet.size > 0 && !allowedEmployeeSet.has(emp.employee_id)) {
+                        return false;
+                    }
                     for (const req of specificReqs) {
                         if (req.is_mandatory) {
                             const empQual = emp.qualifications.find(q => q.qualification_id === req.qualification_id);
@@ -389,20 +487,22 @@ export class DataAssemblerV4 {
                 });
             }
 
+            const timing = buildStandaloneDemandTiming(task as any, startDate, endDate);
+
             demands.push({
                 operation_plan_id: -task.id, // Use negative ID to distinguish or just rely on source_type
                 batch_id: task.related_batch_id || 0,
                 batch_code: "STANDALONE",
                 operation_id: 0,
                 operation_name: `${task.task_code} - ${task.task_name}`,
-                planned_start: dayjs().toISOString(), // Dummy dates for flexible
-                planned_end: dayjs().toISOString(),
+                planned_start: timing.plannedStart,
+                planned_end: timing.plannedEnd,
                 planned_duration_minutes: task.duration_minutes,
                 required_people: task.required_people,
                 position_qualifications: posQuals,
-                scheduling_mode: task.task_type === 'FLEXIBLE' ? 'FLEXIBLE' : 'FIXED', // Simplification
-                earliest_start: task.earliest_start ? dayjs(task.earliest_start).format('YYYY-MM-DD') : undefined,
-                deadline: task.deadline ? dayjs(task.deadline).format('YYYY-MM-DD') : undefined,
+                scheduling_mode: timing.schedulingMode,
+                earliest_start: timing.earliestStart,
+                deadline: timing.deadline,
                 source_type: 'STANDALONE',
                 standalone_task_id: task.id,
                 preferred_shift_ids: task.preferred_shift_ids ? (typeof task.preferred_shift_ids === 'string' ? JSON.parse(task.preferred_shift_ids) : task.preferred_shift_ids) : null
@@ -657,8 +757,8 @@ export class DataAssemblerV4 {
                 batch_code: op.batch_code,
                 operation_id: op.operation_id,
                 operation_name: op.operation_name,
-                planned_start: dayjs(op.planned_start).toISOString(),
-                planned_end: dayjs(op.planned_end).toISOString(),
+                planned_start: toFactoryIsoDateTime(op.planned_start),
+                planned_end: toFactoryIsoDateTime(op.planned_end),
                 planned_duration_minutes: op.planned_duration_minutes,
                 required_people: op.required_people,
                 position_qualifications: posQuals

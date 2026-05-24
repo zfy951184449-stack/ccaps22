@@ -75,6 +75,21 @@ const parseStatusFilter = (value: unknown): string[] => {
     return statuses.length > 0 ? statuses : DEFAULT_BATCH_STATUSES;
 };
 
+const normalizeDateTimeForMysql = (value: unknown): string | null => {
+    const rawValue = value === null || value === undefined ? '' : String(value).trim();
+    if (!rawValue) {
+        return null;
+    }
+
+    const localDateTime = rawValue.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?$/);
+    if (localDateTime) {
+        return `${localDateTime[1]} ${localDateTime[2]}:${localDateTime[3] ?? '00'}`;
+    }
+
+    const parsed = dayjs(rawValue);
+    return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : rawValue;
+};
+
 export const getGanttHierarchy = async (req: Request, res: Response) => {
     try {
         const { start_date, end_date, status } = req.query;
@@ -421,13 +436,21 @@ export const updateGanttOperation = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { startDate, endDate, windowStartDate, windowEndDate, newOperationId, plannedDuration, requiredPeople } = req.body;
+        const normalizedStartDate = normalizeDateTimeForMysql(startDate);
+        const normalizedEndDate = normalizeDateTimeForMysql(endDate);
+        const normalizedWindowStartDate = normalizeDateTimeForMysql(windowStartDate);
+        const normalizedWindowEndDate = normalizeDateTimeForMysql(windowEndDate);
+
+        if (!normalizedStartDate || !normalizedEndDate) {
+            return res.status(400).json({ error: 'Start date and end date are required' });
+        }
 
         // Validation: Window Constraint
         // Although frontend validates, double-check to prevent bypassing
-        const start = dayjs(startDate);
-        const end = dayjs(endDate);
-        const winStart = windowStartDate ? dayjs(windowStartDate) : null;
-        const winEnd = windowEndDate ? dayjs(windowEndDate) : null;
+        const start = dayjs(normalizedStartDate);
+        const end = dayjs(normalizedEndDate);
+        const winStart = normalizedWindowStartDate ? dayjs(normalizedWindowStartDate) : null;
+        const winEnd = normalizedWindowEndDate ? dayjs(normalizedWindowEndDate) : null;
 
         if (winStart && start.isBefore(winStart)) {
             return res.status(400).json({ error: 'Start date cannot be earlier than window start date' });
@@ -450,10 +473,10 @@ export const updateGanttOperation = async (req: Request, res: Response) => {
         `;
 
         const params: any[] = [
-            startDate,
-            endDate,
-            windowStartDate || null,
-            windowEndDate || null
+            normalizedStartDate,
+            normalizedEndDate,
+            normalizedWindowStartDate,
+            normalizedWindowEndDate
         ];
 
         // If replacing operation (Phase 3)

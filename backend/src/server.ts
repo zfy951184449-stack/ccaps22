@@ -21,6 +21,7 @@ import stageOperationRoutes from './routes/stageOperations';
 
 import personnelScheduleRoutes from './routes/personnelSchedules';
 import batchPlanningRoutes from './routes/batchPlanning';
+import mfgTemplatePackageRoutes from './routes/mfgTemplatePackages';
 import calendarRoutes from './routes/calendar';
 import constraintRoutes from './routes/constraintRoutes';
 import shareGroupRoutes from './routes/shareGroupRoutes';
@@ -120,6 +121,7 @@ app.use('/api/stage-operations', stageOperationRoutes);
 
 app.use('/api/personnel-schedules', personnelScheduleRoutes);
 app.use('/api/batch-plans', batchPlanningRoutes);
+app.use('/api/mfg-template-packages', mfgTemplatePackageRoutes);
 app.use('/api/batch-workbench-v2', batchWorkbenchV2Routes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/constraints', constraintRoutes);

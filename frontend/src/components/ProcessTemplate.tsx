@@ -27,6 +27,7 @@ import {
 } from '@ant-design/icons';
 import axios from 'axios';
 import ProcessTemplateGantt from './ProcessTemplateGantt';
+import MfgTemplatePackagePanel from './MfgTemplatePackagePanel';
 import TemplateWorkbookImportModal from './TemplateWorkbookImportModal';
 import { exportSingleTemplateToExcel, SingleTemplateReportData } from '../utils/exportSingleTemplateExcel';
 import './ProcessTemplateWuXi.css';
@@ -392,6 +393,8 @@ const ProcessTemplate: React.FC = () => {
           ))}
         </div>
       </section>
+
+      <MfgTemplatePackagePanel templates={templates} />
 
       <section className="wxb-template-toolbar">
         <div className="wxb-template-tabs">

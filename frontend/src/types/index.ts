@@ -157,6 +157,94 @@ export interface ProcessTemplate {
   team_name?: string;
 }
 
+export type MfgPackageStatus = 'DRAFT' | 'ACTIVE' | 'RETIRED';
+
+export interface MfgTemplatePackageSummary {
+  id: number;
+  package_code: string;
+  package_name: string;
+  description?: string | null;
+  package_status: MfgPackageStatus;
+  module_count: number;
+  day_link_count: number;
+  total_days?: number | null;
+  min_day?: number | null;
+  max_day?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MfgTemplatePackageModule {
+  id?: number;
+  package_id?: number;
+  role_code: string;
+  role_name: string;
+  template_id: number;
+  template_code?: string;
+  template_name?: string;
+  template_total_days?: number | null;
+  start_offset_days?: number | null;
+  computed_start_offset_days?: number;
+  is_anchor: boolean;
+  sort_order: number;
+}
+
+export interface MfgTemplatePackageDayLink {
+  id?: number;
+  package_id?: number;
+  source_role_code: string;
+  target_role_code: string;
+  source_anchor_day: number;
+  target_anchor_day: number;
+  lag_days: number;
+  link_type?: 'MFG_DAY_ANCHOR';
+  is_active?: boolean;
+  description?: string | null;
+}
+
+export interface MfgTemplatePackageDetail extends Omit<MfgTemplatePackageSummary, 'module_count' | 'day_link_count' | 'total_days' | 'min_day' | 'max_day'> {
+  modules: MfgTemplatePackageModule[];
+  day_links: MfgTemplatePackageDayLink[];
+}
+
+export interface MfgTemplatePackagePreviewTask {
+  id: string;
+  package_id: number;
+  module_id: number;
+  role_code: string;
+  role_name: string;
+  template_id: number;
+  template_code: string;
+  template_name: string;
+  stage_id: number;
+  stage_name: string;
+  stage_order: number;
+  schedule_id: number;
+  operation_id: number;
+  operation_code: string;
+  operation_name: string;
+  start_hour: number;
+  end_hour: number;
+  window_start_hour: number;
+  window_end_hour: number;
+  start_day: number;
+  end_day: number;
+  required_people: number;
+  duration_hours: number;
+}
+
+export interface MfgTemplatePackagePreview {
+  package: MfgTemplatePackageDetail;
+  modules: MfgTemplatePackageModule[];
+  day_links: MfgTemplatePackageDayLink[];
+  tasks: MfgTemplatePackagePreviewTask[];
+  min_day: number;
+  max_day: number;
+  total_days: number;
+  warnings: string[];
+  conflicts: string[];
+}
+
 export interface ProcessStage {
   id?: number;
   template_id: number;
@@ -327,6 +415,9 @@ export interface BatchPlan {
   batch_code: string;
   batch_name: string;
   template_id: number;
+  mfg_package_id?: number | null;
+  mfg_package_code?: string | null;
+  mfg_package_name?: string | null;
   template_name?: string;
   team_code?: string;
   team_name?: string;

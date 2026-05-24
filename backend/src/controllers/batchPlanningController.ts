@@ -3,6 +3,7 @@ import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import BatchLifecycleService, { BatchLifecycleError } from '../services/batchLifecycleService';
 import { generateBatchOperationPlansWithResources } from '../services/batchOperationGenerationService';
+import { MfgTemplatePackageService } from '../services/mfgTemplatePackageService';
 
 // 只有 DRAFT 状态的批次可以通过 API 直接修改，ACTIVATED 需要通过生命周期接口
 const MUTABLE_BATCH_STATUSES = new Set(['DRAFT']);
@@ -37,6 +38,9 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
         pbp.batch_code,
         pbp.batch_name,
         pbp.template_id,
+        pbp.mfg_package_id,
+        pkg.package_code AS mfg_package_code,
+        pkg.package_name AS mfg_package_name,
         pt.template_name,
         ou.id as team_id,
         ou.unit_code as team_code,
@@ -58,6 +62,7 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
          WHERE bop.batch_plan_id = pbp.id AND bpa.assignment_status != 'CANCELLED') AS assigned_people_count
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
+      LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
       LEFT JOIN organization_units ou ON pt.team_id = ou.id
       WHERE 1=1
     `;
@@ -96,6 +101,9 @@ export const getBatchPlanById = async (req: Request, res: Response) => {
         pbp.batch_code,
         pbp.batch_name,
         pbp.template_id,
+        pbp.mfg_package_id,
+        pkg.package_code AS mfg_package_code,
+        pkg.package_name AS mfg_package_name,
         pt.template_name,
         pbp.project_code,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
@@ -108,6 +116,7 @@ export const getBatchPlanById = async (req: Request, res: Response) => {
         pbp.updated_at
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
+      LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
       WHERE pbp.id = ?
     `;
 
@@ -175,10 +184,13 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       `SELECT 
         pbp.*,
         pt.template_name,
+        pkg.package_code AS mfg_package_code,
+        pkg.package_name AS mfg_package_name,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
         DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
+      LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
       WHERE pbp.id = ?`,
       [batchPlanId]
     );
@@ -197,6 +209,53 @@ export const createBatchPlan = async (req: Request, res: Response) => {
     }
   } finally {
     connection.release();
+  }
+};
+
+export const createBatchPlanFromMfgPackage = async (req: Request, res: Response) => {
+  try {
+    const {
+      mfg_package_id,
+      batch_code,
+      batch_name,
+      planned_start_date,
+      project_code,
+      description,
+      notes,
+    } = req.body;
+
+    if (!mfg_package_id || !batch_code || !batch_name || !planned_start_date) {
+      return res.status(400).json({ error: '缺少总包批次生成参数' });
+    }
+
+    const batch = await MfgTemplatePackageService.createBatchFromPackage({
+      mfg_package_id: Number(mfg_package_id),
+      batch_code: String(batch_code).trim(),
+      batch_name: String(batch_name).trim(),
+      planned_start_date: String(planned_start_date),
+      project_code: project_code ?? null,
+      description: description ?? null,
+      notes: notes ?? null,
+    });
+
+    res.status(201).json(batch);
+  } catch (error: any) {
+    console.error('Error creating batch plan from MFG package:', error);
+
+    if (error?.message?.includes('MFG_PACKAGE_NOT_FOUND')) {
+      return res.status(404).json({ error: '总包不存在' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_DAY_LINK_CONFLICT')) {
+      return res.status(409).json({ error: '总包 Day 锚点存在冲突，不能生成批次' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_WITHOUT_OPERATIONS')) {
+      return res.status(400).json({ error: '总包没有可生成的工序' });
+    }
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: 'Batch code already exists' });
+    }
+
+    res.status(500).json({ error: 'Failed to create batch plan from MFG package' });
   }
 };
 
@@ -297,10 +356,13 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       `SELECT 
         pbp.*,
         pt.template_name,
+        pkg.package_code AS mfg_package_code,
+        pkg.package_name AS mfg_package_name,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
         DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
+      LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
       WHERE pbp.id = ?`,
       [id]
     );

@@ -159,13 +159,13 @@ const ProcessTemplateV3List: React.FC = () => {
   );
 
   // ---- Actions ----
-  const goEditor = useCallback((t: TemplateSummary) => navigate(`/process-templates-v3/${t.id}`), [navigate]);
+  const goEditor = useCallback((t: TemplateSummary) => navigate(`/process-templates/${t.id}`), [navigate]);
 
   const handleCopy = useCallback(async (t: TemplateSummary, e?: React.MouseEvent) => {
     e?.stopPropagation();
     try {
       const res = await processTemplateV2Api.copyTemplate(t.id);
-      navigate(`/process-templates-v3/${res.newTemplateId}`, { state: { flashMessage: '模版复制成功' } });
+      navigate(`/process-templates/${res.newTemplateId}`, { state: { flashMessage: '模版复制成功' } });
     } catch (err: any) {
       message.error(err?.response?.data?.error || '复制模版失败');
     }
@@ -184,7 +184,7 @@ const ProcessTemplateV3List: React.FC = () => {
       setCreateName('');
       setCreateTeamId(null);
       setCreateDesc('');
-      navigate(`/process-templates-v3/${created.id}`, { state: { flashMessage: '工艺模版已创建' } });
+      navigate(`/process-templates/${created.id}`, { state: { flashMessage: '工艺模版已创建' } });
     } catch (err: any) {
       message.error(err?.response?.data?.error || '创建工艺模版失败');
     } finally {
@@ -283,7 +283,7 @@ const ProcessTemplateV3List: React.FC = () => {
     <>
       <WxbPageShell size="full" minHeight="calc(100vh - 120px)">
         <WxbPageHeader
-          title="工艺模版 V3"
+          title="工艺模版"
           description="甘特图可视化编辑器"
           actions={<WxbButton onClick={() => setCreateOpen(true)}>+ 新建模板</WxbButton>}
         />

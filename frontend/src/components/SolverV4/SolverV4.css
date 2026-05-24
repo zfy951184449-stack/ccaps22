@@ -608,6 +608,37 @@
     background: var(--wx-bg);
 }
 
+.solver-v4-duty-task-table-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--wx-space-12);
+}
+
+.solver-v4-duty-empty-actions,
+.solver-v4-duty-collapse-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wx-space-8);
+    flex-wrap: wrap;
+}
+
+.solver-v4-duty-empty-actions {
+    justify-content: center;
+    margin-top: var(--wx-space-8);
+}
+
+.solver-v4-duty-recurring-collapse {
+    margin: 0 var(--wx-space-16) var(--wx-space-12);
+}
+
+.solver-v4-duty-recurring-collapse .wxb-collapse-content {
+    padding: 0;
+}
+
+.solver-v4-duty-recurring-collapse .wxb-collapse-item.is-open .wxb-collapse-body {
+    max-height: 420px;
+}
+
 .solver-v4-duty-empty-warning {
     display: flex;
     flex-direction: column;
@@ -653,6 +684,28 @@
     margin-top: var(--wx-space-16);
 }
 
+.solver-v4-duty-modal.ant-modal {
+    top: var(--wx-space-24);
+    padding-bottom: var(--wx-space-24);
+}
+
+.solver-v4-duty-modal .ant-modal-content {
+    max-height: calc(100vh - var(--wx-space-48));
+    display: flex;
+    flex-direction: column;
+}
+
+.solver-v4-duty-modal .ant-modal-header,
+.solver-v4-duty-modal .ant-modal-footer {
+    flex: 0 0 auto;
+}
+
+.solver-v4-duty-modal .ant-modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: var(--wx-space-4);
+}
+
 .solver-v4-duty-rule-panel {
     padding: var(--wx-space-12) var(--wx-space-16);
     margin-bottom: var(--wx-space-16);
@@ -675,8 +728,23 @@
     align-items: start;
 }
 
+.solver-v4-duty-form-row-wide {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.solver-v4-duty-form-row-ad-hoc {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
 .solver-v4-duty-form-row .ant-form-item {
     margin-bottom: var(--wx-space-16);
+}
+
+.solver-v4-duty-date-picker.ant-picker,
+.solver-v4-duty-time-picker.ant-picker,
+.solver-v4-duty-datetime-picker.ant-picker {
+    width: 100%;
+    min-width: 0;
 }
 
 .solver-v4-duty-select-sm .ant-select {
@@ -705,6 +773,13 @@
     gap: var(--wx-space-8);
 }
 
+.solver-v4-duty-monthday-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(52px, 1fr));
+    gap: var(--wx-space-8);
+    max-width: 100%;
+}
+
 .solver-v4-duty-confirm-body {
     padding-top: var(--wx-space-8);
     color: var(--wx-fg-2);
@@ -730,6 +805,10 @@
 @media (max-width: 640px) {
     .solver-v4-duty-form-row {
         grid-template-columns: 1fr;
+    }
+
+    .solver-v4-duty-monthday-grid {
+        grid-template-columns: repeat(4, minmax(52px, 1fr));
     }
 
     .solver-v4-duty-card-header {

@@ -1,0 +1,204 @@
+.mfg-package-panel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-surface-0);
+  box-shadow: var(--wx-shadow-sm);
+}
+
+.mfg-package-panel__header,
+.mfg-package-panel__preview-head,
+.mfg-package-modal__section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mfg-package-panel__header h3,
+.mfg-package-panel__preview-head h4,
+.mfg-package-modal__section-head h3 {
+  margin: 4px 0 0;
+  color: var(--wx-ink);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.mfg-package-panel__header p,
+.mfg-package-panel__preview-head p,
+.mfg-package-modal__section-head p {
+  margin: 6px 0 0;
+  color: var(--wx-fg-3);
+  font-size: 13px;
+}
+
+.mfg-package-panel__layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.42fr) minmax(0, 0.58fr);
+  gap: 16px;
+  min-height: 480px;
+}
+
+.mfg-package-panel__list,
+.mfg-package-panel__preview {
+  min-width: 0;
+}
+
+.mfg-package-panel__identity {
+  display: grid;
+  gap: 3px;
+}
+
+.mfg-package-panel__code {
+  color: var(--wx-fg-3);
+  font-family: var(--wx-font-mono, monospace);
+  font-size: 11px;
+}
+
+.mfg-package-panel__name {
+  color: var(--wx-ink);
+  font-weight: 600;
+}
+
+.mfg-package-panel__row-selected > td {
+  background: var(--wx-blue-50) !important;
+}
+
+.mfg-package-panel__preview {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-surface-1);
+}
+
+.mfg-package-panel__preview-state {
+  display: grid;
+  min-height: 360px;
+  place-items: center;
+}
+
+.mfg-package-panel__tags,
+.mfg-package-panel__link-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.mfg-package-panel__link-strip {
+  justify-content: flex-start;
+}
+
+.mfg-package-panel__link-strip span {
+  padding: 5px 8px;
+  border: 1px solid var(--wx-border);
+  border-radius: 6px;
+  background: var(--wx-surface-0);
+  color: var(--wx-fg-2);
+  font-size: 12px;
+}
+
+.mfg-package-panel__conflict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--wx-red-500);
+  border-radius: 6px;
+  background: var(--wx-red-100);
+  color: var(--wx-red-700);
+  font-size: 13px;
+}
+
+.mfg-package-panel__gantt {
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-surface-0);
+}
+
+.mfg-package-modal {
+  display: grid;
+  gap: 18px;
+}
+
+.mfg-package-modal__grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 1fr) minmax(140px, 0.7fr);
+  gap: 12px;
+}
+
+.mfg-package-modal__rows {
+  display: grid;
+  gap: 10px;
+}
+
+.mfg-package-modal__module-row,
+.mfg-package-modal__link-row {
+  display: grid;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-surface-1);
+}
+
+.mfg-package-modal__module-row {
+  grid-template-columns: minmax(120px, 0.7fr) minmax(130px, 0.8fr) minmax(220px, 1.5fr) minmax(120px, 0.7fr) minmax(150px, 0.8fr);
+}
+
+.mfg-package-modal__link-row {
+  grid-template-columns: minmax(140px, 1fr) minmax(96px, 0.6fr) minmax(140px, 1fr) minmax(96px, 0.6fr) minmax(96px, 0.6fr) auto;
+}
+
+.mfg-package-modal__anchor-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 40px;
+}
+
+@media (max-width: 1280px) {
+  .mfg-package-panel__layout {
+    grid-template-columns: 1fr;
+  }
+
+  .mfg-package-modal__grid,
+  .mfg-package-modal__module-row,
+  .mfg-package-modal__link-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .mfg-package-panel,
+  .mfg-package-panel__preview {
+    padding: 12px;
+  }
+
+  .mfg-package-panel__header,
+  .mfg-package-panel__preview-head,
+  .mfg-package-modal__section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mfg-package-panel__tags {
+    justify-content: flex-start;
+  }
+
+  .mfg-package-modal__grid,
+  .mfg-package-modal__module-row,
+  .mfg-package-modal__link-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -68,7 +68,7 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
         <WxbButton
           variant="ghost"
           size="sm"
-          onClick={() => navigate('/process-templates-v3')}
+          onClick={() => navigate('/process-templates')}
           style={{ flexShrink: 0 }}
         >
           ← 返回

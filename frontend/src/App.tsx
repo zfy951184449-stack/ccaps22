@@ -1,7 +1,7 @@
 import React from 'react';
 import { Layout, ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
 import TopNavigation from './components/Navigation/TopNavigation';
@@ -11,8 +11,6 @@ import QualificationsPage from './pages/QualificationsPage';
 import QualificationMatrixPage from './pages/QualificationMatrixPage';
 import OperationsPage from './pages/OperationsPage';
 import OperationTypesPage from './pages/OperationTypesPage';
-import ProcessTemplatesPage from './pages/ProcessTemplatesPage';
-import ProcessTemplatesV2Page from './pages/ProcessTemplatesV2Page';
 import BatchManagementV4Page from './pages/BatchManagementV4Page';
 import BatchManagementWorkbenchV2Page from './pages/BatchManagementWorkbenchV2Page';
 import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
@@ -25,6 +23,19 @@ import RosterLeadershipCockpitPage from './pages/roster/RosterLeadershipCockpitP
 import RosterExceptionRepairPage from './pages/roster/RosterExceptionRepairPage';
 
 const { Content } = Layout;
+
+const ProcessTemplateLegacyRedirect: React.FC = () => {
+  const location = useLocation();
+  const { templateId } = useParams<{ templateId?: string }>();
+  const target = templateId ? `/process-templates/${templateId}` : '/process-templates';
+
+  return (
+    <Navigate
+      to={`${target}${location.search}`}
+      replace
+    />
+  );
+};
 
 const mvpRedirects: Record<string, string> = {
   '/batch-management': '/batch-management-v4',
@@ -83,9 +94,10 @@ const AppLayout: React.FC = () => (
           <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
           <Route path="/operations" element={<OperationsPage />} />
           <Route path="/operation-types" element={<OperationTypesPage />} />
-          <Route path="/process-templates" element={<ProcessTemplatesPage />} />
-          <Route path="/process-templates-v2" element={<ProcessTemplatesV2Page />} />
-          <Route path="/process-templates-v2/:templateId" element={<ProcessTemplatesV2Page />} />
+          <Route path="/process-templates" element={<ProcessTemplatesV3Page />} />
+          <Route path="/process-templates/:templateId" element={<ProcessTemplatesV3Page />} />
+          <Route path="/process-templates-v2" element={<ProcessTemplateLegacyRedirect />} />
+          <Route path="/process-templates-v2/:templateId" element={<ProcessTemplateLegacyRedirect />} />
           <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
           <Route path="/batch-management-workbench-v2" element={<BatchManagementWorkbenchV2Page />} />
           <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
@@ -93,8 +105,8 @@ const AppLayout: React.FC = () => (
           <Route path="/roster/exceptions" element={<RosterExceptionRepairPage />} />
           <Route path="/solver-v4" element={<SolverV4Page />} />
           <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
-          <Route path="/process-templates-v3" element={<ProcessTemplatesV3Page />} />
-          <Route path="/process-templates-v3/:templateId" element={<ProcessTemplatesV3Page />} />
+          <Route path="/process-templates-v3" element={<ProcessTemplateLegacyRedirect />} />
+          <Route path="/process-templates-v3/:templateId" element={<ProcessTemplateLegacyRedirect />} />
           <Route path="/equipment-management" element={<EquipmentManagementPage />} />
           <Route path="/ui-kit" element={<UiKitShowcasePage />} />
           {Object.entries(mvpRedirects).map(([path, target]) => (
