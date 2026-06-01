@@ -1,7 +1,8 @@
 import React from 'react';
-import { Table, Button, Badge, Space, Popconfirm } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import type { WxbDataTableProps } from '../wxb-ui';
+import { WxbBadge, WxbButton, WxbDataTable, WxbPopconfirm } from '../wxb-ui';
 import { Employee } from '../../types/organizationWorkbench';
+import { DeleteIcon, EditIcon } from './OrgWorkbenchIcons';
 
 interface EmployeeTableProps {
     data: Employee[];
@@ -19,30 +20,30 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({
 
     const getStatusBadge = (status: string) => {
         const s = status.toUpperCase();
-        if (s === 'ACTIVE') return <Badge status="success" text="Active" />;
-        if (s === 'VACATION' || s === 'ON LEAVE') return <Badge status="warning" text="On Leave" />;
-        if (s === 'RESIGNED') return <Badge status="error" text="Resigned" />;
-        return <Badge status="default" text={status} />;
+        if (s === 'ACTIVE') return <WxbBadge status="success" variant="bar" label="Active" />;
+        if (s === 'VACATION' || s === 'ON LEAVE') return <WxbBadge status="warning" variant="bar" label="On Leave" />;
+        if (s === 'RESIGNED') return <WxbBadge status="error" variant="bar" label="Resigned" />;
+        return <WxbBadge status="neutral" variant="bar" label={status} />;
     };
 
-    const columns = [
+    const columns: WxbDataTableProps<Employee>['columns'] = [
         {
             title: 'Name',
             dataIndex: 'employee_name',
             key: 'employee_name',
-            render: (text: string) => <span className="font-semibold text-gray-900">{text}</span>
+            render: (text: string) => <span className="orgwb-table-name">{text}</span>
         },
         {
             title: 'ID',
             dataIndex: 'employee_code',
             key: 'employee_code',
-            render: (text: string) => <span className="font-mono text-gray-500">{text}</span>
+            render: (text: string) => <span className="orgwb-table-code">{text}</span>
         },
         {
             title: 'Position',
             key: 'position',
             render: (_: any, record: Employee) => (
-                <span className="text-gray-700">
+                <span className="orgwb-table-position">
                     {record.primary_role_name || record.org_role || 'N/A'}
                 </span>
             )
@@ -58,41 +59,50 @@ const EmployeeTable: React.FC<EmployeeTableProps> = ({
             key: 'actions',
             width: 100,
             render: (_: any, record: Employee) => (
-                <Space>
-                    <Button
-                        type="text"
-                        size="small"
-                        icon={<EditOutlined />}
+                <div className="orgwb-table-actions">
+                    <WxbButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="orgwb-icon-button"
+                        aria-label={`Edit ${record.employee_name}`}
                         onClick={() => onEdit(record)}
-                    />
-                    <Popconfirm
+                    >
+                        <EditIcon />
+                    </WxbButton>
+                    <WxbPopconfirm
                         title="Remove employee?"
                         description="Are you sure you want to remove this employee?"
                         onConfirm={() => onDelete(record.id)}
                         okText="Yes"
                         cancelText="No"
                     >
-                        <Button
-                            type="text"
-                            size="small"
-                            danger
-                            icon={<DeleteOutlined />}
-                        />
-                    </Popconfirm>
-                </Space>
+                        <WxbButton
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            className="orgwb-icon-button"
+                            aria-label={`Delete ${record.employee_name}`}
+                        >
+                            <DeleteIcon />
+                        </WxbButton>
+                    </WxbPopconfirm>
+                </div>
             )
         }
     ];
 
     return (
-        <Table
+        <WxbDataTable<Employee>
             rowKey="id"
             columns={columns}
             dataSource={data}
             loading={loading}
             pagination={{ pageSize: 20, hideOnSinglePage: true }}
             size="middle"
-            className="border rounded-md bg-white border-gray-200 overflow-hidden"
+            className="orgwb-employee-table"
+            density="standard"
+            emptyState={{ description: 'No employees in this organization unit' }}
         />
     );
 };

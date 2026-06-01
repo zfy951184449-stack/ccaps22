@@ -9,21 +9,25 @@ import {
     WxbInput,
     WxbInputNumber,
     WxbModal,
+    WxbSegmented,
     WxbSelect,
     wxbToast,
 } from '../wxb-ui';
 import { batchPlanApi } from '../../services/api';
-import type { BatchTemplateSummary } from '../../types';
+import type { BatchTemplateSummary, MfgTemplatePackageSummary } from '../../types';
 
 interface BulkCreateModalV4Props {
     visible: boolean;
     onCancel: () => void;
     onSuccess: () => void;
     templates?: BatchTemplateSummary[];
+    mfgPackages?: MfgTemplatePackageSummary[];
 }
 
 interface BulkCreateValues {
+    source_kind: 'template' | 'package';
     template_id?: number;
+    mfg_package_id?: number;
     start_date?: Dayjs;
     batch_count: number;
     interval_days: number;
@@ -37,7 +41,9 @@ type BulkCreateErrors = Partial<Record<keyof BulkCreateValues, string>>;
 const PREVIEW_LIMIT = 50;
 
 const defaultBulkValues = (): BulkCreateValues => ({
+    source_kind: 'template',
     template_id: undefined,
+    mfg_package_id: undefined,
     start_date: undefined,
     batch_count: 4,
     interval_days: 7,
@@ -80,11 +86,18 @@ const buildPreview = (values: BulkCreateValues) => {
     return list;
 };
 
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+    const responseData = (error as { response?: { data?: { error?: unknown; message?: unknown } } })?.response?.data;
+    const message = responseData?.error ?? responseData?.message;
+    return typeof message === 'string' && message.trim() ? message : fallback;
+};
+
 const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
     visible,
     onCancel,
     onSuccess,
     templates: templateOptions,
+    mfgPackages = [],
 }) => {
     const [loading, setLoading] = useState(false);
     const [templates, setTemplates] = useState<BatchTemplateSummary[]>(templateOptions ?? []);
@@ -118,6 +131,14 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
 
     const previewList = useMemo(() => buildPreview(values), [values]);
     const lastDay0Date = useMemo(() => getLastDay0Date(values), [values]);
+    const selectedPackage = useMemo(
+        () => mfgPackages.find((item) => item.id === values.mfg_package_id) ?? null,
+        [mfgPackages, values.mfg_package_id],
+    );
+    const packageModuleCount = Math.max(selectedPackage?.module_count ?? 1, 1);
+    const generatedBatchCount = values.source_kind === 'package'
+        ? values.batch_count * packageModuleCount
+        : values.batch_count;
 
     const updateValue = useCallback(<K extends keyof BulkCreateValues>(
         key: K,
@@ -130,11 +151,14 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
     const validate = useCallback(() => {
         const nextErrors: BulkCreateErrors = {};
 
-        if (!values.template_id) {
+        if (values.source_kind === 'template' && !values.template_id) {
             nextErrors.template_id = '请选择模板';
         }
+        if (values.source_kind === 'package' && !values.mfg_package_id) {
+            nextErrors.mfg_package_id = '请选择总包';
+        }
         if (!values.start_date) {
-            nextErrors.start_date = '请选择 Day0 开始日期';
+            nextErrors.start_date = values.source_kind === 'package' ? '请选择总包基准开始日期' : '请选择 Day0 开始日期';
         }
         if (!values.batch_count || values.batch_count < 1) {
             nextErrors.batch_count = '批次数量必须大于 0';
@@ -155,27 +179,38 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
 
     const handleSubmit = useCallback(async () => {
         const day0EndDate = getLastDay0Date(values);
-        if (!validate() || !values.template_id || !values.start_date || !day0EndDate) {
+        if (!validate() || !values.start_date || !day0EndDate) {
             return;
         }
 
         setLoading(true);
         try {
-            const payload = {
-                template_id: values.template_id,
-                day0_start_date: values.start_date.format('YYYY-MM-DD'),
-                day0_end_date: day0EndDate.format('YYYY-MM-DD'),
+            const commonPayload = {
                 interval_days: values.interval_days,
                 batch_prefix: values.batch_prefix.trim(),
                 start_number: values.start_number,
+                batch_number_length: values.batch_number_length,
             };
 
-            const result = await batchPlanApi.createBulk(payload);
+            const result = values.source_kind === 'package'
+                ? await batchPlanApi.createBulkFromPackage({
+                    ...commonPayload,
+                    mfg_package_id: Number(values.mfg_package_id),
+                    base_start_date: values.start_date.format('YYYY-MM-DD'),
+                    base_end_date: day0EndDate.format('YYYY-MM-DD'),
+                })
+                : await batchPlanApi.createBulk({
+                    ...commonPayload,
+                    template_id: Number(values.template_id),
+                    day0_start_date: values.start_date.format('YYYY-MM-DD'),
+                    day0_end_date: day0EndDate.format('YYYY-MM-DD'),
+                });
+
             wxbToast.success(result.message || '批量创建成功');
             onSuccess();
         } catch (error) {
             console.error('Failed to bulk create batches', error);
-            wxbToast.error('批量创建失败');
+            wxbToast.error(getApiErrorMessage(error, '批量创建失败'));
         } finally {
             setLoading(false);
         }
@@ -194,25 +229,52 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
                 <div className="batch-modal-v4__bulk-config">
                     <div className="batch-modal-v4__body">
                         <p className="batch-modal-v4__intro">
-                            设定模板、Day0 开始日期、批次数量和命名规则，系统会按间隔自动推算结束日期。
+                            设定工艺模板或 MFG 总包、起始日期、批次数量和命名规则；总包会按模板模块拆成各部门独立批次。
                         </p>
 
                         <div className="batch-modal-v4__section">
                             <h3 className="batch-modal-v4__section-title">生产规则</h3>
-                            <WxbSelect
-                                label="工艺模板"
-                                placeholder="选择标准生产流程"
-                                value={values.template_id}
-                                error={errors.template_id}
-                                options={templates.map((template) => ({
-                                    label: template.template_name,
-                                    value: template.id,
-                                }))}
-                                onChange={(value) => updateValue('template_id', value as number)}
+                            <WxbSegmented
+                                size="md"
+                                value={values.source_kind}
+                                onChange={(value) => {
+                                    const sourceKind = value as BulkCreateValues['source_kind'];
+                                    updateValue('source_kind', sourceKind);
+                                    updateValue(sourceKind === 'template' ? 'mfg_package_id' : 'template_id', undefined);
+                                }}
+                                options={[
+                                    { label: '工艺模板', value: 'template', icon: <WxbIcon name="recipe" size={14} /> },
+                                    { label: 'MFG 总包', value: 'package', icon: <WxbIcon name="batch-record" size={14} /> },
+                                ]}
                             />
+                            {values.source_kind === 'template' ? (
+                                <WxbSelect
+                                    label="工艺模板"
+                                    placeholder="选择标准生产流程"
+                                    value={values.template_id}
+                                    error={errors.template_id}
+                                    options={templates.map((template) => ({
+                                        label: template.template_name,
+                                        value: template.id,
+                                    }))}
+                                    onChange={(value) => updateValue('template_id', value as number)}
+                                />
+                            ) : (
+                                <WxbSelect
+                                    label="MFG 总包"
+                                    placeholder="选择已设计的生产联动总包"
+                                    value={values.mfg_package_id}
+                                    error={errors.mfg_package_id}
+                                    options={mfgPackages.map((item) => ({
+                                        label: `${item.package_code} · ${item.package_name}`,
+                                        value: item.id,
+                                    }))}
+                                    onChange={(value) => updateValue('mfg_package_id', value as number)}
+                                />
+                            )}
                             <div className="batch-modal-v4__grid">
                                 <WxbDatePicker
-                                    label="Day0 开始日期"
+                                    label={values.source_kind === 'package' ? '总包基准日期开始' : 'Day0 开始日期'}
                                     value={values.start_date as any}
                                     error={errors.start_date}
                                     onChange={(date) => updateValue('start_date', (date as Dayjs | null) || undefined)}
@@ -239,7 +301,9 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
                             />
                             {lastDay0Date && previewList.length > 0 && (
                                 <p className="batch-modal-v4__rule-note">
-                                    将生成 {values.batch_count} 个批次，最后一个 Day0 为 {lastDay0Date.format('YYYY-MM-DD')}。
+                                    {values.source_kind === 'package'
+                                        ? `将生成 ${values.batch_count} 组总包基准批次，每组拆成 ${packageModuleCount} 个部门批次，共 ${generatedBatchCount} 个批次，最后一个总包基准日期为 ${lastDay0Date.format('YYYY-MM-DD')}。`
+                                        : `将生成 ${values.batch_count} 个批次，最后一个 Day0 为 ${lastDay0Date.format('YYYY-MM-DD')}。`}
                                 </p>
                             )}
                         </div>
@@ -282,7 +346,7 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
                             status="success"
                             variant="outline"
                             code="COUNT"
-                            label={previewList.length > 0 ? `${values.batch_count}` : '0'}
+                            label={previewList.length > 0 ? `${generatedBatchCount}` : '0'}
                         />
                     </div>
 
@@ -302,7 +366,9 @@ const BulkCreateModalV4: React.FC<BulkCreateModalV4Props> = ({
                                     </div>
                                 ))}
                                 {values.batch_count > PREVIEW_LIMIT && (
-                                    <div className="batch-modal-v4__preview-note">仅显示前 50 个批次</div>
+                                    <div className="batch-modal-v4__preview-note">
+                                        仅显示前 50 个{values.source_kind === 'package' ? '总包基准批次' : '批次'}
+                                    </div>
                                 )}
                             </>
                         ) : (

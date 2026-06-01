@@ -2,8 +2,7 @@ import { ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 import dayjs from 'dayjs';
 import pool from '../config/database';
 import { SqlExecutor } from './operationResourceBindingService';
-import { isBatchResourceSnapshotsEnabled } from '../utils/featureFlags';
-import { snapshotBatchPlanResourceRules } from './batchResourceSnapshotService';
+import { generateBatchOperationPlansWithResources } from './batchOperationGenerationService';
 
 export type MfgPackageStatus = 'DRAFT' | 'ACTIVE' | 'RETIRED';
 
@@ -58,6 +57,8 @@ export interface MfgPackageModule {
   template_id: number;
   template_code: string;
   template_name: string;
+  team_code: string | null;
+  team_name: string | null;
   template_total_days: number | null;
   start_offset_days: number | null;
   computed_start_offset_days?: number;
@@ -131,6 +132,24 @@ export interface CreateBatchFromPackagePayload {
   notes?: string | null;
 }
 
+export interface CreateBatchFromPackageResult {
+  message: string;
+  batches: RowDataPacket[];
+}
+
+export interface CreateBulkBatchesFromPackagePayload {
+  mfg_package_id: number;
+  base_start_date: string;
+  base_end_date: string;
+  interval_days: number;
+  batch_prefix: string;
+  start_number: number;
+  batch_number_length?: number;
+  project_code?: string | null;
+  description?: string | null;
+  notes?: string | null;
+}
+
 const ROLE_NAME_FALLBACK: Record<string, string> = {
   USP: '上游',
   DSP: '下游',
@@ -154,8 +173,16 @@ const toNumber = (value: unknown, fallback = 0): number => {
   return Number.isFinite(numeric) ? numeric : fallback;
 };
 const formatDate = (value: dayjs.Dayjs): string => value.format('YYYY-MM-DD');
-const formatDateTime = (baseDate: string, hourOffset: number): string => (
-  dayjs(`${baseDate}T00:00:00`).add(hourOffset, 'hour').format('YYYY-MM-DD HH:mm:ss')
+const normalizeBatchCodePart = (value: unknown): string => String(value ?? '')
+  .trim()
+  .toUpperCase()
+  .replace(/[^A-Z0-9]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+const shortenBatchPrefix = (value: unknown, maxLength = 20): string => (
+  normalizeBatchCodePart(value).slice(0, maxLength).replace(/-+$/g, '')
+);
+const truncateText = (value: string, maxLength: number): string => (
+  value.length > maxLength ? value.slice(0, maxLength) : value
 );
 
 const generatePackageCode = async (executor: SqlExecutor): Promise<string> => {
@@ -196,6 +223,8 @@ const mapPackageModule = (row: RowDataPacket): MfgPackageModule => ({
   template_id: Number(row.template_id),
   template_code: String(row.template_code),
   template_name: String(row.template_name),
+  team_code: row.team_code === null || row.team_code === undefined ? null : String(row.team_code),
+  team_name: row.team_name === null || row.team_name === undefined ? null : String(row.team_name),
   template_total_days: row.template_total_days === null || row.template_total_days === undefined
     ? null
     : Number(row.template_total_days),
@@ -384,9 +413,12 @@ export class MfgTemplatePackageService {
          module.*,
          pt.template_code,
          pt.template_name,
-         pt.total_days AS template_total_days
+         pt.total_days AS template_total_days,
+         ou.unit_code AS team_code,
+         ou.unit_name AS team_name
        FROM mfg_template_package_modules module
        JOIN process_templates pt ON pt.id = module.template_id
+       LEFT JOIN organization_units ou ON ou.id = pt.team_id
        WHERE module.package_id = ?
        ORDER BY module.sort_order, module.id`,
       [packageId],
@@ -632,7 +664,7 @@ export class MfgTemplatePackageService {
     };
   }
 
-  static async createBatchFromPackage(payload: CreateBatchFromPackagePayload): Promise<RowDataPacket> {
+  static async createBatchFromPackage(payload: CreateBatchFromPackagePayload): Promise<CreateBatchFromPackageResult> {
     const connection = await pool.getConnection();
 
     try {
@@ -640,125 +672,214 @@ export class MfgTemplatePackageService {
 
       const preview = await this.buildPreview(payload.mfg_package_id, connection);
       if (preview.conflicts.length > 0) {
-        await connection.rollback();
         throw new Error(`MFG_PACKAGE_DAY_LINK_CONFLICT:${preview.conflicts.join(',')}`);
       }
       if (preview.tasks.length === 0) {
-        await connection.rollback();
         throw new Error('MFG_PACKAGE_WITHOUT_OPERATIONS');
       }
 
-      const primaryModule = preview.modules.find((module) => module.is_anchor) ?? preview.modules[0];
-      const baseDate = payload.planned_start_date;
-      const plannedStartDate = formatDate(dayjs(baseDate).add(preview.min_day, 'day'));
-      const plannedEndDate = formatDate(dayjs(baseDate).add(preview.max_day, 'day'));
-      const snapshot = JSON.stringify({
-        package_id: preview.package.id,
-        package_code: preview.package.package_code,
-        package_name: preview.package.package_name,
-        base_date: baseDate,
-        min_day: preview.min_day,
-        max_day: preview.max_day,
-        modules: preview.modules.map((module) => ({
-          role_code: module.role_code,
-          role_name: module.role_name,
-          template_id: module.template_id,
-          template_code: module.template_code,
-          computed_start_offset_days: module.computed_start_offset_days,
-          is_anchor: module.is_anchor,
-        })),
-        day_links: preview.day_links,
-      });
-
-      const [insertResult] = await connection.execute<ResultSetHeader>(
-        `INSERT INTO production_batch_plans (
-           batch_code, batch_name, template_id, mfg_package_id, mfg_package_snapshot_json,
-           project_code, planned_start_date, plan_status, description, notes
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, ?)`,
-        [
-          payload.batch_code,
-          payload.batch_name,
-          primaryModule.template_id,
-          preview.package.id,
-          snapshot,
-          payload.project_code ?? null,
-          plannedStartDate,
-          payload.description ?? null,
-          payload.notes ?? null,
-        ],
-      );
-
-      const batchPlanId = insertResult.insertId;
-      const scheduleToPlanId = new Map<number, number>();
-
-      for (const task of preview.tasks) {
-        const [opResult] = await connection.execute<ResultSetHeader>(
-          `INSERT INTO batch_operation_plans (
-             batch_plan_id,
-             template_schedule_id,
-             operation_id,
-             planned_start_datetime,
-             planned_end_datetime,
-             planned_duration,
-             window_start_datetime,
-             window_end_datetime,
-             required_people,
-             notes
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            batchPlanId,
-            task.schedule_id,
-            task.operation_id,
-            formatDateTime(baseDate, task.start_hour),
-            formatDateTime(baseDate, task.end_hour),
-            task.duration_hours,
-            formatDateTime(baseDate, task.window_start_hour),
-            formatDateTime(baseDate, task.window_end_hour),
-            task.required_people,
-            `MFG package ${preview.package.package_code} / ${task.role_code}`,
-          ],
-        );
-        scheduleToPlanId.set(task.schedule_id, opResult.insertId);
-      }
-
-      await this.copyTemplateConstraintsToBatch(connection, batchPlanId, Array.from(scheduleToPlanId.keys()), scheduleToPlanId);
-
-      await connection.execute(
-        `UPDATE production_batch_plans
-         SET planned_start_date = ?,
-             planned_end_date = ?,
-             template_duration_days = ?
-         WHERE id = ?`,
-        [plannedStartDate, plannedEndDate, preview.total_days, batchPlanId],
-      );
-
-      if (isBatchResourceSnapshotsEnabled()) {
-        await snapshotBatchPlanResourceRules(connection, batchPlanId);
-      }
-
+      const batches = await this.insertDepartmentBatchesFromPackagePreview(connection, preview, payload);
       await connection.commit();
-
-      const [rows] = await pool.execute<RowDataPacket[]>(
-        `SELECT
-           pbp.*,
-           pt.template_name,
-           pkg.package_name AS mfg_package_name,
-           DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') AS planned_start_date,
-           DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') AS planned_end_date
-         FROM production_batch_plans pbp
-         LEFT JOIN process_templates pt ON pt.id = pbp.template_id
-         LEFT JOIN mfg_template_packages pkg ON pkg.id = pbp.mfg_package_id
-         WHERE pbp.id = ?`,
-        [batchPlanId],
-      );
-
-      return rows[0];
+      return {
+        message: `成功创建 ${batches.length} 个部门批次`,
+        batches,
+      };
     } catch (error) {
       await connection.rollback();
       throw error;
     } finally {
       connection.release();
     }
+  }
+
+  static async createBulkBatchesFromPackage(payload: CreateBulkBatchesFromPackagePayload): Promise<CreateBatchFromPackageResult> {
+    const intervalDays = Number(payload.interval_days);
+    const startNumber = Number(payload.start_number);
+    const numberLength = Math.max(Number(payload.batch_number_length ?? 0) || 0, 0);
+    const startDate = dayjs(payload.base_start_date);
+    const endDate = dayjs(payload.base_end_date);
+
+    if (!startDate.isValid() || !endDate.isValid() || intervalDays < 1 || startNumber < 1 || !payload.batch_prefix.trim()) {
+      throw new Error('MFG_PACKAGE_BULK_INVALID_PARAMS');
+    }
+
+    const baseDates: string[] = [];
+    let current = startDate;
+    while (current.isBefore(endDate) || current.isSame(endDate, 'day')) {
+      baseDates.push(formatDate(current));
+      current = current.add(intervalDays, 'day');
+      if (baseDates.length > 500) {
+        throw new Error('MFG_PACKAGE_BULK_TOO_LARGE');
+      }
+    }
+
+    if (baseDates.length === 0) {
+      throw new Error('MFG_PACKAGE_BULK_EMPTY_RANGE');
+    }
+
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const preview = await this.buildPreview(payload.mfg_package_id, connection);
+      if (preview.conflicts.length > 0) {
+        throw new Error(`MFG_PACKAGE_DAY_LINK_CONFLICT:${preview.conflicts.join(',')}`);
+      }
+      if (preview.tasks.length === 0) {
+        throw new Error('MFG_PACKAGE_WITHOUT_OPERATIONS');
+      }
+
+      const batches: RowDataPacket[] = [];
+      for (let index = 0; index < baseDates.length; index += 1) {
+        const numberText = String(startNumber + index).padStart(numberLength, '0');
+        const batchCode = `${payload.batch_prefix.trim()}${numberText}`;
+        const rows = await this.insertDepartmentBatchesFromPackagePreview(connection, preview, {
+          mfg_package_id: payload.mfg_package_id,
+          batch_code: batchCode,
+          batch_name: batchCode,
+          planned_start_date: baseDates[index],
+          project_code: payload.project_code ?? null,
+          description: payload.description ?? null,
+          notes: payload.notes ?? null,
+        });
+        batches.push(...rows);
+      }
+
+      await connection.commit();
+      return {
+        message: `成功创建 ${batches.length} 个部门批次（来自 ${baseDates.length} 个总包基准批次）`,
+        batches,
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  private static buildModuleBatchPrefixes(modules: MfgPackageModule[]): Map<number, string> {
+    const basePrefixes = modules.map((module) => (
+      shortenBatchPrefix(module.team_code)
+      || shortenBatchPrefix(module.role_code)
+      || shortenBatchPrefix(module.template_code)
+      || `T${module.template_id}`
+    ));
+    const counts = new Map<string, number>();
+    basePrefixes.forEach((prefix) => counts.set(prefix, (counts.get(prefix) ?? 0) + 1));
+
+    const used = new Set<string>();
+    const prefixes = new Map<number, string>();
+    modules.forEach((module, index) => {
+      const basePrefix = basePrefixes[index];
+      const needsSuffix = (counts.get(basePrefix) ?? 0) > 1;
+      const suffix = shortenBatchPrefix(module.role_code)
+        || shortenBatchPrefix(module.template_code)
+        || `M${index + 1}`;
+      let prefix = needsSuffix && suffix !== basePrefix
+        ? shortenBatchPrefix(`${basePrefix}-${suffix}`)
+        : basePrefix;
+      let attempt = 2;
+      while (used.has(prefix)) {
+        const serial = String(attempt);
+        const prefixBase = basePrefix.slice(0, Math.max(1, 20 - serial.length - 1)).replace(/-+$/g, '');
+        prefix = `${prefixBase}-${serial}`;
+        attempt += 1;
+      }
+      used.add(prefix);
+      prefixes.set(module.id, prefix);
+    });
+
+    return prefixes;
+  }
+
+  private static async getTemplateMinDays(
+    executor: SqlExecutor,
+    templateIds: number[],
+  ): Promise<Map<number, number>> {
+    if (!templateIds.length) return new Map();
+    const placeholders = templateIds.map(() => '?').join(', ');
+    const [rows] = await executor.execute<RowDataPacket[]>(
+      `SELECT
+         pt.id AS template_id,
+         COALESCE(MIN(ps.start_day + sos.operation_day), 0) AS min_day
+       FROM process_templates pt
+       LEFT JOIN process_stages ps ON ps.template_id = pt.id
+       LEFT JOIN stage_operation_schedules sos ON sos.stage_id = ps.id
+       WHERE pt.id IN (${placeholders})
+       GROUP BY pt.id`,
+      templateIds,
+    );
+
+    return new Map(rows.map((row) => [Number(row.template_id), Number(row.min_day ?? 0)]));
+  }
+
+  private static async insertDepartmentBatchesFromPackagePreview(
+    executor: SqlExecutor,
+    preview: MfgPackagePreview,
+    payload: CreateBatchFromPackagePayload,
+  ): Promise<RowDataPacket[]> {
+    const baseDate = payload.planned_start_date;
+    const baseBatchCode = payload.batch_code.trim();
+    const baseBatchName = payload.batch_name.trim() || baseBatchCode;
+    const prefixes = this.buildModuleBatchPrefixes(preview.modules);
+    const templateMinDays = await this.getTemplateMinDays(
+      executor,
+      Array.from(new Set(preview.modules.map((module) => module.template_id))),
+    );
+    const batches: RowDataPacket[] = [];
+
+    for (const module of preview.modules) {
+      const prefix = prefixes.get(module.id) || shortenBatchPrefix(module.role_code) || `T${module.template_id}`;
+      const moduleDay0Date = formatDate(dayjs(baseDate).add(module.computed_start_offset_days ?? 0, 'day'));
+      const templateMinDay = templateMinDays.get(module.template_id) ?? 0;
+      const plannedStartDate = formatDate(dayjs(moduleDay0Date).add(templateMinDay, 'day'));
+      const batchCode = `${prefix}-${baseBatchCode}`;
+      if (batchCode.length > 50) {
+        throw new Error(`MFG_PACKAGE_BATCH_CODE_TOO_LONG:${batchCode}`);
+      }
+      const batchName = truncateText(`${prefix} ${baseBatchName} - ${module.template_name}`, 100);
+      const traceNote = `MFG package ${preview.package.package_code}; module ${module.role_code}; package base ${baseDate}; module Day0 ${moduleDay0Date}`;
+      const notes = [payload.notes, traceNote].filter(Boolean).join('\n');
+
+      const [insertResult] = await executor.execute<ResultSetHeader>(
+        `INSERT INTO production_batch_plans (
+           batch_code, batch_name, template_id, project_code,
+           planned_start_date, plan_status, description, notes
+         ) VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, ?)`,
+        [
+          batchCode,
+          batchName,
+          module.template_id,
+          payload.project_code ?? null,
+          plannedStartDate,
+          payload.description ?? null,
+          notes || null,
+        ],
+      );
+
+      const batchPlanId = insertResult.insertId;
+      await generateBatchOperationPlansWithResources(executor, batchPlanId);
+
+      const [rows] = await executor.execute<RowDataPacket[]>(
+        `SELECT
+           pbp.*,
+           pt.template_name,
+           ou.unit_code AS team_code,
+           ou.unit_name AS team_name,
+           DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') AS planned_start_date,
+           DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') AS planned_end_date
+         FROM production_batch_plans pbp
+         LEFT JOIN process_templates pt ON pt.id = pbp.template_id
+         LEFT JOIN organization_units ou ON ou.id = pt.team_id
+         WHERE pbp.id = ?`,
+        [batchPlanId],
+      );
+      batches.push(rows[0]);
+    }
+
+    return batches;
   }
 
   private static async replacePackageChildren(
@@ -802,72 +923,6 @@ export class MfgTemplatePackageService {
           link.lag_days ?? 0,
           link.is_active === false ? 0 : 1,
           link.description ?? null,
-        ],
-      );
-    }
-  }
-
-  private static async copyTemplateConstraintsToBatch(
-    executor: SqlExecutor,
-    batchPlanId: number,
-    scheduleIds: number[],
-    scheduleToPlanId: Map<number, number>,
-  ): Promise<void> {
-    if (!scheduleIds.length) return;
-    const placeholders = scheduleIds.map(() => '?').join(', ');
-    const [constraintRows] = await executor.execute<RowDataPacket[]>(
-      `SELECT
-         id,
-         schedule_id,
-         predecessor_schedule_id,
-         constraint_type,
-         time_lag,
-         lag_type,
-         lag_min,
-         lag_max,
-         constraint_level,
-         share_personnel,
-         constraint_name,
-         description
-       FROM operation_constraints
-       WHERE schedule_id IN (${placeholders})
-         AND predecessor_schedule_id IN (${placeholders})`,
-      [...scheduleIds, ...scheduleIds],
-    );
-
-    for (const row of constraintRows) {
-      const currentPlanId = scheduleToPlanId.get(Number(row.schedule_id));
-      const predecessorPlanId = scheduleToPlanId.get(Number(row.predecessor_schedule_id));
-      if (!currentPlanId || !predecessorPlanId) continue;
-
-      await executor.execute(
-        `INSERT INTO batch_operation_constraints (
-           batch_plan_id,
-           batch_operation_plan_id,
-           predecessor_batch_operation_plan_id,
-           constraint_type,
-           time_lag,
-           lag_type,
-           lag_min,
-           lag_max,
-           constraint_level,
-           share_personnel,
-           constraint_name,
-           description
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          batchPlanId,
-          currentPlanId,
-          predecessorPlanId,
-          row.constraint_type,
-          row.time_lag,
-          row.lag_type ?? 'FIXED',
-          row.lag_min ?? 0,
-          row.lag_max ?? null,
-          row.constraint_level ?? 1,
-          row.share_personnel ?? 0,
-          row.constraint_name ?? null,
-          row.description ?? null,
         ],
       );
     }

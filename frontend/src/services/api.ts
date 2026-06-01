@@ -196,7 +196,7 @@ export const batchPlanApi = {
     project_code?: string | null;
     description?: string | null;
     notes?: string | null;
-  }) => api.post<BatchPlan>('/batch-plans/from-package', payload).then((res) => res.data),
+  }) => api.post<{ message: string; batches: BatchPlan[] }>('/batch-plans/from-package', payload).then((res) => res.data),
   update: (id: number, payload: BatchPlanPayload) =>
     api.put<BatchPlan>(`/batch-plans/${id}`, payload).then((res) => res.data),
   remove: (id: number, options?: { force?: boolean }) =>
@@ -222,9 +222,22 @@ export const batchPlanApi = {
     interval_days: number;
     batch_prefix: string;
     start_number: number;
+    batch_number_length?: number;
     description?: string | null;
     notes?: string | null;
   }) => api.post<{ message: string; batches: any[] }>('/batch-plans/bulk', payload).then((res) => res.data),
+  createBulkFromPackage: (payload: {
+    mfg_package_id: number;
+    base_start_date: string;
+    base_end_date: string;
+    interval_days: number;
+    batch_prefix: string;
+    start_number: number;
+    batch_number_length?: number;
+    project_code?: string | null;
+    description?: string | null;
+    notes?: string | null;
+  }) => api.post<{ message: string; batches: any[] }>('/batch-plans/from-package/bulk', payload).then((res) => res.data),
 };
 
 export const shiftTypeApi = {

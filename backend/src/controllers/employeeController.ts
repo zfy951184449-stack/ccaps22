@@ -123,13 +123,15 @@ export const updateEmployee = async (req: Request, res: Response) => {
 
     const [[existing]] = await connection.execute<RowDataPacket[]>(
       `SELECT id,
+              employee_code AS employeeCode,
               employee_name AS employeeName,
               unit_id AS unitId,
               primary_role_id AS primaryRoleId,
               employment_status AS employmentStatus,
               hire_date AS hireDate,
               shopfloor_baseline_pct AS shopfloorBaselinePct,
-              shopfloor_upper_pct AS shopfloorUpperPct
+              shopfloor_upper_pct AS shopfloorUpperPct,
+              org_role AS orgRole
          FROM employees
         WHERE id = ?
         LIMIT 1`,
@@ -143,6 +145,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
     }
 
     const {
+      employeeCode,
       employeeName,
       departmentId,
       primaryTeamId,
@@ -154,6 +157,12 @@ export const updateEmployee = async (req: Request, res: Response) => {
       shopfloorUpperPct,
       orgRole,
     } = req.body || {};
+
+    if (employeeCode !== undefined && !String(employeeCode).trim()) {
+      await connection.rollback();
+      res.status(400).json({ error: 'employeeCode is required' });
+      return;
+    }
 
     // Logic for next unit ID:
     // If unitId is explicitly passed, use it.
@@ -173,7 +182,8 @@ export const updateEmployee = async (req: Request, res: Response) => {
 
     const updateSql = `
       UPDATE employees
-         SET employee_name = COALESCE(?, employee_name),
+         SET employee_code = COALESCE(?, employee_code),
+             employee_name = COALESCE(?, employee_name),
              unit_id = ?,
              primary_role_id = ?,
              employment_status = COALESCE(?, employment_status),
@@ -192,6 +202,7 @@ export const updateEmployee = async (req: Request, res: Response) => {
     }
 
     const [result] = await connection.execute<ResultSetHeader>(updateSql, [
+      employeeCode !== undefined ? String(employeeCode).trim() : null,
       employeeName ? String(employeeName).trim() : null,
       nextUnitId ?? null,
       nextPrimaryRoleId ?? null,
@@ -233,8 +244,12 @@ export const updateEmployee = async (req: Request, res: Response) => {
 
     await connection.commit();
     res.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     await connection.rollback();
+    if (error?.code === 'ER_DUP_ENTRY') {
+      res.status(409).json({ error: 'Employee code already exists' });
+      return;
+    }
     console.error('Error updating employee:', error);
     res.status(500).json({ error: 'Failed to update employee' });
   } finally {

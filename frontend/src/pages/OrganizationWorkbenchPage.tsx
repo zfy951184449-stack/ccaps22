@@ -1,7 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { Breadcrumb, Button, Input, message, Spin, Tabs, Space, Modal } from 'antd';
-import { SearchOutlined, PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import {
+  WxbBreadcrumb,
+  WxbButton,
+  WxbModal,
+  WxbSearchInput,
+  WxbSpinner,
+  WxbTabs,
+  WxbTag,
+  wxbToast,
+} from '../components/wxb-ui';
 
 import OrgTree from '../components/OrganizationWorkbench/OrgTree';
 import EmployeeTable from '../components/OrganizationWorkbench/EmployeeTable';
@@ -12,12 +20,16 @@ import OrgUnitSelectorModal from '../components/OrganizationWorkbench/OrgUnitSel
 import UnavailabilityTab from '../components/UnavailabilityTab';
 import AddUnitModal from '../components/OrganizationWorkbench/AddUnitModal';
 import {
+  DownloadIcon,
+  PlusIcon,
+  UploadIcon,
+} from '../components/OrganizationWorkbench/OrgWorkbenchIcons';
+import {
   OrganizationHierarchyResult,
   OrganizationUnitNode,
   Employee
 } from '../types/organizationWorkbench';
-
-const { TabPane } = Tabs;
+import './OrganizationWorkbenchPage.css';
 
 const getAllKeys = (nodes: OrganizationUnitNode[]): number[] => {
   let keys: number[] = [];
@@ -63,13 +75,10 @@ const OrganizationWorkbenchPage: React.FC = () => {
   // Move Unit Modal
   const [isMoveUnitModalVisible, setIsMoveUnitModalVisible] = useState(false);
   const [movingUnitId, setMovingUnitId] = useState<number | null>(null);
+  const [deleteUnitId, setDeleteUnitId] = useState<number | null>(null);
+  const [deletingUnit, setDeletingUnit] = useState(false);
 
-  // --- Effects ---
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoadingHierarchy(true);
     setLoadingEmployees(true);
     try {
@@ -85,17 +94,22 @@ const OrganizationWorkbenchPage: React.FC = () => {
       setExpandedKeys(allKeys);
 
       // Default select the first root unit if available
-      if (hierRes.data.units.length > 0 && !selectedUnitId) {
-        setSelectedUnitId(hierRes.data.units[0].id);
+      if (hierRes.data.units.length > 0) {
+        setSelectedUnitId((current) => current ?? hierRes.data.units[0].id);
       }
     } catch (err) {
       console.error(err);
-      message.error('Failed to load organization data');
+      wxbToast.error('Failed to load organization data');
     } finally {
       setLoadingHierarchy(false);
       setLoadingEmployees(false);
     }
-  };
+  }, []);
+
+  // --- Effects ---
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const reloadEmployees = async () => {
     setLoadingEmployees(true);
@@ -103,7 +117,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
       const res = await axios.get<Employee[]>('/api/employees');
       setEmployees(res.data);
     } catch (err) {
-      message.error('Failed to refresh employee list');
+      wxbToast.error('Failed to refresh employee list');
     } finally {
       setLoadingEmployees(false);
     }
@@ -127,7 +141,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
   }, [hierarchy]);
 
   // Find descendants for recursive filtering
-  const getDescendantIds = (unitId: number): number[] => {
+  const getDescendantIds = useCallback((unitId: number): number[] => {
     const ids = [unitId];
     const node = unitMap.get(unitId);
     if (node && node.children) {
@@ -136,7 +150,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
       });
     }
     return ids;
-  };
+  }, [unitMap]);
 
   // Filtered Employees
   const filteredEmployees = useMemo(() => {
@@ -158,7 +172,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
     }
 
     return result;
-  }, [employees, selectedUnitId, searchText, unitMap]);
+  }, [employees, getDescendantIds, selectedUnitId, searchText]);
 
 
   // Breadcrumbs
@@ -208,32 +222,33 @@ const OrganizationWorkbenchPage: React.FC = () => {
   const handleDelete = async (id: number) => {
     try {
       await axios.delete(`/api/employees/${id}`);
-      message.success('Employee deleted');
+      wxbToast.success('Employee deleted');
       reloadEmployees();
       fetchData(); // Refresh counts
     } catch (err) {
-      message.error('Deletetion failed');
+      wxbToast.error('Deletion failed');
     }
   };
 
-  const handleDeleteUnit = async (unitId: number) => {
-    Modal.confirm({
-      title: 'Delete Organization Unit?',
-      content: 'This action cannot be undone.',
-      okText: 'Delete',
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        try {
-          await axios.delete(`/api/org-structure/units/${unitId}`);
-          message.success('Unit deleted');
-          if (selectedUnitId === unitId) setSelectedUnitId(null);
-          fetchData();
-        } catch (err: any) {
-          console.error(err);
-          message.error(err.response?.data?.message || 'Failed to delete unit');
-        }
-      }
-    });
+  const handleDeleteUnit = (unitId: number) => {
+    setDeleteUnitId(unitId);
+  };
+
+  const confirmDeleteUnit = async () => {
+    if (!deleteUnitId) return;
+    setDeletingUnit(true);
+    try {
+      await axios.delete(`/api/org-structure/units/${deleteUnitId}`);
+      wxbToast.success('Unit deleted');
+      if (selectedUnitId === deleteUnitId) setSelectedUnitId(null);
+      setDeleteUnitId(null);
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      wxbToast.error(err.response?.data?.message || 'Failed to delete unit');
+    } finally {
+      setDeletingUnit(false);
+    }
   };
 
   const handleEditUnit = (unit: OrganizationUnitNode) => {
@@ -257,30 +272,30 @@ const OrganizationWorkbenchPage: React.FC = () => {
       await axios.put(`/api/org-structure/units/${movingUnitId}`, {
         parent_id: newParentId,
       });
-      message.success('Unit moved successfully');
+      wxbToast.success('Unit moved successfully');
       setIsMoveUnitModalVisible(false);
       setMovingUnitId(null);
       fetchData();
     } catch (err: any) {
       console.error(err);
-      message.error(err?.response?.data?.message || 'Failed to move unit');
+      wxbToast.error(err?.response?.data?.message || 'Failed to move unit');
     }
   };
 
   const selectedUnit = selectedUnitId ? unitMap.get(selectedUnitId) : null;
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="orgwb">
 
       {/* Left Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col shadow-sm z-10">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 backdrop-blur">
-          <span className="font-semibold text-gray-800 text-lg tracking-tight">Organization</span>
+      <aside className="orgwb-sidebar">
+        <div className="orgwb-sidebar-header">
+          <span className="orgwb-sidebar-title">Organization</span>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 scrollbar-hide">
+        <div className="orgwb-sidebar-body">
           {loadingHierarchy ? (
-            <div className="flex justify-center p-10"><Spin /></div>
+            <div className="orgwb-loading"><WxbSpinner size={28} /></div>
           ) : (
             <OrgTree
               units={hierarchy?.units || []}
@@ -297,66 +312,73 @@ const OrganizationWorkbenchPage: React.FC = () => {
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-white">
-          <Button block icon={<PlusOutlined />} className="text-gray-600" onClick={() => {
+        <div className="orgwb-sidebar-footer">
+          <WxbButton type="button" variant="secondary" className="orgwb-block-button" onClick={() => {
             setAddUnitParentId(selectedUnitId);
             setIsAddUnitModalVisible(true);
           }}>
+            <PlusIcon />
             Add Unit
-          </Button>
+          </WxbButton>
         </div>
-      </div>
+      </aside>
 
       {/* Right Content */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
+      <main className="orgwb-main">
 
         {/* Header */}
-        <div className="h-14 border-b border-gray-200 flex items-center px-6 bg-white shrink-0 gap-4">
+        <div className="orgwb-breadcrumb-bar">
           {!selectedUnit ? (
-            <span className="text-gray-400">Select an organization unit to view details</span>
+            <span className="orgwb-muted">Select an organization unit to view details</span>
           ) : (
-            <Breadcrumb separator=">">
-              {breadcrumbItems.map(node => (
-                <Breadcrumb.Item key={node.id} className="text-sm font-medium">
-                  {node.unitName}
-                </Breadcrumb.Item>
-              ))}
-            </Breadcrumb>
+            <WxbBreadcrumb
+              separator=">"
+              items={breadcrumbItems.map((node) => ({
+                label: node.unitName,
+                onClick: () => setSelectedUnitId(node.id),
+              }))}
+            />
           )}
         </div>
 
         {/* Workspace */}
         {selectedUnit && (
-          <div className="flex-1 p-6 overflow-auto">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-800 m-0">{selectedUnit.unitName}</h1>
-                <span className="bg-blue-100 text-blue-700 px-3 py-0.5 rounded-full text-xs font-semibold">
-                  {filteredEmployees.length} Members
-                </span>
+          <div className="orgwb-workspace">
+            <div className="orgwb-workspace-header">
+              <div className="orgwb-title-group">
+                <h1 className="orgwb-title">{selectedUnit.unitName}</h1>
+                <WxbTag color="blue">{filteredEmployees.length} Members</WxbTag>
               </div>
 
-              <Space>
-                <Button icon={<DownloadOutlined />}>Export</Button>
-                <Button icon={<UploadOutlined />}>Import</Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsCreateEmployeeModalVisible(true)}>Add Employee</Button>
-              </Space>
+              <div className="orgwb-toolbar">
+                <WxbButton type="button" variant="secondary">
+                  <DownloadIcon />
+                  Export
+                </WxbButton>
+                <WxbButton type="button" variant="secondary">
+                  <UploadIcon />
+                  Import
+                </WxbButton>
+                <WxbButton type="button" variant="primary" onClick={() => setIsCreateEmployeeModalVisible(true)}>
+                  <PlusIcon />
+                  Add Employee
+                </WxbButton>
+              </div>
             </div>
 
-            <Tabs
+            <WxbTabs
               defaultActiveKey="employees"
-              className="mb-4"
+              className="orgwb-tabs"
               items={[
                 {
                   label: 'Employees', key: 'employees', children: (
                     <>
-                      <div className="mb-4 flex items-center gap-2">
-                        <Input
+                      <div className="orgwb-filter-row">
+                        <WxbSearchInput
                           placeholder="Search employees by name or ID..."
-                          prefix={<SearchOutlined className="text-gray-400" />}
-                          className="max-w-md"
+                          className="orgwb-search"
                           value={searchText}
-                          onChange={e => setSearchText(e.target.value)}
+                          onChange={setSearchText}
                           allowClear
                         />
                       </div>
@@ -383,7 +405,7 @@ const OrganizationWorkbenchPage: React.FC = () => {
             />
           </div>
         )}
-      </div>
+      </main>
 
       <EditEmployeeModalV2
         visible={isModalVisible}
@@ -438,6 +460,19 @@ const OrganizationWorkbenchPage: React.FC = () => {
         onSelect={handleMoveUnitSelect}
         title="Move Unit To..."
       />
+
+      <WxbModal
+        open={deleteUnitId !== null}
+        title="Delete Organization Unit?"
+        onCancel={() => setDeleteUnitId(null)}
+        onOk={confirmDeleteUnit}
+        okText={deletingUnit ? 'Deleting...' : 'Delete'}
+        cancelText="Cancel"
+        okVariant="danger"
+        confirmLoading={deletingUnit}
+      >
+        <p className="orgwb-confirm-copy">This action cannot be undone.</p>
+      </WxbModal>
     </div>
   );
 };

@@ -1,18 +1,18 @@
 import React, { useMemo } from 'react';
-import { Tree } from 'antd';
 import type { DataNode } from 'antd/es/tree';
-import {
-    FolderOutlined,
-    TeamOutlined,
-    ClusterOutlined,
-    DeploymentUnitOutlined,
-    EditOutlined,
-    PlusOutlined,
-    SwapOutlined,
-    DeleteOutlined
-} from '@ant-design/icons';
+import type { MenuProps } from 'antd';
+import { WxbDropdown, WxbTag, WxbTree } from '../wxb-ui';
 import { OrganizationUnitNode } from '../../types/organizationWorkbench';
-import { Dropdown, MenuProps, Divider } from 'antd';
+import {
+    DeleteIcon,
+    EditIcon,
+    FolderIcon,
+    GroupIcon,
+    MoveIcon,
+    PlusIcon,
+    ShiftIcon,
+    TeamIcon,
+} from './OrgWorkbenchIcons';
 
 interface OrgTreeProps {
     units: OrganizationUnitNode[];
@@ -44,19 +44,18 @@ const OrgTree: React.FC<OrgTreeProps> = ({
         const mapNode = (node: OrganizationUnitNode): DataNode => {
             const isLeaf = !node.children || node.children.length === 0;
 
-            // Visual Logic
-            let icon = <FolderOutlined className="text-blue-500" />;
+            let icon = <FolderIcon className="orgwb-tree-icon orgwb-tree-icon--department" />;
             const isDept = node.unitType === 'DEPARTMENT';
 
-            if (node.unitType === 'TEAM') icon = <TeamOutlined className="text-indigo-500" />;
-            if (node.unitType === 'GROUP') icon = <ClusterOutlined className="text-purple-500" />;
-            if (node.unitType === 'SHIFT') icon = <DeploymentUnitOutlined className="text-gray-500" />;
+            if (node.unitType === 'TEAM') icon = <TeamIcon className="orgwb-tree-icon orgwb-tree-icon--team" />;
+            if (node.unitType === 'GROUP') icon = <GroupIcon className="orgwb-tree-icon orgwb-tree-icon--group" />;
+            if (node.unitType === 'SHIFT') icon = <ShiftIcon className="orgwb-tree-icon orgwb-tree-icon--shift" />;
 
             const menuItems: MenuProps['items'] = [
                 {
                     key: 'edit',
                     label: 'Edit Unit',
-                    icon: <EditOutlined />,
+                    icon: <EditIcon />,
                     onClick: (e) => {
                         e.domEvent.stopPropagation();
                         if (onEdit) onEdit(node);
@@ -65,7 +64,7 @@ const OrgTree: React.FC<OrgTreeProps> = ({
                 {
                     key: 'add-child',
                     label: 'Add Sub-Unit',
-                    icon: <PlusOutlined />,
+                    icon: <PlusIcon />,
                     onClick: (e) => {
                         e.domEvent.stopPropagation();
                         if (onAddChild) onAddChild(node.id);
@@ -74,7 +73,7 @@ const OrgTree: React.FC<OrgTreeProps> = ({
                 {
                     key: 'move',
                     label: 'Move To...',
-                    icon: <SwapOutlined />,
+                    icon: <MoveIcon />,
                     onClick: (e) => {
                         e.domEvent.stopPropagation();
                         if (onMove) onMove(node.id);
@@ -84,7 +83,7 @@ const OrgTree: React.FC<OrgTreeProps> = ({
                 {
                     key: 'delete',
                     label: 'Delete Unit',
-                    icon: <DeleteOutlined />,
+                    icon: <DeleteIcon />,
                     danger: true,
                     disabled: (node.children && node.children.length > 0) || node.memberCount > 0,
                     onClick: (e) => {
@@ -95,17 +94,12 @@ const OrgTree: React.FC<OrgTreeProps> = ({
             ];
 
             const titleNode = (
-                <span className="flex items-center gap-1.5 py-0.5 transition-colors duration-200 whitespace-nowrap overflow-hidden group w-full">
-                    <span className={`
-                        ${isDept ? 'font-semibold text-gray-800' : 'font-medium text-gray-600'}
-                        tracking-tight truncate
-                    `}>
+                <span className="orgwb-tree-title">
+                    <span className={isDept ? 'orgwb-tree-title-text orgwb-tree-title-text--strong' : 'orgwb-tree-title-text'}>
                         {node.unitName}
                     </span>
                     {node.memberCount > 0 && (
-                        <span className="flex-shrink-0 text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-                            {node.memberCount}
-                        </span>
+                        <WxbTag className="orgwb-tree-count" color="neutral">{node.memberCount}</WxbTag>
                     )}
                 </span>
             );
@@ -113,9 +107,9 @@ const OrgTree: React.FC<OrgTreeProps> = ({
             return {
                 key: node.id,
                 title: (onDelete || onEdit || onAddChild || onMove) ? (
-                    <Dropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
+                    <WxbDropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
                         {titleNode}
-                    </Dropdown>
+                    </WxbDropdown>
                 ) : titleNode,
                 icon,
                 children: node.children.map(mapNode),
@@ -124,31 +118,11 @@ const OrgTree: React.FC<OrgTreeProps> = ({
         };
 
         return units.map(mapNode);
-    }, [units, onDelete]);
+    }, [units, onAddChild, onDelete, onEdit, onMove]);
 
     return (
-        <div className="py-2">
-            <style>{`
-                .ant-tree-node-content-wrapper {
-                    display: flex !important;
-                    align-items: center !important;
-                    min-height: 28px !important;
-                }
-                .ant-tree-iconEle {
-                    height: 28px !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center;
-                    margin-right: 4px !important;
-                }
-                .ant-tree-title {
-                    flex: 1;
-                    overflow: hidden;
-                    display: flex;
-                    align-items: center;
-                }
-            `}</style>
-            <Tree
+        <div className="orgwb-tree-shell">
+            <WxbTree
                 showIcon
                 showLine={{ showLeafIcon: false }}
                 blockNode
@@ -159,8 +133,8 @@ const OrgTree: React.FC<OrgTreeProps> = ({
                 onExpand={onExpand}
                 expandedKeys={expandedKeys}
                 autoExpandParent={autoExpandParent}
-                className="bg-transparent text-sm"
-                height={600} // Virtual scroll support
+                className="orgwb-tree"
+                height={600}
             />
         </div>
     );

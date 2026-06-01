@@ -1,8 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, DatePicker, Button, message, Divider } from 'antd';
-import { CloseOutlined, UserOutlined, IdcardOutlined, ClusterOutlined, PlusOutlined } from '@ant-design/icons';
+import { Form } from 'antd';
 import axios from 'axios';
+import {
+    WxbButton,
+    WxbDatePicker,
+    WxbInput,
+    WxbModal,
+    WxbSelect,
+    WxbTag,
+    wxbToast,
+} from '../wxb-ui';
 import OrgUnitSelectorModal from './OrgUnitSelectorModal';
+import { GroupIcon, IdCardIcon, PlusIcon, UserIcon } from './OrgWorkbenchIcons';
 
 interface CreateEmployeeModalProps {
     visible: boolean;
@@ -11,8 +20,6 @@ interface CreateEmployeeModalProps {
     defaultUnitId?: number | null;
     defaultUnitName?: string | null;
 }
-
-const { Option } = Select;
 
 const ORG_ROLE_OPTIONS = [
     { value: 'FRONTLINE', label: 'Frontline' },
@@ -80,14 +87,14 @@ const CreateEmployeeModal: React.FC<CreateEmployeeModalProps> = ({
             };
 
             await axios.post('/api/employees', payload);
-            message.success('Employee created successfully');
+            wxbToast.success('Employee created successfully');
             onSuccess();
         } catch (error: any) {
             console.error('Failed to create employee', error);
             if (error?.response?.status === 409) {
-                message.error('Employee code already exists');
+                wxbToast.error('Employee code already exists');
             } else {
-                message.error('Failed to create employee');
+                wxbToast.error('Failed to create employee');
             }
         } finally {
             setLoading(false);
@@ -100,142 +107,107 @@ const CreateEmployeeModal: React.FC<CreateEmployeeModalProps> = ({
         setSelectorVisible(false);
     };
 
-    const renderStatusOption = (status: string, color: string) => (
-        <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${color}`}></span>
+    const renderStatusOption = (status: string, tone: string) => (
+        <span className="orgwb-status-option">
+            <span className={`orgwb-status-dot orgwb-status-dot--${tone}`} />
             <span>{status}</span>
-        </div>
+        </span>
     );
 
+    const roleOptions = availableRoles.map(role => ({ value: role.id, label: role.role_name }));
+    const orgRoleOptions = ORG_ROLE_OPTIONS;
+    const statusOptions = [
+        { value: 'ACTIVE', label: renderStatusOption('Active', 'success') },
+        { value: 'VACATION', label: renderStatusOption('Vacation', 'warning') },
+        { value: 'ON LEAVE', label: renderStatusOption('On Leave', 'amber') },
+        { value: 'RESIGNED', label: renderStatusOption('Resigned', 'danger') },
+    ];
+
     return (
-        <Modal
+        <WxbModal
+            title="Add Employee"
             open={visible}
             footer={null}
-            closable={false}
+            onCancel={onCancel}
             centered
             width={600}
-            className="mac-modal"
-            maskStyle={{ backdropFilter: 'blur(4px)', backgroundColor: 'rgba(0,0,0,0.2)' }}
-            styles={{
-                content: {
-                    backgroundColor: 'transparent',
-                    boxShadow: 'none',
-                    padding: 0
-                }
-            }}
+            className="orgwb-employee-modal"
+            forceRender
         >
-            <div className="overflow-hidden rounded-2xl shadow-2xl bg-white/80 backdrop-blur-xl border border-white/40">
-                {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200/50 bg-white/40">
-                    <h3 className="text-lg font-semibold text-gray-800 m-0 tracking-tight">Add Employee</h3>
-                    <Button
-                        type="text"
-                        icon={<CloseOutlined className="text-gray-500" />}
-                        onClick={onCancel}
-                        className="hover:bg-gray-200/50 rounded-full w-8 h-8 flex items-center justify-center p-0"
-                    />
-                </div>
+            <Form
+                form={form}
+                layout="vertical"
+                requiredMark={false}
+                className="orgwb-form orgwb-employee-form"
+            >
+                <section className="orgwb-form-section">
+                    <h4 className="orgwb-form-section-title">Basic Info</h4>
+                    <div className="orgwb-form-grid">
+                        <Form.Item label="Employee ID" name="employeeCode" rules={[{ required: true, message: 'Required' }]}>
+                            <WxbInput prefix={<IdCardIcon />} placeholder="e.g. EMP001" />
+                        </Form.Item>
+                        <Form.Item label="Name" name="employeeName" rules={[{ required: true, message: 'Required' }]}>
+                            <WxbInput prefix={<UserIcon />} placeholder="Full name" />
+                        </Form.Item>
+                    </div>
+                </section>
 
-                {/* Body */}
-                <div className="p-8">
-                    <Form
-                        form={form}
-                        layout="vertical"
-                        requiredMark={false}
-                        className="space-y-6"
-                    >
-                        {/* Section: Basic Info */}
-                        <div>
-                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Basic Info</h4>
-                            <div className="grid grid-cols-2 gap-5">
-                                <Form.Item label="Employee ID" name="employeeCode" rules={[{ required: true, message: 'Required' }]}>
-                                    <Input prefix={<IdcardOutlined className="text-gray-400" />} placeholder="e.g. EMP001" className="rounded-lg py-1.5" />
-                                </Form.Item>
-                                <Form.Item label="Name" name="employeeName" rules={[{ required: true, message: 'Required' }]}>
-                                    <Input prefix={<UserOutlined className="text-gray-400" />} placeholder="Full name" className="rounded-lg py-1.5" />
-                                </Form.Item>
-                            </div>
-                        </div>
+                <section className="orgwb-form-section">
+                    <h4 className="orgwb-form-section-title">Professional</h4>
+                    <div className="orgwb-form-grid">
+                        <Form.Item label="Position" name="position">
+                            <WxbSelect placeholder="Select Role" allowClear options={roleOptions} />
+                        </Form.Item>
+                        <Form.Item label="Org Role" name="orgRole">
+                            <WxbSelect placeholder="Select Org Role" options={orgRoleOptions} />
+                        </Form.Item>
+                    </div>
 
-                        {/* Section: Professional */}
-                        <div>
-                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 mt-2">Professional</h4>
-                            <div className="grid grid-cols-2 gap-5">
-                                <Form.Item label="Position" name="position">
-                                    <Select className="rounded-lg" size="large" placeholder="Select Role" allowClear>
-                                        {availableRoles.map(role => (
-                                            <Option key={role.id} value={role.id}>{role.role_name}</Option>
-                                        ))}
-                                    </Select>
-                                </Form.Item>
-                                <Form.Item label="Org Role" name="orgRole">
-                                    <Select className="rounded-lg" size="large" placeholder="Select Org Role">
-                                        {ORG_ROLE_OPTIONS.map(opt => (
-                                            <Option key={opt.value} value={opt.value}>{opt.label}</Option>
-                                        ))}
-                                    </Select>
-                                </Form.Item>
-                            </div>
+                    <Form.Item label="Organization">
+                        <WxbButton
+                            type="button"
+                            variant="secondary"
+                            className="orgwb-unit-picker"
+                            onClick={() => setSelectorVisible(true)}
+                        >
+                            {selectedUnitName ? (
+                                <WxbTag color="blue" icon={<GroupIcon />}>{selectedUnitName}</WxbTag>
+                            ) : (
+                                <>
+                                    <PlusIcon />
+                                    Select Unit
+                                </>
+                            )}
+                        </WxbButton>
+                    </Form.Item>
+                </section>
 
-                            <Form.Item label="Organization">
-                                <div
-                                    className="flex items-center gap-2 p-3 bg-gray-50/50 rounded-xl border border-gray-200/50 min-h-[50px] cursor-pointer hover:border-blue-300 transition-colors"
-                                    onClick={() => setSelectorVisible(true)}
-                                >
-                                    {selectedUnitName ? (
-                                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                            <ClusterOutlined /> {selectedUnitName}
-                                        </span>
-                                    ) : (
-                                        <Button
-                                            type="dashed"
-                                            size="small"
-                                            icon={<PlusOutlined className="text-xs" />}
-                                            className="bg-transparent"
-                                        >
-                                            Select Unit
-                                        </Button>
-                                    )}
-                                </div>
-                            </Form.Item>
-                        </div>
+                <section className="orgwb-form-section">
+                    <h4 className="orgwb-form-section-title">Personal</h4>
+                    <div className="orgwb-form-grid">
+                        <Form.Item label="Status" name="employmentStatus">
+                            <WxbSelect options={statusOptions} />
+                        </Form.Item>
+                        <Form.Item label="Hire Date" name="hireDate">
+                            <WxbDatePicker />
+                        </Form.Item>
+                    </div>
+                </section>
 
-                        {/* Section: Personal */}
-                        <div>
-                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 mt-2">Personal</h4>
-                            <div className="grid grid-cols-2 gap-5">
-                                <Form.Item label="Status" name="employmentStatus">
-                                    <Select size="middle" bordered={false} className="bg-gray-100 rounded-lg px-1">
-                                        <Option value="ACTIVE">{renderStatusOption('Active', 'bg-green-500')}</Option>
-                                        <Option value="VACATION">{renderStatusOption('Vacation', 'bg-yellow-500')}</Option>
-                                        <Option value="ON LEAVE">{renderStatusOption('On Leave', 'bg-orange-500')}</Option>
-                                        <Option value="RESIGNED">{renderStatusOption('Resigned', 'bg-red-500')}</Option>
-                                    </Select>
-                                </Form.Item>
-                                <Form.Item label="Hire Date" name="hireDate">
-                                    <DatePicker className="w-full rounded-lg bg-gray-50 border-gray-200" />
-                                </Form.Item>
-                            </div>
-                        </div>
-                    </Form>
-                </div>
-
-                {/* Footer */}
-                <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-200/50 flex items-center gap-3">
-                    <div className="flex-1"></div>
-                    <Button onClick={onCancel} className="rounded-lg border-0 bg-transparent hover:bg-gray-200/50 text-gray-600 font-medium">
+                <div className="orgwb-form-actions">
+                    <WxbButton type="button" onClick={onCancel} variant="ghost">
                         Cancel
-                    </Button>
-                    <Button
-                        type="primary"
+                    </WxbButton>
+                    <WxbButton
+                        type="button"
                         onClick={handleSave}
-                        loading={loading}
-                        className="rounded-lg px-6 bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-500/20 border-0 h-9 font-medium"
+                        disabled={loading}
+                        variant="primary"
                     >
-                        Create Employee
-                    </Button>
+                        {loading ? 'Creating...' : 'Create Employee'}
+                    </WxbButton>
                 </div>
-            </div>
+            </Form>
 
             <OrgUnitSelectorModal
                 visible={selectorVisible}
@@ -243,7 +215,7 @@ const CreateEmployeeModal: React.FC<CreateEmployeeModalProps> = ({
                 onSelect={handleUnitSelect}
                 title="Select Organization Unit"
             />
-        </Modal>
+        </WxbModal>
     );
 };
 

@@ -1,19 +1,41 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, DatePicker, Select, Input, message } from 'antd';
+import { Form } from 'antd';
 import dayjs from 'dayjs';
-import { Employee } from '../types/organizationWorkbench'; // Ensure this type exists or adjust import
+import {
+    WxbModal,
+    WxbRangePicker,
+    WxbSelect,
+    WxbTextarea,
+    wxbToast,
+} from './wxb-ui';
+import { Employee } from '../types/organizationWorkbench';
+
+export interface UnavailabilityRecord {
+    id: number;
+    employeeId: number;
+    employeeName: string;
+    startDate: string;
+    endDate: string;
+    reasonCode: string;
+    reasonLabel: string;
+    notes: string;
+    createdAt: string;
+}
 
 interface UnavailabilityModalProps {
     visible: boolean;
     onCancel: () => void;
     onSuccess: () => void;
-    editingRecord?: any; // Define a proper type if possible
+    editingRecord?: UnavailabilityRecord | null;
     employees: Employee[];
 }
 
-const { Option } = Select;
-const { TextArea } = Input;
-const { RangePicker } = DatePicker;
+const reasonOptions = [
+    { value: 'AL', label: 'Annual Leave (年假)' },
+    { value: 'SL', label: 'Sick Leave (病假)' },
+    { value: 'PL', label: 'Personal Leave (事假)' },
+    { value: 'OT', label: 'Other (其他)' },
+];
 
 const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({
     visible,
@@ -46,7 +68,7 @@ const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({
 
             const payload = {
                 employeeId: values.employeeId,
-                startDatetime: start.startOf('day').toISOString(), // Depending on requirement, might need time
+                startDatetime: start.startOf('day').toISOString(),
                 endDatetime: end.endOf('day').toISOString(),
                 reasonCode: values.reasonCode,
                 notes: values.notes
@@ -69,43 +91,44 @@ const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({
                 throw new Error(error.error || 'Operation failed');
             }
 
-            message.success(editingRecord ? 'Record updated' : 'Record created');
+            wxbToast.success(editingRecord ? 'Record updated' : 'Record created');
             onSuccess();
-        } catch (error: any) {
+        } catch (error) {
             console.error(error);
-            message.error(error.message);
+            wxbToast.error(error instanceof Error ? error.message : 'Operation failed');
         }
     };
 
     return (
-        <Modal
+        <WxbModal
             open={visible}
             title={editingRecord ? "Edit Unavailability" : "Add Unavailability"}
             onCancel={onCancel}
             onOk={handleSubmit}
             destroyOnClose
+            forceRender
             okText="Save"
             cancelText="Cancel"
             maskClosable={false}
-            className="rounded-2xl overflow-hidden" // Try to apply rounded corners if css allows
+            className="orgwb-unavailability-modal"
             width={500}
         >
-            <Form form={form} layout="vertical" preserve={false}>
+            <Form form={form} layout="vertical" preserve={false} className="orgwb-form orgwb-unavailability-form">
                 <Form.Item
                     name="employeeId"
                     label="Employee"
                     rules={[{ required: true, message: 'Please select an employee' }]}
                 >
-                    <Select
+                    <WxbSelect
                         placeholder="Select employee"
                         showSearch
-                        optionFilterProp="children"
-                        disabled={!!editingRecord} // Usually can't change employee on edit
-                    >
-                        {employees.map(emp => (
-                            <Option key={emp.id} value={emp.id}>{emp.employee_name} ({emp.employee_code})</Option>
-                        ))}
-                    </Select>
+                        optionFilterProp="label"
+                        disabled={Boolean(editingRecord)}
+                        options={employees.map(emp => ({
+                            value: emp.id,
+                            label: `${emp.employee_name} (${emp.employee_code})`,
+                        }))}
+                    />
                 </Form.Item>
 
                 <Form.Item
@@ -113,7 +136,7 @@ const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({
                     label="Period"
                     rules={[{ required: true, message: 'Please select dates' }]}
                 >
-                    <RangePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+                    <WxbRangePicker format="YYYY-MM-DD" />
                 </Form.Item>
 
                 <Form.Item
@@ -121,22 +144,17 @@ const UnavailabilityModal: React.FC<UnavailabilityModalProps> = ({
                     label="Reason"
                     rules={[{ required: true, message: 'Please select a reason' }]}
                 >
-                    <Select placeholder="Select reason">
-                        <Option value="AL">Annual Leave (年假)</Option>
-                        <Option value="SL">Sick Leave (病假)</Option>
-                        <Option value="PL">Personal Leave (事假)</Option>
-                        <Option value="OT">Other (其他)</Option>
-                    </Select>
+                    <WxbSelect placeholder="Select reason" options={reasonOptions} />
                 </Form.Item>
 
                 <Form.Item
                     name="notes"
                     label="Notes"
                 >
-                    <TextArea rows={3} placeholder="Optional notes" />
+                    <WxbTextarea rows={3} placeholder="Optional notes" />
                 </Form.Item>
             </Form>
-        </Modal>
+        </WxbModal>
     );
 };
 

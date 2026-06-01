@@ -27,6 +27,7 @@ export * from './TimePicker/TimePicker';
 export * from './InputNumber/InputNumber';
 export * from './Textarea/Textarea';
 export * from './SearchInput/SearchInput';
+export * from './TreeSelect/TreeSelect';
 export * from './Checkbox/Checkbox';
 export * from './Radio/Radio';
 export * from './Slider/Slider';

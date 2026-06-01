@@ -42,6 +42,19 @@
   min-height: 480px;
 }
 
+.mfg-package-panel__guide {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-blue-50);
+  color: var(--wx-fg-2);
+  font-size: 13px;
+}
+
 .mfg-package-panel__list,
 .mfg-package-panel__preview {
   min-width: 0;
@@ -156,7 +169,52 @@
 }
 
 .mfg-package-modal__link-row {
-  grid-template-columns: minmax(140px, 1fr) minmax(96px, 0.6fr) minmax(140px, 1fr) minmax(96px, 0.6fr) minmax(96px, 0.6fr) auto;
+  grid-template-columns:
+    minmax(110px, 0.8fr)
+    minmax(210px, 1.4fr)
+    minmax(86px, 0.5fr)
+    minmax(110px, 0.8fr)
+    minmax(210px, 1.4fr)
+    minmax(86px, 0.5fr)
+    minmax(86px, 0.5fr)
+    auto;
+}
+
+.mfg-package-modal__simple-module-row {
+  display: grid;
+  align-items: end;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-surface-1);
+}
+
+.mfg-package-modal__simple-link-row {
+  display: grid;
+  align-items: end;
+  grid-template-columns:
+    minmax(120px, 0.8fr)
+    minmax(180px, 1.2fr)
+    minmax(96px, 0.55fr)
+    minmax(120px, 0.8fr)
+    minmax(180px, 1.2fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--wx-border);
+  border-radius: 8px;
+  background: var(--wx-surface-1);
+}
+
+.mfg-package-modal__link-summary {
+  grid-column: 1 / -1;
+  padding: 8px 10px;
+  border: 1px solid var(--wx-border);
+  border-radius: 6px;
+  background: var(--wx-surface-0);
+  color: var(--wx-fg-2);
+  font-size: 12px;
 }
 
 .mfg-package-modal__anchor-cell {
@@ -174,7 +232,8 @@
 
   .mfg-package-modal__grid,
   .mfg-package-modal__module-row,
-  .mfg-package-modal__link-row {
+  .mfg-package-modal__link-row,
+  .mfg-package-modal__simple-link-row {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -198,7 +257,9 @@
 
   .mfg-package-modal__grid,
   .mfg-package-modal__module-row,
-  .mfg-package-modal__link-row {
+  .mfg-package-modal__link-row,
+  .mfg-package-modal__simple-module-row,
+  .mfg-package-modal__simple-link-row {
     grid-template-columns: 1fr;
   }
 }

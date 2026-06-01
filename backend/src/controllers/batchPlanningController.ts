@@ -251,11 +251,83 @@ export const createBatchPlanFromMfgPackage = async (req: Request, res: Response)
     if (error?.message?.includes('MFG_PACKAGE_WITHOUT_OPERATIONS')) {
       return res.status(400).json({ error: '总包没有可生成的工序' });
     }
+    if (error?.message?.includes('MFG_PACKAGE_BATCH_CODE_TOO_LONG')) {
+      return res.status(400).json({ error: '批次编码过长，请缩短命名前缀或序号' });
+    }
     if (error?.code === 'ER_DUP_ENTRY') {
       return res.status(400).json({ error: 'Batch code already exists' });
     }
 
     res.status(500).json({ error: 'Failed to create batch plan from MFG package' });
+  }
+};
+
+export const createBatchPlansFromMfgPackageInBulk = async (req: Request, res: Response) => {
+  try {
+    const {
+      mfg_package_id,
+      base_start_date,
+      base_end_date,
+      interval_days,
+      batch_prefix,
+      start_number,
+      batch_number_length,
+      project_code,
+      description,
+      notes,
+    } = req.body;
+
+    if (
+      !mfg_package_id ||
+      !base_start_date ||
+      !base_end_date ||
+      !interval_days ||
+      !batch_prefix ||
+      start_number === undefined
+    ) {
+      return res.status(400).json({ error: '缺少总包批量生成参数' });
+    }
+
+    const result = await MfgTemplatePackageService.createBulkBatchesFromPackage({
+      mfg_package_id: Number(mfg_package_id),
+      base_start_date: String(base_start_date),
+      base_end_date: String(base_end_date),
+      interval_days: Number(interval_days),
+      batch_prefix: String(batch_prefix).trim(),
+      start_number: Number(start_number),
+      batch_number_length: batch_number_length === undefined ? undefined : Number(batch_number_length),
+      project_code: project_code ?? null,
+      description: description ?? null,
+      notes: notes ?? null,
+    });
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('Error bulk creating batch plans from MFG package:', error);
+
+    if (error?.message?.includes('MFG_PACKAGE_NOT_FOUND')) {
+      return res.status(404).json({ error: '总包不存在' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_DAY_LINK_CONFLICT')) {
+      return res.status(409).json({ error: '总包 Day 锚点存在冲突，不能生成批次' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_WITHOUT_OPERATIONS')) {
+      return res.status(400).json({ error: '总包没有可生成的工序' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_BULK_EMPTY_RANGE') || error?.message?.includes('MFG_PACKAGE_BULK_INVALID_PARAMS')) {
+      return res.status(400).json({ error: '总包批量生成参数不正确' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_BULK_TOO_LARGE')) {
+      return res.status(400).json({ error: '单次批量生成不能超过 500 个批次' });
+    }
+    if (error?.message?.includes('MFG_PACKAGE_BATCH_CODE_TOO_LONG')) {
+      return res.status(400).json({ error: '批次编码过长，请缩短命名前缀或序号' });
+    }
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(400).json({ error: '批次编码已存在' });
+    }
+
+    res.status(500).json({ error: 'Failed to bulk create batch plans from MFG package' });
   }
 };
 
@@ -553,6 +625,7 @@ export const createBatchPlansInBulk = async (req: Request, res: Response) => {
       interval_days,        // 间隔天数
       batch_prefix,         // 批次编码前缀
       start_number,         // 起始序号
+      batch_number_length,
       description,
       notes
     } = req.body;
@@ -598,8 +671,9 @@ export const createBatchPlansInBulk = async (req: Request, res: Response) => {
       actualStartDate.setDate(actualStartDate.getDate() + minDay);
 
       const batchNumber = start_number + i;
-      const batchCode = `${batch_prefix}${batchNumber}`;
-      const batchName = `${batch_prefix}${batchNumber}`;
+      const batchNumberText = String(batchNumber).padStart(Number(batch_number_length ?? 0) || 0, '0');
+      const batchCode = `${batch_prefix}${batchNumberText}`;
+      const batchName = batchCode;
 
       // 格式化日期为 YYYY-MM-DD
       const formattedStartDate = actualStartDate.toISOString().split('T')[0];

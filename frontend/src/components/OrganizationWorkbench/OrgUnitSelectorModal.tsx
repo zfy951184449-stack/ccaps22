@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Modal, message, Spin } from 'antd';
+import React, { useCallback, useState, useEffect } from 'react';
 import axios from 'axios';
+import { WxbModal, WxbSpinner, wxbToast } from '../wxb-ui';
 import OrgTree from './OrgTree';
 import { OrganizationHierarchyResult, OrganizationUnitNode } from '../../types/organizationWorkbench';
 
@@ -10,6 +10,17 @@ interface OrgUnitSelectorModalProps {
     onSelect: (unitId: number, unitName: string) => void;
     title?: string;
 }
+
+const getAllKeys = (nodes: OrganizationUnitNode[]): number[] => {
+    let keys: number[] = [];
+    nodes.forEach(node => {
+        keys.push(node.id);
+        if (node.children) {
+            keys = [...keys, ...getAllKeys(node.children)];
+        }
+    });
+    return keys;
+};
 
 const OrgUnitSelectorModal: React.FC<OrgUnitSelectorModalProps> = ({
     visible,
@@ -21,13 +32,7 @@ const OrgUnitSelectorModal: React.FC<OrgUnitSelectorModalProps> = ({
     const [loading, setLoading] = useState(false);
     const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
 
-    useEffect(() => {
-        if (visible && !hierarchy) {
-            fetchHierarchy();
-        }
-    }, [visible]);
-
-    const fetchHierarchy = async () => {
+    const fetchHierarchy = useCallback(async () => {
         setLoading(true);
         try {
             const res = await axios.get<OrganizationHierarchyResult>('/api/org-structure/tree');
@@ -36,22 +41,17 @@ const OrgUnitSelectorModal: React.FC<OrgUnitSelectorModalProps> = ({
             setExpandedKeys(getAllKeys(res.data.units));
         } catch (err) {
             console.error(err);
-            message.error('Failed to load organization tree');
+            wxbToast.error('Failed to load organization tree');
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const getAllKeys = (nodes: OrganizationUnitNode[]): number[] => {
-        let keys: number[] = [];
-        nodes.forEach(node => {
-            keys.push(node.id);
-            if (node.children) {
-                keys = [...keys, ...getAllKeys(node.children)];
-            }
-        });
-        return keys;
-    };
+    useEffect(() => {
+        if (visible && !hierarchy) {
+            fetchHierarchy();
+        }
+    }, [visible, hierarchy, fetchHierarchy]);
 
     const handleSelect = (selectedKeys: React.Key[], info: any) => {
         if (selectedKeys.length > 0) {
@@ -79,19 +79,19 @@ const OrgUnitSelectorModal: React.FC<OrgUnitSelectorModalProps> = ({
     };
 
     return (
-        <Modal
+        <WxbModal
             title={title}
             open={visible}
             onCancel={onCancel}
             footer={null}
             centered
             width={500}
-            className="mac-modal"
+            className="orgwb-selector-modal"
         >
-            <div className="h-[400px] overflow-auto p-4">
+            <div className="orgwb-selector-body">
                 {loading ? (
-                    <div className="flex justify-center items-center h-full">
-                        <Spin />
+                    <div className="orgwb-selector-loading">
+                        <WxbSpinner size={28} />
                     </div>
                 ) : (
                     <OrgTree
@@ -104,7 +104,7 @@ const OrgUnitSelectorModal: React.FC<OrgUnitSelectorModalProps> = ({
                     />
                 )}
             </div>
-        </Modal>
+        </WxbModal>
     );
 };
 

@@ -14,6 +14,7 @@ import { exportTemplateWorkbook } from '../../services/templateWorkbookApi';
 import { exportTemplateToExcel, TemplateExportData } from '../../utils/exportTemplateExcel';
 import { TemplateSummary, TeamSummary } from '../ProcessTemplateV2/types';
 import TemplateWorkbookImportModal from '../TemplateWorkbookImportModal';
+import MfgTemplatePackagePanel from '../MfgTemplatePackagePanel';
 import {
   WxbButton,
   WxbCard,
@@ -44,8 +45,16 @@ import './ProcessTemplateV3List.css';
 
 type StatusFilter = 'all' | 'risk' | 'recent';
 type SortBy = 'updated' | 'cycle' | 'name';
+type WorkspaceMode = 'templates' | 'packages';
 
 const RECENT_DAYS = 14;
+
+const getInitialWorkspaceMode = (): WorkspaceMode => {
+  if (typeof window === 'undefined') return 'templates';
+  return new URLSearchParams(window.location.search).get('workspace') === 'packages'
+    ? 'packages'
+    : 'templates';
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,6 +91,9 @@ const ProcessTemplateV3List: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('updated');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(getInitialWorkspaceMode);
+  const [packageTemplates, setPackageTemplates] = useState<TemplateSummary[]>([]);
+  const [packageTemplateLoading, setPackageTemplateLoading] = useState(false);
 
   // ---- Create modal ----
   const [createOpen, setCreateOpen] = useState(false);
@@ -119,6 +131,28 @@ const ProcessTemplateV3List: React.FC = () => {
 
   useEffect(() => { void loadTeams(); }, [loadTeams]);
   useEffect(() => { void loadTemplates(activeTeamId); }, [activeTeamId, loadTemplates]);
+  useEffect(() => {
+    if (workspaceMode !== 'packages' || packageTemplates.length > 0) return;
+
+    let cancelled = false;
+    const loadPackageTemplates = async () => {
+      try {
+        setPackageTemplateLoading(true);
+        const data = await processTemplateV2Api.listTemplates('all');
+        if (!cancelled) setPackageTemplates(data);
+      } catch {
+        if (!cancelled) {
+          setPackageTemplates([]);
+          message.error('加载总包可选模板失败');
+        }
+      } finally {
+        if (!cancelled) setPackageTemplateLoading(false);
+      }
+    };
+
+    void loadPackageTemplates();
+    return () => { cancelled = true; };
+  }, [packageTemplates.length, workspaceMode]);
   useEffect(() => {
     setSelectedId((cur) => (cur !== null && templates.some((t) => t.id === cur) ? cur : null));
   }, [templates]);
@@ -284,97 +318,133 @@ const ProcessTemplateV3List: React.FC = () => {
       <WxbPageShell size="full" minHeight="calc(100vh - 120px)">
         <WxbPageHeader
           title="工艺模版"
-          description="甘特图可视化编辑器"
-          actions={<WxbButton onClick={() => setCreateOpen(true)}>+ 新建模板</WxbButton>}
-        />
-
-        {/* Team Tabs */}
-        <WxbTabs items={tabItems} activeKey={activeTeamId} onChange={setActiveTeamId} />
-
-        {/* Toolbar */}
-        <WxbFilterBar
-          sticky
-          stickyTop={80}
-          search={{
-            className: 'v3-list-filter-search',
-            placeholder: '搜索模板名 / 编码',
-            value: searchValue,
-            onChange: setSearchValue,
-          }}
-          filters={(
-            <>
-              <WxbSelect
-                className="v3-list-filter-select"
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v as StatusFilter)}
-                options={[
-                  { value: 'all', label: '状态：全部' },
-                  { value: 'risk', label: '状态：有风险' },
-                  { value: 'recent', label: '状态：最近更新' },
-                ]}
-              />
-            </>
-          )}
-          sort={(
-            <WxbSelect
-              className="v3-list-filter-select"
-              value={sortBy}
-              onChange={(v) => setSortBy(v as SortBy)}
-              options={[
-                { value: 'updated', label: '排序：最近更新' },
-                { value: 'cycle', label: '排序：周期最长' },
-                { value: 'name', label: '排序：名称' },
-              ]}
-            />
-          )}
-          selection={(
-            <WxbSelectionSummary
-              selectedCount={selectedTemplate ? 1 : 0}
-              label={selectedTemplate?.template_code}
-              onClear={() => setSelectedId(null)}
-            />
-          )}
-          resultCount={displayed.length}
-          resultLabel="个"
+          description={workspaceMode === 'templates' ? '甘特图可视化编辑器' : '按关键操作发生日期串联多个模板，保存为可生成批次的总包。'}
           actions={(
-            <WxbToolbarActions
-              items={[
-                { key: 'import', label: '导入', onClick: () => setImportOpen(true) },
-                {
-                  key: 'export',
-                  render: (
-                    <WxbDropdown menu={exportMenu} placement="bottomRight">
-                      <WxbButton variant="ghost" size="sm">导出 ▾</WxbButton>
-                    </WxbDropdown>
-                  ),
-                },
-              ]}
-            />
+            <div className="v3-header-actions">
+              <div className="v3-workspace-switch">
+                <WxbButton
+                  type="button"
+                  size="sm"
+                  variant={workspaceMode === 'templates' ? 'primary' : 'secondary'}
+                  onClick={() => setWorkspaceMode('templates')}
+                >
+                  标准模板
+                </WxbButton>
+                <WxbButton
+                  type="button"
+                  size="sm"
+                  variant={workspaceMode === 'packages' ? 'primary' : 'secondary'}
+                  onClick={() => setWorkspaceMode('packages')}
+                >
+                  总包设计
+                </WxbButton>
+              </div>
+              {workspaceMode === 'templates' && (
+                <WxbButton onClick={() => setCreateOpen(true)}>+ 新建模板</WxbButton>
+              )}
+            </div>
           )}
         />
 
-        {/* Content */}
-        {loading ? (
-          <WxbPageSection density="compact">
-            {Array.from({ length: 6 }, (_, i) => (
-              <WxbCard key={`sk-${i}`} noPadding className="v3-template-row">
-                <div className="v3-template-row-inner">
-                  <WxbSkeleton rows={1} />
-                </div>
-              </WxbCard>
-            ))}
-          </WxbPageSection>
-        ) : displayed.length === 0 ? (
-          <WxbPageSection variant="framed" className="v3-list-empty">
-            <WxbEmpty
-              description={searchValue || statusFilter !== 'all' ? '当前筛选无匹配模版' : '暂无工艺模版'}
-              action={<WxbButton onClick={() => setCreateOpen(true)}>新建第一个模板</WxbButton>}
+        {workspaceMode === 'templates' ? (
+          <>
+            {/* Team Tabs */}
+            <WxbTabs items={tabItems} activeKey={activeTeamId} onChange={setActiveTeamId} />
+
+            {/* Toolbar */}
+            <WxbFilterBar
+              sticky
+              stickyTop={80}
+              search={{
+                className: 'v3-list-filter-search',
+                placeholder: '搜索模板名 / 编码',
+                value: searchValue,
+                onChange: setSearchValue,
+              }}
+              filters={(
+                <>
+                  <WxbSelect
+                    className="v3-list-filter-select"
+                    value={statusFilter}
+                    onChange={(v) => setStatusFilter(v as StatusFilter)}
+                    options={[
+                      { value: 'all', label: '状态：全部' },
+                      { value: 'risk', label: '状态：有风险' },
+                      { value: 'recent', label: '状态：最近更新' },
+                    ]}
+                  />
+                </>
+              )}
+              sort={(
+                <WxbSelect
+                  className="v3-list-filter-select"
+                  value={sortBy}
+                  onChange={(v) => setSortBy(v as SortBy)}
+                  options={[
+                    { value: 'updated', label: '排序：最近更新' },
+                    { value: 'cycle', label: '排序：周期最长' },
+                    { value: 'name', label: '排序：名称' },
+                  ]}
+                />
+              )}
+              selection={(
+                <WxbSelectionSummary
+                  selectedCount={selectedTemplate ? 1 : 0}
+                  label={selectedTemplate?.template_code}
+                  onClear={() => setSelectedId(null)}
+                />
+              )}
+              resultCount={displayed.length}
+              resultLabel="个"
+              actions={(
+                <WxbToolbarActions
+                  items={[
+                    { key: 'import', label: '导入', onClick: () => setImportOpen(true) },
+                    {
+                      key: 'export',
+                      render: (
+                        <WxbDropdown menu={exportMenu} placement="bottomRight">
+                          <WxbButton variant="ghost" size="sm">导出 ▾</WxbButton>
+                        </WxbDropdown>
+                      ),
+                    },
+                  ]}
+                />
+              )}
             />
-          </WxbPageSection>
+
+            {/* Content */}
+            {loading ? (
+              <WxbPageSection density="compact">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <WxbCard key={`sk-${i}`} noPadding className="v3-template-row">
+                    <div className="v3-template-row-inner">
+                      <WxbSkeleton rows={1} />
+                    </div>
+                  </WxbCard>
+                ))}
+              </WxbPageSection>
+            ) : displayed.length === 0 ? (
+              <WxbPageSection variant="framed" className="v3-list-empty">
+                <WxbEmpty
+                  description={searchValue || statusFilter !== 'all' ? '当前筛选无匹配模版' : '暂无工艺模版'}
+                  action={<WxbButton onClick={() => setCreateOpen(true)}>新建第一个模板</WxbButton>}
+                />
+              </WxbPageSection>
+            ) : (
+              <WxbPageSection density="compact">
+                {displayed.map(renderRow)}
+              </WxbPageSection>
+            )}
+          </>
         ) : (
-          <WxbPageSection density="compact">
-            {displayed.map(renderRow)}
-          </WxbPageSection>
+          packageTemplateLoading ? (
+            <WxbPageSection density="compact">
+              <WxbSkeleton rows={6} />
+            </WxbPageSection>
+          ) : (
+            <MfgTemplatePackagePanel templates={packageTemplates.length > 0 ? packageTemplates : templates} />
+          )
         )}
       </WxbPageShell>
 
@@ -400,7 +470,6 @@ const ProcessTemplateV3List: React.FC = () => {
               onChange={(v) => setCreateTeamId(v as number | null)}
               placeholder="选择团队（可选）"
               allowClear
-              style={{ width: '100%' }}
               options={teams.map((t) => ({ value: t.id, label: t.unit_name }))}
             />
           </WxbFormField>

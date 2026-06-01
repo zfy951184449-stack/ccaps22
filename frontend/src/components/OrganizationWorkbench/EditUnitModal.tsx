@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Form, Input, Select, Button, TreeSelect, message, InputNumber, Switch } from 'antd';
-import { FolderOutlined, TeamOutlined, ClusterOutlined, DeploymentUnitOutlined } from '@ant-design/icons';
+import { Form } from 'antd';
 import axios from 'axios';
+import {
+    WxbButton,
+    WxbInput,
+    WxbInputNumber,
+    WxbModal,
+    WxbSelect,
+    WxbSwitch,
+    WxbTreeSelect,
+    wxbToast,
+} from '../wxb-ui';
 import { OrganizationUnitNode } from '../../types/organizationWorkbench';
+import { FolderIcon, GroupIcon, ShiftIcon, TeamIcon } from './OrgWorkbenchIcons';
 
 interface EditUnitModalProps {
     visible: boolean;
@@ -11,8 +21,6 @@ interface EditUnitModalProps {
     unit: OrganizationUnitNode | null;
     allUnits: OrganizationUnitNode[];
 }
-
-const { Option } = Select;
 
 const EditUnitModal: React.FC<EditUnitModalProps> = ({
     visible,
@@ -55,18 +63,18 @@ const EditUnitModal: React.FC<EditUnitModalProps> = ({
             if (values.is_active !== unit.isActive) payload.is_active = values.is_active;
 
             if (Object.keys(payload).length === 0) {
-                message.info('No changes detected');
+                wxbToast.info('No changes detected');
                 onCancel();
                 return;
             }
 
             await axios.put(`/api/org-structure/units/${unit.id}`, payload);
-            message.success('Unit updated successfully');
+            wxbToast.success('Unit updated successfully');
             onSuccess();
         } catch (err: any) {
             console.error(err);
             const serverMsg = err?.response?.data?.message;
-            message.error(serverMsg || 'Failed to update unit');
+            wxbToast.error(serverMsg || 'Failed to update unit');
         } finally {
             setSubmitting(false);
         }
@@ -104,151 +112,131 @@ const EditUnitModal: React.FC<EditUnitModalProps> = ({
         return allUnits.map(mapNode).filter(Boolean);
     }, [allUnits, unit]);
 
+    const unitTypeOptions = [
+        {
+            value: 'DEPARTMENT',
+            label: <span className="orgwb-select-option"><FolderIcon className="orgwb-tree-icon--department" /> Department</span>,
+        },
+        {
+            value: 'TEAM',
+            label: <span className="orgwb-select-option"><TeamIcon className="orgwb-tree-icon--team" /> Team</span>,
+        },
+        {
+            value: 'GROUP',
+            label: <span className="orgwb-select-option"><GroupIcon className="orgwb-tree-icon--group" /> Group</span>,
+        },
+        {
+            value: 'SHIFT',
+            label: <span className="orgwb-select-option"><ShiftIcon className="orgwb-tree-icon--shift" /> Shift</span>,
+        },
+    ];
+
     return (
-        <Modal
-            title={<span className="text-xl font-semibold text-gray-900">Edit Unit</span>}
+        <WxbModal
+            title="Edit Unit"
             open={visible}
             onCancel={onCancel}
             footer={null}
             centered
             width={480}
-            className="mac-modal rounded-2xl overflow-hidden"
-            styles={{
-                content: {
-                    borderRadius: '16px',
-                    padding: '24px',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                    border: '1px solid rgba(255,255,255,0.6)',
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    backdropFilter: 'blur(20px)',
-                    WebkitBackdropFilter: 'blur(20px)',
-                }
-            }}
-            maskStyle={{
-                backdropFilter: 'blur(4px)',
-                background: 'rgba(0, 0, 0, 0.2)'
-            }}
+            className="orgwb-form-modal"
+            forceRender
         >
             <Form
                 form={form}
                 layout="vertical"
                 onFinish={handleFinish}
-                className="mt-4"
+                className="orgwb-form"
                 requiredMark="optional"
             >
                 <Form.Item
                     name="unit_name"
-                    label={<span className="font-medium text-gray-700">Unit Name</span>}
+                    label="Unit Name"
                     rules={[{ required: true, message: 'Please enter a unit name' }]}
                 >
-                    <Input
+                    <WxbInput
                         placeholder="Enter unit name..."
-                        className="rounded-lg py-2 bg-white/60 border-gray-200 focus:bg-white transition-all"
                     />
                 </Form.Item>
 
                 <Form.Item
                     name="unit_type"
-                    label={<span className="font-medium text-gray-700">Unit Type</span>}
+                    label="Unit Type"
                     rules={[{ required: true, message: 'Please select a type' }]}
                 >
-                    <Select
+                    <WxbSelect
                         placeholder="Select type..."
-                        className="h-10 rounded-lg"
-                        popupClassName="rounded-xl"
-                    >
-                        <Option value="DEPARTMENT">
-                            <div className="flex items-center gap-2">
-                                <FolderOutlined className="text-blue-500" /> Department
-                            </div>
-                        </Option>
-                        <Option value="TEAM">
-                            <div className="flex items-center gap-2">
-                                <TeamOutlined className="text-indigo-500" /> Team
-                            </div>
-                        </Option>
-                        <Option value="GROUP">
-                            <div className="flex items-center gap-2">
-                                <ClusterOutlined className="text-purple-500" /> Group
-                            </div>
-                        </Option>
-                        <Option value="SHIFT">
-                            <div className="flex items-center gap-2">
-                                <DeploymentUnitOutlined className="text-gray-500" /> Shift
-                            </div>
-                        </Option>
-                    </Select>
+                        options={unitTypeOptions}
+                    />
                 </Form.Item>
 
                 <Form.Item
                     name="parent_id"
-                    label={<span className="font-medium text-gray-700">Parent Unit</span>}
+                    label="Parent Unit"
                     tooltip="Leave empty for root level. Self and descendants are excluded."
                 >
-                    <TreeSelect
+                    <WxbTreeSelect
                         treeData={treeData}
                         placeholder="Select parent (optional)..."
                         allowClear
                         treeDefaultExpandAll
-                        className="h-10 rounded-lg"
-                        popupClassName="rounded-xl"
                         treeLine
                         showSearch
                         treeNodeFilterProp="title"
                     />
                 </Form.Item>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="orgwb-form-grid">
                     <Form.Item
                         name="unit_code"
-                        label={<span className="font-medium text-gray-700 text-xs">Unit Code (Optional)</span>}
+                        label="Unit Code (Optional)"
                     >
-                        <Input placeholder="e.g. DEPT-01" className="rounded-lg bg-white/60 border-gray-200" />
+                        <WxbInput placeholder="e.g. DEPT-01" />
                     </Form.Item>
 
                     <Form.Item
                         name="sort_order"
-                        label={<span className="font-medium text-gray-700 text-xs">Sort Order</span>}
+                        label="Sort Order"
                     >
-                        <InputNumber className="w-full rounded-lg bg-white/60 border-gray-200" min={0} />
+                        <WxbInputNumber min={0} />
                     </Form.Item>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="orgwb-form-grid">
                     <Form.Item
                         name="default_shift_code"
-                        label={<span className="font-medium text-gray-700 text-xs">Default Shift Code</span>}
+                        label="Default Shift Code"
                     >
-                        <Input placeholder="e.g. DAY" className="rounded-lg bg-white/60 border-gray-200" />
+                        <WxbInput placeholder="e.g. DAY" />
                     </Form.Item>
 
                     <Form.Item
                         name="is_active"
-                        label={<span className="font-medium text-gray-700 text-xs">Active</span>}
+                        label="Active"
                         valuePropName="checked"
                     >
-                        <Switch checkedChildren="On" unCheckedChildren="Off" />
+                        <WxbSwitch checkedChildren="On" unCheckedChildren="Off" />
                     </Form.Item>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
-                    <Button
+                <div className="orgwb-form-actions">
+                    <WxbButton
+                        type="button"
                         onClick={onCancel}
-                        className="rounded-full px-6 border-gray-300 text-gray-600 hover:text-gray-800 hover:border-gray-400 font-medium"
+                        variant="ghost"
                     >
                         Cancel
-                    </Button>
-                    <Button
-                        type="primary"
-                        htmlType="submit"
-                        loading={submitting}
-                        className="rounded-full px-8 bg-blue-600 hover:bg-blue-500 border-none shadow-md shadow-blue-500/20 font-medium"
+                    </WxbButton>
+                    <WxbButton
+                        type="submit"
+                        disabled={submitting}
+                        variant="primary"
                     >
-                        Save Changes
-                    </Button>
+                        {submitting ? 'Saving...' : 'Save Changes'}
+                    </WxbButton>
                 </div>
             </Form>
-        </Modal>
+        </WxbModal>
     );
 };
 

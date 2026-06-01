@@ -397,6 +397,7 @@ const BatchManagementV4: React.FC = () => {
                 <BulkCreateModalV4
                     visible={bulkModalVisible}
                     templates={templateSummaries}
+                    mfgPackages={mfgPackages}
                     onCancel={() => setBulkModalVisible(false)}
                     onSuccess={handleSuccess}
                 />

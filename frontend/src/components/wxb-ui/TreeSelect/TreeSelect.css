@@ -1,0 +1,38 @@
+.wxb-tree-select.ant-select {
+  width: 100%;
+}
+
+.wxb-tree-select .ant-select-selector {
+  min-height: 36px !important;
+  border-color: var(--wx-border) !important;
+  border-radius: var(--wx-radius-4) !important;
+  background: var(--wx-bg) !important;
+  font: 400 var(--wx-fs-14)/1.5 var(--wx-font-sans) !important;
+}
+
+.wxb-tree-select.ant-select-focused .ant-select-selector {
+  border-color: var(--wx-blue-500) !important;
+  box-shadow: var(--wx-sh-focus) !important;
+}
+
+.wxb-tree-select-error .ant-select-selector {
+  border-color: var(--wx-red-500) !important;
+}
+
+.wxb-tree-select-popup .ant-select-tree {
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-14)/1.5 var(--wx-font-sans);
+}
+
+.wxb-tree-select-popup .ant-select-tree-node-content-wrapper {
+  border-radius: var(--wx-radius-4);
+}
+
+.wxb-tree-select-popup .ant-select-tree-node-content-wrapper:hover {
+  background: var(--wx-surface-2);
+}
+
+.wxb-tree-select-popup .ant-select-tree-node-selected {
+  background: var(--wx-blue-100) !important;
+  color: var(--wx-blue-700);
+}

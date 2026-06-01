@@ -33,6 +33,12 @@ interface CreateBatchFormValues {
 
 type CreateBatchErrors = Partial<Record<keyof CreateBatchFormValues, string>>;
 
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+    const responseData = (error as { response?: { data?: { error?: unknown; message?: unknown } } })?.response?.data;
+    const message = responseData?.error ?? responseData?.message;
+    return typeof message === 'string' && message.trim() ? message : fallback;
+};
+
 const createDefaultValues = (): CreateBatchFormValues => ({
     source_kind: 'template',
     template_id: undefined,
@@ -165,13 +171,13 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         setLoading(true);
         try {
             if (!initialValues && values.source_kind === 'package') {
-                await batchPlanApi.createFromPackage({
+                const result = await batchPlanApi.createFromPackage({
                     mfg_package_id: Number(values.mfg_package_id),
                     batch_code: values.batch_code.trim(),
                     batch_name: values.batch_name.trim(),
                     planned_start_date: values.planned_start_date.format('YYYY-MM-DD'),
                 });
-                wxbToast.success('总包批次已创建');
+                wxbToast.success(result.message || '已按总包创建部门批次');
                 onSuccess();
                 return;
             }
@@ -203,7 +209,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
             onSuccess();
         } catch (error) {
             console.error('Failed to save batch', error);
-            wxbToast.error(initialValues ? '更新批次失败' : '创建批次失败');
+            wxbToast.error(getApiErrorMessage(error, initialValues ? '更新批次失败' : '创建批次失败'));
         } finally {
             setLoading(false);
         }
@@ -223,7 +229,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         >
             <div className="batch-modal-v4__body">
                 <p className="batch-modal-v4__intro">
-                    选择标准模板或 MFG 总包和 Day 0 日期后，系统会生成批次计划。
+                    选择标准模板会生成单个批次；选择 MFG 总包会按包含的模板生成各部门独立批次。
                 </p>
 
                 <div className="batch-modal-v4__section">
@@ -289,6 +295,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
                                 <div className="batch-modal-v4__warning-title">总包生成范围</div>
                                 <p className="batch-modal-v4__warning-copy">
                                     {selectedPackage.package_name}
+                                    {`，将生成 ${selectedPackage.module_count} 个部门批次`}
                                     {selectedPackage.total_days ? `，预计 ${selectedPackage.total_days} 天` : ''}
                                     {selectedPackage.min_day !== null && selectedPackage.min_day !== undefined
                                         ? `，覆盖 Day ${selectedPackage.min_day} 到 Day ${selectedPackage.max_day}`

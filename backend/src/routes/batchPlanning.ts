@@ -12,7 +12,8 @@ import {
   getTemplateDay0Offset,
   createBatchPlansInBulk,
   getBatchOperationsTree,
-  createBatchPlanFromMfgPackage
+  createBatchPlanFromMfgPackage,
+  createBatchPlansFromMfgPackageInBulk
 } from '../controllers/batchPlanningController';
 
 const router = express.Router();
@@ -31,6 +32,7 @@ router.post('/bulk', createBatchPlansInBulk);
 
 // Create batch from a MFG day-anchor package.
 router.post('/from-package', createBatchPlanFromMfgPackage);
+router.post('/from-package/bulk', createBatchPlansFromMfgPackageInBulk);
 
 // CRUD operations
 router.get('/', getAllBatchPlans);

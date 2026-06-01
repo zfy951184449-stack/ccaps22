@@ -182,6 +182,8 @@ export interface MfgTemplatePackageModule {
   template_id: number;
   template_code?: string;
   template_name?: string;
+  team_code?: string | null;
+  team_name?: string | null;
   template_total_days?: number | null;
   start_offset_days?: number | null;
   computed_start_offset_days?: number;
