@@ -1,4 +1,4 @@
-import React, { useCallback, useId } from 'react';
+import React, { useCallback, useEffect, useId, useRef } from 'react';
 import './Checkbox.css';
 
 export interface WxbCheckboxProps {
@@ -18,20 +18,41 @@ export const WxbCheckbox: React.FC<WxbCheckboxProps> = ({
 }) => {
   const autoId = useId();
   const cbId = id || autoId;
+  const inputRef = useRef<HTMLInputElement>(null);
   const [internal, setInternal] = React.useState(defaultChecked);
   const isControlled = controlledChecked !== undefined;
   const isChecked = isControlled ? controlledChecked : internal;
 
-  const handleChange = useCallback(() => {
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  const handleChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    const next = !isChecked;
+    const next = event.target.checked;
     if (!isControlled) setInternal(next);
     onChange?.(next);
-  }, [disabled, isChecked, isControlled, onChange]);
+  }, [disabled, isControlled, onChange]);
+
+  const handleClick = useCallback((event: React.MouseEvent<HTMLLabelElement>) => {
+    event.stopPropagation();
+  }, []);
 
   return (
-    <label className={`wxb-checkbox ${isChecked ? 'is-checked' : ''} ${indeterminate ? 'is-indeterminate' : ''} ${disabled ? 'is-disabled' : ''} ${className}`} htmlFor={cbId}>
-      <span className="wxb-checkbox-box" onClick={handleChange}>
+    <label className={`wxb-checkbox ${isChecked ? 'is-checked' : ''} ${indeterminate ? 'is-indeterminate' : ''} ${disabled ? 'is-disabled' : ''} ${className}`} htmlFor={cbId} onClick={handleClick}>
+      <input
+        ref={inputRef}
+        id={cbId}
+        className="wxb-checkbox-input"
+        type="checkbox"
+        checked={isChecked}
+        disabled={disabled}
+        aria-checked={indeterminate ? 'mixed' : isChecked}
+        onChange={handleChange}
+      />
+      <span className="wxb-checkbox-box" aria-hidden="true">
         {isChecked && !indeterminate && <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6l2.5 2.5 4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         {indeterminate && <svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 6h6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>}
       </span>

@@ -3,7 +3,14 @@
  */
 import React, { useRef, useEffect, useCallback } from 'react';
 import dayjs from 'dayjs';
-import type { GanttTask, GanttGroup, GanttDependency, GanttLink, FlatRow } from './types';
+import type {
+  GanttTask,
+  GanttGroup,
+  GanttDependency,
+  GanttLink,
+  FlatRow,
+  GanttContextActionContext,
+} from './types';
 import type { GanttState } from './useGanttStore';
 import type { GanttAction } from './useGanttStore';
 import {
@@ -49,7 +56,14 @@ interface GanttCanvasProps {
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
   onTooltipShow?: (task: GanttTask, x: number, y: number, avoidRects?: GanttAvoidRect[]) => void;
   onTooltipHide?: () => void;
-  onContextMenu?: (task: GanttTask | null, x: number, y: number, hitType?: 'task' | 'group', groupId?: string) => void;
+  onContextMenu?: (
+    task: GanttTask | null,
+    x: number,
+    y: number,
+    hitType?: 'task' | 'group',
+    groupId?: string,
+    context?: GanttContextActionContext,
+  ) => void;
   onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
   highlightedLinkIds?: string[];
   /** Per-task share-component color map from Union-Find */
@@ -605,9 +619,69 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const s = stateRef.current;
-    const hit = hitTest(e.clientX - rect.left, e.clientY - rect.top, s.scrollX, s.scrollY, showHeatmap);
-    onContextMenu(hit?.task ?? null, e.clientX, e.clientY, hit?.hitType, hit?.groupId);
-  }, [onContextMenu, hitTest, stateRef, showHeatmap]);
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
+    const effectiveScrollX = s.expandedDay === null ? s.scrollX : 0;
+    const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+    const worldY = canvasY + s.scrollY - totalHeaderH;
+    const rowIndex = worldY >= 0 ? Math.floor(worldY / ROW_HEIGHT) : undefined;
+    const row = rowIndex !== undefined && rowIndex >= 0 && rowIndex < flatRows.length ? flatRows[rowIndex] : undefined;
+    const absoluteStartHourRaw = timeScaleRef.current.xToHour(canvasX + effectiveScrollX);
+    const absoluteStartHour = Number.isFinite(absoluteStartHourRaw)
+      ? Math.round(absoluteStartHourRaw * 4) / 4
+      : undefined;
+
+    const hit = hitTest(canvasX, canvasY, s.scrollX, s.scrollY, showHeatmap);
+    dispatch({ type: 'HOVER', taskId: null });
+    dispatch({ type: 'HOVER_ROW', row: -1, colX: -1 });
+    if (shareHoverTimerRef.current) {
+      clearTimeout(shareHoverTimerRef.current);
+      shareHoverTimerRef.current = null;
+    }
+    if (hoveredShareRef.current) {
+      hoveredShareRef.current = null;
+      onShareHover?.(null, '');
+    }
+    onTooltipHide?.();
+
+    const contextType: GanttContextActionContext['contextType'] = hit?.hitType === 'task'
+      ? 'task'
+      : hit?.hitType === 'group' || row?.type === 'group'
+        ? 'group'
+        : 'background';
+    const groupId = hit?.groupId ?? (row?.type === 'group' ? row.id : row?.groupId);
+    const syntheticGroupTask: GanttTask | null =
+      !hit && contextType === 'group' && row
+        ? {
+            id: row.id,
+            label: row.label,
+            start: absoluteStartHour ?? effectiveStartHour,
+            end: (absoluteStartHour ?? effectiveStartHour) + 1,
+            groupId: row.groupId,
+            color: row.color,
+            draggable: false,
+            readOnly: true,
+          }
+        : null;
+
+    onContextMenu(
+      hit?.task ?? syntheticGroupTask,
+      e.clientX,
+      e.clientY,
+      contextType === 'background' ? undefined : contextType,
+      groupId,
+      {
+        contextType,
+        groupId,
+        x: e.clientX,
+        y: e.clientY,
+        canvasX,
+        canvasY,
+        rowIndex,
+        absoluteStartHour,
+      },
+    );
+  }, [onContextMenu, hitTest, stateRef, showHeatmap, dispatch, onShareHover, onTooltipHide, flatRows, effectiveStartHour]);
 
   return (
     <div ref={containerRef} className="wxb-gantt-canvas-container" style={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>

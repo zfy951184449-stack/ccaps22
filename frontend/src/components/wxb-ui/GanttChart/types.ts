@@ -101,6 +101,23 @@ export interface GanttLink {
   shareMode?: 'SAME_TEAM' | 'DIFFERENT';
 }
 
+export interface GanttContextActionContext {
+  contextType: 'task' | 'group' | 'background';
+  groupId?: string;
+  /** Screen-space menu anchor X coordinate */
+  x: number;
+  /** Screen-space menu anchor Y coordinate */
+  y: number;
+  /** Canvas-local X coordinate */
+  canvasX: number;
+  /** Canvas-local Y coordinate */
+  canvasY: number;
+  /** Flat row index under the cursor, when the click is in the body area */
+  rowIndex?: number;
+  /** Timeline hour represented by the clicked X coordinate */
+  absoluteStartHour?: number;
+}
+
 // ===== Component Props =====
 
 export type ViewMode = 'hour' | 'day' | 'week' | 'month';
@@ -176,7 +193,7 @@ export interface WxbGanttChartProps {
   /** Task duplicate request */
   onTaskDuplicate?: (task: GanttTask) => void;
   /** Context menu action handler (catch-all for custom actions) */
-  onContextAction?: (action: string, task: GanttTask | null) => void;
+  onContextAction?: (action: string, task: GanttTask | null, context: GanttContextActionContext) => void;
   // ===== Context Menu Customization (consumer overrides) =====
   /** Custom menu items for single-task right-click (overrides defaults) */
   taskMenuItems?: import('./GanttContextMenu').ContextMenuItem[];

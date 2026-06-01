@@ -9,10 +9,21 @@ import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { message } from 'antd';
 import axios from 'axios';
 import { WxbGanttChart, WxbSkeleton, WxbEmpty, WxbCard, WxbModal, WxbInput, WxbSelect, WxbButton } from '../wxb-ui';
-import type { GanttTask, YAxisMode } from '../wxb-ui/GanttChart/types';
-import type { ContextMenuItem } from '../wxb-ui/GanttChart/GanttContextMenu';
+import type { GanttContextActionContext, GanttTask, YAxisMode } from '../wxb-ui/GanttChart/types';
+import {
+  CtxIcons,
+  DEFAULT_BG_MENU_ITEMS,
+  DEFAULT_GROUP_MENU_ITEMS,
+  type ContextMenuItem,
+} from '../wxb-ui/GanttChart/GanttContextMenu';
 import { processTemplateV2Api } from '../../services';
 import type { ProcessTemplate, GanttNode, StageOperation } from '../ProcessTemplateGantt/types';
+import type {
+  OperationCreateContext,
+  OperationCreatedResult,
+  TemplateResourceEditorResponse,
+  TemplateStageSummary,
+} from '../ProcessTemplateV2/types';
 import { useGanttData } from '../ProcessTemplateGantt/hooks/useGanttData';
 import { useShareGroupService } from '../ProcessTemplateGantt/useShareGroupService';
 import WxbShareGroupModal from '../ProcessTemplateGantt/components/WxbShareGroupModal';
@@ -24,7 +35,9 @@ import {
 } from '../ProcessTemplateGantt/ganttAdapter';
 import { useV3EditorActions } from './useV3EditorActions';
 import { useResourceView } from './useResourceView';
+import { buildCreateTimingContext, parseStageIdFromGroupId } from './createOperationContext';
 import V3EditorHeader from './V3EditorHeader';
+import QuickCreateOperationModal from './QuickCreateOperationModal';
 import './EquipmentBinding.css';
 
 // ---------------------------------------------------------------------------
@@ -97,7 +110,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [template, setTemplate] = useState<ProcessTemplate | null>(null);
   const [templateLoading, setTemplateLoading] = useState(true);
   const [showTimeWindows, setShowTimeWindows] = useState(false); // default off
-  const [yAxisMode, setYAxisMode] = useState<YAxisMode>('operation');
+  const [yAxisMode, setYAxisMode] = useState<YAxisMode>('stage-equipment');
 
   // ---- Equipment binding state ----
   const [equipmentNodes, setEquipmentNodes] = useState<Array<{
@@ -110,6 +123,10 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [pendingBindTask, setPendingBindTask] = useState<GanttTask | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<GanttTask[]>([]);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [createOperationModalOpen, setCreateOperationModalOpen] = useState(false);
+  const [createOperationContext, setCreateOperationContext] = useState<OperationCreateContext | null>(null);
+  const [resourceEditorData, setResourceEditorData] = useState<TemplateResourceEditorResponse | null>(null);
+  const [resourceEditorLoading, setResourceEditorLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +176,26 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   }, []);
 
   useEffect(() => { void refreshEquipmentNodes(); }, [refreshEquipmentNodes]);
+
+  const loadResourceEditorData = useCallback(async () => {
+    if (!templateId) return null;
+
+    try {
+      setResourceEditorLoading(true);
+      const data = await processTemplateV2Api.getResourceEditor(templateId);
+      setResourceEditorData(data);
+      return data;
+    } catch (err: any) {
+      message.error(err?.response?.data?.error || '加载新增操作参考数据失败');
+      return null;
+    } finally {
+      setResourceEditorLoading(false);
+    }
+  }, [templateId]);
+
+  useEffect(() => {
+    void loadResourceEditorData();
+  }, [loadResourceEditorData]);
 
 
 
@@ -240,6 +277,86 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // In resource view, only show dependencies for hovered task (otherwise too dense)
   const finalDependencies = yAxisMode === 'operation' ? dependencies : [];
 
+  const firstVisibleStageId = useMemo(() => {
+    for (const group of finalGroups) {
+      const stageId = parseStageIdFromGroupId(group.id);
+      if (stageId) return stageId;
+    }
+    return resourceEditorData?.stages[0]?.id ?? ganttData.stages[0]?.id ?? null;
+  }, [finalGroups, ganttData.stages, resourceEditorData]);
+
+  const resolveCreateStage = useCallback((
+    context: GanttContextActionContext,
+    editorData: TemplateResourceEditorResponse,
+  ): TemplateStageSummary | null => {
+    const contextStageId = parseStageIdFromGroupId(context.groupId);
+    const stageId = contextStageId ?? firstVisibleStageId;
+    return editorData.stages.find(stage => Number(stage.id) === Number(stageId)) ?? editorData.stages[0] ?? null;
+  }, [firstVisibleStageId]);
+
+  const ensureResourceEditorData = useCallback(async () => {
+    return resourceEditorData ?? await loadResourceEditorData();
+  }, [loadResourceEditorData, resourceEditorData]);
+
+  const openCreateOperationFromGantt = useCallback(async (context: GanttContextActionContext) => {
+    const editorData = await ensureResourceEditorData();
+    if (!editorData) return;
+
+    const stage = resolveCreateStage(context, editorData);
+    if (!stage) {
+      message.warning('请先创建阶段，再新增操作');
+      return;
+    }
+
+    const absoluteStartHour = context.absoluteStartHour ?? Number(stage.start_day ?? 0) * 24 + 9;
+    const timing = buildCreateTimingContext(stage, absoluteStartHour);
+    setCreateOperationContext({
+      source: context.contextType === 'group' ? 'stage' : 'canvas',
+      stageId: Number(stage.id),
+      absoluteStartHour,
+      operationDay: timing.operationDay,
+      recommendedTime: timing.recommendedTime,
+      recommendedDayOffset: timing.recommendedDayOffset,
+    });
+    setCreateOperationModalOpen(true);
+  }, [ensureResourceEditorData, resolveCreateStage]);
+
+  const closeCreateOperationModal = useCallback(() => {
+    setCreateOperationModalOpen(false);
+    setCreateOperationContext(null);
+  }, []);
+
+  const handleCreatedOperation = useCallback(
+    async (_result: OperationCreatedResult) => {
+      await Promise.all([
+        ganttData.refreshData(),
+        actions.refreshAll(),
+        shareService.refresh(),
+        resourceView.refreshBindings(),
+        loadResourceEditorData(),
+      ]);
+    },
+    [actions, ganttData, loadResourceEditorData, resourceView, shareService],
+  );
+
+  const backgroundMenuItems = useMemo<ContextMenuItem[]>(
+    () =>
+      DEFAULT_BG_MENU_ITEMS.map((item) =>
+        item.key === 'add-task'
+          ? { ...item, label: '新增操作', disabled: resourceEditorLoading }
+          : item,
+      ),
+    [resourceEditorLoading],
+  );
+
+  const groupMenuItems = useMemo<ContextMenuItem[]>(
+    () => [
+      { key: 'add-task', label: '新增操作', icon: CtxIcons.plus, disabled: resourceEditorLoading, divider: true },
+      ...DEFAULT_GROUP_MENU_ITEMS,
+    ],
+    [resourceEditorLoading],
+  );
+
   // ---- Callbacks ----
   const handleTaskEdit = useCallback((task: GanttTask) => {
     // For now, log and show info — full inspector panel is a future enhancement
@@ -315,7 +432,12 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   }, [deleteTargets, ganttData, actions, resourceView]);
 
   const handleContextAction = useCallback(
-    async (action: string, task: GanttTask | null) => {
+    async (action: string, task: GanttTask | null, context: GanttContextActionContext) => {
+      if (action === 'add-task') {
+        await openCreateOperationFromGantt(context);
+        return;
+      }
+
       if (!task) return;
 
       // ---- Equipment binding actions ----
@@ -368,7 +490,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           break;
       }
     },
-    [shareService, handleTaskEdit, handleTaskDelete, equipmentNodes, resourceView],
+    [shareService, handleTaskEdit, handleTaskDelete, equipmentNodes, resourceView, openCreateOperationFromGantt],
   );
 
   // ---- Build final task menu including share sub-items + equipment ----
@@ -571,6 +693,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           links={links}
           highlightedLinkIds={shareService.highlightedLinkIds}
           taskMenuBuilder={buildTaskMenu}
+          groupMenuItems={groupMenuItems}
+          backgroundMenuItems={backgroundMenuItems}
           onTaskDragEnd={actions.handleDragEnd}
           onTaskResizeEnd={actions.handleResizeEnd}
           onTaskEdit={handleTaskEdit}
@@ -630,6 +754,24 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         onCancel={shareService.closeModal}
         onSubmit={shareService.submitModal}
       />
+
+      {resourceEditorData && (
+        <QuickCreateOperationModal
+          open={createOperationModalOpen}
+          templateId={templateId}
+          templateName={resourceEditorData.template.template_name || template.template_name}
+          templateTeamId={resourceEditorData.template.team_id ?? template.team_id ?? null}
+          templateTeamName={resourceEditorData.template.team_name ?? template.team_name ?? null}
+          stages={resourceEditorData.stages}
+          operations={resourceEditorData.operations}
+          resourceNodes={resourceEditorData.resourceTree}
+          operationLibrary={resourceEditorData.operationLibrary ?? []}
+          capabilities={resourceEditorData.capabilities}
+          context={createOperationContext}
+          onCancel={closeCreateOperationModal}
+          onCreated={handleCreatedOperation}
+        />
+      )}
 
       {/* Create Equipment Modal — Wxb Design System */}
       <WxbModal

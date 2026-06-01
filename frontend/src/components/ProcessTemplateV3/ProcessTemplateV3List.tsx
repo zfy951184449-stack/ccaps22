@@ -287,19 +287,32 @@ const ProcessTemplateV3List: React.FC = () => {
       className={`v3-template-row ${selectedId === t.id ? 'is-selected' : ''}`}
       onClick={() => goEditor(t)}
     >
-      <div className="v3-template-row-inner">
-        <WxbCheckbox
-          checked={selectedId === t.id}
-          onChange={() => setSelectedId(t.id)}
-        />
-        <WxbTag color="blue">{t.template_code}</WxbTag>
-        <span className="v3-template-row-title">{t.template_name}</span>
-        <span className="v3-template-row-subtle">{t.team_name || '未分配'}</span>
-        <span className="v3-template-row-muted">{t.total_days} 天</span>
-        {hasRisk(t) && riskBadges(t)}
-        <div className="v3-template-row-spacer" />
-        <WxbButton size="sm" onClick={(e) => { e.stopPropagation(); goEditor(t); }}>编辑</WxbButton>
-        <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>复制</WxbButton>
+      <div className="v3-template-row-inner" role="row">
+        <div className="v3-template-cell v3-template-cell-select" role="cell">
+          <WxbCheckbox
+            checked={selectedId === t.id}
+            onChange={(checked) => setSelectedId(checked ? t.id : null)}
+          />
+        </div>
+        <div className="v3-template-cell v3-template-cell-code" role="cell">
+          <WxbTag color="blue">{t.template_code}</WxbTag>
+        </div>
+        <div className="v3-template-cell v3-template-cell-name" role="cell">
+          <span className="v3-template-row-title">{t.template_name}</span>
+        </div>
+        <div className="v3-template-cell v3-template-cell-team" role="cell">
+          <span className="v3-template-row-subtle">{t.team_name || '未分配'}</span>
+        </div>
+        <div className="v3-template-cell v3-template-cell-days" role="cell">
+          <span className="v3-template-row-muted">{t.total_days} 天</span>
+        </div>
+        <div className="v3-template-cell v3-template-cell-risk" role="cell">
+          {hasRisk(t) ? riskBadges(t) : <WxbTag color="neutral">正常</WxbTag>}
+        </div>
+        <div className="v3-template-cell v3-template-cell-actions" role="cell">
+          <WxbButton size="sm" onClick={(e) => { e.stopPropagation(); goEditor(t); }}>编辑</WxbButton>
+          <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>复制</WxbButton>
+        </div>
       </div>
     </WxbCard>
   );
@@ -433,7 +446,18 @@ const ProcessTemplateV3List: React.FC = () => {
               </WxbPageSection>
             ) : (
               <WxbPageSection density="compact">
-                {displayed.map(renderRow)}
+                <div className="v3-template-list" role="table" aria-label="工艺模版列表">
+                  <div className="v3-template-list-header" role="row">
+                    <span className="v3-template-cell-select" aria-hidden="true" />
+                    <span>编码</span>
+                    <span>模板名称</span>
+                    <span>团队</span>
+                    <span>周期</span>
+                    <span>状态</span>
+                    <span className="v3-template-header-actions">操作</span>
+                  </div>
+                  {displayed.map(renderRow)}
+                </div>
               </WxbPageSection>
             )}
           </>

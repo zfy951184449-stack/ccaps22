@@ -1,0 +1,1617 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>操作-工艺-批次-求解器图形梳理</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --surface: #ffffff;
+      --surface-soft: #f2f6fb;
+      --text: #1f2937;
+      --muted: #667085;
+      --border: #d9e2ec;
+      --blue: #2563eb;
+      --blue-soft: #eaf2ff;
+      --green: #059669;
+      --green-soft: #eafaf3;
+      --amber: #d97706;
+      --amber-soft: #fff7e6;
+      --purple: #7c3aed;
+      --purple-soft: #f3efff;
+      --red: #dc2626;
+      --red-soft: #fff0f0;
+      --shadow: 0 16px 36px rgba(31, 41, 55, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      width: min(1240px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 30px 0 56px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    code {
+      padding: 1px 5px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--surface-soft);
+      color: var(--text);
+      font-size: 0.92em;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      max-width: 540px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .chip::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .ref {
+      color: var(--blue);
+    }
+
+    .snap {
+      color: var(--green);
+    }
+
+    .runtime {
+      color: var(--amber);
+    }
+
+    .mixed {
+      color: var(--purple);
+    }
+
+    .risk {
+      color: var(--red);
+    }
+
+    .board {
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+
+    .diagram {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+
+    .node-title {
+      font-size: 22px;
+      font-weight: 800;
+      fill: var(--text);
+      letter-spacing: 0;
+    }
+
+    .node-subtitle {
+      font-size: 14px;
+      font-weight: 700;
+      fill: var(--muted);
+    }
+
+    .node-text {
+      font-size: 13px;
+      fill: var(--muted);
+    }
+
+    .small-label {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .arrow-label {
+      font-size: 13px;
+      font-weight: 800;
+      fill: var(--text);
+    }
+
+    .arrow-note {
+      font-size: 12px;
+      fill: var(--muted);
+    }
+
+    .section {
+      margin-top: 18px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+
+    .visual-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 16px;
+      margin-top: 14px;
+    }
+
+    .mini-map {
+      display: grid;
+      gap: 10px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-soft);
+    }
+
+    .snapshot-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .stack-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 80px;
+      gap: 10px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .bar {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e6ebf2;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+    }
+
+    .bar-ref span {
+      width: 25%;
+      background: var(--blue);
+    }
+
+    .bar-snap span {
+      width: 88%;
+      background: var(--green);
+    }
+
+    .bar-mixed span {
+      width: 58%;
+      background: var(--purple);
+    }
+
+    .bar-runtime span {
+      width: 70%;
+      background: var(--amber);
+    }
+
+    .packet-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .packet {
+      min-height: 128px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .packet strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .packet ul {
+      margin: 0;
+      padding-left: 17px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .packet li + li {
+      margin-top: 4px;
+    }
+
+    .risk-list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .risk-card {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--red);
+      border-radius: 8px;
+      background: var(--red-soft);
+    }
+
+    .risk-card strong {
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    .apply-flow {
+      display: grid;
+      grid-template-columns: 1fr 54px 1.15fr 54px 1.15fr;
+      gap: 12px;
+      align-items: stretch;
+      margin-top: 14px;
+    }
+
+    .apply-node {
+      min-height: 148px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .apply-node strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .apply-node.result-state {
+      background: var(--purple-soft);
+      border-color: #d7c9ff;
+    }
+
+    .apply-node.production-state {
+      background: var(--green-soft);
+      border-color: #bfe8d7;
+    }
+
+    .apply-node.consumer-state {
+      background: var(--blue-soft);
+      border-color: #b7d4ff;
+    }
+
+    .apply-node ul {
+      margin: 0;
+      padding-left: 17px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .apply-node li + li {
+      margin-top: 5px;
+    }
+
+    .apply-arrow {
+      position: relative;
+      align-self: center;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--green);
+    }
+
+    .apply-arrow::after {
+      content: "";
+      position: absolute;
+      top: -6px;
+      right: -2px;
+      width: 0;
+      height: 0;
+      border-top: 8px solid transparent;
+      border-bottom: 8px solid transparent;
+      border-left: 14px solid var(--green);
+    }
+
+    .impact-map {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .impact-row {
+      display: grid;
+      grid-template-columns: 170px repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .impact-header {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .impact-header div {
+      padding: 0 12px;
+    }
+
+    .impact-layer,
+    .impact-cell {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      font-size: 13px;
+    }
+
+    .impact-layer {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--surface-soft);
+      font-weight: 800;
+    }
+
+    .impact-layer span {
+      margin-top: 4px;
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .impact-cell {
+      min-height: 96px;
+      color: var(--muted);
+    }
+
+    .impact-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      min-height: 24px;
+      margin-bottom: 8px;
+      border-radius: 999px;
+      color: var(--surface);
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    .impact-create {
+      background: var(--green);
+    }
+
+    .impact-update {
+      background: var(--amber);
+    }
+
+    .impact-delete {
+      background: var(--red);
+    }
+
+    .mini-impact {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .action-symbol {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      color: var(--surface);
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+
+    .symbol-create {
+      background: var(--green);
+    }
+
+    .symbol-update {
+      background: var(--amber);
+    }
+
+    .symbol-delete {
+      background: var(--red);
+    }
+
+    .impact-node {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface-soft);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .impact-node.hit {
+      background: var(--green-soft);
+      border-color: #bfe8d7;
+      color: var(--green);
+    }
+
+    .impact-node.warn {
+      background: var(--amber-soft);
+      border-color: #f1c27d;
+      color: var(--amber);
+    }
+
+    .impact-node.stop {
+      background: var(--red-soft);
+      border-color: #f3b6b6;
+      color: var(--red);
+    }
+
+    .impact-node.locked {
+      background: var(--purple-soft);
+      border-color: #d7c9ff;
+      color: var(--purple);
+    }
+
+    .mini-arrow {
+      color: var(--muted);
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .mini-arrow.blocked {
+      color: var(--red);
+    }
+
+    .impact-caption {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .local-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-soft);
+    }
+
+    .legend-token {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .legend-symbol {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      margin-right: 6px;
+      border-radius: 50%;
+      color: var(--surface);
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .legend-symbol.plain {
+      width: auto;
+      min-width: 22px;
+      margin-right: 6px;
+      border-radius: 0;
+      background: transparent;
+      color: var(--text);
+      font-size: 16px;
+    }
+
+    .audit-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .audit-card {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .audit-card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .audit-card p {
+      font-size: 13px;
+    }
+
+    .audit-card.ok {
+      background: var(--green-soft);
+      border-color: #bfe8d7;
+    }
+
+    .audit-card.warn {
+      background: var(--amber-soft);
+      border-color: #f1c27d;
+    }
+
+    .audit-card.bad {
+      background: var(--red-soft);
+      border-color: #f3b6b6;
+    }
+
+    .score {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 54px;
+      min-height: 30px;
+      margin-bottom: 10px;
+      border-radius: 999px;
+      color: var(--surface);
+      font-weight: 900;
+      font-size: 13px;
+    }
+
+    .score.ok {
+      background: var(--green);
+    }
+
+    .score.warn {
+      background: var(--amber);
+    }
+
+    .score.bad {
+      background: var(--red);
+    }
+
+    .guard-map {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .guard-row {
+      display: grid;
+      grid-template-columns: 170px repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .guard-header {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .guard-header div {
+      padding: 0 12px;
+    }
+
+    .guard-layer,
+    .guard-cell {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      font-size: 13px;
+    }
+
+    .guard-layer {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--surface-soft);
+      font-weight: 800;
+    }
+
+    .guard-layer span {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .guard-cell {
+      min-height: 90px;
+      color: var(--muted);
+    }
+
+    .guard-cell strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .route-panel {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .route-panel h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+    }
+
+    .route-item {
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 10px 0;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .route-item:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+
+    .route-item code {
+      color: var(--text);
+    }
+
+    .planner-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .planner-card {
+      min-height: 190px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .planner-card.high {
+      background: var(--red-soft);
+      border-color: #f3b6b6;
+    }
+
+    .planner-card.medium {
+      background: var(--amber-soft);
+      border-color: #f1c27d;
+    }
+
+    .planner-card.low {
+      background: var(--blue-soft);
+      border-color: #b7d4ff;
+    }
+
+    .planner-title {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+      font-weight: 900;
+    }
+
+    .planner-step {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .planner-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .planner-label {
+      min-width: 52px;
+      color: var(--text);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      border-radius: 999px;
+      color: var(--surface);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .pill-ok {
+      background: var(--green);
+    }
+
+    .pill-p1 {
+      background: var(--red);
+    }
+
+    .pill-p2 {
+      background: var(--amber);
+    }
+
+    .source-list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .source-list a {
+      display: block;
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-soft);
+      color: var(--blue);
+      text-decoration: none;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .source-list a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 980px) {
+      header,
+      .visual-grid,
+      .packet-grid,
+      .risk-list,
+      .audit-summary,
+      .planner-grid,
+      .source-list {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .apply-flow {
+        grid-template-columns: 1fr;
+      }
+
+      .apply-arrow {
+        width: 4px;
+        height: 34px;
+        justify-self: center;
+      }
+
+      .apply-arrow::after {
+        top: auto;
+        right: -6px;
+        bottom: -2px;
+        border-left: 8px solid transparent;
+        border-right: 8px solid transparent;
+        border-top: 14px solid var(--green);
+        border-bottom: 0;
+      }
+
+      .legend {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 680px) {
+      main {
+        width: min(100vw - 20px, 1240px);
+        padding-top: 20px;
+      }
+
+      header,
+      .visual-grid,
+      .packet-grid,
+      .risk-list,
+      .audit-summary,
+      .route-grid,
+      .planner-grid,
+      .source-list {
+        grid-template-columns: 1fr;
+      }
+
+      .impact-row {
+        grid-template-columns: 1fr;
+      }
+
+      .guard-row {
+        grid-template-columns: 1fr;
+      }
+
+      .impact-header {
+        display: none;
+      }
+
+      .guard-header {
+        display: none;
+      }
+
+      h1 {
+        font-size: 24px;
+      }
+
+      .board {
+        overflow-x: auto;
+      }
+
+      .diagram {
+        min-width: 1080px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>操作-工艺-批次-求解器：图形版</h1>
+        <p>重点看箭头颜色：蓝色是引用，绿色是批次物化快照，橙色是当次求解请求，紫色是条件快照或混合读取。</p>
+      </div>
+      <div class="legend" aria-label="图例">
+        <span class="chip ref">引用</span>
+        <span class="chip snap">物化快照</span>
+        <span class="chip runtime">运行时快照</span>
+        <span class="chip mixed">条件/混合</span>
+        <span class="chip risk">漂移风险</span>
+      </div>
+    </header>
+
+    <section class="board" aria-label="主流程图">
+      <svg class="diagram" viewBox="0 0 1320 650" role="img" aria-labelledby="diagram-title">
+        <title id="diagram-title">操作主数据到工艺模板、批次计划、求解器和结果应用的信息传递图</title>
+        <defs>
+          <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+            <path d="M2,2 L10,6 L2,10 Z" fill="#2563eb"></path>
+          </marker>
+          <marker id="arrow-green" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+            <path d="M2,2 L10,6 L2,10 Z" fill="#059669"></path>
+          </marker>
+          <marker id="arrow-amber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+            <path d="M2,2 L10,6 L2,10 Z" fill="#d97706"></path>
+          </marker>
+          <marker id="arrow-purple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+            <path d="M2,2 L10,6 L2,10 Z" fill="#7c3aed"></path>
+          </marker>
+          <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+            <path d="M2,2 L10,6 L2,10 Z" fill="#dc2626"></path>
+          </marker>
+          <filter id="soft-shadow" x="-15%" y="-20%" width="130%" height="150%">
+            <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#1f2937" flood-opacity="0.12"></feDropShadow>
+          </filter>
+        </defs>
+
+        <rect x="24" y="24" width="1272" height="602" rx="18" fill="#ffffff"></rect>
+        <rect x="48" y="410" width="1208" height="160" rx="16" fill="#f6f8fb" stroke="#d9e2ec"></rect>
+        <text x="70" y="444" class="node-title" font-size="18">哪些地方容易和“快照”混淆</text>
+        <text x="70" y="470" class="node-text">下方是后续复盘时最容易出现差异的三个位置。</text>
+
+        <g filter="url(#soft-shadow)">
+          <rect x="50" y="95" width="205" height="205" rx="16" fill="#eaf2ff" stroke="#b7d4ff" stroke-width="2"></rect>
+          <ellipse cx="152.5" cy="128" rx="58" ry="18" fill="#ffffff" stroke="#2563eb" stroke-width="2"></ellipse>
+          <path d="M94.5,128 V210 C94.5,220 210.5,220 210.5,210 V128" fill="#ffffff" stroke="#2563eb" stroke-width="2"></path>
+          <ellipse cx="152.5" cy="210" rx="58" ry="18" fill="#ffffff" stroke="#2563eb" stroke-width="2"></ellipse>
+          <text x="82" y="258" class="node-title">操作主数据</text>
+          <text x="82" y="282" class="node-subtitle">operations</text>
+        </g>
+
+        <g filter="url(#soft-shadow)">
+          <rect x="320" y="95" width="225" height="205" rx="16" fill="#ffffff" stroke="#2563eb" stroke-width="2"></rect>
+          <rect x="346" y="125" width="173" height="34" rx="8" fill="#eaf2ff" stroke="#b7d4ff"></rect>
+          <rect x="346" y="172" width="173" height="34" rx="8" fill="#eaf2ff" stroke="#b7d4ff"></rect>
+          <rect x="346" y="219" width="173" height="34" rx="8" fill="#eaf2ff" stroke="#b7d4ff"></rect>
+          <text x="376" y="148" class="small-label" fill="#2563eb">stage 1</text>
+          <text x="376" y="195" class="small-label" fill="#2563eb">stage 2</text>
+          <text x="376" y="242" class="small-label" fill="#2563eb">stage operation</text>
+          <text x="348" y="282" class="node-title">工艺模板</text>
+          <text x="348" y="306" class="node-subtitle">模板结构 + 相对时间</text>
+        </g>
+
+        <g filter="url(#soft-shadow)">
+          <rect x="620" y="72" width="250" height="252" rx="16" fill="#eafaf3" stroke="#059669" stroke-width="2"></rect>
+          <rect x="650" y="110" width="190" height="38" rx="8" fill="#ffffff" stroke="#bfe8d7"></rect>
+          <rect x="650" y="160" width="190" height="38" rx="8" fill="#ffffff" stroke="#bfe8d7"></rect>
+          <rect x="650" y="210" width="190" height="38" rx="8" fill="#ffffff" stroke="#bfe8d7"></rect>
+          <text x="675" y="134" class="small-label" fill="#059669">batch_operation_plans</text>
+          <text x="686" y="184" class="small-label" fill="#059669">constraints</text>
+          <text x="692" y="234" class="small-label" fill="#059669">share groups</text>
+          <text x="650" y="292" class="node-title">批次计划</text>
+          <text x="650" y="316" class="node-subtitle">具体批次的执行实例</text>
+        </g>
+
+        <g filter="url(#soft-shadow)">
+          <rect x="940" y="95" width="220" height="230" rx="16" fill="#fff7e6" stroke="#d97706" stroke-width="2"></rect>
+          <path d="M980 128 H1120 V252 H980 Z" fill="#ffffff" stroke="#f1c27d" stroke-width="2"></path>
+          <path d="M1005 152 H1095 M1005 178 H1110 M1005 204 H1080 M1005 230 H1102" stroke="#d97706" stroke-width="7" stroke-linecap="round"></path>
+          <text x="974" y="282" class="node-title">求解请求</text>
+          <text x="974" y="306" class="node-subtitle">SolverRequest JSON</text>
+        </g>
+
+        <g filter="url(#soft-shadow)">
+          <rect x="1210" y="95" width="60" height="205" rx="16" fill="#f3efff" stroke="#7c3aed" stroke-width="2"></rect>
+          <circle cx="1240" cy="140" r="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2"></circle>
+          <circle cx="1240" cy="190" r="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2"></circle>
+          <circle cx="1240" cy="240" r="12" fill="#ffffff" stroke="#7c3aed" stroke-width="2"></circle>
+          <line x1="1240" y1="152" x2="1240" y2="178" stroke="#7c3aed" stroke-width="3"></line>
+          <line x1="1240" y1="202" x2="1240" y2="228" stroke="#7c3aed" stroke-width="3"></line>
+        </g>
+        <text x="1172" y="340" class="node-title">结果保存</text>
+        <text x="1172" y="364" class="node-subtitle">scheduling_runs</text>
+
+        <path d="M255 198 H315" stroke="#2563eb" stroke-width="4" stroke-dasharray="9 7" fill="none" marker-end="url(#arrow-blue)"></path>
+        <rect x="263" y="154" width="74" height="30" rx="15" fill="#eaf2ff" stroke="#b7d4ff"></rect>
+        <text x="275" y="174" class="arrow-label">引用 ID</text>
+
+        <path d="M545 198 H615" stroke="#059669" stroke-width="5" fill="none" marker-end="url(#arrow-green)"></path>
+        <rect x="548" y="154" width="94" height="30" rx="15" fill="#eafaf3" stroke="#bfe8d7"></rect>
+        <text x="562" y="174" class="arrow-label">生成快照</text>
+
+        <path d="M870 198 H935" stroke="#d97706" stroke-width="5" fill="none" marker-end="url(#arrow-amber)"></path>
+        <rect x="872" y="154" width="98" height="30" rx="15" fill="#fff7e6" stroke="#f1c27d"></rect>
+        <text x="887" y="174" class="arrow-label">组装 JSON</text>
+
+        <path d="M1160 198 H1204" stroke="#7c3aed" stroke-width="5" fill="none" marker-end="url(#arrow-purple)"></path>
+        <rect x="1142" y="154" width="86" height="30" rx="15" fill="#f3efff" stroke="#d7c9ff"></rect>
+        <text x="1157" y="174" class="arrow-label">输出结果</text>
+
+        <path d="M1240 300 C1240 326 1210 334 1176 346" stroke="#059669" stroke-width="5" fill="none" marker-end="url(#arrow-green)"></path>
+        <rect x="900" y="340" width="268" height="62" rx="14" fill="#eafaf3" stroke="#bfe8d7" stroke-width="2"></rect>
+        <text x="924" y="366" class="node-title" font-size="18">应用后生产态</text>
+        <text x="924" y="389" class="node-text">batch_personnel_assignments / employee_shift_plans</text>
+
+        <path d="M432 300 C432 352 620 348 650 382" stroke="#7c3aed" stroke-width="4" stroke-dasharray="8 7" fill="none" marker-end="url(#arrow-purple)"></path>
+        <path d="M745 324 C745 354 780 356 805 382" stroke="#7c3aed" stroke-width="4" stroke-dasharray="8 7" fill="none" marker-end="url(#arrow-purple)"></path>
+        <path d="M805 382 C900 360 970 345 1028 303" stroke="#7c3aed" stroke-width="4" stroke-dasharray="8 7" fill="none" marker-end="url(#arrow-purple)"></path>
+        <rect x="640" y="372" width="250" height="64" rx="14" fill="#f3efff" stroke="#d7c9ff" stroke-width="2"></rect>
+        <text x="665" y="399" class="node-title" font-size="18">资源规则分支</text>
+        <text x="665" y="422" class="node-text">feature flag 开启：批次快照；否则回退操作/模板规则</text>
+
+        <g>
+          <rect x="92" y="500" width="265" height="64" rx="12" fill="#fff0f0" stroke="#f3b6b6"></rect>
+          <circle cx="118" cy="532" r="12" fill="#dc2626"></circle>
+          <text x="114" y="537" font-size="16" font-weight="800" fill="#ffffff">1</text>
+          <text x="142" y="524" class="arrow-label">主数据仍会被 join</text>
+          <text x="142" y="546" class="arrow-note">例如 operation_name 不是批次深拷贝</text>
+        </g>
+        <g>
+          <rect x="512" y="500" width="285" height="64" rx="12" fill="#fff0f0" stroke="#f3b6b6"></rect>
+          <circle cx="538" cy="532" r="12" fill="#dc2626"></circle>
+          <text x="534" y="537" font-size="16" font-weight="800" fill="#ffffff">2</text>
+          <text x="562" y="524" class="arrow-label">资源规则是条件快照</text>
+          <text x="562" y="546" class="arrow-note">开关不同，求解输入可能不同</text>
+        </g>
+        <g>
+          <rect x="932" y="500" width="285" height="64" rx="12" fill="#fff0f0" stroke="#f3b6b6"></rect>
+          <circle cx="958" cy="532" r="12" fill="#dc2626"></circle>
+          <text x="954" y="537" font-size="16" font-weight="800" fill="#ffffff">3</text>
+          <text x="982" y="524" class="arrow-label">完整求解输入未归档</text>
+          <text x="982" y="546" class="arrow-note">只能算运行时快照，不是审计级快照</text>
+        </g>
+      </svg>
+    </section>
+
+    <section class="section">
+      <h2>快照深度和数据包</h2>
+      <div class="visual-grid">
+        <div class="mini-map">
+          <h2>快照深度</h2>
+          <div class="snapshot-stack">
+            <div class="stack-row">
+              <span>操作到模板</span>
+              <div class="bar bar-ref"><span></span></div>
+              <strong class="ref">引用</strong>
+            </div>
+            <div class="stack-row">
+              <span>模板到批次</span>
+              <div class="bar bar-snap"><span></span></div>
+              <strong class="snap">较深</strong>
+            </div>
+            <div class="stack-row">
+              <span>资源规则</span>
+              <div class="bar bar-mixed"><span></span></div>
+              <strong class="mixed">条件</strong>
+            </div>
+            <div class="stack-row">
+              <span>批次到求解器</span>
+              <div class="bar bar-runtime"><span></span></div>
+              <strong class="runtime">当次</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="mini-map">
+          <h2>一句话判断</h2>
+          <p>合理，但不是完整不可变快照。当前设计适合生产排程：模板复用主数据，批次固化执行计划，求解器消费当次 JSON。若要审计级复盘，需要额外持久化完整求解输入和主数据版本。</p>
+        </div>
+      </div>
+
+      <div class="packet-grid">
+        <article class="packet">
+          <strong>模板拿到什么</strong>
+          <ul>
+            <li><code>operation_id</code></li>
+            <li>阶段、顺序、相对日期</li>
+            <li>推荐时间和时间窗口</li>
+          </ul>
+        </article>
+        <article class="packet">
+          <strong>批次固化什么</strong>
+          <ul>
+            <li>实际开始/结束时间</li>
+            <li>窗口、持续时间、人数</li>
+            <li>约束和共享组</li>
+          </ul>
+        </article>
+        <article class="packet">
+          <strong>求解器收到什么</strong>
+          <ul>
+            <li><code>operation_demands</code></li>
+            <li>人员、资质、不可用</li>
+            <li>班次、日历、资源</li>
+          </ul>
+        </article>
+        <article class="packet">
+          <strong>结果写回什么</strong>
+          <ul>
+            <li><code>scheduling_runs</code> 结果摘要</li>
+            <li><code>batch_personnel_assignments</code></li>
+            <li><code>employee_shift_plans</code></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>结果应用后的阶段</h2>
+      <div class="apply-flow" aria-label="求解结果应用后的生产态流转">
+        <article class="apply-node result-state">
+          <strong>1. 结果草稿</strong>
+          <ul>
+            <li><code>scheduling_runs.result_summary</code></li>
+            <li><code>summary_json</code></li>
+            <li>仍是求解输出，不等于生产排班已生效</li>
+          </ul>
+        </article>
+        <div class="apply-arrow" aria-hidden="true"></div>
+        <article class="apply-node production-state">
+          <strong>2. Apply 写入生产表</strong>
+          <ul>
+            <li><code>batch_personnel_assignments</code>：操作到人员</li>
+            <li><code>employee_shift_plans</code>：员工到日期/班次</li>
+            <li>写入 <code>scheduling_run_id</code> 追溯来源</li>
+          </ul>
+        </article>
+        <div class="apply-arrow" aria-hidden="true"></div>
+        <article class="apply-node consumer-state">
+          <strong>3. 后续页面读取</strong>
+          <ul>
+            <li>批次甘特图、日历、人员看板</li>
+            <li>锁定/历史班次会影响下一次求解</li>
+            <li>删除结果不自动撤销已应用生产表</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>数据新增/修改/删除的影响地图</h2>
+      <div class="local-legend" aria-label="影响地图图例">
+        <span class="legend-token"><span class="legend-symbol symbol-create">+</span>新增</span>
+        <span class="legend-token"><span class="legend-symbol symbol-update">Δ</span>修改</span>
+        <span class="legend-token"><span class="legend-symbol symbol-delete">×</span>删除</span>
+        <span class="legend-token"><span class="legend-symbol plain">→</span>传递影响</span>
+        <span class="legend-token"><span class="legend-symbol plain">⊣</span>不传递/被阻断</span>
+        <span class="legend-token"><span class="legend-symbol plain">?</span>取决于配置或是否重建</span>
+        <span class="legend-token"><span class="legend-symbol plain">≠</span>不等价</span>
+        <span class="impact-node hit">会影响</span>
+        <span class="impact-node locked">已固化/已锁定</span>
+        <span class="impact-node warn">需注意</span>
+        <span class="impact-node stop">风险/阻断</span>
+      </div>
+      <div class="impact-map" aria-label="不同层级数据新增修改删除后的影响">
+        <div class="impact-row impact-header">
+          <div>数据层</div>
+          <div>新增</div>
+          <div>修改</div>
+          <div>删除</div>
+        </div>
+
+        <div class="impact-row">
+          <div class="impact-layer">操作主数据<span>operations</span></div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-create">+</span>
+              <span class="impact-node hit">操作库</span>
+              <span class="mini-arrow blocked">⊣</span>
+              <span class="impact-node">模板</span>
+              <span class="impact-node">批次</span>
+            </div>
+            <div class="impact-caption">新增只进入可选池</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-update">Δ</span>
+              <span class="impact-node hit">模板展示</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">新批次</span>
+              <span class="impact-node locked">既有批次</span>
+            </div>
+            <div class="impact-caption">既有批次通常已固化</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-delete">×</span>
+              <span class="impact-node stop">引用阻断</span>
+              <span class="impact-node warn">建议停用</span>
+            </div>
+            <div class="impact-caption">硬删不适合主数据</div>
+          </div>
+        </div>
+
+        <div class="impact-row">
+          <div class="impact-layer">工艺模板<span>stage_operation_schedules</span></div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-create">+</span>
+              <span class="impact-node hit">模板</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">后续批次</span>
+              <span class="impact-node locked">既有批次</span>
+            </div>
+            <div class="impact-caption">不会反写已生成批次</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-update">Δ</span>
+              <span class="impact-node hit">新模板</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">重生成</span>
+              <span class="impact-node locked">旧快照</span>
+            </div>
+            <div class="impact-caption">只有重生成才进入批次</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-delete">×</span>
+              <span class="impact-node stop">引用批次</span>
+              <span class="mini-arrow blocked">⊣</span>
+              <span class="impact-node">删除</span>
+            </div>
+            <div class="impact-caption">应先检查已有批次</div>
+          </div>
+        </div>
+
+        <div class="impact-row">
+          <div class="impact-layer">批次操作<span>batch_operation_plans</span></div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-create">+</span>
+              <span class="impact-node hit">批次</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">下次求解</span>
+            </div>
+            <div class="impact-caption">最好由模板生成</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-update">Δ</span>
+              <span class="impact-node hit">时间/窗口</span>
+              <span class="impact-node hit">人数</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">Solver</span>
+            </div>
+            <div class="impact-caption">直接改变求解输入</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-delete">×</span>
+              <span class="impact-node stop">约束</span>
+              <span class="impact-node stop">共享组</span>
+              <span class="impact-node stop">人员</span>
+              <span class="impact-node stop">资源</span>
+            </div>
+            <div class="impact-caption">已排班后风险最高</div>
+          </div>
+        </div>
+
+        <div class="impact-row">
+          <div class="impact-layer">资源规则<span>template/global/batch</span></div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-create">+</span>
+              <span class="impact-node hit">规则库</span>
+              <span class="mini-arrow">?</span>
+              <span class="impact-node warn">批次快照</span>
+            </div>
+            <div class="impact-caption">取决于是否重建快照</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-update">Δ</span>
+              <span class="impact-node locked">有快照</span>
+              <span class="mini-arrow">/</span>
+              <span class="impact-node hit">无快照</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">最新规则</span>
+            </div>
+            <div class="impact-caption">读取路径不唯一</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-delete">×</span>
+              <span class="impact-node warn">回退上层</span>
+              <span class="impact-node stop">约束减少</span>
+            </div>
+            <div class="impact-caption">可能改变资源可行性</div>
+          </div>
+        </div>
+
+        <div class="impact-row">
+          <div class="impact-layer">求解结果<span>run/result/apply</span></div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-create">+</span>
+              <span class="impact-node hit">结果草稿</span>
+              <span class="mini-arrow blocked">⊣</span>
+              <span class="impact-node">生产表</span>
+            </div>
+            <div class="impact-caption">未 Apply 不生效</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-update">Δ</span>
+              <span class="impact-node hit">覆盖结果</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node warn">下次 Apply</span>
+            </div>
+            <div class="impact-caption">影响写入内容</div>
+          </div>
+          <div class="impact-cell">
+            <div class="mini-impact">
+              <span class="action-symbol symbol-delete">×</span>
+              <span class="impact-node hit">草稿</span>
+              <span class="mini-arrow blocked">≠</span>
+              <span class="impact-node stop">撤销生产表</span>
+            </div>
+            <div class="impact-caption">已应用需单独撤销</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>CRUD 设计审计</h2>
+      <div class="audit-summary" aria-label="CRUD 设计审计总览">
+        <article class="audit-card ok">
+          <span class="score ok">OK</span>
+          <strong>主生命周期方向正确</strong>
+          <p>批次激活、撤销、删除已经有状态和残留数据清理边界。</p>
+        </article>
+        <article class="audit-card warn">
+          <span class="score warn">P2</span>
+          <strong>快照边界不完整</strong>
+          <p>资源规则、模板删除、主数据版本仍有混合读取和审计追溯弱点。</p>
+        </article>
+        <article class="audit-card bad">
+          <span class="score bad">P1</span>
+          <strong>入口守卫不一致</strong>
+          <p>部分甘特图、约束、资源入口可以绕过批次状态保护。</p>
+        </article>
+      </div>
+
+      <div class="guard-map" aria-label="生命周期守卫目标状态">
+        <div class="guard-row guard-header">
+          <div>对象</div>
+          <div>DRAFT</div>
+          <div>ACTIVATED</div>
+          <div>APPLIED</div>
+        </div>
+        <div class="guard-row">
+          <div class="guard-layer">批次基础<span>production_batch_plans</span></div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node hit">可改</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">重生成快照</span>
+            </div>
+            <div class="impact-caption">模板/开工日变更</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node stop">禁改模板</span>
+              <span class="impact-node stop">禁改开工日</span>
+            </div>
+            <div class="impact-caption">已有状态保护</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node warn">撤销</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">再改</span>
+            </div>
+            <div class="impact-caption">先清理排班结果</div>
+          </div>
+        </div>
+        <div class="guard-row">
+          <div class="guard-layer">批次操作<span>batch_operation_plans</span></div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node hit">可改</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">下次求解</span>
+            </div>
+            <div class="impact-caption">草稿期合理</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node stop">甘特入口</span>
+              <span class="mini-arrow blocked">!</span>
+              <span class="impact-node warn">缺守卫</span>
+            </div>
+            <div class="impact-caption">当前入口不一致</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node stop">人员</span>
+              <span class="impact-node stop">班次</span>
+              <span class="impact-node stop">结果</span>
+            </div>
+            <div class="impact-caption">已应用后高风险</div>
+          </div>
+        </div>
+        <div class="guard-row">
+          <div class="guard-layer">约束/共享组<span>constraints/share</span></div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node hit">可改</span>
+              <span class="impact-node hit">校验环</span>
+            </div>
+            <div class="impact-caption">草稿期调整</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node stop">约束 CRUD</span>
+              <span class="mini-arrow blocked">!</span>
+              <span class="impact-node warn">校验不足</span>
+            </div>
+            <div class="impact-caption">状态/同批次/间接环</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node warn">改约束</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node warn">重算</span>
+            </div>
+            <div class="impact-caption">不应静默影响已排班</div>
+          </div>
+        </div>
+        <div class="guard-row">
+          <div class="guard-layer">资源规则<span>resource snapshots</span></div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node hit">固化</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">批次快照</span>
+            </div>
+            <div class="impact-caption">草稿期快照</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node warn">feature flag</span>
+              <span class="mini-arrow">?</span>
+              <span class="impact-node locked">回退规则</span>
+            </div>
+            <div class="impact-caption">读取路径条件化</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node stop">冻结</span>
+              <span class="mini-arrow blocked">⊣</span>
+              <span class="impact-node">静默改输入</span>
+            </div>
+            <div class="impact-caption">已应用后应锁定</div>
+          </div>
+        </div>
+        <div class="guard-row">
+          <div class="guard-layer">求解结果<span>run/result</span></div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node hit">结果草稿</span>
+              <span class="mini-arrow blocked">⊣</span>
+              <span class="impact-node">生产表</span>
+            </div>
+            <div class="impact-caption">未 Apply 不生效</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node hit">Apply</span>
+              <span class="mini-arrow">→</span>
+              <span class="impact-node hit">人员/班次</span>
+            </div>
+            <div class="impact-caption">写入生产排班</div>
+          </div>
+          <div class="guard-cell">
+            <div class="mini-impact">
+              <span class="impact-node stop">缺 unapply</span>
+              <span class="impact-node warn">需 replan</span>
+            </div>
+            <div class="impact-caption">缺显式撤销对象</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-grid" aria-label="CRUD 入口一致性审计">
+        <div class="route-panel">
+          <h3>已符合预期的入口</h3>
+          <div class="route-item">
+            <span class="pill pill-ok">OK</span>
+            <div><code>batchPlanning.updateBatchPlan</code><br>激活批次禁止直接改模板/开工日期。</div>
+          </div>
+          <div class="route-item">
+            <span class="pill pill-ok">OK</span>
+            <div><code>calendar.updateOperationSchedule</code><br>明确禁止修改 <code>ACTIVATED</code> 批次。</div>
+          </div>
+          <div class="route-item">
+            <span class="pill pill-ok">OK</span>
+            <div><code>BatchLifecycleService</code><br>激活、撤销、删除都有排班残留清理。</div>
+          </div>
+        </div>
+        <div class="route-panel">
+          <h3>需要统一守卫的入口</h3>
+          <div class="route-item">
+            <span class="pill pill-p1">P1</span>
+            <div><code>batchGanttV5.update/delete</code><br>可直接改/删批次操作，缺批次状态和已应用保护。</div>
+          </div>
+          <div class="route-item">
+            <span class="pill pill-p1">P1</span>
+            <div><code>batchConstraint CRUD</code><br>缺同批次校验、间接环校验、生命周期校验。</div>
+          </div>
+          <div class="route-item">
+            <span class="pill pill-p2">P2</span>
+            <div><code>batchOperationResource PUT</code><br>只看 feature flag，缺 DRAFT/ACTIVATED/APPLIED 判断。</div>
+          </div>
+          <div class="route-item">
+            <span class="pill pill-p2">P2</span>
+            <div><code>processTemplate.delete</code><br>应显式提示被批次引用，而不是依赖 FK 兜底。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>四个最需要注意的点</h2>
+      <div class="risk-list">
+        <article class="risk-card">
+          <strong>不是全字段快照</strong>
+          <p>批次保存了计划时间和人数，但展示或求解时仍可能 join 当前 <code>operations</code> 取名称。</p>
+        </article>
+        <article class="risk-card">
+          <strong>资源规则受开关影响</strong>
+          <p>启用批次资源快照时优先读快照；否则可能回退到操作/模板资源规则。</p>
+        </article>
+        <article class="risk-card">
+          <strong>求解输入未完整归档</strong>
+          <p>求解结果有保存，但当次完整 <code>SolverRequest</code> 没看到独立留档。</p>
+        </article>
+        <article class="risk-card">
+          <strong>删除结果不等于撤销</strong>
+          <p>结果 Apply 后已经写入生产表，后续撤销需要处理人员分配和班次计划。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>源码入口</h2>
+      <div class="source-list">
+        <a href="../backend/src/controllers/stageOperationController.ts">模板引用操作</a>
+        <a href="../backend/src/controllers/batchPlanningController.ts">创建批次</a>
+        <a href="../backend/src/services/batchOperationGenerationService.ts">触发批次操作生成</a>
+        <a href="../database/fix_time_calculation.sql">生成批次操作计划</a>
+        <a href="../database/migrations/20251216_add_share_group_copy_to_batch.sql">共享组复制到批次</a>
+        <a href="../backend/src/services/batchResourceSnapshotService.ts">资源规则快照</a>
+        <a href="../backend/src/services/schedulingV4/DataAssemblerV4.ts">组装求解请求</a>
+        <a href="../solver_v4/contracts/request.py">求解器请求合约</a>
+        <a href="../backend/src/controllers/batchGanttV5Controller.ts">甘特图批次操作 CRUD</a>
+        <a href="../backend/src/controllers/batchConstraintController.ts">批次约束 CRUD</a>
+        <a href="../backend/src/controllers/calendarController.ts">日历操作更新守卫</a>
+        <a href="../backend/src/controllers/schedulingV4/applyResultController.ts">求解结果 Apply</a>
+        <a href="../backend/src/services/batchLifecycleService.ts">批次生命周期清理</a>
+        <a href="../backend/src/controllers/batchOperationResourceController.ts">批次资源规则入口</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -138,14 +138,26 @@ const loadTemplateShareGroups = async (templateId: number) => {
 const loadOperationLibrary = async () => {
   const [rows] = await pool.execute<RowDataPacket[]>(
     `SELECT
-        id,
-        operation_code,
-        operation_name,
-        standard_time,
-        required_people,
-        description
-     FROM operations
-     ORDER BY operation_code`,
+        o.id,
+        o.operation_code,
+        o.operation_name,
+        o.standard_time,
+        o.required_people,
+        o.description,
+        o.operation_type_id,
+        ot.type_code AS operation_type_code,
+        ot.type_name AS operation_type_name,
+        ot.color AS operation_type_color,
+        ot.team_id,
+        ou.unit_code AS team_code,
+        ou.unit_name AS team_name
+     FROM operations o
+     LEFT JOIN operation_types ot ON (
+       o.operation_type_id = ot.id
+       OR (o.operation_type_id IS NULL AND o.operation_type COLLATE utf8mb4_unicode_ci = ot.type_code)
+     )
+     LEFT JOIN organization_units ou ON ot.team_id = ou.id
+     ORDER BY ou.unit_code, o.operation_code`,
   );
 
   return rows;

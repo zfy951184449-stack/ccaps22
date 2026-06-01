@@ -6,14 +6,66 @@
   cursor: pointer;
 }
 
+.v3-template-list {
+  display: grid;
+  gap: var(--wx-space-8);
+}
+
+.v3-template-list-header,
 .v3-template-row-inner {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(112px, 150px) minmax(220px, 1fr) minmax(76px, 104px) minmax(64px, 76px) minmax(112px, 240px) 116px;
   align-items: center;
-  gap: var(--wx-space-12);
+  column-gap: var(--wx-space-12);
+}
+
+.v3-template-list-header {
+  padding: 0 16px 2px;
+  color: var(--wx-fg-4);
+  font: 500 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+}
+
+.v3-template-header-actions {
+  text-align: right;
+}
+
+.v3-template-row-inner {
   padding: 10px 16px;
 }
 
+.v3-template-cell {
+  min-width: 0;
+}
+
+.v3-template-cell-select {
+  display: flex;
+  justify-content: center;
+}
+
+.v3-template-cell-code .wxb-tag {
+  max-width: 100%;
+}
+
+.v3-template-cell-code .wxb-tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v3-template-cell-risk {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-4);
+  overflow: hidden;
+}
+
+.v3-template-cell-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--wx-space-8);
+}
+
 .v3-template-row-title {
+  display: block;
   min-width: 0;
   overflow: hidden;
   color: var(--wx-ink);
@@ -29,13 +81,11 @@
 }
 
 .v3-template-row-muted {
+  display: block;
   color: var(--wx-fg-4);
   font: 400 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+  text-align: right;
   white-space: nowrap;
-}
-
-.v3-template-row-spacer {
-  flex: 1 1 auto;
 }
 
 .v3-list-filter-search {
@@ -74,10 +124,28 @@
     width: 100%;
   }
 
-  .v3-template-row-inner {
-    align-items: flex-start;
-    flex-wrap: wrap;
+  .v3-template-list-header {
+    display: none;
   }
+
+  .v3-template-row-inner {
+    grid-template-areas:
+      "select code actions"
+      "select name actions"
+      ". team actions"
+      ". days risk";
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: flex-start;
+    row-gap: var(--wx-space-6);
+  }
+
+  .v3-template-cell-select { grid-area: select; padding-top: 2px; }
+  .v3-template-cell-code { grid-area: code; }
+  .v3-template-cell-name { grid-area: name; }
+  .v3-template-cell-team { grid-area: team; }
+  .v3-template-cell-days { grid-area: days; }
+  .v3-template-cell-risk { grid-area: risk; justify-content: flex-end; }
+  .v3-template-cell-actions { grid-area: actions; }
 
   .v3-header-actions {
     align-items: stretch;
@@ -88,9 +156,5 @@
   .v3-workspace-switch {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .v3-template-row-spacer {
-    display: none;
   }
 }

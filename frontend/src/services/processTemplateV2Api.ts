@@ -5,7 +5,9 @@ import {
   CreateStagePayload,
   NodeCanvasLayoutHint,
   OperationLibraryItem,
+  OperationPositionQualificationPayload,
   OperationTypeOption,
+  QualificationOption,
   ResourceNodeCleanableTargetsResponse,
   ResourceNode,
   ResourceNodeRelation,
@@ -285,6 +287,10 @@ const mapOperationLibraryItem = (data: any): OperationLibraryItem => ({
   operation_type_code: data.operation_type_code ?? null,
   operation_type_name: data.operation_type_name ?? null,
   operation_type_color: data.operation_type_color ?? null,
+  team_id:
+    data.team_id !== undefined && data.team_id !== null ? Number(data.team_id) : null,
+  team_code: data.team_code ?? null,
+  team_name: data.team_name ?? null,
   qualification_count:
     data.qualification_count !== undefined && data.qualification_count !== null ? Number(data.qualification_count) : undefined,
 });
@@ -297,6 +303,11 @@ const mapOperationType = (data: any): OperationTypeOption => ({
   teamId: data.team_id !== undefined && data.team_id !== null ? Number(data.team_id) : null,
   teamCode: data.team_code ?? null,
   teamName: data.team_name ?? null,
+});
+
+const mapQualificationOption = (data: any): QualificationOption => ({
+  id: Number(data.id),
+  qualification_name: data.qualification_name,
 });
 
 const mapResourceEditorResponse = (data: any): TemplateResourceEditorResponse => ({
@@ -488,8 +499,10 @@ export const processTemplateV2Api = {
   deleteStage: async (stageId: number) => {
     await client.delete(`/process-stages/${stageId}`);
   },
-  listOperationLibrary: async () => {
-    const response = await client.get('/operations');
+  listOperationLibrary: async (teamId?: number | null) => {
+    const response = await client.get('/operations', {
+      params: teamId ? { team_id: teamId } : undefined,
+    });
     return (response.data ?? []).map(mapOperationLibraryItem);
   },
   getNextOperationCode: async () => {
@@ -517,6 +530,19 @@ export const processTemplateV2Api = {
       description: payload.description ?? null,
     });
     return mapOperationLibraryItem(response.data);
+  },
+  listAvailableQualifications: async () => {
+    const response = await client.get('/operation-qualifications/available');
+    return (response.data ?? []).map(mapQualificationOption);
+  },
+  setOperationPositionQualifications: async (
+    operationId: number,
+    positionNumber: number,
+    qualifications: OperationPositionQualificationPayload[],
+  ) => {
+    await client.put(`/operation-qualifications/${operationId}/position/${positionNumber}`, {
+      qualifications,
+    });
   },
   createStageOperation: async (stageId: number, payload: CreateStageOperationPayload) => {
     const response = await client.post(`/stage-operations/stage/${stageId}`, {

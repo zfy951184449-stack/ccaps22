@@ -3,7 +3,7 @@
  * Assembles: Toolbar + Sidebar + Canvas + Tooltip + Minimap + ContextMenu + SelectionPanel
  */
 import React, { useRef, useMemo, useCallback, useState } from 'react';
-import type { WxbGanttChartProps, GanttTask } from './types';
+import type { WxbGanttChartProps, GanttTask, GanttContextActionContext } from './types';
 import type { UndoToastData } from './useGanttDrag';
 import { useGanttStore } from './useGanttStore';
 import { useGanttLayout } from './useGanttLayout';
@@ -324,21 +324,51 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     task: GanttTask | null;
     contextType: 'task' | 'group' | 'background';
     groupId?: string;
-  }>({ visible: false, x: 0, y: 0, task: null, contextType: 'background' });
+    actionContext: GanttContextActionContext;
+  }>({
+    visible: false,
+    x: 0,
+    y: 0,
+    task: null,
+    contextType: 'background',
+    actionContext: {
+      contextType: 'background',
+      x: 0,
+      y: 0,
+      canvasX: 0,
+      canvasY: 0,
+    },
+  });
 
   const handleContextMenu = useCallback((
     task: GanttTask | null,
     x: number,
     y: number,
     hitType?: 'task' | 'group',
-    groupId?: string
+    groupId?: string,
+    context?: GanttContextActionContext,
   ) => {
     let contextType: 'task' | 'group' | 'background';
     if (hitType === 'group') contextType = 'group';
     else if (task) contextType = 'task';
     else contextType = 'background';
 
-    setCtxMenu({ visible: true, x, y, task, contextType, groupId });
+    setCtxMenu({
+      visible: true,
+      x,
+      y,
+      task,
+      contextType,
+      groupId,
+      actionContext: context ?? {
+        contextType,
+        groupId,
+        x,
+        y,
+        canvasX: x,
+        canvasY: y,
+      },
+    });
   }, []);
 
   const handleCtxClose = useCallback(() => {
@@ -444,9 +474,9 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
 
     // Catch-all: forward to consumer's generic handler
     if (!handled && onContextAction) {
-      onContextAction(key, task);
+      onContextAction(key, task, ctxMenu.actionContext);
     }
-  }, [dispatch, groups, tasks, ctxMenu.groupId, collectDescendantGroupIds, onTaskEdit, requestTaskDeletion, onTaskDuplicate, onContextAction]);
+  }, [dispatch, groups, tasks, ctxMenu.groupId, ctxMenu.actionContext, collectDescendantGroupIds, onTaskEdit, requestTaskDeletion, onTaskDuplicate, onContextAction]);
 
   // ===== Selection Panel Handlers =====
   const handleDeselectTask = useCallback((taskId: string) => {

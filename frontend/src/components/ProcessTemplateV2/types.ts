@@ -160,6 +160,9 @@ export interface OperationLibraryItem {
   operation_type_code?: string | null;
   operation_type_name?: string | null;
   operation_type_color?: string | null;
+  team_id?: number | null;
+  team_code?: string | null;
+  team_name?: string | null;
   qualification_count?: number;
 }
 
@@ -171,6 +174,17 @@ export interface OperationTypeOption {
   teamId?: number | null;
   teamCode?: string | null;
   teamName?: string | null;
+}
+
+export interface QualificationOption {
+  id: number;
+  qualification_name: string;
+}
+
+export interface OperationPositionQualificationPayload {
+  qualification_id: number;
+  min_level: number;
+  is_mandatory: number;
 }
 
 export type OperationCreateSourceMode = 'existing' | 'new';

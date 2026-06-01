@@ -21,19 +21,38 @@ const generateNextOperationCode = async (): Promise<string> => {
 // 获取所有操作
 export const getAllOperations = async (req: Request, res: Response) => {
   try {
+    const { team_id } = req.query;
+    const params: unknown[] = [];
+    let whereClause = '';
+    if (team_id) {
+      whereClause = 'WHERE ot.team_id = ?';
+      params.push(team_id);
+    }
+
     const [rows] = await pool.execute(`
       SELECT 
         o.*,
         ot.type_code as operation_type_code,
         ot.type_name as operation_type_name,
         ot.color as operation_type_color,
-        COUNT(DISTINCT oqr.qualification_id) as qualification_count
+        ot.team_id,
+        ou.unit_code as team_code,
+        ou.unit_name as team_name,
+        COALESCE(oq.qualification_count, 0) as qualification_count
       FROM operations o
-      LEFT JOIN operation_types ot ON o.operation_type_id = ot.id
-      LEFT JOIN operation_qualification_requirements oqr ON o.id = oqr.operation_id
-      GROUP BY o.id
-      ORDER BY o.operation_code
-    `);
+      LEFT JOIN operation_types ot ON (
+        o.operation_type_id = ot.id
+        OR (o.operation_type_id IS NULL AND o.operation_type COLLATE utf8mb4_unicode_ci = ot.type_code)
+      )
+      LEFT JOIN organization_units ou ON ot.team_id = ou.id
+      LEFT JOIN (
+        SELECT operation_id, COUNT(DISTINCT qualification_id) as qualification_count
+        FROM operation_qualification_requirements
+        GROUP BY operation_id
+      ) oq ON o.id = oq.operation_id
+      ${whereClause}
+      ORDER BY ou.unit_code, o.operation_code
+    `, params);
 
     res.json(rows);
   } catch (error) {
