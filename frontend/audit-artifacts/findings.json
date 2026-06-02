@@ -1,0 +1,156 @@
+{
+  "list": {
+    "rowsApprox": 46,
+    "buttons": [
+      "MFG8 APS\nWUXI BIOLOGICS",
+      "调度中心\nOVERVIEW",
+      "基础数据\nMASTER DATA",
+      "生产计划\nOPERATIONS",
+      "人员与排班\nWORKFORCE",
+      "UI 组件库\nDESIGN SYSTEM",
+      "标准模板",
+      "总包设计",
+      "+ 新建模板",
+      "全部",
+      "Media",
+      "USP",
+      "DSP",
+      "Buffer",
+      "导入",
+      "导出 ▾",
+      "编辑",
+      "复制",
+      "编辑",
+      "复制",
+      "编辑",
+      "复制",
+      "编辑",
+      "复制",
+      "编辑",
+      "复制",
+      "编辑",
+      "复制",
+      "编辑",
+      "复制"
+    ],
+    "hasSearch": true,
+    "sample": "MFG8 APS\nWUXI BIOLOGICS\n调度中心\nOVERVIEW\n基础数据\nMASTER DATA\n生产计划\nOPERATIONS\n人员与排班\nWORKFORCE\nUI 组件库\nDESIGN SYSTEM\nCtrl K\nAPS\n工艺模版\n\n甘特图可视化编辑器\n\n标准模板\n总包设计\n+ 新建模板\n全部\nMedia\nUSP\nDSP\nBuffer\n状态：全部\n排序：最近更新\n共 8 个\n导入\n导出 ▾\n编码\n模板名称\n团队\n周期\n状态\n操作\nPT-00002\nWBP2486/B\nUSP\n41 天\n正常\n编辑\n复制\nPT-00004\nWBP2486/DSP\nDSP\n17 天\n正常\n编辑\n复制\nPT-00005\nWBP2486/B - backup\nUSP\n21 天\n正常\n编辑\n复制\nPT-00008\nMedia WBP2486\nMedia\n37 天\n正常\n编辑\n复制\nPT-00009\nb"
+  },
+  "editorLoadMs": 2527,
+  "editor": {
+    "hasCanvas": true,
+    "canvasRect": {
+      "x": 225,
+      "y": 185.59375,
+      "width": 1190,
+      "height": 685.40625,
+      "top": 185.59375,
+      "right": 1415,
+      "bottom": 871,
+      "left": 225
+    },
+    "headerButtons": [
+      "MFG8 APS\nWUXI BIOLOGICS",
+      "调度中心\nOVERVIEW",
+      "基础数据\nMASTER DATA",
+      "生产计划\nOPERATIONS",
+      "人员与排班\nWORKFORCE",
+      "UI 组件库\nDESIGN SYSTEM",
+      "通知",
+      "← 返回",
+      "操作",
+      "阶段▸设备",
+      "设备",
+      "自动排程",
+      "时",
+      "天",
+      "周",
+      "月",
+      "−",
+      "+",
+      "⟳",
+      "⤢"
+    ],
+    "sidebarRowCount": 25,
+    "toolbarBtns": [
+      "时",
+      "天",
+      "周",
+      "月",
+      "−",
+      "+",
+      "⟳",
+      "⤢"
+    ]
+  },
+  "drag": {
+    "attempted": true,
+    "row": "摇床短信报警测试（每次项目开始前做一次即可）",
+    "networkAfterDrag": [
+      {
+        "t": 1780384841725,
+        "method": "PUT",
+        "url": "/api/stage-operations/134"
+      }
+    ],
+    "tooltipSeen": true
+  },
+  "context": {
+    "menuItems": [
+      "编辑操作",
+      "绑定设备▸",
+      "绑定设备",
+      "▸",
+      "删除操作",
+      "—",
+      "新建共享组"
+    ],
+    "editClicked": true,
+    "afterEdit": {
+      "modalOpen": false,
+      "messageText": "编辑 摇床短信报警测试（每次项目开始前做一次即可） (ID: operation_134)"
+    },
+    "editNetwork": []
+  },
+  "doubleClick": {
+    "modalOpen": false,
+    "network": []
+  },
+  "selection": {
+    "ctrlClicks": 2,
+    "panel": {
+      "visible": true,
+      "title": "已选中 1 个任务",
+      "hasShareBtn": false,
+      "hasEquipSelect": true,
+      "buttons": [
+        "清空",
+        "解除绑定",
+        "+ 新建设备"
+      ]
+    },
+    "unbindNetwork": []
+  },
+  "zoom": {
+    "labelBefore": "14%",
+    "labelAfter": "14%",
+    "changed": false
+  },
+  "a11y": {
+    "canvasHasAria": null,
+    "canvasTabIndex": -1,
+    "totalButtons": 24,
+    "unlabeledButtons": 1,
+    "imgNoAlt": 1
+  },
+  "consoleErrors": [
+    "Warning: [antd: message] Static function can not consume context like dynamic theme. Please use 'App' component instead."
+  ],
+  "allMutatingNetwork": [
+    {
+      "t": 1780384841725,
+      "method": "PUT",
+      "url": "/api/stage-operations/134"
+    }
+  ]
+}

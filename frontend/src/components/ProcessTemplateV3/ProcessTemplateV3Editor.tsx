@@ -37,7 +37,7 @@ import { useV3EditorActions } from './useV3EditorActions';
 import { useResourceView } from './useResourceView';
 import { buildCreateTimingContext, parseStageIdFromGroupId } from './createOperationContext';
 import V3EditorHeader from './V3EditorHeader';
-import QuickCreateOperationModal from './QuickCreateOperationModal';
+import QuickCreateOperationModal, { type EditOperationTarget } from './QuickCreateOperationModal';
 import './EquipmentBinding.css';
 
 // ---------------------------------------------------------------------------
@@ -115,6 +115,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // ---- Equipment binding state ----
   const [equipmentNodes, setEquipmentNodes] = useState<Array<{
     id: number; nodeName: string; equipmentSystemType: string | null; equipmentClass: string | null;
+    departmentCode: string | null;
   }>>([]);
   const [showCreateEquipModal, setShowCreateEquipModal] = useState(false);
   const [newEquipName, setNewEquipName] = useState('');
@@ -125,6 +126,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [createOperationModalOpen, setCreateOperationModalOpen] = useState(false);
   const [createOperationContext, setCreateOperationContext] = useState<OperationCreateContext | null>(null);
+  const [editOperationModalOpen, setEditOperationModalOpen] = useState(false);
+  const [editOperationTarget, setEditOperationTarget] = useState<EditOperationTarget | null>(null);
   const [resourceEditorData, setResourceEditorData] = useState<TemplateResourceEditorResponse | null>(null);
   const [resourceEditorLoading, setResourceEditorLoading] = useState(false);
 
@@ -162,12 +165,17 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // ---- Load equipment node list ----
   const refreshEquipmentNodes = useCallback(async () => {
     try {
-      const all = await processTemplateV2Api.listResourceNodes();
+      // tree:false → flat list; the default tree form only exposes SITE roots,
+      // which would hide all nested EQUIPMENT_UNIT nodes.
+      // boundResourceIsSchedulable: only nodes bound to a schedulable resource are valid
+      // bind targets — the backend rejects the rest ("not bound to a schedulable resource").
+      const all = await processTemplateV2Api.listResourceNodes({ tree: false });
       setEquipmentNodes(
-        all.filter((n: any) => n.nodeClass === 'EQUIPMENT_UNIT' && n.isActive)
+        all.filter((n: any) => n.nodeClass === 'EQUIPMENT_UNIT' && n.isActive && n.boundResourceIsSchedulable)
           .map((n: any) => ({
             id: n.id, nodeName: n.nodeName,
             equipmentSystemType: n.equipmentSystemType, equipmentClass: n.equipmentClass,
+            departmentCode: n.departmentCode ?? null,
           })),
       );
     } catch (err) {
@@ -176,6 +184,30 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   }, []);
 
   useEffect(() => { void refreshEquipmentNodes(); }, [refreshEquipmentNodes]);
+
+  // ---- Equipment binding options: grouped by team (departmentCode), current template's team first ----
+  const equipmentBindingOptions = useMemo(() => {
+    const teamCode = template?.team_code ?? null;
+    const groups = new Map<string, Array<{ label: string; value: number }>>();
+    for (const node of equipmentNodes) {
+      const key = node.departmentCode ?? '__none__';
+      if (!groups.has(key)) groups.set(key, []);
+      const extra = [node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ');
+      groups.get(key)!.push({ value: node.id, label: extra ? `${node.nodeName} (${extra})` : node.nodeName });
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => {
+        if (teamCode && a === teamCode) return -1;
+        if (teamCode && b === teamCode) return 1;
+        if (a === '__none__') return 1;
+        if (b === '__none__') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([code, opts]) => ({
+        label: code === '__none__' ? '未归属团队' : code === teamCode ? `${code}（本模板）` : code,
+        options: opts.sort((x, y) => x.label.localeCompare(y.label, 'zh-Hans-CN')),
+      }));
+  }, [equipmentNodes, template?.team_code]);
 
   const loadResourceEditorData = useCallback(async () => {
     if (!templateId) return null;
@@ -358,10 +390,54 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   );
 
   // ---- Callbacks ----
+  // Find the StageOperation row for a schedule ID within the gantt node tree.
+  const findStageOperation = useCallback((scheduleId: number): StageOperation | null => {
+    const walk = (nodes: GanttNode[]): StageOperation | null => {
+      for (const node of nodes) {
+        if (node.type === 'operation') {
+          const op = node.data as StageOperation | undefined;
+          if (op?.id === scheduleId) return op;
+        }
+        if (node.children) {
+          const found = walk(node.children);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+    return walk(ganttData.ganttNodes);
+  }, [ganttData.ganttNodes]);
+
   const handleTaskEdit = useCallback((task: GanttTask) => {
-    // For now, log and show info — full inspector panel is a future enhancement
-    message.info(`编辑 ${task.label} (ID: ${task.id})`);
-  }, []);
+    if (task.readOnly || task.type !== 'operation') return;
+    const scheduleId = getScheduleIdFromTask(task);
+    if (!scheduleId) return;
+    const op = findStageOperation(scheduleId);
+    if (!op) {
+      message.warning('未找到该操作的排程数据，请刷新后重试');
+      return;
+    }
+    const libItem = resourceEditorData?.operationLibrary?.find(
+      (item) => Number(item.id) === Number(op.operation_id),
+    );
+    setEditOperationTarget({
+      scheduleId: op.id,
+      operationId: op.operation_id,
+      operationName: op.operation_name,
+      operationCode: op.operation_code,
+      stageId: op.stage_id,
+      operationDay: Number(op.operation_day ?? 0),
+      recommendedTime: Number(op.recommended_time ?? 0),
+      recommendedDayOffset: Number(op.recommended_day_offset ?? 0),
+      windowStartTime: Number(op.window_start_time ?? 0),
+      windowStartDayOffset: Number(op.window_start_day_offset ?? 0),
+      windowEndTime: Number(op.window_end_time ?? 0),
+      windowEndDayOffset: Number(op.window_end_day_offset ?? 0),
+      durationHours: Number(op.standard_time ?? libItem?.standard_time ?? 2),
+      requiredPeople: Number(op.required_people ?? libItem?.required_people ?? 1),
+    });
+    setEditOperationModalOpen(true);
+  }, [findStageOperation, resourceEditorData]);
 
   const openDeleteConfirm = useCallback((targets: GanttTask[]) => {
     const seen = new Set<number>();
@@ -570,14 +646,15 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     [templateId, ganttData, shareService],
   );
 
-  // ---- Batch bind from selection panel ----
-  const handleBatchBind = useCallback(async (nodeId: number) => {
-    const scheduleIds = Array.from(document.querySelectorAll('[data-selected-task-id]'))
-      .map(el => parseInt(el.getAttribute('data-selected-task-id') || '', 10))
+  // ---- Batch bind from selection panel (selectedTaskIds come from the gantt selection) ----
+  const handleBatchBind = useCallback(async (selectedTaskIds: string[], nodeId: number) => {
+    const scheduleIds = selectedTaskIds
+      .map(id => parseInt(id.replace(/\D/g, ''), 10))
       .filter(Number.isFinite);
-    // Fallback: use the gantt internal selection if the above approach fails
-    // This will be populated via the selectionPanelExtraActions render
-    if (!scheduleIds.length) return;
+    if (!scheduleIds.length) {
+      message.warning('请先在甘特图中选择操作');
+      return;
+    }
     try {
       await processTemplateV2Api.batchUpdateBindings(scheduleIds, nodeId, 'PRIMARY');
       const name = equipmentNodes.find(n => n.id === nodeId)?.nodeName || '';
@@ -592,7 +669,10 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     const scheduleIds = taskIds
       .map(id => parseInt(id.replace(/\D/g, ''), 10))
       .filter(Number.isFinite);
-    if (!scheduleIds.length) return;
+    if (!scheduleIds.length) {
+      message.warning('请先在甘特图中选择操作');
+      return;
+    }
     try {
       await processTemplateV2Api.batchUpdateBindings(scheduleIds, null, 'PRIMARY');
       message.success(`已解除 ${scheduleIds.length} 个操作的设备绑定`);
@@ -607,7 +687,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     if (!newEquipName.trim()) { message.warning('请输入设备名称'); return; }
     try {
       // Find the first ROOM node as parent (fallback to ID 11)
-      const allNodes = await processTemplateV2Api.listResourceNodes();
+      const allNodes = await processTemplateV2Api.listResourceNodes({ tree: false });
       const firstRoom = allNodes.find((n: any) => n.nodeClass === 'ROOM' && n.nodeSubtype === 'MAIN_PROCESS');
       const parentId = firstRoom ? (firstRoom as any).id : 11;
 
@@ -698,24 +778,23 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onTaskDragEnd={actions.handleDragEnd}
           onTaskResizeEnd={actions.handleResizeEnd}
           onTaskEdit={handleTaskEdit}
+          onTaskDoubleClick={handleTaskEdit}
           onTaskDelete={handleTaskDelete}
           onTasksDelete={handleTasksDelete}
           onContextAction={handleContextAction}
           showSelectionPanel
           onCreateShareGroup={handleQuickLink}
-          selectionPanelExtraActions={(
+          selectionPanelExtraActions={(selectedTaskIds: string[]) => (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
               <WxbSelect
-                placeholder="选择设备绑定"
+                placeholder={`绑定 ${selectedTaskIds.length} 个操作到设备`}
                 showSearch
+                optionFilterProp="label"
                 value={undefined}
                 onChange={(val) => {
-                  if (val != null) void handleBatchBind(val as number);
+                  if (val != null) void handleBatchBind(selectedTaskIds, val as number);
                 }}
-                options={equipmentNodes.map(node => ({
-                  value: node.id,
-                  label: `${node.nodeName}${node.equipmentSystemType ? ` (${[node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ')})` : ''}`,
-                }))}
+                options={equipmentBindingOptions}
                 style={{ width: '100%' }}
               />
               <div style={{ display: 'flex', gap: 6 }}>
@@ -723,7 +802,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
                   variant="ghost"
                   size="sm"
                   style={{ flex: 1 }}
-                  onClick={() => void handleBatchUnbind([])}
+                  onClick={() => void handleBatchUnbind(selectedTaskIds)}
                 >
                   解除绑定
                 </WxbButton>
@@ -770,6 +849,41 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           context={createOperationContext}
           onCancel={closeCreateOperationModal}
           onCreated={handleCreatedOperation}
+        />
+      )}
+
+      {resourceEditorData && (
+        <QuickCreateOperationModal
+          mode="edit"
+          open={editOperationModalOpen}
+          editTarget={editOperationTarget}
+          templateId={templateId}
+          templateName={resourceEditorData.template.template_name || template.template_name}
+          templateTeamId={resourceEditorData.template.team_id ?? template.team_id ?? null}
+          templateTeamName={resourceEditorData.template.team_name ?? template.team_name ?? null}
+          stages={resourceEditorData.stages}
+          operations={resourceEditorData.operations}
+          resourceNodes={resourceEditorData.resourceTree}
+          operationLibrary={resourceEditorData.operationLibrary ?? []}
+          capabilities={resourceEditorData.capabilities}
+          context={null}
+          bindingOptions={equipmentBindingOptions}
+          onCreated={async () => {}}
+          onCancel={() => {
+            setEditOperationModalOpen(false);
+            setEditOperationTarget(null);
+          }}
+          onUpdated={async () => {
+            setEditOperationModalOpen(false);
+            setEditOperationTarget(null);
+            await Promise.all([
+              ganttData.refreshData(),
+              actions.refreshAll(),
+              shareService.refresh(),
+              resourceView.refreshBindings(),
+              loadResourceEditorData(),
+            ]);
+          }}
         />
       )}
 

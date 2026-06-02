@@ -21,6 +21,8 @@ frontend-next/out/
 frontend-next/storybook-static/
 frontend-next/playwright-report/
 frontend-next/test-results/
+frontend/playwright-report/
+frontend/test-results/
 backend/dist/
 admin/dist/
 

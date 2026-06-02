@@ -1,0 +1,21 @@
+{
+  "zoom": {
+    "before": "14%",
+    "afterPlus": "21%",
+    "works": true
+  },
+  "multiSelect": {
+    "reached": 0,
+    "labels": [],
+    "panel": {
+      "visible": false
+    }
+  },
+  "dataSelectedTaskIdCount": 0,
+  "autoSchedule": [
+    "POST /api/process-templates/7/auto-schedule"
+  ],
+  "allNet": [
+    "POST /api/process-templates/7/auto-schedule"
+  ]
+}

@@ -209,8 +209,9 @@ export interface WxbGanttChartProps {
   highlightedLinkIds?: string[];
   /** Create share group from selection panel (one-click link) */
   onCreateShareGroup?: (selectedTaskIds: string[]) => void;
-  /** Extra actions injected into the selection panel by the consumer */
-  selectionPanelExtraActions?: React.ReactNode;
+  /** Extra actions injected into the selection panel by the consumer.
+   *  May be a render function receiving the current selected task IDs. */
+  selectionPanelExtraActions?: React.ReactNode | ((selectedTaskIds: string[]) => React.ReactNode);
   /** CSS class name */
   className?: string;
   /** Inline style */

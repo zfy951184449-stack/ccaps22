@@ -350,9 +350,9 @@ export function useResourceView(
   const [loading, setLoading] = useState(false);
   const loadedTemplateRef = useRef<number>(0);
 
-  // Load bindings when mode changes from 'operation' or on first resource view
+  // Load bindings once per template, regardless of Y-axis mode — the operation view's
+  // right-click menu and the edit modal also rely on binding state.
   useEffect(() => {
-    if (yAxisMode === 'operation') return;
     if (loadedTemplateRef.current === templateId) return; // already loaded
 
     let cancelled = false;

@@ -15,8 +15,9 @@ export interface GanttSelectionPanelProps {
   onSelectAllInGroup: (groupId: string) => void;
   /** Callback to create a share group from the currently selected tasks */
   onCreateShareGroup?: (selectedTaskIds: string[]) => void;
-  /** Extra action buttons injected by consumer (e.g., equipment binding) */
-  extraActions?: React.ReactNode;
+  /** Extra action buttons injected by consumer (e.g., equipment binding).
+   *  May be a render function receiving the current selected task IDs. */
+  extraActions?: React.ReactNode | ((selectedTaskIds: string[]) => React.ReactNode);
 }
 
 interface GroupedSelection {
@@ -145,7 +146,7 @@ const GanttSelectionPanel: React.FC<GanttSelectionPanelProps> = ({
       )}
       {extraActions && (
         <div style={{ padding: '8px 12px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-          {extraActions}
+          {typeof extraActions === 'function' ? extraActions(Array.from(selectedTaskIds)) : extraActions}
         </div>
       )}
     </div>

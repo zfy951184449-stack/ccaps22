@@ -45,6 +45,28 @@ type DraftQualificationRequirement = {
   positionNumber: number;
 };
 
+/**
+ * Identifies an existing scheduled operation to edit. Name / people / qualifications
+ * belong to the shared operation definition (edited elsewhere); this modal's edit mode
+ * only adjusts this schedule row's timing.
+ */
+export type EditOperationTarget = {
+  scheduleId: number;
+  operationId: number;
+  operationName: string;
+  operationCode: string;
+  stageId: number;
+  operationDay: number;
+  recommendedTime: number;
+  recommendedDayOffset: number;
+  windowStartTime: number;
+  windowStartDayOffset: number;
+  windowEndTime: number;
+  windowEndDayOffset: number;
+  durationHours: number;
+  requiredPeople: number;
+};
+
 type QuickCreateOperationModalProps = {
   open: boolean;
   templateId: number;
@@ -59,6 +81,14 @@ type QuickCreateOperationModalProps = {
   context: OperationCreateContext | null;
   onCancel: () => void;
   onCreated: (result: OperationCreatedResult) => Promise<void> | void;
+  /** 'create' (default) opens the new-operation flow; 'edit' edits an existing schedule's timing. */
+  mode?: 'create' | 'edit';
+  /** Required when mode === 'edit': the schedule row to edit. */
+  editTarget?: EditOperationTarget | null;
+  /** Called after a successful edit save. */
+  onUpdated?: (result: { scheduleId: number; stageId: number }) => Promise<void> | void;
+  /** Grouped equipment options for the edit-mode 设备绑定 field (by team, current team first). */
+  bindingOptions?: Array<{ label: string; options: Array<{ label: string; value: number }> }>;
 };
 
 type QuickCreateDraft = {
@@ -348,6 +378,33 @@ const buildInitialDraft = ({
   };
 };
 
+/**
+ * Seed a draft from an existing schedule row for edit mode. windowMode is 'manual' so the
+ * stored time window is preserved (not auto-recomputed) until the user opts into 'auto'.
+ */
+const buildEditDraft = (editTarget: EditOperationTarget): QuickCreateDraft => ({
+  sourceMode: 'existing',
+  stageId: editTarget.stageId,
+  resourceNodeId: null,
+  operationId: editTarget.operationId,
+  searchValue: '',
+  operationDay: Number(editTarget.operationDay ?? 0),
+  recommendedTime: Number(editTarget.recommendedTime ?? 9),
+  recommendedDayOffset: Number(editTarget.recommendedDayOffset ?? 0),
+  durationHours: Number(editTarget.durationHours ?? 2),
+  requiredPeople: Number(editTarget.requiredPeople ?? 1),
+  windowMode: 'manual',
+  windowStartTime: Number(editTarget.windowStartTime ?? 0),
+  windowStartDayOffset: Number(editTarget.windowStartDayOffset ?? 0),
+  windowEndTime: Number(editTarget.windowEndTime ?? 0),
+  windowEndDayOffset: Number(editTarget.windowEndDayOffset ?? 0),
+  newOperationName: '',
+  nextOperationCode: editTarget.operationCode,
+  operationTypeId: null,
+  description: '',
+  qualificationRequirements: [],
+});
+
 const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   open,
   templateId,
@@ -362,8 +419,13 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   context,
   onCancel,
   onCreated,
+  mode = 'create',
+  editTarget = null,
+  onUpdated,
+  bindingOptions = [],
 }) => {
   const [draft, setDraft] = useState<QuickCreateDraft | null>(null);
+  const [editInitialResourceNodeId, setEditInitialResourceNodeId] = useState<number | null>(null);
   const [operationTypes, setOperationTypes] = useState<OperationTypeOption[]>([]);
   const [qualifications, setQualifications] = useState<QualificationOption[]>([]);
   const [recentOperationIds, setRecentOperationIds] = useState<number[]>([]);
@@ -425,6 +487,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       setDraft(null);
       setApiError(null);
       setSavingStep('');
+      setEditInitialResourceNodeId(null);
       return;
     }
 
@@ -444,17 +507,34 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         if (cancelled) return;
         setOperationTypes(nextOperationTypes);
         setQualifications(nextQualifications);
-        setDraft(
-          buildInitialDraft({
-            stages,
-            leafNodes,
-            context,
-            savedConfig,
-            nextOperationCode,
-            operationLibrary,
-            operationTypes: nextOperationTypes,
-          }),
-        );
+        if (mode === 'edit' && editTarget) {
+          setDraft(buildEditDraft(editTarget));
+          // Prefill current equipment binding (authoritative single fetch — avoids
+          // depending on resource-view load timing).
+          try {
+            const bindingResp = await processTemplateV2Api.getTemplateScheduleBinding(editTarget.scheduleId);
+            const nodeId = bindingResp.binding?.resourceNodeId ?? null;
+            if (!cancelled) {
+              setEditInitialResourceNodeId(nodeId);
+              setDraft((current) => (current ? { ...current, resourceNodeId: nodeId } : current));
+            }
+          } catch (bindingError) {
+            console.error('Failed to load current binding:', bindingError);
+          }
+        } else {
+          setEditInitialResourceNodeId(null);
+          setDraft(
+            buildInitialDraft({
+              stages,
+              leafNodes,
+              context,
+              savedConfig,
+              nextOperationCode,
+              operationLibrary,
+              operationTypes: nextOperationTypes,
+            }),
+          );
+        }
       } catch (error: any) {
         console.error('Failed to initialize quick create operation modal:', error);
         message.error(error?.response?.data?.error || '初始化新增操作弹窗失败');
@@ -470,7 +550,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [context, leafNodes, open, operationLibrary, stages, templateId, templateTeamId]);
+  }, [context, editTarget, leafNodes, mode, open, operationLibrary, stages, templateId, templateTeamId]);
 
   const stageOperationIds = useMemo(
     () =>
@@ -593,6 +673,8 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   };
 
   useEffect(() => {
+    // Create-only: edit mode keeps the draft deterministic from editTarget.
+    if (mode !== 'create') return;
     if (!draft || draft.sourceMode !== 'existing' || !selectedOperation) {
       return;
     }
@@ -620,9 +702,11 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
           }
         : next;
     });
-  }, [draft, selectedOperation, selectedStage]);
+  }, [draft, mode, selectedOperation, selectedStage]);
 
   useEffect(() => {
+    // Create-only: never clear the fixed operation while editing.
+    if (mode !== 'create') return;
     if (!draft || draft.sourceMode !== 'existing' || !selectedOperation) return;
     if (matchesTeamFilter(selectedOperation, teamFilterValue, includeUnassignedForCurrentTeam)) return;
 
@@ -634,7 +718,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
           }
         : current,
     );
-  }, [draft, includeUnassignedForCurrentTeam, selectedOperation, teamFilterValue]);
+  }, [draft, includeUnassignedForCurrentTeam, mode, selectedOperation, teamFilterValue]);
 
   const startLabel = draft && selectedStage
     ? `Day ${getStageStartDay(selectedStage) + draft.operationDay + draft.recommendedDayOffset} / ${formatHourLabel(draft.recommendedTime)}`
@@ -804,6 +888,44 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     }
   };
 
+  const handleUpdate = async () => {
+    if (!draft || !editTarget || !selectedStage) return;
+    if (!canSave) {
+      setApiError(validationIssues[0] ?? '请先补齐必填信息');
+      return;
+    }
+    try {
+      setSaving(true);
+      setApiError(null);
+      setSavingStep('保存排程参数');
+      await processTemplateV2Api.updateStageOperation(editTarget.scheduleId, {
+        operationDay: Number(draft.operationDay ?? 0),
+        recommendedTime: Number(draft.recommendedTime ?? 0),
+        recommendedDayOffset: Number(draft.recommendedDayOffset ?? 0),
+        windowStartTime: Number(draft.windowStartTime ?? 0),
+        windowStartDayOffset: Number(draft.windowStartDayOffset ?? 0),
+        windowEndTime: Number(draft.windowEndTime ?? 0),
+        windowEndDayOffset: Number(draft.windowEndDayOffset ?? 0),
+      });
+      // Persist equipment binding only when it changed (null = unbind).
+      const nextResourceNodeId = draft.resourceNodeId ?? null;
+      if (nextResourceNodeId !== editInitialResourceNodeId) {
+        setSavingStep('更新设备绑定');
+        await processTemplateV2Api.batchUpdateBindings([editTarget.scheduleId], nextResourceNodeId, 'PRIMARY');
+      }
+      await onUpdated?.({ scheduleId: editTarget.scheduleId, stageId: Number(draft.stageId) });
+      message.success('操作已更新');
+      onCancel();
+    } catch (error: any) {
+      const detail = error?.response?.data?.error || error?.message || '更新操作失败';
+      setApiError(detail);
+      message.error(detail);
+    } finally {
+      setSaving(false);
+      setSavingStep('');
+    }
+  };
+
   const renderOperationItem = (item: OperationLibraryItem) => {
     const selected = Number(draft?.operationId) === Number(item.id);
     const recentlyUsed = recentOperationIds.includes(Number(item.id));
@@ -845,14 +967,18 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   const footer = (
     <div className="qcom-footer">
       <div className="qcom-footer-summary">
-        {savingStep ? `处理中：${savingStep}` : `创建到 ${selectedStage?.stage_name ?? '未选择阶段'} / ${startLabel}`}
+        {savingStep
+          ? `处理中：${savingStep}`
+          : mode === 'edit'
+            ? `保存到 ${selectedStage?.stage_name ?? '未选择阶段'} / ${startLabel}`
+            : `创建到 ${selectedStage?.stage_name ?? '未选择阶段'} / ${startLabel}`}
       </div>
       <div className="qcom-footer-actions">
         <WxbButton variant="ghost" onClick={onCancel} disabled={saving}>
           取消
         </WxbButton>
-        <WxbButton disabled={!canSave} onClick={() => void handleCreate()}>
-          {saving ? '创建中...' : '创建操作'}
+        <WxbButton disabled={!canSave} onClick={() => void (mode === 'edit' ? handleUpdate() : handleCreate())}>
+          {mode === 'edit' ? (saving ? '保存中...' : '保存修改') : saving ? '创建中...' : '创建操作'}
         </WxbButton>
       </div>
     </div>
@@ -861,7 +987,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   return (
     <WxbModal
       open={open}
-      title="新增操作"
+      title={mode === 'edit' ? '编辑操作' : '新增操作'}
       width="min(920px, calc(100vw - 32px))"
       centered
       maskClosable={false}
@@ -883,7 +1009,9 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                 <WxbTag color="blue">模板 #{templateId}</WxbTag>
                 <WxbTag color="cyan">{selectedStage?.stage_name ?? '未选择阶段'}</WxbTag>
                 <WxbTag color="green">{startLabel}</WxbTag>
-                <WxbTag color={selectedNode ? 'neutral' : 'amber'}>{selectedNode?.nodeName ?? '未绑定资源节点'}</WxbTag>
+                {mode !== 'edit' && (
+                  <WxbTag color={selectedNode ? 'neutral' : 'amber'}>{selectedNode?.nodeName ?? '未绑定资源节点'}</WxbTag>
+                )}
               </div>
             </div>
 
@@ -897,31 +1025,49 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
               <section className="qcom-section qcom-section-source" aria-labelledby="qcom-source-title">
                 <div className="qcom-section-header">
                   <div>
-                    <h3 id="qcom-source-title">选择操作</h3>
+                    <h3 id="qcom-source-title">{mode === 'edit' ? '操作' : '选择操作'}</h3>
                   </div>
-                  <WxbSegmented
-                    size="sm"
-                    value={draft.sourceMode}
-                    onChange={(value) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        sourceMode: value as SourceMode,
-                        operationTypeId:
-                          value === 'new'
-                            ? operationTypes.some((item) => Number(item.id) === Number(current.operationTypeId))
-                              ? current.operationTypeId
-                              : defaultOperationTypeId
-                            : current.operationTypeId,
-                      }))
-                    }
-                    options={[
-                      { label: '现有操作', value: 'existing' },
-                      { label: '新建主数据', value: 'new' },
-                    ]}
-                  />
+                  {mode !== 'edit' && (
+                    <WxbSegmented
+                      size="sm"
+                      value={draft.sourceMode}
+                      onChange={(value) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          sourceMode: value as SourceMode,
+                          operationTypeId:
+                            value === 'new'
+                              ? operationTypes.some((item) => Number(item.id) === Number(current.operationTypeId))
+                                ? current.operationTypeId
+                                : defaultOperationTypeId
+                              : current.operationTypeId,
+                        }))
+                      }
+                      options={[
+                        { label: '现有操作', value: 'existing' },
+                        { label: '新建主数据', value: 'new' },
+                      ]}
+                    />
+                  )}
                 </div>
 
-                {draft.sourceMode === 'existing' ? (
+                {mode === 'edit' ? (
+                  <div className="qcom-source-existing">
+                    <div className="qcom-master-summary">
+                      <div className="qcom-master-identity">
+                        <span className="qcom-master-label">
+                          名称 / 人数 / 资格属于操作库（跨模板共享），此处仅调整本排程的时间安排
+                        </span>
+                        <span className="qcom-master-code">{editTarget?.operationName}</span>
+                      </div>
+                      <div className="qcom-master-tags">
+                        <WxbTag color="neutral">{editTarget?.operationCode}</WxbTag>
+                        <WxbTag color="neutral">{Number(editTarget?.durationHours ?? 0)}h</WxbTag>
+                        <WxbTag color="neutral">{Number(editTarget?.requiredPeople ?? 1)}人</WxbTag>
+                      </div>
+                    </div>
+                  </div>
+                ) : draft.sourceMode === 'existing' ? (
                   <div className="qcom-source-existing">
                     <div className="qcom-source-tools">
                       <WxbSelect
@@ -1205,6 +1351,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                     options={stageOptions}
                     showSearch
                     optionFilterProp="label"
+                    disabled={mode === 'edit'}
                     onChange={(value) =>
                       updateDraft((current) => ({
                         ...current,
@@ -1212,24 +1359,41 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                       }))
                     }
                   />
-                  <WxbSelect
-                    label="默认资源节点"
-                    value={draft.resourceNodeId ?? undefined}
-                    options={resourceOptions}
-                    showSearch
-                    allowClear
-                    optionFilterProp="label"
-                    placeholder="可不绑定"
-                    onChange={(value) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        resourceNodeId: value ? Number(value) : null,
-                      }))
-                    }
-                  />
+                  {mode === 'edit' ? (
+                    <WxbSelect
+                      label="设备绑定"
+                      value={draft.resourceNodeId ?? undefined}
+                      options={bindingOptions}
+                      showSearch
+                      allowClear
+                      optionFilterProp="label"
+                      placeholder="未绑定"
+                      onChange={(value) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          resourceNodeId: value ? Number(value) : null,
+                        }))
+                      }
+                    />
+                  ) : (
+                    <WxbSelect
+                      label="默认资源节点"
+                      value={draft.resourceNodeId ?? undefined}
+                      options={resourceOptions}
+                      showSearch
+                      allowClear
+                      optionFilterProp="label"
+                      placeholder="可不绑定"
+                      onChange={(value) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          resourceNodeId: value ? Number(value) : null,
+                        }))
+                      }
+                    />
+                  )}
                   <WxbInputNumber
                     label="阶段内 Day"
-                    min={0}
                     value={draft.operationDay}
                     onChange={(value) =>
                       updateDraft((current) => ({

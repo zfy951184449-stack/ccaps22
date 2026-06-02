@@ -88,6 +88,7 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
           <WxbTag color="blue">{templateCode}</WxbTag>
           <span
+            title={templateName}
             style={{
               fontWeight: 600,
               fontSize: 15,

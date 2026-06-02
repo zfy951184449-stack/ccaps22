@@ -100,6 +100,7 @@ const ProcessTemplateV3List: React.FC = () => {
   const [createName, setCreateName] = useState('');
   const [createTeamId, setCreateTeamId] = useState<number | null>(null);
   const [createDesc, setCreateDesc] = useState('');
+  const [createNameError, setCreateNameError] = useState(false);
   const [creating, setCreating] = useState(false);
 
   // ---- Import / Export ----
@@ -206,7 +207,11 @@ const ProcessTemplateV3List: React.FC = () => {
   }, [navigate]);
 
   const handleCreate = useCallback(async () => {
-    if (!createName.trim()) return;
+    if (!createName.trim()) {
+      setCreateNameError(true);
+      message.warning('请输入模板名称');
+      return;
+    }
     try {
       setCreating(true);
       const created = await processTemplateV2Api.createTemplate({
@@ -218,6 +223,7 @@ const ProcessTemplateV3List: React.FC = () => {
       setCreateName('');
       setCreateTeamId(null);
       setCreateDesc('');
+      setCreateNameError(false);
       navigate(`/process-templates/${created.id}`, { state: { flashMessage: '工艺模版已创建' } });
     } catch (err: any) {
       message.error(err?.response?.data?.error || '创建工艺模版失败');
@@ -479,14 +485,18 @@ const ProcessTemplateV3List: React.FC = () => {
         okText="创建"
         confirmLoading={creating}
         onOk={handleCreate}
-        onCancel={() => { setCreateOpen(false); setCreateName(''); setCreateTeamId(null); setCreateDesc(''); }}
+        onCancel={() => { setCreateOpen(false); setCreateName(''); setCreateTeamId(null); setCreateDesc(''); setCreateNameError(false); }}
       >
         <div className="v3-create-form">
           <WxbInput
             label="模板名称"
             placeholder="输入模板名称"
             value={createName}
-            onChange={(e) => setCreateName(e.target.value)}
+            error={createNameError ? '请输入模板名称' : undefined}
+            onChange={(e) => {
+              setCreateName(e.target.value);
+              if (createNameError) setCreateNameError(false);
+            }}
           />
           <WxbFormField label="所属团队">
             <WxbSelect

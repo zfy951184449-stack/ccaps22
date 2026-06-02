@@ -12,20 +12,22 @@ import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
 import { copyTemplateScheduleBindings } from '../services/resourceNodeService';
 
 // 生成下一个模版编码
+// 仅考虑符合 PT-数字 规范的编码，按数值（而非字典序）取最大值，避免被
+// 自定义编码（如 WBP2486_DSP_TAT9）干扰而生成 PT-00NaN。
 const generateNextTemplateCode = async (): Promise<string> => {
   const [rows] = await pool.execute(
-    'SELECT template_code FROM process_templates ORDER BY template_code DESC LIMIT 1'
+    "SELECT template_code FROM process_templates WHERE template_code REGEXP '^PT-[0-9]+$'"
   ) as any;
 
-  if (rows.length === 0) {
-    return 'PT-00001';
+  let maxNumber = 0;
+  for (const row of rows) {
+    const num = parseInt(String(row.template_code).slice(3), 10);
+    if (Number.isFinite(num) && num > maxNumber) {
+      maxNumber = num;
+    }
   }
 
-  const lastCode = rows[0].template_code;
-  const lastNumber = parseInt(lastCode.split('-')[1]);
-  const nextNumber = lastNumber + 1;
-
-  return `PT-${nextNumber.toString().padStart(5, '0')}`;
+  return `PT-${(maxNumber + 1).toString().padStart(5, '0')}`;
 };
 
 // 计算模版的总天数
