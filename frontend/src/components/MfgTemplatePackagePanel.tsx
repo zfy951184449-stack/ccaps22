@@ -40,10 +40,13 @@ type SimpleLink = {
   source_role_code: string;
   source_schedule_id?: number | null;
   source_anchor_day: number;
+  source_anchor_restored?: boolean;
   target_role_code: string;
   target_schedule_id?: number | null;
   target_anchor_day: number;
+  target_anchor_restored?: boolean;
   lag_days: number;
+  description?: string | null;
 };
 
 type PackageFormState = {
@@ -59,6 +62,15 @@ type AnchorOperationOption = {
   stageName: string;
   absoluteDay: number;
   label: string;
+};
+
+type LinkSide = 'source' | 'target';
+
+type OperationSelectValue = number | string | undefined;
+
+type LinkWithOptionalScheduleIds = MfgTemplatePackageDetail['day_links'][number] & {
+  source_schedule_id?: number | null;
+  target_schedule_id?: number | null;
 };
 
 const createRoleCode = (index: number) => `T${index + 1}`;
@@ -126,21 +138,34 @@ const getTemplateLabel = (template?: TemplateOption) => {
   return `${template.template_code} · ${template.template_name}`;
 };
 
+const createRestoredAnchorValue = (side: LinkSide, roleCode: string, anchorDay: number) => (
+  `restored-anchor:${side}:${roleCode}:${anchorDay}`
+);
+
 const toFormState = (detail: MfgTemplatePackageDetail): PackageFormState => ({
   package_name: detail.package_name,
   modules: detail.modules.map((module, index) => ({
     role_code: module.role_code || createRoleCode(index),
     template_id: module.template_id,
   })),
-  links: detail.day_links.map((link) => ({
-    source_role_code: link.source_role_code,
-    source_schedule_id: null,
-    source_anchor_day: link.source_anchor_day,
-    target_role_code: link.target_role_code,
-    target_schedule_id: null,
-    target_anchor_day: link.target_anchor_day,
-    lag_days: link.lag_days,
-  })),
+  links: detail.day_links.map((rawLink) => {
+    const link = rawLink as LinkWithOptionalScheduleIds;
+    const sourceScheduleId = link.source_schedule_id ?? null;
+    const targetScheduleId = link.target_schedule_id ?? null;
+
+    return {
+      source_role_code: link.source_role_code,
+      source_schedule_id: sourceScheduleId,
+      source_anchor_day: link.source_anchor_day,
+      source_anchor_restored: !sourceScheduleId,
+      target_role_code: link.target_role_code,
+      target_schedule_id: targetScheduleId,
+      target_anchor_day: link.target_anchor_day,
+      target_anchor_restored: !targetScheduleId,
+      lag_days: link.lag_days,
+      description: link.description ?? null,
+    };
+  }),
 });
 
 const PackageDesignerModal: React.FC<{
@@ -259,6 +284,88 @@ const PackageDesignerModal: React.FC<{
     return getOperationOptionsForRole(roleCode).find((operation) => operation.scheduleId === scheduleId);
   }, [getOperationOptionsForRole]);
 
+  const findUniqueOperationByAnchor = useCallback((roleCode: string, anchorDay: number) => {
+    const matches = getOperationOptionsForRole(roleCode)
+      .filter((operation) => operation.absoluteDay === anchorDay);
+    return matches.length === 1 ? matches[0] : undefined;
+  }, [getOperationOptionsForRole]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    setForm((current) => {
+      let changed = false;
+      const links = current.links.map((link) => {
+        let next = link;
+
+        if (!link.source_schedule_id && link.source_anchor_restored) {
+          const operation = findUniqueOperationByAnchor(link.source_role_code, link.source_anchor_day);
+          if (operation) {
+            next = {
+              ...next,
+              source_schedule_id: operation.scheduleId,
+              source_anchor_restored: false,
+            };
+            changed = true;
+          }
+        }
+
+        if (!next.target_schedule_id && next.target_anchor_restored) {
+          const operation = findUniqueOperationByAnchor(next.target_role_code, next.target_anchor_day);
+          if (operation) {
+            next = {
+              ...next,
+              target_schedule_id: operation.scheduleId,
+              target_anchor_restored: false,
+            };
+            changed = true;
+          }
+        }
+
+        return next;
+      });
+
+      return changed ? { ...current, links } : current;
+    });
+  }, [findUniqueOperationByAnchor, open]);
+
+  const getOperationSelectValue = useCallback((link: SimpleLink, side: LinkSide): OperationSelectValue => {
+    if (side === 'source') {
+      if (link.source_schedule_id) return link.source_schedule_id;
+      return link.source_anchor_restored
+        ? createRestoredAnchorValue('source', link.source_role_code, link.source_anchor_day)
+        : undefined;
+    }
+
+    if (link.target_schedule_id) return link.target_schedule_id;
+    return link.target_anchor_restored
+      ? createRestoredAnchorValue('target', link.target_role_code, link.target_anchor_day)
+      : undefined;
+  }, []);
+
+  const getOperationSelectOptions = useCallback((link: SimpleLink, side: LinkSide) => {
+    const roleCode = side === 'source' ? link.source_role_code : link.target_role_code;
+    const anchorDay = side === 'source' ? link.source_anchor_day : link.target_anchor_day;
+    const restored = side === 'source' ? link.source_anchor_restored : link.target_anchor_restored;
+    const scheduleId = side === 'source' ? link.source_schedule_id : link.target_schedule_id;
+    const options = getOperationOptionsForRole(roleCode).map((operation) => ({
+      value: operation.scheduleId,
+      label: operation.label,
+    }));
+
+    if (!scheduleId && restored) {
+      return [
+        {
+          value: createRestoredAnchorValue(side, roleCode, anchorDay),
+          label: `已保存 Day ${anchorDay}`,
+        },
+        ...options,
+      ];
+    }
+
+    return options;
+  }, [getOperationOptionsForRole]);
+
   const describeLink = useCallback((link: SimpleLink) => {
     const sourceTemplate = moduleByRole.get(link.source_role_code)?.template_id;
     const targetTemplate = moduleByRole.get(link.target_role_code)?.template_id;
@@ -267,6 +374,10 @@ const PackageDesignerModal: React.FC<{
     const sourceOperation = findOperation(link.source_role_code, link.source_schedule_id);
     const targetOperation = findOperation(link.target_role_code, link.target_schedule_id);
     const relation = link.lag_days === 0 ? '同一天' : `相差 ${link.lag_days > 0 ? '+' : ''}${link.lag_days} 天`;
+
+    if (!sourceOperation && !targetOperation && link.description) {
+      return link.description;
+    }
 
     return `${sourceTemplateName ?? '源模板'} / ${sourceOperation?.operationName ?? `Day ${link.source_anchor_day}`} ${relation} ${targetTemplateName ?? '目标模板'} / ${targetOperation?.operationName ?? `Day ${link.target_anchor_day}`}`;
   }, [findOperation, moduleByRole, templateById]);
@@ -281,10 +392,22 @@ const PackageDesignerModal: React.FC<{
         )),
         links: current.links.map((link) => {
           if (link.source_role_code === roleCode) {
-            return { ...link, source_schedule_id: null, source_anchor_day: 0 };
+            return {
+              ...link,
+              source_schedule_id: null,
+              source_anchor_day: 0,
+              source_anchor_restored: false,
+              description: null,
+            };
           }
           if (link.target_role_code === roleCode) {
-            return { ...link, target_schedule_id: null, target_anchor_day: 0 };
+            return {
+              ...link,
+              target_schedule_id: null,
+              target_anchor_day: 0,
+              target_anchor_restored: false,
+              description: null,
+            };
           }
           return link;
         }),
@@ -296,7 +419,7 @@ const PackageDesignerModal: React.FC<{
     setForm((current) => ({
       ...current,
       links: current.links.map((link, linkIndex) => (
-        linkIndex === index ? { ...link, ...patch } : link
+        linkIndex === index ? { ...link, ...patch, description: null } : link
       )),
     }));
   }, []);
@@ -314,6 +437,8 @@ const PackageDesignerModal: React.FC<{
             ...link,
             source_schedule_id: operation?.scheduleId ?? null,
             source_anchor_day: operation?.absoluteDay ?? link.source_anchor_day,
+            source_anchor_restored: false,
+            description: null,
           };
         }
 
@@ -321,6 +446,8 @@ const PackageDesignerModal: React.FC<{
           ...link,
           target_schedule_id: operation?.scheduleId ?? null,
           target_anchor_day: operation?.absoluteDay ?? link.target_anchor_day,
+          target_anchor_restored: false,
+          description: null,
         };
       }),
     }));
@@ -387,8 +514,8 @@ const PackageDesignerModal: React.FC<{
     const invalidLink = form.links.find((link) => (
       !moduleByRole.get(link.source_role_code)?.template_id ||
       !moduleByRole.get(link.target_role_code)?.template_id ||
-      !link.source_schedule_id ||
-      !link.target_schedule_id
+      (!link.source_schedule_id && !link.source_anchor_restored) ||
+      (!link.target_schedule_id && !link.target_anchor_restored)
     ));
     if (invalidLink) {
       wxbToast.error('请为每条串联关系选择源模板操作和目标模板操作');
@@ -513,19 +640,19 @@ const PackageDesignerModal: React.FC<{
                   source_role_code: value as string,
                   source_schedule_id: null,
                   source_anchor_day: 0,
+                  source_anchor_restored: false,
                 })}
               />
               <WxbSelect
                 label="源操作"
-                value={link.source_schedule_id ?? undefined}
+                value={getOperationSelectValue(link, 'source')}
                 placeholder={isOperationLoadingForRole(link.source_role_code) ? '操作加载中' : '选择操作'}
                 showSearch
                 optionFilterProp="label"
-                options={getOperationOptionsForRole(link.source_role_code).map((operation) => ({
-                  value: operation.scheduleId,
-                  label: operation.label,
-                }))}
-                onChange={(value) => updateLinkOperation(index, 'source', value as number)}
+                options={getOperationSelectOptions(link, 'source')}
+                onChange={(value) => {
+                  if (typeof value === 'number') updateLinkOperation(index, 'source', value);
+                }}
               />
               <WxbInputNumber
                 label="相差天数"
@@ -542,19 +669,19 @@ const PackageDesignerModal: React.FC<{
                   target_role_code: value as string,
                   target_schedule_id: null,
                   target_anchor_day: 0,
+                  target_anchor_restored: false,
                 })}
               />
               <WxbSelect
                 label="目标操作"
-                value={link.target_schedule_id ?? undefined}
+                value={getOperationSelectValue(link, 'target')}
                 placeholder={isOperationLoadingForRole(link.target_role_code) ? '操作加载中' : '选择操作'}
                 showSearch
                 optionFilterProp="label"
-                options={getOperationOptionsForRole(link.target_role_code).map((operation) => ({
-                  value: operation.scheduleId,
-                  label: operation.label,
-                }))}
-                onChange={(value) => updateLinkOperation(index, 'target', value as number)}
+                options={getOperationSelectOptions(link, 'target')}
+                onChange={(value) => {
+                  if (typeof value === 'number') updateLinkOperation(index, 'target', value);
+                }}
               />
               <div className="mfg-package-modal__link-summary">
                 {describeLink(link)}
