@@ -13,7 +13,13 @@ import {
   SearchOutlined,
   SettingOutlined,
   TableOutlined,
+  LogoutOutlined,
+  TeamOutlined,
+  KeyOutlined,
+  UserSwitchOutlined,
 } from '@ant-design/icons';
+import { WxbDropdown } from '../wxb-ui/Dropdown/Dropdown';
+import { useAuth } from '../../contexts/AuthContext';
 import './TopNavigation.css';
 
 type NavLeaf = {
@@ -21,6 +27,8 @@ type NavLeaf = {
   label: string;
   path: string;
   icon: React.ReactNode;
+  /** 需要的权限码（permission_code）；不传则所有人可见。 */
+  requiredPermission?: string;
 };
 
 type NavGroup = {
@@ -30,6 +38,8 @@ type NavGroup = {
   path?: string;
   icon: React.ReactNode;
   children?: NavLeaf[];
+  /** 顶层入口需要的权限码（无 children 的组用）。 */
+  requiredPermission?: string;
 };
 
 const navGroups: NavGroup[] = [
@@ -79,6 +89,17 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    key: 'governance',
+    label: '权限治理',
+    subtitle: 'Governance',
+    icon: <SafetyOutlined />,
+    children: [
+      { key: 'governance-roles', icon: <KeyOutlined />, label: '角色管理', path: '/governance/roles', requiredPermission: 'GOVERNANCE_ROLE_READ' },
+      { key: 'governance-users', icon: <UserSwitchOutlined />, label: '用户授权', path: '/governance/users', requiredPermission: 'GOVERNANCE_USER_READ' },
+      { key: 'governance-permissions', icon: <TeamOutlined />, label: '权限目录', path: '/governance/permissions', requiredPermission: 'GOVERNANCE_ROLE_READ' },
+    ],
+  },
+  {
     key: 'ui-kit',
     label: 'UI 组件库',
     subtitle: 'Design System',
@@ -97,8 +118,8 @@ const matchesPath = (pathname: string, path: string) => {
   return pathname === path || pathname.startsWith(`${path}/`);
 };
 
-const getGroupSelection = (pathname: string) => {
-  for (const group of navGroups) {
+const getGroupSelection = (pathname: string, groups: NavGroup[]) => {
+  for (const group of groups) {
     if (group.path && matchesPath(pathname, group.path)) {
       return { group, child: undefined };
     }
@@ -109,12 +130,50 @@ const getGroupSelection = (pathname: string) => {
     }
   }
 
-  return { group: navGroups[0], child: undefined };
+  return { group: groups[0], child: undefined };
+};
+
+const getAvatarInitials = (displayName?: string): string => {
+  if (!displayName) return 'APS';
+  const trimmed = displayName.trim();
+  if (!trimmed) return 'APS';
+  // 中文取末两字，英文取前两字符。
+  if (/[一-龥]/.test(trimmed)) {
+    return trimmed.slice(-2);
+  }
+  return trimmed.slice(0, 2).toUpperCase();
 };
 
 export default function TopNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout, hasPermission } = useAuth();
+
+  // 按权限过滤导航：隐藏无权限的菜单项；过滤后子项为空的分组整组隐藏。
+  const visibleGroups = useMemo(
+    () =>
+      navGroups.reduce<NavGroup[]>((acc, group) => {
+        if (group.children) {
+          const children = group.children.filter(
+            (child) => !child.requiredPermission || hasPermission(child.requiredPermission),
+          );
+          if (children.length > 0) {
+            acc.push({ ...group, children });
+          }
+          return acc;
+        }
+        if (!group.requiredPermission || hasPermission(group.requiredPermission)) {
+          acc.push(group);
+        }
+        return acc;
+      }, []),
+    [hasPermission],
+  );
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  }, [logout, navigate]);
   const navRef = useRef<HTMLElement | null>(null);
   const linksRef = useRef<HTMLDivElement | null>(null);
   const linkRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -124,12 +183,12 @@ export default function TopNavigation() {
   const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0, minWidth: 220 });
 
   const { group: activeGroup, child: activeChild } = useMemo(
-    () => getGroupSelection(location.pathname),
-    [location.pathname],
+    () => getGroupSelection(location.pathname, visibleGroups),
+    [location.pathname, visibleGroups],
   );
 
   const searchableRoutes = useMemo(
-    () => navGroups.reduce<Array<{ key: string; label: string; path: string; group: string }>>(
+    () => visibleGroups.reduce<Array<{ key: string; label: string; path: string; group: string }>>(
       (routes, group) => {
         if (group.path) {
           routes.push({ key: group.key, label: group.label, path: group.path, group: group.label });
@@ -149,7 +208,7 @@ export default function TopNavigation() {
       },
       [],
     ),
-    [],
+    [visibleGroups],
   );
 
   const movePill = useCallback((key: string) => {
@@ -186,9 +245,9 @@ export default function TopNavigation() {
   }, []);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => movePill(activeGroup.key));
+    const frame = window.requestAnimationFrame(() => movePill(activeGroup?.key ?? ''));
     const handleResize = () => {
-      movePill(activeGroup.key);
+      movePill(activeGroup?.key ?? '');
 
       if (openGroupKey) {
         const target = linkRefs.current[openGroupKey];
@@ -208,7 +267,7 @@ export default function TopNavigation() {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', handleResize);
     };
-  }, [activeGroup.key, movePill, openGroupKey]);
+  }, [activeGroup?.key, movePill, openGroupKey]);
 
   useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
@@ -291,7 +350,7 @@ export default function TopNavigation() {
 
         <div
           className="wxb-topnav-links"
-          onMouseLeave={() => movePill(activeGroup.key)}
+          onMouseLeave={() => movePill(activeGroup?.key ?? '')}
           ref={linksRef}
         >
           <span
@@ -304,8 +363,8 @@ export default function TopNavigation() {
             }}
           />
 
-          {navGroups.map((item) => {
-            const active = item.key === activeGroup.key;
+          {visibleGroups.map((item) => {
+            const active = item.key === activeGroup?.key;
             const childItems = item.children;
             const menuOpen = openGroupKey === item.key;
 
@@ -420,10 +479,42 @@ export default function TopNavigation() {
             <span className="wxb-topnav-notification-dot" />
           </button>
 
-          <span aria-label="当前用户" className="wxb-topnav-avatar" role="img">
-            APS
-            <span className="wxb-topnav-presence" />
-          </span>
+          <WxbDropdown
+            trigger={['click']}
+            placement="bottomRight"
+            menu={{
+              items: [
+                {
+                  key: 'user-info',
+                  label: (
+                    <div style={{ padding: '4px 0', lineHeight: 1.4 }}>
+                      <div style={{ fontWeight: 600, color: 'var(--wx-fg-1)' }}>
+                        {user?.displayName || '未登录'}
+                      </div>
+                      {user?.username ? (
+                        <div style={{ fontSize: 'var(--wx-fs-12)', color: 'var(--wx-fg-3)' }}>
+                          @{user.username}
+                        </div>
+                      ) : null}
+                    </div>
+                  ),
+                  disabled: true,
+                },
+                { type: 'divider' as const },
+                {
+                  key: 'logout',
+                  icon: <LogoutOutlined />,
+                  label: '退出登录',
+                  onClick: handleLogout,
+                },
+              ],
+            }}
+          >
+            <button aria-label="当前用户" className="wxb-topnav-avatar" type="button">
+              {getAvatarInitials(user?.displayName)}
+              <span className="wxb-topnav-presence" />
+            </button>
+          </WxbDropdown>
         </div>
       </nav>
     </header>

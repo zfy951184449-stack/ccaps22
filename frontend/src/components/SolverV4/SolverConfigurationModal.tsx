@@ -5,9 +5,12 @@ import {
     WxbIcon,
     WxbInputNumber,
     WxbModal,
+    WxbSegmented,
     WxbSelect,
     WxbSwitch,
 } from '../wxb-ui';
+
+export type LeaderOpsPolicy = 'allow' | 'soft' | 'ban';
 
 export interface SolverConfig {
     enable_share_group: boolean;
@@ -68,6 +71,10 @@ export interface SolverConfig {
 
     // Leadership Coverage
     enable_leadership_coverage: boolean;
+    enable_leader_production_coverage: boolean;
+    leader_ops_policy_group_leader: LeaderOpsPolicy;
+    leader_ops_policy_team_leader: LeaderOpsPolicy;
+    leader_ops_policy_dept_manager: LeaderOpsPolicy;
     objective_weight_leader_nonworkday: number;
     objective_weight_leader_workday_rest: number;
     objective_weight_leader_ops: number;
@@ -137,6 +144,10 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
 
     // Leadership Coverage Defaults
     enable_leadership_coverage: true,
+    enable_leader_production_coverage: true,
+    leader_ops_policy_group_leader: 'soft',
+    leader_ops_policy_team_leader: 'ban',
+    leader_ops_policy_dept_manager: 'ban',
     objective_weight_leader_nonworkday: 20,
     objective_weight_leader_workday_rest: 10,
     objective_weight_leader_ops: 30,
@@ -146,6 +157,19 @@ export const DEFAULT_SOLVER_CONFIG: SolverConfig = {
     max_time_seconds: 300,
     stagnation_limit: 300,
 };
+
+// 管理职级中文名（班组长 SHIFT_LEADER 不视为领导，不在此列）
+const LEADER_ROLE_LABELS: Record<string, string> = {
+    GROUP_LEADER: '组长',
+    TEAM_LEADER: '主管',
+    DEPT_MANAGER: '经理',
+};
+
+const LEADER_OPS_POLICY_OPTIONS = [
+    { label: '允许参与', value: 'allow' },
+    { label: '软性减少', value: 'soft' },
+    { label: '禁止参与', value: 'ban' },
+];
 
 interface SolverConfigurationModalProps {
     visible: boolean;
@@ -228,6 +252,7 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
         { key: 'enable_standard_hours', title: '标准工时合规', description: '确保排班符合法定工时要求' },
         { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '无操作需求时优先安排标准班（白班）' },
         { key: 'enable_leadership_coverage', title: '领导层排班约束', description: '生产日必须有管理岗在岗；主管/经理不参与操作；管理人员优先工作日出勤' },
+        { key: 'enable_leader_production_coverage', title: '└ 生产日需领导在岗', description: '每个有生产操作的日期至少 1 名管理岗上班（硬约束）。领导太少、覆盖不过来导致无解时可关闭', indent: true },
     ];
 
     const consecutiveDaysConstraints = [
@@ -289,7 +314,8 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
 
     const isToggleDisabled = (key: keyof SolverConfig) =>
         (key === 'strict_locked_shifts' && !config.enable_locked_shifts) ||
-        (key === 'enable_prefer_extended_night_rest' && !config.enable_night_rest);
+        (key === 'enable_prefer_extended_night_rest' && !config.enable_night_rest) ||
+        (key === 'enable_leader_production_coverage' && !config.enable_leadership_coverage);
 
     const onNumberChange = (key: keyof SolverConfig, value: number | string | null) => {
         handleWeightChange(key, typeof value === 'number' ? value : value === null ? null : Number(value));
@@ -334,6 +360,21 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
                 disabled={options?.disabled}
             />
         </label>
+    );
+
+    const renderLeaderOpsPolicyRow = (key: keyof SolverConfig, roleCode: string, hint: string) => (
+        <div className="solver-v4-config-row">
+            <div className="solver-v4-config-copy">
+                <strong>{LEADER_ROLE_LABELS[roleCode] || roleCode}</strong>
+                <span>{hint}</span>
+            </div>
+            <WxbSegmented
+                size="sm"
+                options={LEADER_OPS_POLICY_OPTIONS}
+                value={config[key] as string}
+                onChange={(v) => onConfigChange({ ...config, [key]: v as LeaderOpsPolicy })}
+            />
+        </div>
     );
 
     return (
@@ -395,6 +436,12 @@ const SolverConfigurationModal: React.FC<SolverConfigurationModalProps> = ({
 
                 {config.enable_leadership_coverage && (
                     <section className="solver-v4-config-subpanel">
+                        <p>各管理职级参与生产操作的策略（班组长视为一线，不在此列）。</p>
+                        <div className="solver-v4-config-list">
+                            {renderLeaderOpsPolicyRow('leader_ops_policy_dept_manager', 'DEPT_MANAGER', '默认：禁止参与生产')}
+                            {renderLeaderOpsPolicyRow('leader_ops_policy_team_leader', 'TEAM_LEADER', '默认：禁止参与生产')}
+                            {renderLeaderOpsPolicyRow('leader_ops_policy_group_leader', 'GROUP_LEADER', '默认：软性减少')}
+                        </div>
                         <p>管理岗偏好权重配置。数值越大，优化压力越高。</p>
                         <div className="solver-v4-config-grid">
                             {renderNumberField('objective_weight_leader_nonworkday', '非工作日出勤惩罚', { min: 0, max: 1000 })}

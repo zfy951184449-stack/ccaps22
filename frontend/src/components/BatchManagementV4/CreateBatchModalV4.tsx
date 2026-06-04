@@ -218,6 +218,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     return (
         <WxbModal
             open={visible}
+            className="batch-modal-v4__modal"
             title={initialValues ? '编辑批次' : '新建生产批次'}
             okText={initialValues ? '保存更改' : '立即创建'}
             cancelText="取消"

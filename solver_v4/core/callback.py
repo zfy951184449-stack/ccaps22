@@ -1,3 +1,4 @@
+import os
 import time
 import requests
 import json
@@ -21,6 +22,18 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         self.run_id = run_id
         self.api_url = api_url
         self.log_search_progress = log_search_progress
+
+        # 🔐 solver→backend 回调共享密钥（与 backend 的 SOLVER_CALLBACK_SECRET 同值）。
+        # backend 的 requireServiceAuth 用 timingSafeEqual 校验 header X-Solver-Callback-Token。
+        # 进度 POST / 结果 POST / status 轮询 GET 都带上：status 路由在 backend 同样挂了
+        # requireServiceAuth（见 backend/src/routes/schedulingV4.ts 与 docs/pending-decisions.md PD-3），
+        # 缺密钥会被 401 拦死。
+        self.callback_secret = os.environ.get("SOLVER_CALLBACK_SECRET", "").strip()
+        if not self.callback_secret:
+            logger.warning(
+                "⚠️ SOLVER_CALLBACK_SECRET 未设置：solver→backend 回调将不带 "
+                "X-Solver-Callback-Token，新版 backend 会以 401 拒绝回调（进度/结果无法回写）。"
+            )
         
         # Stop Strategy Config
         self.max_time_seconds = max_time_seconds
@@ -220,6 +233,13 @@ class APICallback(cp_model.CpSolverSolutionCallback):
             except Exception as e:
                 logger.warning(f"⚠️ StopSearch() failed: {e}")
 
+    def _auth_headers(self) -> dict:
+        """回调鉴权头：带共享密钥供 backend 的 requireServiceAuth 校验。
+        未配置密钥时返回空 dict（保持旧行为，由 backend 决定 401/503）。"""
+        if self.callback_secret:
+            return {"X-Solver-Callback-Token": self.callback_secret}
+        return {}
+
     def push_progress(self, status, progress=None, metrics=None, message=None, log_line=None, type="STATUS"):
         """Sends POST request to backend with retry logic."""
         max_retries = 2
@@ -241,7 +261,7 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         
         for attempt in range(max_retries + 1):
             try:
-                requests.post(self.api_url, json=payload, timeout=2)
+                requests.post(self.api_url, json=payload, headers=self._auth_headers(), timeout=2)
                 return  # Success, exit
             except requests.exceptions.Timeout:
                 if attempt < max_retries:
@@ -257,7 +277,7 @@ class APICallback(cp_model.CpSolverSolutionCallback):
     def poll_server_stop(self):
         """Check if server requested stop."""
         try:
-            resp = requests.get(self.status_url, timeout=1)
+            resp = requests.get(self.status_url, headers=self._auth_headers(), timeout=1)
             if resp.status_code == 200:
                 data = resp.json()
                 # If status is STOPPING or STOPPED
@@ -334,7 +354,7 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         }
         
         try:
-            resp = requests.post(result_url, json=payload, timeout=30)
+            resp = requests.post(result_url, json=payload, headers=self._auth_headers(), timeout=30)
             if resp.status_code == 200:
                 logger.info(f"✅ Result summary pushed successfully")
             else:

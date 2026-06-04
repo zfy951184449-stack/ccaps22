@@ -86,6 +86,45 @@ function formatExpandedDayLabel(cfg: DrawConfig, day: number): string {
   return date ? date.format('YYYY-MM-DD') : `Day ${day}`;
 }
 
+function formatPeakBadgeLabel(peakData: { peak: number; peakHour: number }, width: number): string {
+  const hour = `${Math.floor(peakData.peakHour).toString().padStart(2, '0')}:00`;
+  if (width >= 112) return `峰 ${peakData.peak} @ ${hour}`;
+  if (width >= 58) return `峰 ${peakData.peak}`;
+  return `${peakData.peak}`;
+}
+
+function drawPeakBadge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  peakData: { peak: number; peakHour: number },
+  minPeak: number,
+  maxPeak: number
+): void {
+  const label = formatPeakBadgeLabel(peakData, width);
+  ctx.font = `600 ${width >= 58 ? 10 : 9}px ${FONT_SANS}`;
+  const measured = ctx.measureText(label).width;
+  const badgeW = Math.min(Math.max(measured + 12, width >= 58 ? 34 : 22), Math.max(22, width - 8));
+  const badgeX = x + Math.max(4, (width - badgeW) / 2);
+  const badgeY = y;
+  const fill = getHeatColor(peakData.peak, minPeak, maxPeak);
+
+  ctx.fillStyle = fill;
+  roundRect(ctx, badgeX, badgeY, badgeW, height, 4);
+  ctx.fill();
+
+  ctx.strokeStyle = hexToRgba(THEME.ink, 0.12);
+  ctx.lineWidth = 0.8;
+  roundRect(ctx, badgeX, badgeY, badgeW, height, 4);
+  ctx.stroke();
+
+  ctx.fillStyle = THEME.ink;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, badgeX + badgeW / 2, badgeY + height - 4);
+}
+
 /** Clip rendering to below-header area. Must call ctx.restore() after. */
 export function clipBelowHeader(ctx: CanvasRenderingContext2D, cfg: DrawConfig): void {
   const totalHeaderH = HEADER_HEIGHT + (cfg.showHeatmap ? HEATMAP_HEIGHT : 0);
@@ -273,6 +312,11 @@ export function drawTimeAxis(
   const startDay = Math.floor(startHour / 24);
   const totalDays = Math.ceil((cfg.endHour - startHour) / 24);
   const totalHeaderH = HEADER_HEIGHT + (showHeatmap ? HEATMAP_HEIGHT : 0);
+  const nonZeroPeakValues = peaks
+    ? Array.from(peaks.values()).map(p => p.peak).filter(p => p > 0)
+    : [];
+  const minPeak = nonZeroPeakValues.length > 0 ? Math.min(...nonZeroPeakValues) : 0;
+  const maxPeak = nonZeroPeakValues.length > 0 ? Math.max(...nonZeroPeakValues) : 1;
 
   // Header background
   ctx.fillStyle = THEME.surface2;
@@ -341,6 +385,11 @@ export function drawTimeAxis(
     ctx.textAlign = 'center';
     ctx.fillText(formatExpandedDayLabel(cfg, expDay), centerX, 16);
 
+    const peakData = peaks?.get(expDay);
+    if (!showHeatmap && peakData && peakData.peak > 0) {
+      drawPeakBadge(ctx, centerX + 96, 4, 96, 17, peakData, minPeak, maxPeak);
+    }
+
     // ▸ Next arrow
     ctx.fillStyle = THEME.primary;
     ctx.font = `600 16px ${FONT_SANS}`;
@@ -388,15 +437,19 @@ export function drawTimeAxis(
       const x = scaledX(dayHour, cfg);
       const currentDayW = scaledWidth(dayHour, dayHour + 24, cfg);
       if (x + currentDayW < 0 || x > canvasW) continue;
+      const peakData = peaks?.get(startDay + d);
+      const showInlinePeak = !showHeatmap && !!peakData && peakData.peak > 0 && currentDayW >= 34;
 
       // Day label
       ctx.fillStyle = THEME.ink;
       ctx.font = `600 12px ${FONT_SANS}`;
       ctx.textAlign = 'center';
-      ctx.fillText(formatDayLabel(cfg, startDay + d, dayW), x + currentDayW / 2, 18);
+      ctx.fillText(formatDayLabel(cfg, startDay + d, dayW), x + currentDayW / 2, showInlinePeak ? 16 : 18);
 
       // Hour sub-labels: adaptive density based on zoom
-      if (showHourSubs) {
+      if (showInlinePeak) {
+        drawPeakBadge(ctx, x, 25, currentDayW, 17, peakData, minPeak, maxPeak);
+      } else if (showHourSubs) {
         ctx.fillStyle = THEME.fg4;
         ctx.font = `400 9px ${FONT_SANS}`;
         ctx.textAlign = 'center';

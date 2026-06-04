@@ -138,6 +138,23 @@ const getTemplateLabel = (template?: TemplateOption) => {
   return `${template.template_code} · ${template.template_name}`;
 };
 
+const normalizeMatchText = (value?: string | null) => (
+  String(value ?? '').trim().toLowerCase().replace(/\s+/g, '')
+);
+
+const extractSavedOperationLabel = (description: string | null | undefined, side: LinkSide): string | null => {
+  const text = String(description ?? '').trim();
+  if (!text) return null;
+
+  const relationMatch = text.match(/\s(?:同一天|相差 [+-]?\d+ 天)\s/);
+  const segment = side === 'source'
+    ? text.slice(0, relationMatch?.index ?? text.length)
+    : text.slice(relationMatch ? (relationMatch.index ?? 0) + relationMatch[0].length : 0);
+  const slashIndex = segment.lastIndexOf(' / ');
+  const label = slashIndex >= 0 ? segment.slice(slashIndex + 3).trim() : '';
+  return label || null;
+};
+
 const createRestoredAnchorValue = (side: LinkSide, roleCode: string, anchorDay: number) => (
   `restored-anchor:${side}:${roleCode}:${anchorDay}`
 );
@@ -284,9 +301,19 @@ const PackageDesignerModal: React.FC<{
     return getOperationOptionsForRole(roleCode).find((operation) => operation.scheduleId === scheduleId);
   }, [getOperationOptionsForRole]);
 
-  const findUniqueOperationByAnchor = useCallback((roleCode: string, anchorDay: number) => {
+  const findSavedOperationByAnchor = useCallback((roleCode: string, anchorDay: number, description?: string | null) => {
     const matches = getOperationOptionsForRole(roleCode)
       .filter((operation) => operation.absoluteDay === anchorDay);
+
+    const normalizedDescription = normalizeMatchText(description);
+    if (normalizedDescription) {
+      const describedMatches = matches.filter((operation) => (
+        normalizedDescription.includes(normalizeMatchText(operation.operationName)) ||
+        normalizedDescription.includes(normalizeMatchText(operation.operationCode))
+      ));
+      if (describedMatches.length === 1) return describedMatches[0];
+    }
+
     return matches.length === 1 ? matches[0] : undefined;
   }, [getOperationOptionsForRole]);
 
@@ -299,7 +326,7 @@ const PackageDesignerModal: React.FC<{
         let next = link;
 
         if (!link.source_schedule_id && link.source_anchor_restored) {
-          const operation = findUniqueOperationByAnchor(link.source_role_code, link.source_anchor_day);
+          const operation = findSavedOperationByAnchor(link.source_role_code, link.source_anchor_day, link.description);
           if (operation) {
             next = {
               ...next,
@@ -311,7 +338,7 @@ const PackageDesignerModal: React.FC<{
         }
 
         if (!next.target_schedule_id && next.target_anchor_restored) {
-          const operation = findUniqueOperationByAnchor(next.target_role_code, next.target_anchor_day);
+          const operation = findSavedOperationByAnchor(next.target_role_code, next.target_anchor_day, next.description);
           if (operation) {
             next = {
               ...next,
@@ -327,7 +354,7 @@ const PackageDesignerModal: React.FC<{
 
       return changed ? { ...current, links } : current;
     });
-  }, [findUniqueOperationByAnchor, open]);
+  }, [findSavedOperationByAnchor, open]);
 
   const getOperationSelectValue = useCallback((link: SimpleLink, side: LinkSide): OperationSelectValue => {
     if (side === 'source') {
@@ -354,10 +381,11 @@ const PackageDesignerModal: React.FC<{
     }));
 
     if (!scheduleId && restored) {
+      const savedOperationLabel = extractSavedOperationLabel(link.description, side);
       return [
         {
           value: createRestoredAnchorValue(side, roleCode, anchorDay),
-          label: `已保存 Day ${anchorDay}`,
+          label: savedOperationLabel ? `${savedOperationLabel} · Day ${anchorDay}` : `Day ${anchorDay}`,
         },
         ...options,
       ];
@@ -375,7 +403,7 @@ const PackageDesignerModal: React.FC<{
     const targetOperation = findOperation(link.target_role_code, link.target_schedule_id);
     const relation = link.lag_days === 0 ? '同一天' : `相差 ${link.lag_days > 0 ? '+' : ''}${link.lag_days} 天`;
 
-    if (!sourceOperation && !targetOperation && link.description) {
+    if ((link.source_anchor_restored || link.target_anchor_restored) && link.description) {
       return link.description;
     }
 

@@ -53,6 +53,9 @@ export interface UseGanttDragProps {
   onAutoScroll?: (dx: number) => void;
   canvasWidth: number;
   timeScale?: GanttTimeScale;
+  /** Clamp single-task move to [windowStart, windowEnd]. Default: true.
+   *  When false the window no longer restricts dragging (timeline bounds still apply). */
+  clampDragToWindow?: boolean;
 }
 
 export interface UseGanttDragResult {
@@ -105,6 +108,7 @@ export function useGanttDrag({
   onAutoScroll,
   canvasWidth,
   timeScale,
+  clampDragToWindow = true,
 }: UseGanttDragProps): UseGanttDragResult {
   const dragRef = useRef<DragState | null>(null);
   const undoStack = useRef<UndoEntry[]>([]);
@@ -366,8 +370,8 @@ export function useGanttDrag({
       startMouseY: e.clientY,
       originals,
       deltaHours: 0,
-      windowMinHour: task.windowStart,
-      windowMaxHour: task.windowEnd,
+      windowMinHour: clampDragToWindow ? task.windowStart : undefined,
+      windowMaxHour: clampDragToWindow ? task.windowEnd : undefined,
       taskColor: task.color || '#1F6FEB',
       taskLabel: task.label,
       warningLevel: 'normal',
@@ -377,7 +381,7 @@ export function useGanttDrag({
     dragRef.current = newState;
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [readOnly, handleMouseMove, handleMouseUp]);
+  }, [readOnly, clampDragToWindow, handleMouseMove, handleMouseUp]);
 
   // ===== Start Group Cascade Drag =====
   const startGroupDrag = useCallback((

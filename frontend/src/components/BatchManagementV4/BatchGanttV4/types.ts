@@ -3,6 +3,20 @@ import dayjs from 'dayjs';
 export type ViewMode = 'day' | 'week' | 'month';
 export type LayoutMode = 'dense' | 'standard' | 'compact';
 
+export interface GanttPersonnelAssignment {
+    id: number;
+    positionNumber: number;
+    employeeId: number;
+    employeeCode?: string | null;
+    employeeName?: string | null;
+    role?: string | null;
+    status: string;
+    shiftPlanId?: number | null;
+    shiftCode?: string | null;
+    shiftName?: string | null;
+    planDate?: string | null;
+}
+
 export interface GanttOperation {
     id: number;
     templateScheduleId?: number | null;
@@ -16,6 +30,7 @@ export interface GanttOperation {
     duration: number;
     requiredPeople: number;
     assignedPeople: number;
+    personnelAssignments?: GanttPersonnelAssignment[];
     windowStartDate?: string | null;
     windowEndDate?: string | null;
     resourceNodeId?: number | null;

@@ -3,6 +3,9 @@
 import React from 'react';
 
 export const WxbIconsData: Record<string, React.ReactNode> = {
+  'close': (<>
+    <path d="M6 6l12 12M18 6L6 18"/>
+  </>),
   'vial-thaw': (<>
     <path d="M9 2v3h6V2"/><path d="M8 5h8l-1 14a2 2 0 01-2 2h-2a2 2 0 01-2-2L8 5z"/><path d="M9 11h6"/><path d="M11 17h2"/>
   </>),

@@ -239,6 +239,7 @@ interface V4HistoricalShift {
     is_work: boolean;
     is_night: boolean;
     consecutive_work_days: number; // 截止该日期的连续工作天数
+    consecutive_rest_days: number; // 截止该日期的连续休息天数（rest 边界约束用）
 }
 
 interface V4Resource {
@@ -311,6 +312,14 @@ export class DataAssemblerV4 {
             console.log(`[DataAssemblerV4] Interval solve mode: solve ${effectiveSolveStart} ~ ${effectiveSolveEnd} within window ${startDate} ~ ${endDate}`);
         }
 
+        // History lookback must cover the largest consecutive-day limit, otherwise the
+        // boundary counts get under-counted (work limit default 6, rest limit default 4).
+        const histLookback = Math.max(
+            Number(config?.max_consecutive_work_days ?? 6),
+            Number(config?.max_consecutive_rest_days ?? 4),
+            6,
+        ) + 1;
+
         // Parallel data fetching
         const [
             operationsData,
@@ -330,7 +339,7 @@ export class DataAssemblerV4 {
             this.fetchShareGroups(startDate, endDate, batchIds),
             this.fetchLockedOperations(batchIds),
             this.fetchLockedShifts(startDate, endDate),
-            this.fetchHistoricalShifts(startDate),
+            this.fetchHistoricalShifts(startDate, histLookback),
             // For interval solve, only fetch special shift requirements within solve range
             this.fetchSpecialShiftRequirements(effectiveSolveStart, effectiveSolveEnd),
         ]);
@@ -786,8 +795,15 @@ export class DataAssemblerV4 {
     }
 
     private static async fetchEmployees(startDate: string, endDate: string, teamIds: number[] = []): Promise<V4EmployeeProfile[]> {
-        // Fetch basic info
-        let query = "SELECT id, employee_code, employee_name, org_role FROM employees WHERE employment_status = 'ACTIVE'";
+        // Fetch basic info.
+        // org_role is derived from primary_role_id → employee_roles.role_code (the authoritative role).
+        // The legacy employees.org_role column is unmaintained (defaults to FRONTLINE) and kept only as a fallback.
+        let query = `
+            SELECT e.id, e.employee_code, e.employee_name,
+                   COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS org_role
+            FROM employees e
+            LEFT JOIN employee_roles er ON er.id = e.primary_role_id
+            WHERE e.employment_status = 'ACTIVE'`;
         const params: any[] = [];
 
         if (teamIds.length > 0) {
@@ -801,8 +817,10 @@ export class DataAssemblerV4 {
                     SELECT ou.id FROM organization_units ou
                     INNER JOIN unit_tree ut ON ou.parent_id = ut.id
                 )
-                SELECT e.id, e.employee_code, e.employee_name, e.org_role 
+                SELECT e.id, e.employee_code, e.employee_name,
+                       COALESCE(er.role_code, e.org_role, 'FRONTLINE') AS org_role
                 FROM employees e
+                LEFT JOIN employee_roles er ON er.id = e.primary_role_id
                 WHERE e.employment_status = 'ACTIVE'
                   AND e.unit_id IN (SELECT id FROM unit_tree)
             `;
@@ -1276,27 +1294,25 @@ export class DataAssemblerV4 {
             // Sort by date descending (most recent first)
             const sorted = data.dateRecords.sort((a, b) => b.date.localeCompare(a.date));
 
+            const lastIsWork = sorted.length > 0 ? sorted[0].isWork : false;
+            const lastIsNight = sorted.length > 0 ? sorted[0].isNight : false;
+
+            // Count consecutive WORK days backward from window start - 1 (stop at first rest)
             let consecutiveWorkDays = 0;
-            let lastIsWork = false;
-            let lastIsNight = false;
-
-            // Count consecutive work days from window start - 1 going backwards
             for (let i = 0; i < sorted.length; i++) {
-                const record = sorted[i];
-                if (i === 0) {
-                    lastIsWork = record.isWork;
-                    lastIsNight = record.isNight;
-                }
-
-                if (record.isWork) {
-                    consecutiveWorkDays++;
-                } else {
-                    // Stop counting on first rest day
-                    break;
-                }
+                if (sorted[i].isWork) consecutiveWorkDays++;
+                else break;
             }
 
-            // Return one record per employee with the consecutive count
+            // Count consecutive REST days backward (stop at first work) — mirror of above.
+            // The two are mutually exclusive: the most recent day is either work or rest.
+            let consecutiveRestDays = 0;
+            for (let i = 0; i < sorted.length; i++) {
+                if (!sorted[i].isWork) consecutiveRestDays++;
+                else break;
+            }
+
+            // Return one record per employee with the consecutive counts
             // Using the most recent date (historyEndDate or closest available)
             const latestDate = sorted.length > 0 ? sorted[0].date : historyEndDate;
 
@@ -1305,7 +1321,8 @@ export class DataAssemblerV4 {
                 date: latestDate,
                 is_work: lastIsWork,
                 is_night: lastIsNight,
-                consecutive_work_days: consecutiveWorkDays
+                consecutive_work_days: consecutiveWorkDays,
+                consecutive_rest_days: consecutiveRestDays
             });
         });
 

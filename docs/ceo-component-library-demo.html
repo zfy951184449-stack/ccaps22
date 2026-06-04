@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MFG8APS Executive Presentation Skin</title>
+<style>
+:root {
+  --wx-blue-950: #03152f;
+  --wx-blue-900: #082a5c;
+  --wx-blue-800: #0a3470;
+  --wx-blue-700: #0b3d7f;
+  --wx-blue-600: #1556b5;
+  --wx-blue-500: #1f6feb;
+  --wx-blue-200: #c7dcf7;
+  --wx-blue-100: #e6f2fb;
+  --wx-cyan-500: #16b8d8;
+  --wx-cyan-200: #a8ecf6;
+  --wx-green-600: #267f5c;
+  --wx-green-500: #2e9d6e;
+  --wx-green-100: #e6f4ed;
+  --wx-amber-600: #c8871a;
+  --wx-amber-500: #e8b53c;
+  --wx-amber-100: #fbf1d9;
+  --wx-red-600: #b83f34;
+  --wx-red-500: #d6493a;
+  --wx-red-100: #fbe6e3;
+  --wx-ink: #0f1b2d;
+  --wx-fg-2: #3a4a5c;
+  --wx-fg-3: #5a6b7e;
+  --wx-fg-4: #8898a8;
+  --wx-divider: #eef2f7;
+  --wx-border: #d9e4f0;
+  --wx-surface-2: #f5f8fb;
+  --wx-surface-1: #fafcfe;
+  --wx-bg: #ffffff;
+  --wx-font-sans: Inter, "PingFang SC", "Source Han Sans SC", system-ui, sans-serif;
+  --wx-font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --wx-radius-4: 4px;
+  --wx-radius-6: 6px;
+  --wx-radius-8: 8px;
+  --wx-shadow-panel: 0 24px 80px rgba(0, 11, 34, 0.26);
+  --wx-shadow-soft: 0 12px 30px rgba(6, 28, 70, 0.15);
+  --wx-glow-cyan: 0 0 26px rgba(22, 184, 216, 0.36);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--wx-font-sans);
+  color: var(--wx-bg);
+  background: linear-gradient(180deg, rgba(3, 21, 47, 0.98), rgba(6, 29, 63, 0.98));
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+}
+
+.stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+}
+
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 720px;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(22, 184, 216, 0.1) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(22, 184, 216, 0.08) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(180deg, #000, transparent 92%);
+}
+
+.stage::after {
+  content: "";
+  position: absolute;
+  top: 96px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(168, 236, 246, 0.72), transparent);
+  box-shadow: var(--wx-glow-cyan);
+  pointer-events: none;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(1440px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+.topbar {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-mark {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(168, 236, 246, 0.54);
+  border-radius: var(--wx-radius-8);
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 18px rgba(22, 184, 216, 0.24);
+}
+
+.brand-mark svg,
+.icon svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-copy strong {
+  display: block;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.brand-copy span {
+  display: block;
+  margin-top: 3px;
+  color: rgba(230, 242, 251, 0.7);
+  font-size: 12px;
+}
+
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  border: 1px solid rgba(199, 220, 247, 0.18);
+  border-radius: var(--wx-radius-8);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+}
+
+.topnav a {
+  color: rgba(230, 242, 251, 0.72);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1;
+  padding: 10px 12px;
+  border-radius: var(--wx-radius-6);
+  white-space: nowrap;
+}
+
+.topnav a.active,
+.topnav a:hover {
+  color: var(--wx-bg);
+  background: rgba(22, 184, 216, 0.16);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn {
+  height: 36px;
+  border-radius: var(--wx-radius-6);
+  border: 1px solid rgba(199, 220, 247, 0.26);
+  padding: 0 14px;
+  color: var(--wx-bg);
+  background: rgba(255, 255, 255, 0.08);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.btn.primary {
+  background: linear-gradient(135deg, var(--wx-cyan-500), var(--wx-blue-500));
+  border-color: transparent;
+  box-shadow: var(--wx-glow-cyan);
+}
+
+.btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(620px, 1.35fr);
+  gap: 28px;
+  padding: 40px 0 30px;
+  align-items: stretch;
+}
+
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 520px;
+}
+
+.eyebrow {
+  color: var(--wx-cyan-200);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 14px 0 14px;
+  max-width: 620px;
+  font-size: clamp(42px, 4.9vw, 70px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+h1 span {
+  display: block;
+}
+
+.hero-lead {
+  margin: 0;
+  max-width: 560px;
+  color: rgba(230, 242, 251, 0.78);
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.signal-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.signal {
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid rgba(199, 220, 247, 0.16);
+  border-radius: var(--wx-radius-8);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.signal b {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(230, 242, 251, 0.7);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.signal strong {
+  display: block;
+  font-size: 28px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.signal span {
+  display: block;
+  margin-top: 8px;
+  color: rgba(168, 236, 246, 0.82);
+  font-size: 12px;
+}
+
+.hero-footer {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid rgba(199, 220, 247, 0.2);
+  border-radius: var(--wx-radius-4);
+  color: rgba(230, 242, 251, 0.78);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+
+.pill i,
+.dot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 999px;
+  background: var(--wx-cyan-500);
+  box-shadow: 0 0 14px rgba(22, 184, 216, 0.66);
+}
+
+.command-board {
+  border: 1px solid rgba(199, 220, 247, 0.22);
+  border-radius: var(--wx-radius-8);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(250, 252, 254, 0.98)),
+    var(--wx-bg);
+  box-shadow: var(--wx-shadow-panel);
+  color: var(--wx-ink);
+  overflow: hidden;
+}
+
+.board-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 66px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--wx-divider);
+}
+
+.board-title {
+  min-width: 0;
+}
+
+.board-title strong {
+  display: block;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.board-title span {
+  display: block;
+  margin-top: 4px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--wx-radius-4);
+  color: var(--wx-green-600);
+  background: var(--wx-green-100);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(310px, 0.94fr);
+  gap: 1px;
+  background: var(--wx-divider);
+}
+
+.board-cell {
+  background: var(--wx-bg);
+  padding: 18px;
+}
+
+.cell-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mini-link {
+  color: var(--wx-blue-600);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.flow-map {
+  position: relative;
+  min-height: 202px;
+  padding: 14px 10px 8px;
+}
+
+.flow-line {
+  position: absolute;
+  left: 58px;
+  right: 58px;
+  top: 92px;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--wx-blue-200), var(--wx-cyan-500), var(--wx-green-500), var(--wx-amber-500));
+}
+
+.flow-steps {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.flow-step {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  text-align: center;
+}
+
+.flow-node {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--wx-blue-700);
+  background: var(--wx-bg);
+  border: 1px solid var(--wx-blue-200);
+  box-shadow: 0 10px 28px rgba(21, 86, 181, 0.15);
+}
+
+.flow-node.active {
+  color: var(--wx-bg);
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--wx-blue-600), var(--wx-cyan-500));
+  box-shadow: var(--wx-glow-cyan);
+}
+
+.flow-node.warn {
+  color: var(--wx-ink);
+  border-color: rgba(232, 181, 60, 0.5);
+  background: var(--wx-amber-100);
+}
+
+.flow-node svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.flow-step strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.flow-step span {
+  color: var(--wx-fg-3);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.kpi-stack {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.kpi {
+  min-height: 106px;
+  padding: 14px;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+}
+
+.kpi b {
+  display: block;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kpi strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 31px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi span {
+  display: block;
+  margin-top: 9px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+}
+
+.kpi.good strong {
+  color: var(--wx-green-600);
+}
+
+.kpi.warn strong {
+  color: var(--wx-amber-600);
+}
+
+.gantt {
+  display: grid;
+  gap: 10px;
+}
+
+.gantt-head,
+.gantt-row {
+  display: grid;
+  grid-template-columns: 96px repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  align-items: center;
+}
+
+.gantt-head span {
+  color: var(--wx-fg-4);
+  font-size: 11px;
+  text-align: center;
+}
+
+.lane-label {
+  color: var(--wx-fg-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.track {
+  height: 20px;
+  border-radius: var(--wx-radius-4);
+  background: var(--wx-surface-2);
+  position: relative;
+  overflow: hidden;
+}
+
+.bar {
+  position: absolute;
+  inset: 2px auto 2px 0;
+  border-radius: var(--wx-radius-4);
+  background: var(--wx-blue-500);
+}
+
+.bar.green {
+  background: var(--wx-green-500);
+}
+
+.bar.amber {
+  background: var(--wx-amber-500);
+}
+
+.bar.red {
+  background: var(--wx-red-500);
+}
+
+.w42 { width: 42%; }
+.w48 { width: 48%; }
+.w54 { width: 54%; }
+.w58 { width: 58%; }
+.w62 { width: 62%; }
+.w68 { width: 68%; }
+.w70 { width: 70%; }
+.w72 { width: 72%; }
+.w76 { width: 76%; }
+.w78 { width: 78%; }
+.w80 { width: 80%; }
+.w86 { width: 86%; }
+.w88 { width: 88%; }
+
+.eyebrow.on-light {
+  color: var(--wx-blue-700);
+}
+
+.risk-list {
+  display: grid;
+  gap: 10px;
+}
+
+.risk-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 11px;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+}
+
+.risk-item .icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--wx-radius-6);
+  display: grid;
+  place-items: center;
+}
+
+.risk-item.high .icon {
+  color: var(--wx-red-600);
+  background: var(--wx-red-100);
+}
+
+.risk-item.mid .icon {
+  color: var(--wx-amber-600);
+  background: var(--wx-amber-100);
+}
+
+.risk-item.good .icon {
+  color: var(--wx-green-600);
+  background: var(--wx-green-100);
+}
+
+.risk-copy {
+  min-width: 0;
+}
+
+.risk-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--wx-ink);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.risk-copy span {
+  display: block;
+  margin-top: 4px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+}
+
+.risk-tag {
+  padding: 5px 7px;
+  border-radius: var(--wx-radius-4);
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sections {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 22px;
+  padding: 32px 0 70px;
+  color: var(--wx-ink);
+}
+
+.sections::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  background: var(--wx-surface-2);
+}
+
+.section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.section-head h2 {
+  margin: 0;
+  color: var(--wx-ink);
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.section-head p {
+  margin: 8px 0 0;
+  max-width: 760px;
+  color: var(--wx-fg-3);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+  gap: 18px;
+}
+
+.panel,
+.scenario,
+.component-row {
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-bg);
+  box-shadow: var(--wx-shadow-soft);
+}
+
+.panel {
+  padding: 18px;
+}
+
+.panel h3,
+.scenario h3 {
+  margin: 0 0 14px;
+  color: var(--wx-ink);
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.diagnosis {
+  display: grid;
+  gap: 12px;
+}
+
+.diagnosis-row {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+  border: 1px solid var(--wx-border);
+}
+
+.diagnosis-row b {
+  color: var(--wx-fg-3);
+  font-size: 12px;
+}
+
+.diagnosis-row span {
+  color: var(--wx-ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.action-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.action-strip button {
+  height: 34px;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-6);
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+  padding: 0 11px;
+  cursor: pointer;
+}
+
+.scenario {
+  overflow: hidden;
+}
+
+.scenario h3 {
+  padding: 18px 18px 0;
+}
+
+.scenario-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scenario-table th,
+.scenario-table td {
+  padding: 11px 12px;
+  border-top: 1px solid var(--wx-divider);
+  text-align: left;
+  font-size: 12px;
+}
+
+.scenario-table th {
+  color: var(--wx-fg-3);
+  background: var(--wx-surface-1);
+  font-weight: 700;
+}
+
+.scenario-table td {
+  color: var(--wx-fg-2);
+}
+
+.scenario-table strong {
+  color: var(--wx-ink);
+  font-size: 13px;
+}
+
+.winner {
+  color: var(--wx-green-600);
+  font-weight: 700;
+}
+
+.component-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  background: var(--wx-divider);
+}
+
+.component {
+  min-height: 152px;
+  padding: 18px;
+  background: var(--wx-bg);
+}
+
+.component .icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--wx-radius-8);
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+}
+
+.component strong {
+  display: block;
+  margin-top: 14px;
+  color: var(--wx-ink);
+  font-size: 14px;
+}
+
+.component span {
+  display: block;
+  margin-top: 7px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.brief-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-divider);
+  box-shadow: var(--wx-shadow-soft);
+}
+
+.brief-side {
+  padding: 22px;
+  background:
+    linear-gradient(135deg, rgba(8, 42, 92, 0.96), rgba(11, 61, 127, 0.92)),
+    var(--wx-blue-900);
+  color: var(--wx-bg);
+}
+
+.brief-side h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.brief-side p {
+  margin: 12px 0 0;
+  color: rgba(230, 242, 251, 0.78);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.brief-main {
+  padding: 20px;
+  background: var(--wx-bg);
+}
+
+.brief-items {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.brief-item {
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+}
+
+.brief-item b {
+  display: block;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.brief-item strong {
+  display: block;
+  margin-top: 9px;
+  color: var(--wx-ink);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.brief-item span {
+  display: block;
+  margin-top: 9px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+@media (max-width: 1180px) {
+  .hero,
+  .board-grid,
+  .panel-grid,
+  .brief-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-copy {
+    min-height: auto;
+    gap: 26px;
+  }
+}
+
+@media (max-width: 780px) {
+  .shell {
+    width: min(100% - 28px, 1440px);
+  }
+
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+
+  .topnav,
+  .toolbar-actions {
+    width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .signal-row,
+  .kpi-stack,
+  .component-row,
+  .brief-items {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-steps {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .flow-line {
+    display: none;
+  }
+
+  .flow-step {
+    grid-template-columns: 74px minmax(0, 1fr);
+    justify-items: start;
+    text-align: left;
+  }
+
+  .flow-step span,
+  .flow-step strong {
+    grid-column: 2;
+  }
+
+  .gantt-head,
+  .gantt-row {
+    grid-template-columns: 76px repeat(7, 42px);
+    overflow-x: auto;
+  }
+
+  .diagnosis-row {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M5 18V8l7-5 7 5v10"/><path d="M7 18h10"/><path d="M9 18v-5h6v5"/><path d="M8 10h8"/></svg>
+        </div>
+        <div class="brand-copy">
+          <strong>MFG8APS Executive Skin</strong>
+          <span>Biopharma manufacturing command cockpit</span>
+        </div>
+      </div>
+      <nav class="topnav" aria-label="演示导航">
+        <a class="active" href="#cockpit">CEO Cockpit</a>
+        <a href="#diagnosis">Infeasible Recovery</a>
+        <a href="#scenario">Scenario Compare</a>
+        <a href="#library">Component Library</a>
+      </nav>
+      <div class="toolbar-actions">
+        <button class="btn" type="button">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M7 12h10"/><path d="M10 17h4"/></svg>
+          Filter
+        </button>
+        <button class="btn primary" type="button">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+          Board Brief
+        </button>
+      </div>
+    </header>
+
+    <section class="hero" id="cockpit">
+      <div class="hero-copy">
+        <div>
+          <div class="eyebrow">WuXi Biologics APS · CEO Review Mode</div>
+          <h1><span>让排产排班</span><span>成为 CEO 决策屏</span></h1>
+          <p class="hero-lead">一个面向高层的展示皮肤：用强数字、关键路径、风险诊断和方案推荐，把“本月是否能交付、瓶颈在哪里、需要什么决策”在第一屏讲清楚。</p>
+          <div class="signal-row" aria-label="核心经营信号">
+            <div class="signal">
+              <b>On-time delivery confidence</b>
+              <strong>92%</strong>
+              <span>较上轮方案 +7.4%</span>
+            </div>
+            <div class="signal">
+              <b>Critical vacancies</b>
+              <strong>18</strong>
+              <span>集中在 DSP 夜班</span>
+            </div>
+            <div class="signal">
+              <b>Estimated cost impact</b>
+              <strong>1.8M</strong>
+              <span>三倍薪与加班合计</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-footer">
+          <span class="pill"><i></i> GMP audit-ready</span>
+          <span class="pill"><i></i> Solver V4 scenario engine</span>
+          <span class="pill"><i></i> USP / DSP / QC flow visibility</span>
+        </div>
+      </div>
+
+      <div class="command-board" aria-label="高层驾驶舱演示">
+        <div class="board-header">
+          <div class="board-title">
+            <strong>June Manufacturing Readiness</strong>
+            <span>Last solver run: 2026-06-04 09:30 · Scenario B recommended</span>
+          </div>
+          <span class="status-chip"><span class="dot"></span> READY WITH RISKS</span>
+        </div>
+        <div class="board-grid">
+          <div class="board-cell">
+            <div class="cell-label">
+              Batch flow map
+              <span class="mini-link">USP to release</span>
+            </div>
+            <div class="flow-map">
+              <div class="flow-line" aria-hidden="true"></div>
+              <div class="flow-steps">
+                <div class="flow-step">
+                  <div class="flow-node active">
+                    <svg viewBox="0 0 24 24"><path d="M6 3h12v4H6z"/><path d="M7 7v11a3 3 0 0 0 3 3h4a3 3 0 0 0 3-3V7"/><path d="M9 13h6"/></svg>
+                  </div>
+                  <strong>USP</strong>
+                  <span>Seed train and bioreactor slots stable</span>
+                </div>
+                <div class="flow-step">
+                  <div class="flow-node active">
+                    <svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h6"/></svg>
+                  </div>
+                  <strong>DSP</strong>
+                  <span>Column capacity is tight on week 3</span>
+                </div>
+                <div class="flow-step">
+                  <div class="flow-node warn">
+                    <svg viewBox="0 0 24 24"><path d="M5 4h14"/><path d="M7 4l5 9 5-9"/><path d="M12 13v8"/><circle cx="12" cy="18" r="2"/></svg>
+                  </div>
+                  <strong>QC</strong>
+                  <span>Release assay queue needs decision</span>
+                </div>
+                <div class="flow-step">
+                  <div class="flow-node">
+                    <svg viewBox="0 0 24 24"><path d="M12 3v6"/><circle cx="12" cy="15" r="6"/><path d="M12 12v3l2 1"/></svg>
+                  </div>
+                  <strong>Hold</strong>
+                  <span>Two lots near hold-time guardrail</span>
+                </div>
+                <div class="flow-step">
+                  <div class="flow-node">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+                  </div>
+                  <strong>Release</strong>
+                  <span>Forecast release window on track</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="board-cell">
+            <div class="cell-label">
+              Factory KPI strip
+              <span class="mini-link">business view</span>
+            </div>
+            <div class="kpi-stack">
+              <div class="kpi good">
+                <b>岗位覆盖率</b>
+                <strong>97.8%</strong>
+                <span>比基准方案 +3.1%</span>
+              </div>
+              <div class="kpi warn">
+                <b>三倍薪人天</b>
+                <strong>42</strong>
+                <span>可通过方案 C 降至 31</span>
+              </div>
+              <div class="kpi">
+                <b>Readiness Score</b>
+                <strong>84</strong>
+                <span>DSP 技术员依赖偏高</span>
+              </div>
+              <div class="kpi">
+                <b>批次准点风险</b>
+                <strong>3</strong>
+                <span>P0 风险需要今日拍板</span>
+              </div>
+            </div>
+          </div>
+          <div class="board-cell">
+            <div class="cell-label">
+              Executive gantt preview
+              <span class="mini-link">critical path</span>
+            </div>
+            <div class="gantt" aria-label="关键路径甘特">
+              <div class="gantt-head">
+                <span></span><span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span><span>W6</span><span>W7</span>
+              </div>
+              <div class="gantt-row">
+                <div class="lane-label">Batch 2406-A</div>
+                <div class="track"><div class="bar green w86"></div></div>
+                <div class="track"><div class="bar green w76"></div></div>
+                <div class="track"><div class="bar amber w62"></div></div>
+                <div class="track"><div class="bar amber w80"></div></div>
+                <div class="track"><div class="bar green w48"></div></div>
+                <div class="track"></div>
+                <div class="track"></div>
+              </div>
+              <div class="gantt-row">
+                <div class="lane-label">Batch 2406-B</div>
+                <div class="track"></div>
+                <div class="track"><div class="bar green w72"></div></div>
+                <div class="track"><div class="bar green w88"></div></div>
+                <div class="track"><div class="bar red w68"></div></div>
+                <div class="track"><div class="bar amber w54"></div></div>
+                <div class="track"></div>
+                <div class="track"></div>
+              </div>
+              <div class="gantt-row">
+                <div class="lane-label">Batch 2406-C</div>
+                <div class="track"></div>
+                <div class="track"></div>
+                <div class="track"><div class="bar green w42"></div></div>
+                <div class="track"><div class="bar green w78"></div></div>
+                <div class="track"><div class="bar green w70"></div></div>
+                <div class="track"><div class="bar amber w58"></div></div>
+                <div class="track"></div>
+              </div>
+            </div>
+          </div>
+          <div class="board-cell">
+            <div class="cell-label">
+              Risk queue
+              <span class="mini-link">decision needed</span>
+            </div>
+            <div class="risk-list">
+              <div class="risk-item high">
+                <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 9v5M12 17h.01"/></svg></div>
+                <div class="risk-copy">
+                  <strong>DSP 夜班资质缺口</strong>
+                  <span>18 个岗位缺口，集中在 6/18-6/22</span>
+                </div>
+                <span class="risk-tag">P0</span>
+              </div>
+              <div class="risk-item mid">
+                <div class="icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v6l4 2"/></svg></div>
+                <div class="risk-copy">
+                  <strong>QC release assay 排队</strong>
+                  <span>建议调整批次释放优先级</span>
+                </div>
+                <span class="risk-tag">P1</span>
+              </div>
+              <div class="risk-item good">
+                <div class="icon"><svg viewBox="0 0 24 24"><path d="M8 12l3 3 5-6"/><circle cx="12" cy="12" r="9"/></svg></div>
+                <div class="risk-copy">
+                  <strong>USP 设备窗口稳定</strong>
+                  <span>无需额外领导介入</span>
+                </div>
+                <span class="risk-tag">OK</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <main class="shell sections">
+    <section id="diagnosis">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow on-light">Solver Recovery</div>
+          <h2>无解不再是红色标签，而是可执行的恢复路径</h2>
+          <p>高层演示时要展示系统“能解释、能建议、能重跑”。排班员日常使用时也能减少试错。</p>
+        </div>
+      </div>
+      <div class="panel-grid">
+        <div class="panel">
+          <h3>InfeasibleDiagnosisPanel</h3>
+          <div class="diagnosis">
+            <div class="diagnosis-row">
+              <b>冲突约束</b>
+              <span>6/20 DSP capture 操作要求 A 级资质与领导在岗，但当日两名合格主管均被锁定到夜班后连续休息约束。</span>
+            </div>
+            <div class="diagnosis-row">
+              <b>影响范围</b>
+              <span>Batch 2406-B、Batch 2406-D；共 6 个岗位、2 个 QC release 节点、预计影响交付 1.5 天。</span>
+            </div>
+            <div class="diagnosis-row">
+              <b>建议动作</b>
+              <span>优先采用“允许主管软性参与生产 + 增加 4 小时加班上限”的组合，预计恢复 92% 覆盖率。</span>
+            </div>
+          </div>
+          <div class="action-strip" aria-label="松弛建议动作">
+            <button type="button">允许领导软性顶岗</button>
+            <button type="button">放宽工时上限 4h</button>
+            <button type="button">允许 1 个岗位空缺</button>
+            <button type="button">用新配置重跑</button>
+          </div>
+        </div>
+        <div class="scenario" id="scenario">
+          <h3>ScenarioCompareBoard</h3>
+          <table class="scenario-table">
+            <thead>
+              <tr>
+                <th>方案</th>
+                <th>覆盖率</th>
+                <th>成本影响</th>
+                <th>交付风险</th>
+                <th>推荐</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>A 保守</strong></td>
+                <td>94.1%</td>
+                <td>1.2M</td>
+                <td>中</td>
+                <td>备选</td>
+              </tr>
+              <tr>
+                <td><strong>B 平衡</strong></td>
+                <td>97.8%</td>
+                <td>1.8M</td>
+                <td>低</td>
+                <td class="winner">采用</td>
+              </tr>
+              <tr>
+                <td><strong>C 控成本</strong></td>
+                <td>95.6%</td>
+                <td>0.9M</td>
+                <td>中高</td>
+                <td>待拍板</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="library">
+      <div class="section-head">
+        <div>
+          <div class="eyebrow on-light">Component Library Content</div>
+          <h2>组件库要补的是 APS 业务复合件，而不只是按钮和表格</h2>
+          <p>基础件现有 wxb-ui 已覆盖很多，下一步应把高层汇报、求解诊断、方案对比、合规护栏做成可复用组件。</p>
+        </div>
+      </div>
+      <div class="component-row">
+        <div class="component">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 15l3-4 3 2 4-7"/></svg></div>
+          <strong>ExecutiveHero</strong>
+          <span>CEO 第一屏：交付概率、成本、缺口、关键路径、推荐方案。</span>
+        </div>
+        <div class="component">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M8 8h8"/><path d="M8 16h8"/><circle cx="12" cy="12" r="9"/></svg></div>
+          <strong>BatchFlowMap</strong>
+          <span>把 USP、DSP、QC、Hold、Release 做成有行业辨识度的生产流。</span>
+        </div>
+        <div class="component">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 9v5M12 17h.01"/></svg></div>
+          <strong>InfeasibleDiagnosis</strong>
+          <span>把无解从技术失败翻译为业务约束冲突和一键松弛建议。</span>
+        </div>
+        <div class="component">
+          <div class="icon"><svg viewBox="0 0 24 24"><path d="M5 6h14"/><path d="M5 12h14"/><path d="M5 18h14"/><path d="M9 4v16M15 4v16"/></svg></div>
+          <strong>ScenarioCompare</strong>
+          <span>把多轮求解结果转成可拍板的 A/B/C 经营对比。</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="brief-panel">
+        <div class="brief-side">
+          <div class="eyebrow">Boardroom Story Mode</div>
+          <h3>一页式经营简报可以直接从系统导出</h3>
+          <p>高层不需要看 56 项求解配置。他们需要看本月生产是否可交付、主要瓶颈、推荐方案、成本影响和需要拍板的动作。</p>
+        </div>
+        <div class="brief-main">
+          <div class="brief-items">
+            <div class="brief-item">
+              <b>推荐方案</b>
+              <strong>Scenario B</strong>
+              <span>平衡交付风险与加班成本</span>
+            </div>
+            <div class="brief-item">
+              <b>需今日决策</b>
+              <strong>3 项</strong>
+              <span>领导顶岗、QC 优先级、加班上限</span>
+            </div>
+            <div class="brief-item">
+              <b>预计收益</b>
+              <strong>+7.4%</strong>
+              <span>交付信心相对基准提升</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

@@ -169,10 +169,18 @@ class SolverV4:
                     for emp_id in pos.candidate_employee_ids
                 ]
                 
+                # Standalone tasks use their own vacancy switch (allow_standalone_vacancy,
+                # default True); batch ops use allow_position_vacancy (default False).
+                is_standalone = getattr(op, "source_type", "BATCH") == "STANDALONE"
+                if is_standalone:
+                    allow_vacancy_cfg = config.get("allow_standalone_vacancy", True)
+                else:
+                    allow_vacancy_cfg = config.get("allow_position_vacancy", False)
+
                 if candidates_vars:
                     is_mandatory = op.operation_plan_id in mandatory_ops
-                    allow_vacancy = config.get("allow_position_vacancy", False) and not is_mandatory
-                    
+                    allow_vacancy = allow_vacancy_cfg and not is_mandatory
+
                     if allow_vacancy:
                         self.model.Add(sum(candidates_vars) <= 1)
                         var_vacant = self.model.NewBoolVar(f"Vacant_Op{op.operation_plan_id}_Pos{pos.position_number}")
@@ -182,8 +190,7 @@ class SolverV4:
                     else:
                         self.model.Add(sum(candidates_vars) == 1)
                 else:
-                    allow_vacancy = config.get("allow_position_vacancy", False)
-                    if allow_vacancy:
+                    if allow_vacancy_cfg:
                         msg = f"No candidates for Op {op.operation_plan_id} Pos {pos.position_number}, will be vacant."
                         logger.warning(msg)
                         if callback: callback.log(f"[WARNING] {msg}")
@@ -333,8 +340,11 @@ class SolverV4:
                 objective_terms.append(expr_special_shortage)
                 objective_desc.append("专项欠配(优先)")
 
-        # O1: Vacancy Minimization
-        if config.get("allow_position_vacancy", False) and vacancy_vars:
+        # O1: Vacancy Minimization — penalize ANY vacancy var (batch OR standalone).
+        # vacancy_vars only contain entries when some vacancy was allowed, so gating on
+        # the dict alone is correct (don't gate on allow_position_vacancy, which would
+        # drop standalone vacancy penalties when only allow_standalone_vacancy is on).
+        if vacancy_vars:
             from objectives.minimize_vacancies import MinimizeVacanciesObjective
             
             op_metadata = {}
@@ -345,7 +355,8 @@ class SolverV4:
                     op_metadata[op.operation_plan_id] = {
                         'date': start_dt.strftime('%Y-%m-%d'),
                         'start_hour': start_dt.hour,
-                        'required_people': op.required_people
+                        'required_people': op.required_people,
+                        'source_type': getattr(op, 'source_type', 'BATCH')
                     }
                 except Exception as e:
                     logger.warning(f"Failed to parse date for op {op.operation_plan_id}: {e}")

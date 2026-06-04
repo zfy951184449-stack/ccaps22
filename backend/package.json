@@ -12,11 +12,13 @@
     "test:db": "vitest run src/tests/batchLifecycleService.test.ts",
     "migrate:metrics": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/create_personnel_scheduling_tables.sql'",
     "migrate:personnel": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/update_personnel_scheduling_schema.sql'",
-    "migrate:special-shifts": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/migrations/20260303_create_special_shift_window_tables.sql && MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/migrations/20260304_expand_special_shift_window_joint_solve.sql'"
+    "migrate:special-shifts": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/migrations/20260303_create_special_shift_window_tables.sql && MYSQL_PWD=\"${DB_PASSWORD:-${MYSQL_PASSWORD:-}}\" mysql -h\"${DB_HOST:-localhost}\" -P\"${DB_PORT:-3306}\" -u\"${DB_USER:-${MYSQL_USER:-root}}\" \"${DB_NAME:-${MYSQL_DATABASE:-aps_system}}\" < ../database/migrations/20260304_expand_special_shift_window_joint_solve.sql'",
+    "migrate:auth": "sh -ac 'set -a; [ -f .env ] && . ./.env; set +a; NODE_PATH=./node_modules ts-node --project ../scripts/tsconfig.json ../scripts/auth/run_auth_migrations.ts'"
   },
   "dependencies": {
     "@types/eventsource": "^1.1.15",
     "axios": "^1.13.2",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dayjs": "^1.11.18",
     "dotenv": "^16.6.1",
@@ -25,6 +27,7 @@
     "express-rate-limit": "^8.3.2",
     "helmet": "^8.1.0",
     "http-proxy-middleware": "^3.0.5",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
     "mysql2": "^3.18.2",
@@ -32,8 +35,10 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.0",
     "@types/express": "^4.17.0",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.1.0",
     "@types/node": "^20.0.0",

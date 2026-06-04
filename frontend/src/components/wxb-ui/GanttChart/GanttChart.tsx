@@ -194,6 +194,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   collapseEmptyNightShifts = false,
   enableFullscreen = false,
   readOnly = false,
+  clampDragToWindow = true,
   initialDayWidth = DEFAULT_DAY_WIDTH,
   zoomRange = [MIN_DAY_WIDTH, MAX_DAY_WIDTH],
   personnelPeaks,
@@ -595,6 +596,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           showHeatmap={showHeatmap}
           collapseEmptyNightShifts={collapseEmptyNightShifts}
           readOnly={readOnly}
+          clampDragToWindow={clampDragToWindow}
           zoomRange={zoomRange}
           personnelPeaks={personnelPeaks}
           onTaskClick={onTaskClick}

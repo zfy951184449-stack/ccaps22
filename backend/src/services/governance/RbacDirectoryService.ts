@@ -91,12 +91,13 @@ export class RbacDirectoryService {
   }
 
   static async revokeUserRole(userId: number, roleId: number, revokedBy?: number | null, reasonText?: string | null): Promise<void> {
+    // revoked_by 记录撤销人，assigned_by 保留原授予人（不被撤销人覆盖，保全审计）。
     await pool.execute(
       `UPDATE user_role_assignments
        SET assignment_status = 'REVOKED',
            effective_to = COALESCE(effective_to, NOW()),
            reason_text = COALESCE(?, reason_text),
-           assigned_by = COALESCE(?, assigned_by)
+           revoked_by = COALESCE(?, revoked_by)
        WHERE user_id = ?
          AND role_id = ?
          AND assignment_status = 'ACTIVE'

@@ -88,6 +88,16 @@ echo "🧠 启动V4求解器服务 (端口${SOLVER_V4_PORT})..."
 if [[ -d "solver_v4/.venv" ]]; then
   cd solver_v4
   source .venv/bin/activate
+  # solver→backend 回调共享密钥：必须与 backend/.env 的 SOLVER_CALLBACK_SECRET 同值。
+  # solver 的进度/结果回调及 status 轮询都带 header X-Solver-Callback-Token，backend 的
+  # requireServiceAuth 校验它；缺失会被 401 拦死。进程环境未显式提供时从 backend/.env 读取。
+  if [[ -z "${SOLVER_CALLBACK_SECRET:-}" && -f "${SCRIPT_DIR}/backend/.env" ]]; then
+    SOLVER_CALLBACK_SECRET="$(grep -E '^SOLVER_CALLBACK_SECRET=' "${SCRIPT_DIR}/backend/.env" 2>/dev/null | head -n1 | cut -d '=' -f2- | tr -d '[:space:]' || true)"
+  fi
+  export SOLVER_CALLBACK_SECRET="${SOLVER_CALLBACK_SECRET:-}"
+  if [[ -z "${SOLVER_CALLBACK_SECRET}" ]]; then
+    echo "  ⚠️ 未找到 SOLVER_CALLBACK_SECRET（backend/.env 也没有）；solver 回调将缺少鉴权头，backend 会以 401 拒绝。"
+  fi
   if command -v gunicorn >/dev/null 2>&1; then
     # Gunicorn: 2 workers, 10-minute timeout for long solves
     gunicorn app:app \

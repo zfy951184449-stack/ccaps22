@@ -1,0 +1,88 @@
+.wxb-login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--wx-space-24);
+  background:
+    radial-gradient(120% 120% at 0% 0%, var(--wx-blue-50) 0%, transparent 55%),
+    radial-gradient(120% 120% at 100% 100%, var(--wx-blue-100) 0%, transparent 50%),
+    var(--wx-surface-2);
+  box-sizing: border-box;
+}
+
+.wxb-login-card {
+  width: 100%;
+  max-width: 408px;
+  padding: var(--wx-space-32);
+}
+
+.wxb-login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-12);
+  margin-bottom: var(--wx-space-24);
+}
+
+.wxb-login-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--wx-radius-12);
+  background: var(--wx-primary);
+  color: #ffffff;
+  flex: 0 0 auto;
+}
+
+.wxb-login-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.wxb-login-brand-title {
+  font-size: var(--wx-fs-16);
+  font-weight: 600;
+  color: var(--wx-fg-1);
+}
+
+.wxb-login-brand-sub {
+  font-size: var(--wx-fs-12);
+  color: var(--wx-fg-3);
+}
+
+.wxb-login-heading {
+  font-size: var(--wx-fs-22);
+  font-weight: 600;
+  color: var(--wx-fg-1);
+  margin: 0 0 var(--wx-space-4);
+}
+
+.wxb-login-subheading {
+  font-size: var(--wx-fs-13);
+  color: var(--wx-fg-3);
+  margin: 0 0 var(--wx-space-24);
+}
+
+.wxb-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wx-space-16);
+}
+
+.wxb-login-actions {
+  margin-top: var(--wx-space-8);
+}
+
+.wxb-login-submit {
+  width: 100%;
+}
+
+.wxb-login-hint {
+  margin-top: var(--wx-space-16);
+  font-size: var(--wx-fs-12);
+  color: var(--wx-fg-4);
+  text-align: center;
+}

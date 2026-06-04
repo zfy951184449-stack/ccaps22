@@ -3,20 +3,33 @@ LeadershipCoverage Constraint
 
 Implements four leadership scheduling rules:
 
-  Rule 1 (Hard): On any date with production operations, at least one employee
-                 with org_role >= GROUP_LEADER must be assigned a working shift.
+  Rule 1 (Hard, toggleable): On any date with production operations, at least one
+                 leader (GROUP_LEADER / TEAM_LEADER / DEPT_MANAGER) must work a shift.
+                 Switchable via enable_leader_production_coverage (default True) — turn
+                 off when few leaders must cover many days and it clashes with the
+                 StandardHours monthly cap (otherwise INFEASIBLE).
 
-  Rule 2 (Hard): Employees with org_role in {TEAM_LEADER, DEPT_MANAGER} must NOT
-                 be assigned to any operation (assignment vars forced to 0).
-                 They can still be assigned working shifts (on-duty without ops).
+  Rule 2 (Hard): Leaders whose per-role policy is 'ban' must NOT be assigned to
+                 any operation (assignment vars forced to 0). They can still be
+                 assigned working shifts (on-duty without ops).
 
-  Rule 3 (Soft): Group Leader+ employees should prefer working on workdays and
-                 resting on non-workdays. Penalty vars added to ctx.leadership_penalty_vars.
+  Rule 3 (Soft): Leaders should prefer working on workdays and resting on
+                 non-workdays. Penalty vars added to ctx.leadership_penalty_vars.
 
-  Rule 4 (Soft): Group Leader+ employees should minimize operation assignments and
-                 SPECIAL shift usage. Penalty vars added to ctx.leadership_penalty_vars.
+  Rule 4 (Soft): Leaders whose policy is 'soft' should minimize operation
+                 assignments; all leaders should minimize SPECIAL shift usage.
+                 Penalty vars added to ctx.leadership_penalty_vars.
 
-Config toggle: enable_leadership_coverage (default True)
+Per-role operation policy (config keys; defaults preserve prior behavior):
+  leader_ops_policy_group_leader  (default 'soft')
+  leader_ops_policy_team_leader   (default 'ban')
+  leader_ops_policy_dept_manager  (default 'ban')
+  Each value ∈ {'allow', 'soft', 'ban'}.
+  NOTE: SHIFT_LEADER (班组长) is intentionally NOT treated as a leader.
+
+Config toggles:
+  enable_leadership_coverage         (default True)  — master switch for this module
+  enable_leader_production_coverage  (default True)  — Rule 1 only (production-day coverage)
 """
 
 from typing import Set, Dict, List
@@ -27,11 +40,26 @@ from core.context import SolverContext
 from utils.time_utils import parse_iso_to_unix
 
 
-# Roles at or above Group Leader
+# Leader roles. NOTE: SHIFT_LEADER (班组长) is intentionally NOT a leader here.
 LEADER_ROLES = {"GROUP_LEADER", "TEAM_LEADER", "DEPT_MANAGER"}
 
-# Roles banned from operation assignments (Team Leader and above)
-OPS_BANNED_ROLES = {"TEAM_LEADER", "DEPT_MANAGER"}
+# Config key mapping each leader role to its production-operation policy.
+ROLE_OPS_POLICY_KEYS = {
+    "GROUP_LEADER": "leader_ops_policy_group_leader",
+    "TEAM_LEADER": "leader_ops_policy_team_leader",
+    "DEPT_MANAGER": "leader_ops_policy_dept_manager",
+}
+
+# Per-role operation policy:
+#   'ban'   → hard-forbidden from any operation assignment (Rule 2)
+#   'soft'  → allowed, but penalized to minimize operation assignments (Rule 4a)
+#   'allow' → no restriction on operation assignments
+# Defaults preserve the previous hard-coded behavior (经理/团队长 banned, 工段长 soft).
+DEFAULT_OPS_POLICY = {
+    "GROUP_LEADER": "soft",
+    "TEAM_LEADER": "ban",
+    "DEPT_MANAGER": "ban",
+}
 
 
 class LeadershipCoverageConstraint(BaseConstraint):
@@ -53,26 +81,36 @@ class LeadershipCoverageConstraint(BaseConstraint):
             self.log("Missing shift_assignments or shift_index. Skipping.", level="warning")
             return 0
 
-        # ── Classify employees by role ──
-        leader_emp_ids: Set[int] = set()     # GL+: GROUP_LEADER, TEAM_LEADER, DEPT_MANAGER
-        ops_banned_emp_ids: Set[int] = set() # TL+: TEAM_LEADER, DEPT_MANAGER
-        gl_only_emp_ids: Set[int] = set()    # GROUP_LEADER only (for Rule 4 ops penalty)
+        # ── Resolve per-role operation policy (config overrides defaults) ──
+        ops_policy = {
+            role: str(config.get(key, DEFAULT_OPS_POLICY[role])).lower()
+            for role, key in ROLE_OPS_POLICY_KEYS.items()
+        }
+
+        # ── Classify employees by role + policy ──
+        leader_emp_ids: Set[int] = set()      # all leaders (GROUP_LEADER, TEAM_LEADER, DEPT_MANAGER)
+        ops_banned_emp_ids: Set[int] = set()  # policy 'ban'  → hard-forbidden from operations (Rule 2)
+        ops_soft_emp_ids: Set[int] = set()    # policy 'soft' → penalized in operations (Rule 4a)
 
         for ep in data.employee_profiles:
             role = getattr(ep, "org_role", "FRONTLINE")
-            if role in LEADER_ROLES:
-                leader_emp_ids.add(ep.employee_id)
-            if role in OPS_BANNED_ROLES:
+            if role not in LEADER_ROLES:
+                continue
+            leader_emp_ids.add(ep.employee_id)
+            policy = ops_policy.get(role, "allow")
+            if policy == "ban":
                 ops_banned_emp_ids.add(ep.employee_id)
-            if role == "GROUP_LEADER":
-                gl_only_emp_ids.add(ep.employee_id)
+            elif policy == "soft":
+                ops_soft_emp_ids.add(ep.employee_id)
 
         if not leader_emp_ids:
-            self.log("No Group Leader+ employees found. Skipping.")
+            self.log("No leader employees found. Skipping.")
             return 0
 
-        self.log(f"Leader employees (GL+): {sorted(leader_emp_ids)}")
-        self.log(f"Ops-banned employees (TL+): {sorted(ops_banned_emp_ids)}")
+        self.log(f"Leader employees: {sorted(leader_emp_ids)}")
+        self.log(f"Ops policy: {ops_policy}")
+        self.log(f"Ops-banned (hard): {sorted(ops_banned_emp_ids)}; "
+                 f"ops-soft (penalty): {sorted(ops_soft_emp_ids)}")
 
         constraints_added = 0
 
@@ -111,31 +149,38 @@ class LeadershipCoverageConstraint(BaseConstraint):
         window_dates = get_date_range(data.window['start_date'], data.window['end_date'])
 
         # ══════════════════════════════════════════════
-        # Rule 1: Production day leader coverage (HARD)
+        # Rule 1: Production day leader coverage (HARD, toggleable)
         # ══════════════════════════════════════════════
-        for date_str in window_dates:
-            if date_str not in production_dates:
-                continue
+        # This hard rule can clash with StandardHours (monthly hour cap): with few
+        # leaders covering many production days, required hours can exceed the cap and
+        # make the model INFEASIBLE. So it is independently switchable via
+        # enable_leader_production_coverage (default True).
+        if config.get("enable_leader_production_coverage", True):
+            for date_str in window_dates:
+                if date_str not in production_dates:
+                    continue
 
-            # Sum of working shift vars for all leaders on this date
-            leader_work_vars = []
-            for emp_id in leader_emp_ids:
-                for shift_id in working_shift_ids:
-                    key = (emp_id, date_str, shift_id)
-                    if key in shift_assignments:
-                        leader_work_vars.append(shift_assignments[key])
+                # Sum of working shift vars for all leaders on this date
+                leader_work_vars = []
+                for emp_id in leader_emp_ids:
+                    for shift_id in working_shift_ids:
+                        key = (emp_id, date_str, shift_id)
+                        if key in shift_assignments:
+                            leader_work_vars.append(shift_assignments[key])
 
-            if leader_work_vars:
-                model.Add(sum(leader_work_vars) >= 1)
-                constraints_added += 1
-            else:
-                self.log(
-                    f"WARNING: No leader shift vars for production date {date_str}. "
-                    f"Coverage cannot be guaranteed!",
-                    level="warning"
-                )
+                if leader_work_vars:
+                    model.Add(sum(leader_work_vars) >= 1)
+                    constraints_added += 1
+                else:
+                    self.log(
+                        f"WARNING: No leader shift vars for production date {date_str}. "
+                        f"Coverage cannot be guaranteed!",
+                        level="warning"
+                    )
 
-        self.log(f"Rule 1: Added {constraints_added} production-day leader coverage constraints.")
+            self.log(f"Rule 1: Added {constraints_added} production-day leader coverage constraints.")
+        else:
+            self.log("Rule 1: production-day leader coverage DISABLED by config. Skipping.")
         rule1_count = constraints_added
 
         # ══════════════════════════════════════════════
@@ -150,7 +195,7 @@ class LeadershipCoverageConstraint(BaseConstraint):
                     rule2_count += 1
                     constraints_added += 1
 
-        self.log(f"Rule 2: Banned {rule2_count} assignment vars for Team Leader+ employees.")
+        self.log(f"Rule 2: Banned {rule2_count} assignment vars for ban-policy leaders.")
 
         # ══════════════════════════════════════════════
         # Rule 3: GL+ workday/rest-day preference (SOFT)
@@ -194,11 +239,11 @@ class LeadershipCoverageConstraint(BaseConstraint):
         rule4_ops_count = 0
         rule4_special_count = 0
 
-        # 4a: Penalize operation assignments for GL (GROUP_LEADER only)
-        #     Note: TL+/DEPT_MANAGER are already hard-banned by Rule 2
-        if gl_only_emp_ids:
+        # 4a: Penalize operation assignments for 'soft'-policy leaders.
+        #     'ban' leaders are already hard-forbidden by Rule 2; 'allow' leaders are unrestricted.
+        if ops_soft_emp_ids:
             for key, var in assignments.items():
-                if len(key) >= 3 and key[2] in gl_only_emp_ids:
+                if len(key) >= 3 and key[2] in ops_soft_emp_ids:
                     ctx.leadership_penalty_vars.append((var, w_ops))
                     rule4_ops_count += 1
 

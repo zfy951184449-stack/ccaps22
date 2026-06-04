@@ -34,12 +34,79 @@ import {
   SpecialShiftWindowRule,
 } from '../types';
 
+import { wxbToast } from '../components/wxb-ui/Toast/Toast';
+
+/**
+ * 认证令牌在 localStorage 的存储键。AuthContext 与拦截器共用此键，
+ * 不要在别处硬编码字符串，统一从这里导入。
+ */
+export const AUTH_TOKEN_STORAGE_KEY = 'auth_token';
+
+export const getAuthToken = (): string | null => {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const setAuthToken = (token: string): void => {
+  try {
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+  } catch {
+    /* localStorage 不可用（隐私模式等）时静默降级 */
+  }
+};
+
+export const clearAuthToken = (): void => {
+  try {
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  } catch {
+    /* noop */
+  }
+};
+
 const api = axios.create({
   baseURL: '/api',
   headers: {
     'Content-Type': 'application/json'
   }
 });
+
+// 请求拦截器：若本地存有令牌，注入 Authorization: Bearer <token>。
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// 响应拦截器：
+//   401 → 清 token 并跳 /login（登录接口本身的 401 不跳转，交由调用方处理报错文案）。
+//   403 → Toast 提示无权限（错误信封可能带 required 权限码）。
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const requestUrl: string = error?.config?.url ?? '';
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/change-password');
+
+    if (status === 401 && !isAuthEndpoint) {
+      clearAuthToken();
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.assign('/login');
+      }
+    } else if (status === 403) {
+      const data = error?.response?.data ?? {};
+      const message = typeof data.error === 'string' && data.error ? data.error : '无权限执行该操作';
+      wxbToast.error(message);
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 const mapEmployeePayload = (data: any) => ({
   employeeCode: data.employeeCode ?? data.employee_code,
@@ -385,3 +452,9 @@ export const calendarApi = {
       })
       .then((res) => res.data),
 };
+
+/**
+ * 共享的 axios 实例（已装配 Bearer 注入 + 401/403 拦截）。
+ * authApi / governanceApi 等新服务模块复用此实例，避免重复创建/重复装拦截器。
+ */
+export default api;

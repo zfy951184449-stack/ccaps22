@@ -25,6 +25,7 @@ import {
     getBatchDateExtent,
     hourOffsetToDate,
 } from './batchGanttAdapter';
+import { usePeakPersonnelV4 } from './hooks/usePeakPersonnelV4';
 import './BatchGanttWxb.css';
 
 const AUTOFIT_PROBE_MONTHS = 12;
@@ -115,7 +116,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
     const initialDates = useMemo(getInitialDates, []);
     const [startDate, setStartDate] = useState(initialDates.start);
     const [endDate, setEndDate] = useState(initialDates.end);
-    const [yAxisMode, setYAxisMode] = useState<YAxisMode>('operation');
+    const [yAxisMode, setYAxisMode] = useState<YAxisMode>('stage-equipment');
     const [showTimeWindows, setShowTimeWindows] = useState(false);
     const [hasUserInteracted, setHasUserInteracted] = useState(initialDates.fromUrl);
     const [hasAutoFit, setHasAutoFit] = useState(false);
@@ -147,11 +148,33 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
         () => buildBatchGanttRenderModel(model, yAxisMode, showTimeWindows),
         [model, showTimeWindows, yAxisMode],
     );
+    const dailyPeaks = usePeakPersonnelV4(batches, shareGroups, startDate, endDate);
 
     const rangeHours = useMemo(
         () => Math.max(24, endDate.endOf('day').diff(originDate, 'hour', true)),
         [endDate, originDate],
     );
+    const personnelPeaks = useMemo(() => {
+        const peaks = new Map<number, { peak: number; peakHour: number }>();
+
+        dailyPeaks.forEach((dailyPeak) => {
+            if (dailyPeak.peak <= 0) {
+                return;
+            }
+
+            const dayOffset = dayjs(dailyPeak.dayKey).startOf('day').diff(originDate, 'day');
+            if (dayOffset < 0 || dayOffset * 24 > rangeHours) {
+                return;
+            }
+
+            peaks.set(dayOffset, {
+                peak: dailyPeak.peak,
+                peakHour: dailyPeak.peakHour,
+            });
+        });
+
+        return peaks;
+    }, [dailyPeaks, originDate, rangeHours]);
 
     const selectedRangeLabel = `${startDate.format('YYYY-MM-DD')} - ${endDate.format('YYYY-MM-DD')}`;
 
@@ -603,6 +626,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                         rowHeight={32}
                         sidebarWidth={300}
                         initialDayWidth={120}
+                        personnelPeaks={personnelPeaks}
                         taskMenuItems={TASK_MENU_ITEMS}
                         onTaskDoubleClick={handleEditTask}
                         onTaskEdit={handleEditTask}
@@ -610,6 +634,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                         onTaskResizeEnd={handleTaskDragEnd}
                         onGroupDragEnd={handleGroupDragEnd}
                         onCreateShareGroup={handleCreateShareGroup}
+                        clampDragToWindow={false}
                         collapseEmptyNightShifts
                         enableFullscreen
                         showSelectionPanel

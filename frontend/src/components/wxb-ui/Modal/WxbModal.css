@@ -1,8 +1,17 @@
+.wxb-modal-root {
+  font-family: var(--wx-font-sans);
+}
+
+.wxb-modal-title {
+  margin: 0;
+}
+
 .wxb-modal .ant-modal-content {
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border-radius: var(--wx-radius-8);
+  box-shadow: var(--wx-sh-3);
   padding: 32px;
-  border: 1px solid rgba(0,0,0,0.04);
+  border: 1px solid var(--wx-border);
+  background: var(--wx-bg);
 }
 
 .wxb-modal .ant-modal-header {
@@ -14,20 +23,20 @@
 .wxb-modal .wxb-modal-close-icon {
   font-size: 20px;
   font-weight: 200;
-  color: var(--wxb-color-text-secondary);
+  color: var(--wx-fg-3);
   transition: color 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.02);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-2);
 }
 
 .wxb-modal .wxb-modal-close-icon:hover {
-  color: var(--wxb-color-text-primary);
-  background: rgba(0,0,0,0.06);
+  color: var(--wx-fg-1);
+  background: var(--wx-surface-3);
 }
 
 .wxb-modal .ant-modal-close {

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MFG8APS 多角色使用体验分析报告</title>
+<style>
+:root{
+  --blue-50:#eff6ff;--blue-100:#dbeafe;--blue-200:#bfdbfe;--blue-500:#3b82f6;--blue-600:#2563eb;--blue-700:#1d4ed8;--blue-800:#1e40af;
+  --cyan-600:#0891b2;--cyan-50:#ecfeff;
+  --red-50:#fef2f2;--red-100:#fee2e2;--red-500:#ef4444;--red-600:#dc2626;--red-700:#b91c1c;
+  --amber-50:#fffbeb;--amber-100:#fef3c7;--amber-500:#f59e0b;--amber-600:#d97706;
+  --green-50:#f0fdf4;--green-100:#dcfce7;--green-500:#22c55e;--green-600:#16a34a;
+  --slate-50:#f8fafc;--slate-100:#f1f5f9;--slate-200:#e2e8f0;--slate-300:#cbd5e1;--slate-400:#94a3b8;--slate-500:#64748b;--slate-600:#475569;--slate-700:#334155;--slate-800:#1e293b;--slate-900:#0f172a;
+  --shadow:0 1px 3px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04);
+  --shadow-md:0 4px 12px rgba(15,23,42,.08);
+  --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  color:var(--slate-800);background:var(--slate-50);line-height:1.7;-webkit-font-smoothing:antialiased;font-size:15px;
+}
+code,.mono{font-family:"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;font-size:.82em}
+
+/* ---------- header ---------- */
+.hero{
+  background:linear-gradient(135deg,#0f2557 0%,#1d4ed8 55%,#0891b2 100%);
+  color:#fff;padding:56px 24px 64px;position:relative;overflow:hidden;
+}
+.hero::after{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,rgba(255,255,255,.10) 1px,transparent 0);background-size:26px 26px;opacity:.5}
+.hero-inner{max-width:1080px;margin:0 auto;position:relative;z-index:1}
+.hero .eyebrow{font-size:13px;letter-spacing:3px;text-transform:uppercase;opacity:.85;font-weight:600}
+.hero h1{font-size:38px;font-weight:800;margin:14px 0 10px;letter-spacing:.5px;line-height:1.25}
+.hero .sub{font-size:17px;opacity:.92;max-width:760px}
+.hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.hero-meta .chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);padding:7px 14px;border-radius:999px;font-size:13px;backdrop-filter:blur(4px)}
+.hero-score{display:flex;align-items:center;gap:22px;margin-top:30px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.2);border-radius:var(--radius);padding:20px 26px;max-width:640px}
+.hero-score .big{font-size:54px;font-weight:800;line-height:1}
+.hero-score .big small{font-size:22px;opacity:.7;font-weight:600}
+.hero-score .desc{font-size:14px;opacity:.95}
+.hero-score .desc b{display:block;font-size:16px;margin-bottom:3px}
+
+/* ---------- nav ---------- */
+.toc{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--slate-200);box-shadow:var(--shadow)}
+.toc-inner{max-width:1080px;margin:0 auto;display:flex;gap:4px;overflow-x:auto;padding:0 16px}
+.toc a{flex:0 0 auto;padding:14px 14px;color:var(--slate-500);text-decoration:none;font-size:13.5px;font-weight:600;border-bottom:2.5px solid transparent;white-space:nowrap;transition:.15s}
+.toc a:hover{color:var(--blue-600)}
+.toc a.active{color:var(--blue-700);border-bottom-color:var(--blue-600)}
+
+/* ---------- layout ---------- */
+main{max-width:1080px;margin:0 auto;padding:8px 24px 80px}
+section{padding:46px 0 8px;scroll-margin-top:64px}
+.sec-head{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+.sec-num{flex:0 0 auto;width:38px;height:38px;border-radius:10px;background:var(--blue-600);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px}
+.sec-head h2{font-size:26px;font-weight:800;color:var(--slate-900);letter-spacing:.3px}
+.sec-lead{color:var(--slate-500);font-size:15px;margin:2px 0 24px;padding-left:52px}
+@media(max-width:640px){.sec-lead{padding-left:0}}
+
+.card{background:#fff;border:1px solid var(--slate-200);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card h3{font-size:18px;font-weight:700;color:var(--slate-900);margin-bottom:6px}
+.muted{color:var(--slate-500)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media(max-width:820px){.grid2,.grid3{grid-template-columns:1fr}}
+
+/* ---------- badges ---------- */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.6;white-space:nowrap}
+.sev-高{background:var(--red-100);color:var(--red-700)}
+.sev-中{background:var(--amber-100);color:var(--amber-600)}
+.sev-低{background:var(--slate-100);color:var(--slate-500)}
+.val-高{background:var(--green-100);color:var(--green-600)}
+.val-中{background:var(--amber-100);color:var(--amber-600)}
+.val-低{background:var(--slate-100);color:var(--slate-500)}
+.pri-P0{background:var(--red-600);color:#fff}
+.pri-P1{background:var(--amber-500);color:#fff}
+.pri-P2{background:var(--blue-600);color:#fff}
+.tag{display:inline-block;background:var(--blue-50);color:var(--blue-700);border:1px solid var(--blue-100);padding:2px 9px;border-radius:7px;font-size:12px;font-weight:600;margin:2px 3px 2px 0}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:14px;background:#fff;border-radius:10px;overflow:hidden}
+thead th{background:var(--slate-100);color:var(--slate-700);text-align:left;padding:11px 13px;font-weight:700;font-size:13px;border-bottom:2px solid var(--slate-200)}
+tbody td{padding:11px 13px;border-bottom:1px solid var(--slate-100);vertical-align:top;overflow-wrap:break-word}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--blue-50)}
+.t-title{font-weight:700;color:var(--slate-900)}
+.t-detail{color:var(--slate-600);font-size:13.5px;margin-top:3px}
+.evi{display:block;margin-top:6px;color:var(--slate-400);font-size:12px}
+.evi code{background:var(--slate-100);padding:1px 5px;border-radius:4px;color:var(--slate-600);word-break:break-all}
+.fix{display:block;margin-top:7px;font-size:13px;color:var(--blue-700);background:var(--blue-50);border-left:3px solid var(--blue-500);padding:7px 10px;border-radius:0 6px 6px 0}
+.fix::before{content:"建议 ";font-weight:700}
+
+/* ---------- role section ---------- */
+.role-block{margin-bottom:30px}
+.role-bar{display:flex;align-items:center;gap:16px;background:linear-gradient(90deg,var(--blue-700),var(--blue-600));color:#fff;border-radius:var(--radius) var(--radius) 0 0;padding:18px 24px}
+.role-bar .r-name{font-size:19px;font-weight:800;flex:1}
+.role-bar .r-score{font-size:13px;text-align:right}
+.role-bar .r-score b{font-size:30px;display:block;line-height:1}
+.role-body{background:#fff;border:1px solid var(--slate-200);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:22px 24px}
+.role-meta{font-size:14px;color:var(--slate-600);margin-bottom:14px}
+.role-meta b{color:var(--slate-800)}
+.flow-steps{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 18px}
+.flow-steps .step{background:var(--slate-100);border-radius:7px;padding:5px 10px;font-size:12.5px;color:var(--slate-600);position:relative}
+.subhead{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;margin:20px 0 10px;color:var(--slate-800)}
+.subhead .dot{width:9px;height:9px;border-radius:50%}
+.dot-s{background:var(--green-500)}.dot-p{background:var(--red-500)}.dot-f{background:var(--blue-500)}
+.score-reason{margin-top:18px;background:var(--slate-50);border:1px dashed var(--slate-300);border-radius:10px;padding:14px 16px;font-size:13.5px;color:var(--slate-600)}
+.score-reason b{color:var(--slate-800)}
+
+/* ---------- svg chart wraps ---------- */
+.chart-wrap{background:#fff;border:1px solid var(--slate-200);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 24px;margin-bottom:20px}
+.chart-wrap h3{margin-bottom:4px}
+.chart-wrap .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:12.5px;color:var(--slate-600)}
+.chart-wrap .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+svg{display:block;max-width:100%;height:auto}
+
+/* ---------- callouts ---------- */
+.callout{border-radius:var(--radius);padding:18px 22px;margin-bottom:18px;border:1px solid}
+.callout-red{background:var(--red-50);border-color:var(--red-100)}
+.callout-blue{background:var(--blue-50);border-color:var(--blue-100)}
+.callout-green{background:var(--green-50);border-color:var(--green-100)}
+.callout h3{margin-bottom:8px}
+.callout-red h3{color:var(--red-700)}
+.callout-blue h3{color:var(--blue-800)}
+.callout-green h3{color:var(--green-600)}
+.top3{counter-reset:t}
+.top3 .item{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--slate-200)}
+.top3 .item:last-child{border-bottom:none}
+.top3 .n{counter-increment:t;flex:0 0 auto;width:30px;height:30px;border-radius:50%;background:var(--blue-600);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:15px}
+.top3 .n::before{content:counter(t)}
+.top3 .txt{font-size:14px}
+
+/* ---------- exec summary ---------- */
+.exec p{margin-bottom:14px;font-size:15.5px;color:var(--slate-700)}
+.exec p:first-letter{font-weight:600}
+.maturity{font-size:16px;font-weight:600;color:var(--blue-800);background:var(--blue-50);border-left:4px solid var(--blue-600);padding:14px 18px;border-radius:0 10px 10px 0;margin:6px 0 22px}
+
+/* roadmap */
+.road{position:relative;padding-left:8px}
+.phase{position:relative;padding:0 0 8px 0;margin-bottom:8px}
+.phase ul{margin:10px 0 0 4px;padding-left:18px}
+.phase li{margin-bottom:7px;font-size:14px;color:var(--slate-700)}
+.phase .why{margin-top:10px;font-size:13px;color:var(--slate-500);background:var(--slate-50);border-radius:8px;padding:10px 12px}
+
+footer{max-width:1080px;margin:0 auto;padding:30px 24px 60px;color:var(--slate-400);font-size:13px;border-top:1px solid var(--slate-200)}
+.err{color:var(--red-600);font-size:13px}
+.note{font-size:12.5px;color:var(--slate-400);margin-top:8px}
+
+@media print{
+  .toc{display:none}.hero{padding:30px 20px}body{font-size:12px}
+  section{page-break-inside:avoid}.role-block,.card,.chart-wrap{page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">MFG8APS · 生物制药 APS 排产排班系统</div>
+    <h1>多角色使用体验分析报告</h1>
+    <p class="sub">从排班员、生产领导层、一线员工、工艺工程师、IT 管理员五个角色视角，对系统的「好用之处 / 待改进之处 / 可新增功能」做的一次结构化评估。</p>
+    <div class="hero-meta">
+      <span class="chip">分析方法：多 Agent 工作流（9 个 Agent）</span>
+      <span class="chip">3 阶段：功能勘察 → 角色分析 → Opus 综合</span>
+      <span class="chip">覆盖角色：5 个层级</span>
+      <span class="chip">生成日期：2026-06-03</span>
+    </div>
+    <div class="hero-score">
+      <div class="big" id="hero-avg">–<small>/10</small></div>
+      <div class="desc">
+        <b>整体可用性（五角色均分）</b>
+        <span id="hero-maturity">—</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="toc-inner" id="toc">
+    <a href="#summary">执行摘要</a>
+    <a href="#method">分析方法</a>
+    <a href="#map">产品功能地图</a>
+    <a href="#scores">角色评分</a>
+    <a href="#roles">分角色深度分析</a>
+    <a href="#cross">跨角色共性洞察</a>
+    <a href="#priority">功能优先级矩阵</a>
+    <a href="#roadmap">演进路线图</a>
+  </div>
+</nav>
+
+<main>
+
+  <!-- 1. 执行摘要 -->
+  <section id="summary">
+    <div class="sec-head"><div class="sec-num">1</div><h2>执行摘要</h2></div>
+    <p class="sec-lead">系统当前的整体成熟度、最大亮点、最致命短板，以及「如果只做三件事」的建议。</p>
+    <div class="maturity" id="maturity"></div>
+    <div class="card exec" id="exec-body"><span class="err" id="err-exec"></span></div>
+    <div class="callout callout-blue top3">
+      <h3>如果只做三件事</h3>
+      <div id="top3-body"><span class="err" id="err-top3"></span></div>
+    </div>
+  </section>
+
+  <!-- 2. 分析方法 -->
+  <section id="method">
+    <div class="sec-head"><div class="sec-num">2</div><h2>分析方法</h2></div>
+    <p class="sec-lead">本报告由一套多 Agent 工作流自动产出：先并行勘察三层代码建立统一事实基础，再让每个角色独立读码评估，最后由 Opus 做交叉综合。所有结论均要求给出代码 / 功能位置作为证据。</p>
+    <div class="chart-wrap">
+      <h3>多 Agent 分析流水线</h3>
+      <p class="muted">9 个 Agent · 3 个阶段 · 约 104 万 token · 227 次工具调用</p>
+      <svg viewBox="0 0 980 280" role="img" aria-label="分析流水线示意图">
+        <defs>
+          <marker id="arr" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8"/></marker>
+        </defs>
+        <!-- phase 1 -->
+        <rect x="20" y="30" width="240" height="220" rx="14" fill="#eff6ff" stroke="#bfdbfe"/>
+        <text x="140" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="#1e40af">阶段一 · 功能勘察</text>
+        <text x="140" y="74" text-anchor="middle" font-size="11" fill="#64748b">并行 3 个 Explore Agent</text>
+        <g font-size="12" fill="#334155">
+          <rect x="44" y="92" width="192" height="40" rx="9" fill="#fff" stroke="#dbeafe"/><text x="140" y="116" text-anchor="middle">前端：页面 / 组件 / 入口</text>
+          <rect x="44" y="140" width="192" height="40" rx="9" fill="#fff" stroke="#dbeafe"/><text x="140" y="164" text-anchor="middle">后端：业务能力 / 数据模型</text>
+          <rect x="44" y="188" width="192" height="40" rx="9" fill="#fff" stroke="#dbeafe"/><text x="140" y="212" text-anchor="middle">求解器：约束 / 目标 / 短板</text>
+        </g>
+        <!-- phase 2 -->
+        <rect x="370" y="30" width="240" height="220" rx="14" fill="#ecfeff" stroke="#a5f3fc"/>
+        <text x="490" y="56" text-anchor="middle" font-size="14" font-weight="700" fill="#0e7490">阶段二 · 角色分析</text>
+        <text x="490" y="74" text-anchor="middle" font-size="11" fill="#64748b">并行 5 个角色 Agent</text>
+        <g font-size="11.5" fill="#334155">
+          <rect x="392" y="88" width="196" height="30" rx="8" fill="#fff" stroke="#a5f3fc"/><text x="404" y="107" font-size="11.5">① 排班员 / 计划排程员</text>
+          <rect x="392" y="122" width="196" height="30" rx="8" fill="#fff" stroke="#a5f3fc"/><text x="404" y="141">② 生产领导层 / 厂长</text>
+          <rect x="392" y="156" width="196" height="30" rx="8" fill="#fff" stroke="#a5f3fc"/><text x="404" y="175">③ 一线操作工 / 技术员</text>
+          <rect x="392" y="190" width="196" height="30" rx="8" fill="#fff" stroke="#a5f3fc"/><text x="404" y="209">④ 工艺工程师</text>
+          <rect x="392" y="224" width="196" height="20" rx="6" fill="#fff" stroke="#a5f3fc"/><text x="404" y="238">⑤ IT / 系统管理员</text>
+        </g>
+        <!-- phase 3 -->
+        <rect x="720" y="70" width="240" height="140" rx="14" fill="#eef2ff" stroke="#c7d2fe"/>
+        <text x="840" y="100" text-anchor="middle" font-size="14" font-weight="700" fill="#4338ca">阶段三 · 综合</text>
+        <text x="840" y="120" text-anchor="middle" font-size="11" fill="#64748b">Opus 4.8 交叉分析</text>
+        <g font-size="11.5" fill="#334155" text-anchor="middle">
+          <text x="840" y="146">共性痛点 · 优先级矩阵</text>
+          <text x="840" y="166">路线图 · 评分汇总</text>
+          <rect x="760" y="178" width="160" height="22" rx="7" fill="#fff" stroke="#c7d2fe"/><text x="840" y="193">→ 本 HTML 报告</text>
+        </g>
+        <!-- arrows -->
+        <line x1="262" y1="140" x2="366" y2="140" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+        <line x1="612" y1="140" x2="716" y2="140" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+      </svg>
+      <p class="note">说明：阶段二的每个角色 Agent 都拿到阶段一合并出的同一张「功能地图」作为事实基础，并被要求独立打开源码核实，避免空泛臆断。</p>
+    </div>
+  </section>
+
+  <!-- 3. 功能地图 -->
+  <section id="map">
+    <div class="sec-head"><div class="sec-num">3</div><h2>产品功能地图</h2></div>
+    <p class="sec-lead">系统由三个独立服务构成，前端按业务分为 6 大模块。下图标出各模块主要面向的角色——可以直观看到「越靠近排产引擎的模块越成熟，面向被排班者与经营决策者的入口几乎缺位」。</p>
+    <div class="chart-wrap">
+      <h3>三服务架构与功能模块 · 角色覆盖</h3>
+      <svg viewBox="0 0 980 470" role="img" aria-label="系统架构与功能模块图">
+        <defs>
+          <marker id="arr2" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#64748b"/></marker>
+        </defs>
+        <!-- frontend modules -->
+        <text x="30" y="28" font-size="13" font-weight="700" fill="#1e293b">前端 · React + wxb-ui（6 大模块）</text>
+        <g font-size="12">
+          <rect x="30" y="40" width="142" height="64" rx="10" fill="#eff6ff" stroke="#bfdbfe"/><text x="101" y="66" text-anchor="middle" font-weight="700" fill="#1e40af">调度中心</text><text x="101" y="86" text-anchor="middle" fill="#64748b" font-size="10.5">人力/工时曲线</text>
+          <rect x="184" y="40" width="142" height="64" rx="10" fill="#eff6ff" stroke="#bfdbfe"/><text x="255" y="66" text-anchor="middle" font-weight="700" fill="#1e40af">基础数据</text><text x="255" y="86" text-anchor="middle" fill="#64748b" font-size="10.5">设备/资质/操作</text>
+          <rect x="338" y="40" width="142" height="64" rx="10" fill="#dbeafe" stroke="#93c5fd"/><text x="409" y="62" text-anchor="middle" font-weight="700" fill="#1e40af">生产计划</text><text x="409" y="80" text-anchor="middle" fill="#64748b" font-size="10.5">工艺模板V3</text><text x="409" y="95" text-anchor="middle" fill="#64748b" font-size="10.5">批次管理V4·甘特</text>
+          <rect x="492" y="40" width="142" height="64" rx="10" fill="#dbeafe" stroke="#93c5fd"/><text x="563" y="62" text-anchor="middle" font-weight="700" fill="#1e40af">人员与排班</text><text x="563" y="80" text-anchor="middle" fill="#64748b" font-size="10.5">V4求解·驾驶舱</text><text x="563" y="95" text-anchor="middle" fill="#64748b" font-size="10.5">异常修复</text>
+          <rect x="646" y="40" width="142" height="64" rx="10" fill="#eff6ff" stroke="#bfdbfe"/><text x="717" y="66" text-anchor="middle" font-weight="700" fill="#1e40af">班次定义</text><text x="717" y="86" text-anchor="middle" fill="#64748b" font-size="10.5">班次模板库</text>
+          <rect x="800" y="40" width="150" height="64" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="4 3"/><text x="875" y="62" text-anchor="middle" font-weight="700" fill="#dc2626">一线员工入口</text><text x="875" y="82" text-anchor="middle" fill="#dc2626" font-size="10.5">缺失</text><text x="875" y="96" text-anchor="middle" fill="#94a3b8" font-size="10">无 /my-schedule</text>
+        </g>
+        <!-- proxy -->
+        <rect x="30" y="138" width="920" height="34" rx="9" fill="#fff" stroke="#e2e8f0"/><text x="490" y="160" text-anchor="middle" font-size="12" fill="#475569">setupProxy.js · 前端 <tspan font-family="monospace" fill="#0891b2">/api</tspan> → 后端 :3001（浏览器从不直连求解器）</text>
+        <line x1="490" y1="104" x2="490" y2="136" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <!-- backend -->
+        <rect x="30" y="204" width="430" height="100" rx="12" fill="#f0fdf4" stroke="#bbf7d0"/>
+        <text x="245" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">后端 API · Express + MySQL（:3001）</text>
+        <g font-size="11" fill="#334155" text-anchor="middle">
+          <rect x="48" y="244" width="120" height="44" rx="8" fill="#fff" stroke="#bbf7d0"/><text x="108" y="262">批次 / 工艺模板</text><text x="108" y="278" font-size="10" fill="#64748b">DataAssemblerV4</text>
+          <rect x="178" y="244" width="120" height="44" rx="8" fill="#fff" stroke="#bbf7d0"/><text x="238" y="262">排产编排 / SSE</text><text x="238" y="278" font-size="10" fill="#64748b">solveOrchestrator</text>
+          <rect x="308" y="244" width="134" height="44" rx="8" fill="#fff" stroke="#fecaca"/><text x="375" y="262" fill="#b91c1c">认证/RBAC/审计</text><text x="375" y="278" font-size="10" fill="#dc2626">建表未接线</text>
+        </g>
+        <!-- solver -->
+        <rect x="496" y="204" width="280" height="100" rx="12" fill="#fffbeb" stroke="#fde68a"/>
+        <text x="636" y="230" text-anchor="middle" font-size="13" font-weight="700" fill="#b45309">求解器 · OR-Tools CP-SAT（:5005）</text>
+        <g font-size="11" fill="#334155" text-anchor="middle">
+          <rect x="512" y="244" width="120" height="44" rx="8" fill="#fff" stroke="#fde68a"/><text x="572" y="262">约束注册表</text><text x="572" y="278" font-size="10" fill="#64748b">夜班/连班/资质…</text>
+          <rect x="642" y="244" width="120" height="44" rx="8" fill="#fff" stroke="#fde68a"/><text x="702" y="262">优化目标</text><text x="702" y="278" font-size="10" fill="#64748b">公平/成本/空缺</text>
+        </g>
+        <!-- mysql -->
+        <rect x="800" y="204" width="150" height="100" rx="12" fill="#f1f5f9" stroke="#cbd5e1"/>
+        <text x="875" y="248" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">MySQL</text><text x="875" y="270" text-anchor="middle" font-size="10.5" fill="#64748b">aps_system</text><text x="875" y="286" text-anchor="middle" font-size="10" fill="#94a3b8">无统一迁移器</text>
+        <line x1="245" y1="172" x2="245" y2="202" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <line x1="460" y1="254" x2="494" y2="254" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <text x="478" y="248" text-anchor="middle" font-size="9.5" fill="#94a3b8">HTTP</text>
+        <line x1="776" y1="254" x2="798" y2="254" stroke="#64748b" stroke-width="1.5" marker-end="url(#arr2)"/>
+        <!-- legend bar -->
+        <g font-size="11.5">
+          <text x="30" y="346" font-weight="700" fill="#1e293b">主链路成熟度（颜色越深越成熟、虚线红框为缺失）</text>
+          <rect x="30" y="358" width="16" height="16" rx="4" fill="#dbeafe" stroke="#93c5fd"/><text x="54" y="371" fill="#475569">核心活跃链路（V4 排产 / 工艺V3）— 细节成熟</text>
+          <rect x="360" y="358" width="16" height="16" rx="4" fill="#eff6ff" stroke="#bfdbfe"/><text x="384" y="371" fill="#475569">配套模块 — 基本可用</text>
+          <rect x="560" y="358" width="16" height="16" rx="4" fill="#fff" stroke="#fecaca"/><text x="584" y="371" fill="#475569">建表/有接口但未接线</text>
+          <rect x="760" y="358" width="16" height="16" rx="4" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="3 2"/><text x="784" y="371" fill="#475569">完全缺失</text>
+        </g>
+        <!-- one-line takeaway -->
+        <rect x="30" y="392" width="920" height="58" rx="10" fill="#fef2f2" stroke="#fecaca"/>
+        <text x="50" y="416" font-size="12.5" font-weight="700" fill="#b91c1c">结构性结论</text>
+        <text x="50" y="436" font-size="12.5" fill="#7f1d1d">系统只服务了「制作排班的人」，几乎没有服务「被排班的人」「为经营负责的人」和「让系统合规跑起来的人」——这正是后两类角色评分断崖式下跌的根因。</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- 4. 评分 -->
+  <section id="scores">
+    <div class="sec-head"><div class="sec-num">4</div><h2>角色可用性评分</h2></div>
+    <p class="sec-lead">每个角色 Agent 基于真实工作流，对系统「当前对我这个角色的可用性」给出 1–10 分。分差极大本身就是关键发现。</p>
+    <div class="grid2">
+      <div class="chart-wrap">
+        <h3>五角色可用性评分</h3>
+        <p class="muted">满分 10 分 · 越靠近排产引擎分越高</p>
+        <div id="chart-scores"><span class="err" id="err-scores"></span></div>
+      </div>
+      <div class="chart-wrap">
+        <h3>各角色痛点严重度分布</h3>
+        <p class="muted">按 Agent 标注的「高 / 中 / 低」严重度统计</p>
+        <div id="chart-sev"></div>
+        <div class="legend">
+          <span><i style="background:#dc2626"></i>高（含合规/数据安全级）</span>
+          <span><i style="background:#f59e0b"></i>中</span>
+          <span><i style="background:#cbd5e1"></i>低</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. 角色详情 -->
+  <section id="roles">
+    <div class="sec-head"><div class="sec-num">5</div><h2>分角色深度分析</h2></div>
+    <p class="sec-lead">每个角色：典型工作流 → 好用之处（优点）→ 待改进之处（痛点，标注严重度与建议）→ 可新增功能（标注价值 / 成本）。所有条目均附代码或功能位置证据。</p>
+    <div id="roles-body"><span class="err" id="err-roles"></span></div>
+  </section>
+
+  <!-- 6. 共性洞察 -->
+  <section id="cross">
+    <div class="sec-head"><div class="sec-num">6</div><h2>跨角色共性洞察</h2></div>
+    <p class="sec-lead">把五个角色的发现交叉比对后，浮现出被多个角色反复点名的共同优点与共同痛点——这些是最值得优先处理的信号。</p>
+    <div class="callout callout-green">
+      <h3>跨角色共同认可的优点</h3>
+      <ul id="cross-strengths" style="margin:8px 0 0 18px"><li class="err" id="err-cs"></li></ul>
+    </div>
+    <h3 style="margin:24px 0 4px;font-size:18px">跨角色共性痛点（按严重度与受影响角色数排序）</h3>
+    <p class="muted" style="margin-bottom:14px">同一根问题被不同角色从不同侧面提出，往往意味着它是结构性的、而非局部体验问题。</p>
+    <div id="cross-pain"><span class="err" id="err-cp"></span></div>
+  </section>
+
+  <!-- 7. 优先级矩阵 -->
+  <section id="priority">
+    <div class="sec-head"><div class="sec-num">7</div><h2>功能优先级矩阵</h2></div>
+    <p class="sec-lead">把各角色提出的新功能建议去重合并为 <b id="pm-count">—</b> 项，按「价值 × 实现成本」定位，并给出 P0 / P1 / P2 优先级。左上角（高价值 / 低成本）是性价比最高的「快赢」区。</p>
+    <div class="chart-wrap">
+      <h3>价值 — 成本四象限（气泡编号对应下方清单）</h3>
+      <div id="chart-quad"><span class="err" id="err-quad"></span></div>
+      <div class="legend">
+        <span><i style="background:#dc2626"></i>P0 必做地基</span>
+        <span><i style="background:#f59e0b"></i>P1 决策闭环 / 全角色覆盖</span>
+        <span><i style="background:#2563eb"></i>P2 经营全局 / 工厂闭环</span>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="pm-table"><span class="err" id="err-pm"></span></div>
+    </div>
+  </section>
+
+  <!-- 8. 路线图 -->
+  <section id="roadmap">
+    <div class="sec-head"><div class="sec-num">8</div><h2>演进路线图</h2></div>
+    <p class="sec-lead">基于优先级与依赖关系给出的分阶段建议。核心逻辑：先补合规地基（它解锁后续几乎所有按角色能力），再用「已算好但没呈现」的指标补决策闭环与全角色覆盖，最后收口生产经营全局与工厂闭环。</p>
+    <div id="chart-roadmap"></div>
+    <div id="roadmap-body"><span class="err" id="err-rm"></span></div>
+  </section>
+
+</main>
+
+<footer>
+  <p>本报告由 Claude Code 多 Agent 工作流自动生成 · 9 个 Agent（3 勘察 + 5 角色 + 1 综合）· Opus 4.8 综合。所有评分与结论来自对仓库源码的实际勘察，结论中的文件路径可点开核实。</p>
+  <p style="margin-top:6px">生成于 2026-06-03 · MFG8APS / CCAPS22 生物制药 APS 系统</p>
+</footer>
+
+<script id="report-data" type="application/json">{"roles": [{"role": "排班员 / 生产计划排程员", "role_summary": "车间/计划部门日常高频操作人员，把生产批次落到时间轴、配置并触发 V4 求解器排人、在甘特图与排班矩阵核对微调、处理资质缺口与冲突、最后应用方案。是 V4 链路的核心驱动用户。", "typical_workflow": "1) 在「批次管理 V4」(/batch-management-v4) 用 CreateBatchModalV4 从工艺模板/工艺包新建当月批次，设好开工日期；2) 进入 BatchGanttV4 甘特图，按操作/阶段·设备/设备三种 Y 轴视角拖拽调整生产操作时间，处理设备占用重叠；3) 切到「排班调度」(/solver-v4)，按月份+部门筛选并勾选 ACTIVATED 批次；4) 点「高级配置」在 SolverConfigurationModal 调约束开关与权重，再用 OperationReviewModal 看每个岗位的合格人数并跑「预检」；5) 「确认并排班」触发求解，SolveProgressV4Modal 看实时进度与日志；6) 求解完进 SolveResultV4Page 看排班矩阵/操作分配明细/KPI，对个别格子手动改班次或在「操作分配明细」里换人，撤销/重置；7) 「应用排班」写库；8) 月中有变动时用「区间求解」只重排部分日期，或去 /roster/exceptions 处理离职请假异常。", "strengths": [{"title": "求解约束/目标配置极其细颗粒且开关-权重联动直观", "detail": "SolverConfigurationModal 把硬约束、连续天数、夜班规则、领导力策略、独立任务、优化目标(各带启停开关+权重数字框)分组陈列，子约束用缩进+disabled 联动(如关掉 enable_locked_shifts 后严格模式自动禁用、关掉夜班后休息后延长休息自动禁用)，领导参与生产用三态 Segmented(允许/软性减少/禁止)按职级单独配。对排班员意味着能精确表达本厂规则而不必改代码。", "evidence": "frontend/src/components/SolverV4/SolverConfigurationModal.tsx (isToggleDisabled L315-318, renderLeaderOpsPolicyRow L365-378, 目标区 L527-547)"}, {"title": "排班前的岗位资质预检 + 预检按钮，先看缺口再排", "detail": "OperationReviewModal 在求解前按共享组/独立操作分组列出每个操作的岗位，用绿/黄/红 Tag 直接标注「N 人合格」(0 红、≤3 黄、\u003e3 绿)，可点开看具体候选人；还有独立的「预检」按钮调 /precheck 返回 PASS/WARNING/ERROR 文案。排班员在按下求解前就能预判哪些岗位会空、要不要先补人或调配置，省掉一轮无效求解。", "evidence": "frontend/src/components/SolverV4/OperationReviewModal.tsx (岗位资质 Tag L227-249, handlePrecheck L157-190)"}, {"title": "结果页手动改派带候选人分级推荐，而非裸下拉", "detail": "AssignmentsView 在换人时把候选人按班次是否覆盖操作时间分三档展示：推荐(班次正好覆盖)、需调整班次、当天休息，配星标/警告/灰点图标。排班员手补空岗时一眼就知道选谁代价最小(直接用 vs 要改班次 vs 要叫醒休息的人)，比传统系统给一个无序人名下拉强很多。", "evidence": "frontend/src/components/SolverV4/views/AssignmentsView.tsx (候选分层渲染 L316-369, handleSelectCandidate L240-243)"}, {"title": "手动改班次实时校验 + 改动增量可视、可撤销/重置", "detail": "ManualEditDrawer 改班次时即时跑 validateShiftChange，违反约束直接报错并禁用应用按钮，还显示工时变化Δ；结果页顶部/底部持续显示「+N改、夜班Δ、工时偏差Δ」并提供撤销、编辑记录抽屉、重置所有。排班员微调时心里有数、错了能回退，应用前还会区分跳过的锁定岗位/班次冲突计数。", "evidence": "frontend/src/components/SolverV4/components/ManualEditDrawer.tsx (校验 L61-83, 禁用应用 L120), SolveResultV4Page.tsx (editDelta footer L766-797, 撤销/记录 L664-672)"}, {"title": "滚动/增量重排能力齐备：区间求解 + 锁定保留", "detail": "提供「区间求解」Tab 可只选部分日期重排、并清晰显示区间外被冻结的日期段；求解器内置 FrozenRange + LockedOperations/LockedShifts，应用时明确「保留已锁定的操作分配和班次」。对排班员意味着月中临时变动不必整月推倒重排，已确认的部分稳定不动——这正是生物制药长周期批次最需要的。", "evidence": "frontend/src/components/SolverV4/IntervalSolveTab.tsx (区间外冻结展示 L342-356), solver_v4/constraints/ (locked_operations/locked_shifts/frozen range), OperationReviewModal.tsx (锁定保留提示 L357-363)"}, {"title": "生产甘特拖拽改期所见即所得、设备占用重叠自动标红、组拖拽联动", "detail": "BatchGanttV4 支持单操作拖拽/拉伸改时间直接落库(/api/v5/gantt/operations/:id)，共享组/依赖整组拖拽并提示「已移动 N 个操作」，同设备时间重叠的任务在「设备」视图自动按重叠拆道并标 OVERLAP。排班员调生产计划时间表时反馈即时，设备撞车一眼可见。", "evidence": "frontend/src/components/BatchManagementV4/BatchGanttV4/index.tsx (persistTaskTime L441-470, handleGroupDragEnd L476-506), batchGanttAdapter.ts (findOverlappingTaskIds L357-369, conflictType OVERLAP L386)"}], "painpoints": [{"title": "求解无解(INFEASIBLE)时几乎没有可诊断信息，更无松弛建议", "detail": "求解失败只在历史里显示一个红色「无解」Tag，且 FAILED 状态的行连「查看结果」按钮都没有(只有 COMPLETED/APPLIED 才有)，结果页也无任何 INFEASIBLE 专用界面，只有 toast「加载结果失败」。排班员遇到无解只能靠经验把 56 项配置逐个试关，反复试错。求解器后端 precheck.py 也只覆盖候选为零/单点故障/日期过载/标准工时四项，连续天数、领导覆盖、共享组的可行性都不查，无法提前预警常见的无解诱因。", "severity": "高", "evidence": "frontend/src/components/SolverV4/RunHistoryTab.tsx (无解 Tag L35-55, 仅 COMPLETED/APPLIED 才给查看按钮 L164), SolveResultV4Page.tsx (无 INFEASIBLE 处理, 仅 error toast L133/520), solver_v4/core/precheck.py (仅 4 项检查 L45-55)", "suggestion": "求解失败必须返回并展示「冲突约束定位」：列出对无解贡献最大的约束/操作/日期，并自动给出可落地的松弛建议(如「关闭『生产日需领导在岗』或允许岗位空缺即可求解」)，FAILED 行也开放进入诊断视图。短期可先把 precheck 的 ERROR 详情完整渲染在结果页顶部并高亮涉及的批次/岗位。"}, {"title": "求解器配置不持久化、无场景预设，每次从默认 56 项重来", "detail": "solverConfig 只存在组件 useState，初值恒为 DEFAULT_SOLVER_CONFIG，无 localStorage、无后端保存、无「另存为预设」。排班员每次进入排班页、或刷新、或换月，精心调好的权重和约束组合全部丢失，必须重配。对每天/每周重复排班的角色这是巨大的隐性负担，也极易因漏配某项导致结果不一致。", "severity": "高", "evidence": "frontend/src/components/SolverV4/MonthlyBatchSelector.tsx (useState(DEFAULT_SOLVER_CONFIG) L61, 无任何持久化), SolverConfigurationModal.tsx (handleReset 回默认 L240-242, 全文件无 localStorage)", "suggestion": "加配置预设库：内置「标准/激进/保守」三套，并允许排班员按团队/场景命名保存与一键载入，配置随用户或团队持久化(localStorage 兜底 + 后端表)。"}, {"title": "生产甘特里『自动排程』是假按钮，只跳转不排", "detail": "BatchGanttV4 工具栏的「自动排程」点击后只弹 toast「请在 V4 自动排班中运行」并 navigate 到 /solver-v4，并不会对当前可见批次发起求解。排班员在生产甘特上看好了批次、最自然的下一步就是直接排人，却被踢回另一个页面重新筛月份、勾批次、配config，工作流割裂。", "severity": "中", "evidence": "frontend/src/components/BatchManagementV4/BatchGanttV4/index.tsx (handleAutoSchedule L532-535)", "suggestion": "让甘特上的『自动排程』直接带着当前可见 batch_ids 唤起 OperationReviewModal/求解(复用 /solve)，至少把当前批次与时间窗预填进求解页，免去重复筛选。"}, {"title": "手动换人不按资质过滤，把合规校验甩给人工", "detail": "AssignmentsView 候选人列表只按『班次是否覆盖时间』分档，完全不按操作所需资质过滤或标注，底部仅一行小字「请确认所选人员具备此操作所需资质」。在生物制药里岗位资质是硬合规要求，让排班员肉眼核对极易误派无资质人员，且系统不拦截。求解器自动结果是合规的，但人一改就可能破坏合规。", "severity": "高", "evidence": "frontend/src/components/SolverV4/views/AssignmentsView.tsx (候选仅按 tier 分档无资质过滤 L316-369, 仅文字提示 L371)", "suggestion": "候选列表按操作资质要求过滤或显著标注资质匹配度(达标/缺 X 资质/资质不足等级)，对不达标人员置灰或二次确认；手动改派后在应用前做资质合规校验并阻断违规。"}, {"title": "求解进度条信息贫乏，无法判断要不要继续等", "detail": "SolveProgressV4Modal 只有百分比进度、已分配班次数、用时、滚动日志，但『已用时』KPI 实际固定显示 00:00(metrics.elapsed 从未被 SSE 更新)，也没有当前最优解质量/Gap/剩余预计时间。大规模问题可能跑到 300s，排班员盯着一个不动的计时和不知含义的日志，无法判断是快出结果还是该提前停。", "severity": "中", "evidence": "frontend/src/components/SolverV4/SolveProgressV4Modal.tsx (elapsed 初值 00:00 且 setMetrics 只更新 assigned 未更新 elapsed L42-46/L104-109, KPI L254-261)", "suggestion": "进度面板补：真实计时、当前最优目标值/Gap 趋势、阶段(组装/求解/回写)文案、停滞提示；让『停止』在已有可行解时明确提示『停止将采用当前最优解』。"}, {"title": "无多轮求解结果对比，调权重后难判断好坏", "detail": "RunHistoryTab 只能逐条点开看单次结果，没有勾选 2 次运行并排对比填充率/夜班均衡/工时偏差/成本的能力。排班员调了某个权重后想知道『这版比上版好在哪』，只能凭记忆或两个窗口来回切，难以形成『调参→看效果』的有效闭环。", "severity": "中", "evidence": "frontend/src/components/SolverV4/RunHistoryTab.tsx (列表只提供单条『查看结果』L162-176, 无对比入口)", "suggestion": "历史页支持选中两条运行做并排 diff：关键 KPI 对比、哪些人/岗位排法不同高亮，并可标注每次运行用的配置摘要。"}, {"title": "新建批次后被弹回列表，进甘特要再点一次", "detail": "CreateBatchModalV4 成功后只调 onSuccess()+关闭弹窗，回到批次列表；排班员要调时间还得再去甘特视图点进。对一次要建多个批次再统一排期还好，但单批次『建完就想看/调时间表』的高频场景多一次跳转。", "severity": "低", "evidence": "frontend/src/components/BatchManagementV4/CreateBatchModalV4.tsx (成功仅 onSuccess L181/L209)", "suggestion": "新建成功后给『进入甘特调整』的快捷动作或可选直接打开该批次甘特，保留当前『回列表』为默认。"}, {"title": "配置项里仍存在语义易混/疑似死开关，排班员可能白调", "detail": "求解器侧已知 soft_night_rest 被读取却不消费、与前端 preferred_night_rest_days 语义重叠；夜班延长休息的软罚项被并入 leadership_penalty_vars，关闭领导力约束可能误伤其权重。前端把这些都做成了可调控件，排班员调了却可能无效或行为不符预期，且无任何提示。", "severity": "中", "evidence": "PROJECT_MAP 求解器短板 4.3(soft_night_rest 死开关、罚项混入 leadership_penalty_vars); SolverConfigurationModal.tsx (preferred_night_rest_days/objective_weight_night_rest_extend 控件 L473-474)", "suggestion": "清理死开关并统一命名，确保前端每个可调项都真实生效；对相互依赖的开关(如夜班延长休息独立于领导力约束)解耦，必要时在 UI 加生效条件说明。"}], "feature_ideas": [{"title": "无解诊断与一键松弛助手", "detail": "求解返回 INFEASIBLE 时，基于 CP-SAT 的 assumptions/IIS 或分层放松定位最小冲突约束集，用业务语言告诉排班员『XX 日生产操作需领导在岗，但当天仅 1 名领导且已满月工时上限』，并给『关闭该约束 / 允许此岗位空缺 / 放宽工时上限 4h』等可点按钮，点了即用新配置重排。直击当前最痛的无解黑盒问题。", "value": "高", "effort": "高"}, {"title": "求解配置预设库(标准/激进/保守 + 自定义命名保存)", "detail": "内置三套场景预设并允许按团队/月度命名保存、载入、设默认，配置随用户持久化。把每天重复配 56 项的负担降到一次选择，且保证不同批次排班口径一致。落地成本低、对高频排班员收益立竿见影。", "value": "高", "effort": "低"}, {"title": "生产甘特内嵌『就地排人』", "detail": "在 BatchGanttV4 直接对当前筛选出的批次发起 V4 求解(复用现有 /solve 与进度/结果组件)，求解完把人员覆盖度/空岗以色块叠加回甘特，让『调生产时间—排人—看缺口』在同一屏闭环，消除来回跳转。", "value": "高", "effort": "中"}, {"title": "换人时的资质合规护栏", "detail": "手动改派候选列表按操作资质要求实时过滤/分级(达标/缺资质/资质等级不足)，不达标者置灰或强制二次确认；应用前对全部人工改动做资质与工时硬校验并阻断违规。把合规风险从『人工自查』变成『系统兜底』，对 GMP 环境尤为关键。", "value": "高", "effort": "中"}, {"title": "求解结果并排对比与配置溯源", "detail": "历史页选两条运行并排 diff 关键 KPI(填充率/夜班均衡/工时偏差/三倍薪成本)并高亮排法差异，每条运行附带所用配置摘要。让排班员『调参→看效果』形成数据驱动闭环，也便于向主管解释方案取舍。", "value": "中", "effort": "中"}, {"title": "加班/成本预估随结果展示", "detail": "利用已有 shift_definitions 的加班费率与 holiday_salary_config 三倍薪配置，在结果页 KPI 旁估算本方案的加班工时与额外薪资成本，并在多方案对比中并列。排班员能在『排满 vs 控成本』间做明确权衡，而不止看覆盖率。", "value": "中", "effort": "中"}, {"title": "批次排程冲突的资源级提示升级", "detail": "当前甘特重叠只做同设备时间撞车的视觉标红，可进一步结合 operation_resource_requirements/维护窗，在拖拽落库时即时提示『该时段设备处于维护窗/资源已被他批次占满』。让生产计划阶段就拦住物理不可行的排期。", "value": "中", "effort": "中"}], "overall_score": 7, "score_reason": "对排班员这一核心角色，V4 链路的『骨架』已相当完整且不少细节贴心：批次→甘特→配置→预检→求解→进度→结果→手动微调→应用→区间增量重排，全流程闭环可走通；配置颗粒度、岗位资质预检、候选人分级推荐、改动增量可视/可撤销、锁定保留与区间求解，都是成熟 APS 才有的能力，明显高于行业平均。但扣分集中在排班员『出问题时』的体验：求解无解几乎是黑盒、无诊断无松弛建议(高severity)，配置每次清零无预设(高severity)，手动换人不挡资质(高severity，生物制药合规红线)，外加生产甘特『自动排程』假按钮、进度计时不动、无多轮对比等中等问题。这些都不是缺功能，而是把判断与试错成本压在了高频用户身上。骨架值 8，但这些日常高频痛点拉回到 7：能高效完成顺利路径，一旦遇到无解/合规/调参验证就明显费力。"}, {"role": "生产领导层 / 车间主任 / 厂长", "role_summary": "工厂级管理决策者，不亲自做细粒度排产/排班操作，但要掌握全局排产进度、产能与人力利用、关键瓶颈与风险，用于资源决策与对上汇报。在本系统里基本是\"只读 + 策略管控\"角色：看驾驶舱/仪表盘、设定领导参与生产的政策、审阅求解方案质量、导出报表。", "typical_workflow": "早会前打开\"调度中心\"仪表盘看本月人力供需曲线、工时曲线和当日人员分配是否有缺口；进入\"工厂人力韧性驾驶舱\"看 Readiness Score、资质瓶颈四象限、关键人员依赖和异常韧性，判断未来一个季度哪里要提前补人/培训；在 V4 自动排班里抽查最新一轮求解的岗位填充率与未分配缺口，并通过求解配置弹窗设定各管理职级（组长/主管/部门经理）是否允许下场顶岗（allow/soft/ban）；需要对上汇报或评审时导出排班结果 PDF/Excel。真正的\"批次生产进度/完成率/在制状态\"在系统里目前看不到，需要另想办法。", "strengths": [{"title": "人力韧性驾驶舱是真正面向领导设计的只读决策视图", "detail": "页面明确标注 Read-only 不会自动改排班，提供 Readiness Score 仪表、最大人力/工时缺口 KPI、资质瓶颈四象限（高需求/高脆弱=真瓶颈）、关键人员依赖表、异常韧性（可替补修复比例、单人缺勤最大影响）和'管理层洞察+建议动作'。语言是管理语言而非技术日志，季度/年度窗口切换贴合领导决策节奏。这是少数真正为厂长/主管量身做的页面。", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/pages/roster/RosterLeadershipCockpitPage.tsx（windowOptions 本季度/下季度/今年/未来一年；ReadinessScore、四象限、KeyPersonDependency 表）"}, {"title": "驾驶舱指标是真·数据驱动，不是写死的样例", "detail": "后端服务直接查 MySQL（pool）按峰值并发需求、候选人覆盖深度、缺口、单人缺勤敏感性等动态计算风险等级与'为什么是这个等级'的解释文字，而不是硬编码模板。领导看到的瓶颈结论有据可依，可信度高。", "evidence": "/Users/zhengfengyi/MFG8APS/backend/src/services/rosterLeadershipCockpit/RosterLeadershipCockpitService.ts（import pool；reasons.push 基于 peakConcurrentDemand/candidateCoverageDepth/absenceSensitivity 计算）"}, {"title": "'领导是否下场顶岗'有明确的三态策略管控", "detail": "求解配置弹窗按管理职级分别提供 allow/soft/ban 三态：默认组长 soft、主管 ban、部门经理 ban；并有领导工作日/非工作日、领导参与操作/特殊班的软权重。这正好对应领导层最关心的'我的管理人员到底要不要、能不能下产线'这一策略诉求，且班组长(SHIFT_LEADER)被刻意排除在'领导'之外，符合一线现实。", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/SolverV4/SolverConfigurationModal.tsx（LeaderOpsPolicy='allow'|'soft'|'ban'；leader_ops_policy_group_leader 默认 soft，team_leader/dept_manager 默认 ban；LEADER_ROLE_LABELS 注释说明 SHIFT_LEADER 不视为领导）"}, {"title": "月度人力/工时供需曲线把节假日成本风险可视化", "detail": "调度中心仪表盘的人力供需曲线提供团队总人数、人力充足率、平均缺口、峰值缺口（含日期）等 KPI，并在图上用区域标注把法定假日(3倍工资)和周末高亮、画出总人数参考线。领导一眼能看到哪天需求顶到天花板、哪天动用了3倍工资日，对产能与成本风险有直观感知。", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/Dashboard/ManpowerCurveCard.tsx（summary.sufficiency_rate/max_gap_date；wxbAnnotations 对 salary_multiplier===3 与周末做 region 标注、total_headcount 参考线）"}, {"title": "求解方案质量与历史可追溯，便于评审", "detail": "V4 求解历史列表用'最优解/可行解(含Gap%)/无解/已应用'标签 + 岗位填充率(按\u003e=90/70 着色) + 求解耗时 + 时间窗，让领导无需懂 OR-Tools 也能判断某轮方案靠不靠谱；结果可一键导出 PDF（封面KPI+日程+人员统计+缺口清单）与 Excel，方便评审和留档。", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/SolverV4/RunHistoryTab.tsx（SolverQualityTag、fill_rate 着色列）；/Users/zhengfengyi/MFG8APS/frontend/src/utils/exportSchedulePdf.ts（5页报告结构）"}], "painpoints": [{"title": "全系统看不到'生产批次执行进度/完成率'——对厂长是致命缺口", "detail": "领导最关心的'整体排产进度'其实无处可看。调度中心后端只有 4 个接口（manpower-curve / work-hours-curve / daily-assignments / shifts），全是人力维度；批次状态库里只有 DRAFT/ACTIVATED 两种规划态，仪表盘也只按 plan_status='ACTIVATED' 过滤，没有 IN_PROGRESS/COMPLETED 等执行态，更没有实际开始/结束、完成百分比、在制批次数。batchPlanningController 里的 actual 只是用 day-offset 算出来的计划开始日，不是真实执行进度。等于这套系统是'排产计划器'而非'生产监控器'，领导拿不到产能利用率/批次完成率这类核心 KPI。", "severity": "高", "evidence": "完全缺失：/Users/zhengfengyi/MFG8APS/backend/src/routes/dashboard.ts 仅 4 条 get；dashboardController.ts 多处 WHERE pbp.plan_status='ACTIVATED'；batchPlanningController.ts:670 actualStartDate 仅由 minDay 偏移得出", "suggestion": "先在 batch_plans 增加执行态(IN_PROGRESS/COMPLETED/ON_HOLD)与实际开始/结束、完成度字段（或对接 MES 回填）；在调度中心新增'生产进度'卡片：在制批次数、按团队的批次完成率、计划 vs 实际偏差、延期批次预警。即便没有 MES，也可先做'计划进度'（按今天落在批次时间线的位置估算应完成度）。"}, {"title": "没有多方案对比，领导无法做'方案A vs 方案B'的决策", "detail": "领导评审排产/排班时天然要比较：'保守排法 vs 激进排法谁更省加班、谁缺口更小'。但求解历史只能一次点开一条 run 单独查看，没有任何并排对比/差异视图，也没有把填充率、缺口、加班、成本等指标做成可横向比较的表。领导只能靠记忆或自己拿 Excel 拼，决策支持薄弱。", "severity": "高", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/SolverV4/RunHistoryTab.tsx（handleViewResult 单选 runId 打开 SolveResultV4Page，无 compare/diff）；全仓搜索无 compare/comparison 组件", "suggestion": "在求解历史支持勾选 2-3 条 run 进入对比页，并排展示岗位填充率、未覆盖缺口、加班/三倍工资日成本、夜班/周末公平度等关键指标差异，高亮更优项，直接服务于领导拍板。"}, {"title": "求解结果只有'岗位填没填满'，没有成本/加班/产能口径的管理 KPI", "detail": "方案概览(OverviewView)给的是分配摘要、排班班次数、参与员工、覆盖工序、排班周期——全是执行口径。SolveResultV4Page 里完全没有'成本/加班/工资/三倍'相关字段。求解器内部明明算了三倍薪日成本、加班风险、夜班均衡等目标，但这些没有以金额/工时汇总成领导能看的'本方案预计额外加班费/三倍工资日人天'，领导无法从成本角度评估方案。", "severity": "高", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/SolverV4/views/OverviewView.tsx（仅 completion_rate/coverage_rate/satisfaction/solve_time 与岗位/工序计数）；grep 成本|加班|cost|salary 在 SolveResultV4Page.tsx 零命中", "suggestion": "把求解器已计算的 triple_salary、overtime_risk、夜班/周末分布在结果页汇总成管理 KPI：预计加班工时、三倍工资日人天、人均工时偏差、夜班公平度，最好折算成估算成本区间，供领导横向比较与汇报。"}, {"title": "领导驾驶舱入口被埋在'人员与排班'三级菜单里，没有 EXEC 着陆页", "detail": "对厂长而言驾驶舱应是打开系统的第一屏，但它作为子项藏在'人员与排班'下拉里(roster/leadership-cockpit)，与'班次定义''异常修复'等操作型功能混在一起；顶部导航也没有任何按角色定制的'领导视图'。默认落地页是偏操作的'调度中心'。领导每次都要点进二级菜单找，体验不像给决策者用的。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/Navigation/TopNavigation.tsx（roster-leadership-cockpit 作为 personnel 组的 children 之一；无角色过滤逻辑）", "suggestion": "为领导角色提供一个聚合着陆页/或把驾驶舱提为顶级入口；中长期结合 RBAC（库表已存在）按角色裁剪导航，让领导默认进'管理总览'而非操作页。"}, {"title": "驾驶舱在后端不可用时'静默'降级为 MOCK 数据，可能误导决策", "detail": "当只读 API 调用失败时，前端直接 catch 后用 buildMockFallbackSnapshot 生成一份假数据并照常渲染整页，仅靠一个 MOCK_FALLBACK 小标签和告警区提示。领导若没注意角落标签，会把演示用的假瓶颈/假缺口当成真实情况做决策，风险很高。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/pages/roster/rosterLeadershipCockpitService.ts（catch 后 return buildMockFallbackSnapshot，正常路径与降级路径渲染同一组件）", "suggestion": "降级时用全屏醒目横幅或拦截弹窗明确告知'数据不可用，以下为示例'，并默认折叠/打码具体数字，避免假数据被误读；或提供'重试/联系管理员'而非直接展示 mock。"}, {"title": "顶部通知铃铛是装饰件，缺乏面向领导的主动预警推送", "detail": "领导理想状态是'有风险系统来找我'，但顶栏的通知铃只有一个静态红点，没有任何点击处理和后端支撑（全仓无 notification/alert 路由）。所有风险（缺口、无解、瓶颈恶化、延期）都要领导自己进系统翻才能发现，缺乏推送/订阅机制。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/components/Navigation/TopNavigation.tsx（BellOutlined + notification-dot，无 onClick）；backend routes 无 notification/alert 端点", "suggestion": "建立预警中心：当出现无解、关键资质转 CRITICAL、本月缺口超阈值、批次延期时生成通知并支持邮件/企业微信推送；铃铛点开展示待办风险列表，直达对应驾驶舱卡片。"}, {"title": "驾驶舱与求解结果均无按团队(USP/DSP/SP&I)拆分的横向对比口径", "detail": "领导常要回答'哪个车间/团队最吃紧、产能利用率最低'。驾驶舱按整厂窗口聚合，缺少'按团队并排'的分组对比；求解结果也未按团队汇总缺口/加班。虽然仪表盘曲线支持选组织路径，但一次只能看一个范围，做不到多团队同屏比较。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/pages/roster/RosterLeadershipCockpitPage.tsx（仅时间窗维度，无 team 分组列）；ManpowerCurveCard 通过 orgPath 单范围筛选", "suggestion": "在驾驶舱与方案结果中增加'按团队'分组的小多图/排行榜（各团队 Readiness、缺口、加班、填充率），支持一屏看全厂横向对比，便于资源在车间间调配。"}, {"title": "导出是排班作业报表，不是面向领导/上级的管理汇报模板", "detail": "现有 PDF 导出结构是封面+工序日程+全量人员统计+缺口清单，本质是给排班执行/留档看的明细，页数多、偏操作。领导对上汇报想要的是一页纸式 executive summary（产能利用率、缺口与风险 Top N、加班成本、关键人员依赖、建议动作），目前没有这种汇报级模板，也无法直接导出驾驶舱视图。", "severity": "低", "evidence": "/Users/zhengfengyi/MFG8APS/frontend/src/utils/exportSchedulePdf.ts（5页：封面/工序日程×2/人员统计/缺口）；驾驶舱页无导出按钮（仅 Refresh）", "suggestion": "为驾驶舱增加'导出管理简报(PDF/PPT)'：一页关键 KPI + 瓶颈 Top5 + 建议动作；让领导可直接拿去开会，而非二次加工排班明细。"}], "feature_ideas": [{"title": "生产进度总览看板（计划 vs 实际，按团队/批次）", "detail": "新增独立的'生产总览'页：在制/已完成/延期批次数、按团队的批次完成率、计划进度 vs 实际进度偏差条、延期 Top 批次与原因。第一阶段无 MES 时可先用'计划进度'(今天在批次时间线上的位置)做估算；第二阶段对接 MES 回填实际开始/结束。直接补上厂长当前最大的盲区——产能与进度。", "value": "高", "effort": "高"}, {"title": "求解/排产多方案对比页", "detail": "在求解历史勾选 2-3 个 run 进入并排对比：岗位填充率、未覆盖缺口、预计加班工时、三倍工资日人天、夜班/周末公平度逐项对照并高亮更优方案，支持一键'采用此方案'。把领导'拍板选哪个排法'的决策从拍脑袋变成看数据。", "value": "高", "effort": "中"}, {"title": "方案成本与加班估算面板", "detail": "复用求解器已有的 triple_salary/overtime/夜班目标量，在结果页汇总为管理 KPI：预计加班工时、三倍工资日人天、人均工时偏差，并按可配置工资系数折算成估算成本区间。让领导能从'多花多少钱'角度评估并比较方案，也便于对上汇报降本成效。", "value": "高", "effort": "中"}, {"title": "领导专属管理着陆页 + 风险预警中心", "detail": "为领导角色提供聚合首页：驾驶舱 Readiness、本月缺口/加班、在制批次进度、关键资质 CRITICAL 数、待处理风险列表一屏直达；配合通知铃做主动预警（无解/瓶颈恶化/批次延期触发，支持邮件/企业微信推送）。配合已存在但未接线的 RBAC 库表按角色裁剪导航。", "value": "高", "effort": "中"}, {"title": "按团队产能/人力利用率横向对比与排行", "detail": "在驾驶舱和生产总览中增加'按团队(USP/DSP/SP&I)'小多图与排行榜：各团队 Readiness、人力充足率、缺口、加班、批次完成率一屏对比，并标出最吃紧团队。支撑领导跨车间调配资源与问责。", "value": "中", "effort": "中"}, {"title": "一页式管理简报导出（PDF/PPT）", "detail": "为驾驶舱/生产总览加'导出管理简报'：自动生成一页关键 KPI（产能利用率、缺口与风险 Top5、加班成本、关键人员依赖、建议动作）。让领导直接拿去周会/月度经营会，免去手工二次整理。", "value": "中", "effort": "低"}, {"title": "领导参与生产政策的影响即时预览", "detail": "在求解配置弹窗里调整某职级 allow/soft/ban 时，给出轻量即时反馈：'若主管设为 ban，预计 X 天生产日缺少领导覆盖 / 需额外 Y 人'。让领导在拍策略前就看到对缺口与覆盖的影响，避免设完才发现无解。可基于 precheck 做轻量试算。", "value": "中", "effort": "中"}], "overall_score": 5.5, "score_reason": "系统在'人力与排班决策'这条线上对领导支持是真不错：人力韧性驾驶舱是少见的、真正用管理语言+真实 DB 数据做的只读决策视图（Readiness、瓶颈四象限、关键人员依赖、异常韧性都到位），领导参与生产的 allow/soft/ban 三态策略管控也精准命中该角色诉求，方案质量标签和 PDF/Excel 导出降低了评审门槛。但站在厂长/车间主任最核心的诉求'整体排产进度 + 产能利用率 + 多方案对比 + 成本口径'上，缺口很硬：系统本质是排产计划器而非生产监控器（批次只有 DRAFT/ACTIVATED、无执行态与完成率、无 MES）、求解结果只有岗位填充率没有加班/成本 KPI、求解历史不能并排比较、驾驶舱还被埋在三级菜单且后端失败会静默降级到 mock。也就是说'人力风险'看得很透，'生产经营全局'几乎看不到。综合给 5.5：对'人力侧决策'约 7-8 分，对'生产/产能/成本决策'约 3-4 分，取偏向核心诉求的均衡分。"}, {"role": "一线操作工 / 技术员", "role_summary": "被排班的执行层员工（生物制药车间操作工/技术员）。他们不参与排产决策，只是排班结果的\"被动接收方\"：需要知道自己哪天上什么班、做哪道工序、在哪台设备/哪个区域，并希望排班公平（夜班/连班/工时均衡）、变更能及时通知、最好能在手机上自助查询。在本系统里，这个角色实际上没有任何专属入口——所有界面都是为计划员/HR/排班员/领导设计的\"管理视角\"，操作工只能依赖打印件或主管口头转达。", "typical_workflow": "理想日常：上班前用手机查\"我本周/今天上什么班、几点到几点、做哪道工序、用哪台罐/层析柱、在哪个区域\"；看到排班变更（被顶替、临时调班）时收到推送并确认；想核对自己这个月夜班/周末/加班是否过多、是否公平；请假/不可用时间能自助提报。\\n\\n系统现实：以上几乎全部无法自助完成。系统无登录、无\"我\"的概念，没有任何面向个人的页面。操作工要查班，只能由 HR/主管打开 /personnel-scheduling 月度排班网格，在几十人的大表里找到自己那一行——而且那一行只显示班次时长色块（早/中/夜/休/假），看不到\"做哪道工序、用哪台设备\"。真正的\"人→工序→岗位\"明细只藏在 /solver-v4 求解结果页（AssignmentsView/PersonnelView）里，那是排班员排产时用的，且按\"工序\"而非\"人\"组织，操作工根本接触不到。最终多半还是靠主管导出 Excel/PDF 贴在车间或口头通知。请假提报也得通过 HR 在组织工作台代录（UnavailabilityTab）。", "strengths": [{"title": "排班数据底层其实很完整，公平性指标已被算出来（只差没给本人看）", "detail": "求解器已把操作工最关心的公平性维度都算清楚了：PersonnelView 对每个员工展示排班工时、排班天数、周末工作天数、最大连续工作天数，且连续工作\u003e6天会标红警告、周末工作超均值1.5倍也会标红。Solver 侧硬约束更是直接保障了夜班后强制休息、连续工作上限、月工时上下限、夜班间隔、夜班均衡/周末均衡目标。也就是说'排得公不公平'这件事系统是当真在管的，对操作工是实质性利好——只是这些结论目前只给排班员看，没有回流给员工本人。", "evidence": "frontend/src/components/SolverV4/views/PersonnelView.tsx（周末/连续工作标红逻辑 L240-248）；solver_v4/constraints/night_shift.py、consecutive_days.py、standard_hours.py；objectives/balance_night_shifts.py"}, {"title": "班次色块视觉编码清晰，至少'几号上什么班'一眼能认", "detail": "PersonnelScheduleTable 用语义色把早班(蓝/success)、长白班(info)、夜班(红/error)、休(灰)、假(warning)区分开，今日列高亮、周末列底色、特殊覆盖加角标 tooltip。如果操作工能看到自己那一行，识别'本月作息节奏'的体验是不错的。", "evidence": "frontend/src/pages/personnel-scheduling/components/PersonnelScheduleTable.tsx（getShiftDisplay 配色与 is-today/is-weekend）"}, {"title": "工序-设备-区域绑定数据在链路里是存在的，做个人视图无需补数据", "detail": "批次甘特已能按'设备'轴展示工序所在设备（resourceName/resourceEquipmentClass/resourceSystemType），后端求解请求 V4Resource 里带 location 字段。这意味着'我做哪道工序、用哪台设备、在哪个区域'所需的数据后端都有，只是从未在'按人'的维度组装出来。对未来做操作工视图来说，这是低成本红利。", "evidence": "frontend/src/components/BatchManagementV4/BatchGanttV4/batchGanttAdapter.ts（resourceName/equipmentClass）；backend/src/services/schedulingV4/DataAssemblerV4.ts L246-254（resource_name, location）"}], "painpoints": [{"title": "完全没有'一线员工'入口——系统只为管理层而建", "detail": "导航的6大分组(调度中心/基础数据/生产计划/人员与排班/班次定义/UI组件库)以及全部路由，没有任何一个是给被排班员工自助查询的。操作工不是这个系统的'用户'，只是被排进去的'资源'。这是该角色体验的根本性缺陷：他想用，但根本没有为他设计的那扇门。", "severity": "高", "evidence": "frontend/src/App.tsx（全部路由）；frontend/src/components/Navigation/TopNavigation.tsx（navGroups 全为管理功能，PROJECT_MAP 6.也已把'一线主管'首页标注为'缺失'）", "suggestion": "新增 /my-schedule 只读个人页：本周/本月我的班次时间表 + 每班对应工序/岗位/设备/区域 + 我的夜班/周末/连班/工时统计。作为操作工的默认落地页。"}, {"title": "没有登录与'我是谁'，自助查询在架构上无从谈起", "detail": "前端无任何 login/Auth 页面，后端 server.ts 无鉴权中间件，rbacTypes/users 表只是空壳。系统无法识别当前是哪位员工，因此连'只显示我的排班'这个最基本动作都做不到。这是所有自助/通知/确认功能的前置阻塞项。", "severity": "高", "evidence": "frontend/src 无 *login*/*auth* 文件，App.tsx 无 AuthContext；backend/src/server.ts 无 requireAuth/jwt（与 PROJECT_MAP 二.4.1'0% 认证覆盖'一致）", "suggestion": "先落地轻量员工身份（工号+短信验证码或企业微信/SSO 扫码即可，不必上完整 RBAC），把 user_employee_links 接通，让前端能拿到'当前员工ID'。"}, {"title": "最接近的排班表只显示班次时长，看不到'做哪道工序/在哪台设备'", "detail": "PersonnelScheduleTable 单元格仅渲染班次小时数/休/假色块，没有工序名、岗位、设备、区域。操作工即便挤进 HR 的月度网格找到自己，也只知道'8号上夜班'，不知道'夜班具体干哪道工序、在哪个罐区'——而这恰恰是上岗前最需要的信息。讽刺的是这些数据在批次甘特/求解结果里都有，只是没按人组装。", "severity": "高", "evidence": "frontend/src/pages/personnel-scheduling/components/PersonnelScheduleTable.tsx（cell 只渲染 WxbBadge 班次，无工序/设备）；对比 AssignmentsView.tsx L443-451 详情面板也只有工序名/批次/时间/共享组，同样无设备/区域", "suggestion": "在个人视图里把 batch_personnel_assignments 与操作的 resourceName/location 做 join，按'日期→班次→工序→岗位→设备→区域'展开，让操作工一屏看清当班任务。"}, {"title": "任务级排班结果被锁在排产员工作流里，操作工根本够不着", "detail": "唯一能看到'人-工序-岗位'明细的 AssignmentsView/PersonnelView/TimelineView 都内嵌在 /solver-v4 求解结果页，是排班员排产/微调时用的，且按工序而非按人组织（AssignmentsView 是工序主从列表，PersonnelView 是利用率管理仪表盘）。操作工既无入口也读不懂，信息可达性几乎为零。", "severity": "高", "evidence": "frontend/src/components/SolverV4/views/AssignmentsView.tsx（按工序的 master-detail + 更换/移除按钮，面向排班员）；PersonnelView.tsx（利用率/连班管理仪表盘，非个人任务清单）", "suggestion": "把'按人'的当班任务视图从求解结果中抽出，做成独立的只读个人页，剥离所有编辑/分配/移除操作。"}, {"title": "排班变更没有任何通知机制，导航铃铛是装饰品", "detail": "顶部通知铃铛是个无 onClick 的静态按钮(还带一个常亮小红点)，点了没反应。后端也没有任何短信/企业微信/邮件/推送接口。操作工被临时调班、被顶替、夜班取消时，系统不会主动告知，只能靠主管口头或微信群转达——极易漏看、上错班/漏上班。", "severity": "高", "evidence": "frontend/src/components/Navigation/TopNavigation.tsx（BellOutlined 按钮无 handler，notification-dot 写死）；backend 全仓 grep 无 notification/sms/wechat/push 发送实现", "suggestion": "排班'应用/变更'后触发通知（先做站内消息+铃铛真实列表，二期接企业微信/短信），变更项让员工一键确认'已知悉'，形成闭环留痕。"}, {"title": "无法自助提报请假/不可用时间，必须求 HR 代录", "detail": "缺勤/请假只能由管理员在 /organization-workbench 的 UnavailabilityTab 里替员工录入。操作工想请假得线下找 HR，HR 再来系统登记，链路长、滞后，且容易出现'员工已知要请假但排班仍把他排上'的错排。", "severity": "中", "evidence": "frontend/src/components/UnavailabilityTab.tsx、UnavailabilityModal.tsx 挂在组织工作台；backend/src/routes/unavailabilityRoutes.ts 无面向员工自助的提交入口", "suggestion": "个人页加'请假/不可用申报'，提交后进入待审，审批通过即写入 unavailable_periods 供下次求解规避。"}, {"title": "实质上是桌面专用，操作工在车间用手机几乎不可用", "detail": "操作工日常在产线、戴手套、用手机，但系统是密集大表(日×员工网格)、Canvas 甘特、多列管理面板，全仓仅约25个CSS文件含@media、排班页仅1处960px断点(还只是收一下工具栏)。手机上要横向滚一个月×几十人的网格找自己，体验极差。", "severity": "高", "evidence": "frontend/public/index.html 有 viewport meta，但 frontend/src/pages/personnel-scheduling/PersonnelSchedulingPage.css 仅 1 处 @media(max-width:960px)；PersonnelScheduleTable 为整月宽表；wxb-ui/GanttChart 为 2D Canvas 桌面交互", "suggestion": "个人页按移动优先设计（竖向卡片：今天/明天/本周班次卡，点开看工序与设备），独立于现有桌面网格。"}, {"title": "导出只有 Excel/PDF，缺 iCal，无法进个人手机日历", "detail": "求解结果只支持导出 Excel/PDF（exportScheduleExcel/exportSchedulePdf），没有 iCal/ICS。操作工想把自己的班次同步到手机日历/收到日历提醒做不到，只能看主管发的截图或打印件。", "severity": "中", "evidence": "frontend/src/components/SolverV4/SolveResultV4Page.tsx L568-593（仅 Excel/PDF）；全仓无 text/calendar / VCALENDAR 实现", "suggestion": "提供'我的班次'iCal 订阅链接(webcal)，员工订阅后班次/变更自动同步进系统日历并提醒。"}, {"title": "排班对操作工不透明：看不到'为什么这么排、是否公平'", "detail": "系统算了夜班均衡、周末均衡、连班上限，但这些只在管理端可见。操作工看到自己夜班偏多时，无法自查'是不是比同组人多''是否触发了某条公平规则'，只能凭感觉抱怨，缺乏可信度与申诉依据。", "severity": "中", "evidence": "solver_v4/objectives/balance_night_shifts.py、minimize_vacancies.py 等公平目标无任何面向员工的呈现；PersonnelView 的公平统计停留在管理端", "suggestion": "个人页提供'我的公平度'小卡：本月夜班/周末/加班数 + 与同组中位数对比，规则命中可加一句话说明。"}], "feature_ideas": [{"title": "'我的排班'移动优先个人页（默认落地页）", "detail": "以工号身份登录后，竖向卡片展示今天/明天/本周班次，每张卡点开显示：班次时段、所属批次、要做的工序、岗位号、设备/容器、所在区域、是否夜班/三倍薪日。数据全部已存在(batch_personnel_assignments + resourceName/location)，主要是新增按人组装的只读接口与移动页。这是把操作工真正变成系统'用户'的关键一步。", "value": "高", "effort": "中"}, {"title": "排班变更主动通知 + 一键确认闭环", "detail": "在结果'应用'或异常修复后，对受影响员工推送变更(企业微信/短信/站内)，员工点'已知悉'回写确认状态与时间。让铃铛变成真实消息中心。直接消除'上错班/漏上班'风险，对生产连续性价值很高；可分阶段：先站内消息，再接企业微信。", "value": "高", "effort": "中"}, {"title": "员工自助请假/不可用申报", "detail": "个人页提交请假/不可用时段→主管审批→写入 unavailable_periods，下次求解自动规避。后端 unavailability 模型已具备，主要补员工侧提交与审批流。减少 HR 代录、降低排到不可用人员的错排。", "value": "高", "effort": "中"}, {"title": "'我的班次'iCal 订阅", "detail": "生成 webcal 订阅地址，员工一次订阅，之后班次与变更自动同步进手机日历并自动提醒。后端加 ICS 输出即可，前端只需展示订阅二维码/链接。对降低漏班、提升体验性价比很高。", "value": "中", "effort": "低"}, {"title": "个人公平度看板（夜班/周末/连班对比）", "detail": "把已有的 PersonnelView 公平统计抽取一份只读给员工本人：本月夜班数、周末工作、连续工作天数、工时，并与同组中位数对比、命中的公平规则给一句话解释。提升排班透明度与员工信任，复用现成计算逻辑。", "value": "中", "effort": "低"}, {"title": "扫码看岗（设备/区域二维码 → 当前/下一工序与负责人）", "detail": "在罐区/层析间贴二维码，操作工扫码即看该设备此刻/接下来的工序、计划起止、当班负责人/岗位。利用 resourceNodeId 与排班数据反查。贴合 CMO 现场'人到设备前'的真实动线，但依赖个人页与身份先就绪，故成本偏高。", "value": "中", "effort": "高"}], "overall_score": 2, "score_reason": "一线操作工占全厂人数最多，却是系统里最被忽视的角色：导航 6 大分组与全部路由都是管理视角，没有登录、没有『我是谁』、没有任何个人入口；9 条痛点中 6 条为高——查不到自己的班次与工序/设备、唯一能看到人-工序明细的页面锁在排班员工作流里够不着、排班变更零通知、车间手机几乎不可用。系统把他当『被排进去的资源』而非『用户』。唯一加分项是底层数据其实完整、公平性指标也已算出，未来补个人视图成本不高。综合给 2 分。"}, {"role": "工艺工程师 / 工艺模板管理员", "role_summary": "排产的\"上游配方\"维护者。负责在工艺模板（process template）中定义阶段、工序（操作）、时间安排、设备绑定、人员资质要求和共享组，并把多个模板串成\"总包\"。其产出（模板/总包）是批次创建和 V4 自动排班的数据源头——模板质量直接决定下游排产的可行性。在系统里主要活动在 /process-templates（V3 编辑器 + 总包设计）与 /operations（操作主数据库）两个区域。", "typical_workflow": "1) 进 /process-templates 列表，按团队(USP/DSP/SP&I)/搜索/风险标签找到目标模板，或点\"新建模板\"/\"复制\"已有模板起步。2) 进入全屏甘特编辑器(ProcessTemplateV3Editor)：在阶段树上右键/双击空白\"新增操作\"，用 QuickCreateOperationModal 选现有操作或新建操作主数据(名称/耗时/人数/资质/操作类型)，设定阶段内 Day、开始时刻、时间窗。3) 在甘特图上拖拽/缩放操作条微调时间，给操作右键\"绑定设备\"，框选多个操作批量绑定或\"链接为共享组\"。4) 点\"自动排程\"重算依赖关系，切换 操作/阶段▸设备/设备 三种 Y 轴视角核对布局。5) 必要时切到\"总包设计\"标签，选多个模板、用关键操作的发生日期(锚点)串联设定相差天数。6) 通过列表\"导出 Workbook/总览\"做评审或备份，用\"导入 Excel\"批量建模板。7) 模板交给计划员去 /batch-management-v4 建批次、再到 /solver-v4 排班。", "strengths": [{"title": "全屏甘特直接编辑工序时间，拖拽即改、所见即所得", "detail": "V3 编辑器以 WxbGanttChart 为核心，工程师可直接拖拽/缩放操作条改时间(handleDragEnd→updateStageOperation)，无需在表单里手填一堆 Day/时刻数字。支持 操作/阶段▸设备/设备 三种 Y 轴视角切换，对'按设备看产线占用'和'按工序看流程'两种心智模型都覆盖。这是该角色最高频动作，体验是系统里最成熟的一块。", "evidence": "frontend/src/components/ProcessTemplateV3/ProcessTemplateV3Editor.tsx (yAxisMode 切换、WxbGanttChart 渲染)；useV3EditorActions.ts handleDragEnd/handleResizeEnd"}, {"title": "新增操作弹窗信息密度高、带智能默认与'最近使用/本阶段用过'排序", "detail": "QuickCreateOperationModal 把'选操作→设资质→排时间窗'整合在一个 920px 弹窗里：按团队过滤操作库、搜索、自动按'本阶段用过/最近使用'排序(localStorage 记忆 recentOperationIds)，选中操作后自动带入标准耗时/人数，时间窗'自动'模式自动计算(开始-2h 到 结束)。新建主数据时还能内联配置按岗位的资质要求(min_level/是否必须/适用岗位)。对反复建相似工序的工程师省了大量重复输入。", "evidence": "frontend/src/components/ProcessTemplateV3/QuickCreateOperationModal.tsx (writeSavedConfig/recentOperationIds、buildAutomaticWindow、buildPositionQualificationPayloads、teamFilter)"}, {"title": "删除工序有下游批次占用保护，错删风险低", "detail": "删除排程操作时后端会先 COUNT 引用该 template_schedule_id 的批次，若被批次使用直接拒绝并返回占用的批次数与批次号(最多列5个)，前端删除确认弹窗也明确写'不会删除操作定义本身、会移除设备绑定与共享组成员'。对'改模板会不会搞乱已排批次'这一核心担忧，删除路径上做了正确兜底。", "evidence": "backend/src/controllers/stageOperationController.ts removeOperationFromStage (batch usage check, 返回 batch_count/batch_codes)；ProcessTemplateV3Editor.tsx 删除确认 WxbModal 文案"}, {"title": "设备绑定操作顺手：右键单绑、框选批量绑、缺设备可当场新建并回绑", "detail": "绑定设备做成了右键子菜单(列出按团队分组、本模板团队优先的设备，已绑的打勾)，框选多个操作可在 SelectionPanel 批量绑定/解绑，且发现没有合适设备时能直接'+新建设备'创建 EQUIPMENT_UNIT 并自动回绑到当前操作。设备下拉按 departmentCode 分组且当前模板团队置顶，减少跨团队误绑。", "evidence": "ProcessTemplateV3Editor.tsx buildTaskMenu(bindChildren)、handleBatchBind/handleCreateEquipment、equipmentBindingOptions(按团队分组排序)"}, {"title": "复制模板 + Excel 导入/导出，支持快速起步与离线评审", "detail": "列表页支持一键复制模板(copyTemplate 后直接跳进新模板编辑器)、导出单模板 Workbook、导出团队级模板总览、以及 Excel 批量导入(TemplateWorkbookImportModal)。对'基于相似工艺起新模板'和'把工艺给 QA/生产评审'两个常见诉求是实用的。", "evidence": "frontend/src/components/ProcessTemplateV3/ProcessTemplateV3List.tsx handleCopy/handleExportWorkbook/handleExportOverview；services/templateWorkbookApi"}, {"title": "总包(Package)只存串联关系、用真实操作做锚点，语义清晰", "detail": "总包设计明确'只保存串联关系，不复制模板内容'，相邻模板自动生成一条串联，锚点用真实操作(加载各模板 planner 的操作列表，label 带 Day)而非裸日期，编辑时还能从已保存的 description 反解恢复锚点操作。对'上游收获=下游AC C1 相差N天'这类跨模板时间联动表达得比较自然。", "evidence": "frontend/src/components/MfgTemplatePackagePanel.tsx (toAnchorOperationOption、findSavedOperationByAnchor、describeLink；面板文案'只保存串联关系不复制模板内容')"}], "painpoints": [{"title": "模板编辑不会同步到已生成的批次，且全程零提示——'改动对下游影响可控可预览'几乎落空", "detail": "这是该角色最关心的诉求，却是最大缺口。批次操作由存储过程 generate_batch_operation_plans 在建批次时一次性快照进 batch_operation_plans，之后改模板里工序的时间/时间窗(updateStageOperation)既不回写已建批次，也没有任何'此改动影响 N 个批次'的提示。删除工序会被批次占用拦截，但'改时间/改资质要求'这类更隐蔽的修改静默生效，工程师无法判断已排好的批次是否还成立，也没有'重新生成受影响批次'的入口。改了模板自以为生效，实际线上批次还是旧配方，是典型的静默数据漂移。", "severity": "高", "evidence": "backend/src/services/batchOperationGenerationService.ts(CALL generate_batch_operation_plans 快照)；stageOperationController.ts updateStageOperation(无批次引用检查、无影响提示)；全仓搜索无 affected-batch/regenerate 入口", "suggestion": "在 updateStageOperation/绑定/资质变更路径上复用删除时的批次占用查询，编辑保存前弹'此修改将影响 X 个批次(列批次号)'确认；并提供'同步到 DRAFT 批次/标记 ACTIVATED 批次需复查'的动作，或在列表页给'模板已变更、N 个批次待同步'徽标。"}, {"title": "完全没有版本历史/对比/回滚，多代(V1/V2/V3)指的是代码代次不是模板版本", "detail": "工程师对受 GMP 约束的工艺配方天然需要'谁在何时改了什么、能否对比与回滚'。但系统里 process_templates 没有版本表，编辑器没有版本/历史/对比/回滚任何入口，代码里 version 仅指 Excel workbook_version 导出格式号。加之全系统无审计日志、无 RBAC，任何人改模板都不留痕、不可追溯、不可恢复。对生物制药 CMO 这是合规级风险，不只是体验问题。", "severity": "高", "evidence": "全仓搜索：processTemplate/stageOperation 代码内 version 仅出现在 processTemplateWorkbookService(workbook_version)；无 template_version 表/历史接口；CLAUDE.md 注明无 auth/RBAC、无审计日志", "suggestion": "先做轻量版：保存时落一份模板快照(stages+operations+bindings JSON)到 template_versions 表，提供'历史版本列表+与当前 diff+回滚为新版本';长期接入审计日志(谁/何时/改了哪个字段)。"}, {"title": "工序间先后/依赖(precedence)约束在 V3 编辑器里只能看、不能编辑", "detail": "工艺的核心是工序顺序与前后置关系。V3 编辑器把依赖(toGanttDeps(constraints))渲染成连线展示，但右键菜单只有 编辑/删除/绑定设备/共享组——没有任何'新增前置/后置约束'的动作。precedence 约束的创建/编辑 UI(predecessor/successor、lag_time)只存在于旧版 ProcessTemplateGantt/components/GanttModals.tsx(Ant Design、V2 时代)。结果是工程师只能靠手动拖时间硬凑顺序，无法显式声明'A 完成后 N 小时才能开始 B'这种工艺约束，求解器也拿不到这层信息。", "severity": "高", "evidence": "ProcessTemplateV3Editor.tsx 只 toGanttDeps 做展示、buildTaskMenu 无约束动作；约束编辑 UI 仅在 ProcessTemplateGantt/components/GanttModals.tsx(constraintType predecessor/successor) 未被 V3 复用", "suggestion": "把约束创建/编辑能力迁进 V3：在两操作连线上右键或框选两个操作后提供'添加前置/后置约束(类型+lag)';并在编辑器内提供约束列表面板可增删改。"}, {"title": "编辑器每个动作即时写库，没有'草稿/保存/撤销'，误拖一下就直接改了线上模板", "detail": "V3 编辑器无 save/dirty/undo 概念(代码里搜不到)，拖动一次就 updateStageOperation 直接落库、删除即删。工程师做一组试探性调整时无法'整体预览后再提交'，更没有 Ctrl+Z。结合上面无版本/无审计，一次误操作既不可撤销也不可追溯。对需要谨慎改配方的角色，缺安全感。", "severity": "中", "evidence": "ProcessTemplateV3Editor.tsx/useV3EditorActions.ts 每次拖拽/删除即调用后端无暂存层；全仓 V3 目录无 undo/redo/dirty/unsaved", "suggestion": "至少加操作级撤销(拖拽/删除后 toast 内'撤销');进阶做编辑器层草稿态，批量改完点'保存'再提交一组变更(配合版本快照)。"}, {"title": "模板可行性校验(editor-validate)有后端接口但 V3 编辑器没接，工程师改完不知道模板能不能排出来", "detail": "后端有 POST /:id/editor-validate(validateTemplateResourceEditor)能校验资源/绑定/约束，但前端只在旧版 V2 的 TemplateResourceEditorTab 里调用，活跃的 V3 编辑器完全没接。列表页虽有'未绑定/约束冲突/无效绑定'风险徽标，但进了编辑器后没有任何'当前模板校验通过/有哪些问题'的反馈，工程师要等到下游 /solver-v4 precheck 报错才发现模板有坑，反馈链路太长。", "severity": "中", "evidence": "backend/src/routes/processTemplates.ts:53 editor-validate 路由存在；前端 grep 仅 ProcessTemplateV2/TemplateResourceEditorTab 与 api 封装调用，V3 编辑器无引用", "suggestion": "在 V3 编辑器顶栏加'校验模板'按钮调用 editor-validate，把未绑定/约束冲突/资质缺口就地高亮到对应操作条;保存或离开前自动校验提示。"}, {"title": "现有操作的名称/人数/资质是跨模板共享主数据，在模板里改一处会动到所有模板，但提示很弱", "detail": "QuickCreateOperationModal 编辑模式只调本排程的时间，名称/人数/资质属于操作库(operations 主数据，跨模板共享)——只有一行小字说明,要改这些得跳去 /operations 页。OperationsPage 的编辑弹窗能改名称/耗时/人数/类型/描述,但资质又不在这个弹窗里(要走单独的按岗位资质流程)。工程师想'给这个模板里这道工序多加一个人/换资质'时，要么误以为改了只影响本模板(实则全局),要么在三个地方(模板排程/操作库/资质矩阵)之间反复横跳，心智负担重、易错。", "severity": "中", "evidence": "QuickCreateOperationModal.tsx edit 模式提示'名称/人数/资格属于操作库(跨模板共享)此处仅调整时间';frontend/src/pages/OperationsPage.tsx 编辑弹窗仅 name/standard_time/required_people/type/description,资质字段不在其中", "suggestion": "在编辑弹窗里对'共享字段'做强提示(显示'此操作被 N 个模板引用,修改将全部生效');把按岗位资质编辑收进操作主数据编辑弹窗,减少跳转;或提供'仅本模板覆盖人数/资质'的局部 override 能力。"}, {"title": "自动排程是黑盒一键操作,改了什么、是否动了已绑定/已锁定的安排没有任何预览", "detail": "顶栏'自动排程'按钮直接 POST /auto-schedule 调 scheduleTemplateOperations 重排整模板时间,前端只显示'排程中…/完成'。工程师不知道它依据什么规则重排、会不会覆盖自己刚手工摆好的时间或时间窗,也没有'预览改动/选择性应用/撤销'。对一个会大面积改写时间的操作,缺乏可控性。", "severity": "中", "evidence": "frontend/src/components/ProcessTemplateV3/useV3EditorActions.ts handleAutoSchedule(直接 POST 后 refresh);backend/src/controllers/processTemplateController.ts autoScheduleTemplate→scheduleTemplateOperations", "suggestion": "自动排程改为'预览模式':先返回拟改动的 diff(哪些操作时间从 X 变 Y)供勾选应用,提供应用后一键撤销;并说明排程规则。"}, {"title": "总包设计无可视化预览,串联是否正确只能靠脑补", "detail": "总包把多模板按锚点日期串联,但整个设计过程是纯表单(源模板/源操作/相差天数/目标模板/目标操作 + 一行文字摘要),没有把串联后的总时间线画出来。工程师设了多条串联后,无法直观看到各模板在时间轴上如何首尾衔接、总周期多长、有没有重叠或断档,容易把相差天数的正负/锚点选错。", "severity": "中", "evidence": "frontend/src/components/MfgTemplatePackagePanel.tsx PackageDesignerModal 仅表单 + describeLink 文字摘要,无甘特/时间线预览组件", "suggestion": "在总包设计弹窗内嵌一个 MiniGantt,实时把各模块按当前串联关系铺到统一时间轴上预览(标注锚点连线与总天数),保存前所见即所得。"}, {"title": "列表风险徽标(未绑定/约束冲突/无效绑定)不可下钻,看到红色却找不到是哪道工序", "detail": "列表页给模板打了'N 未绑定/N 约束冲突/N 无效绑定'徽标,但点不动——进编辑器后也没有'只看有问题的操作'筛选或定位。工程师知道模板有3个未绑定却要在整张甘特里自己翻找,排障效率低。", "severity": "低", "evidence": "frontend/src/components/ProcessTemplateV3/ProcessTemplateV3List.tsx riskBadges(纯展示 WxbTag);编辑器无问题项定位/筛选", "suggestion": "风险徽标可点击,跳进编辑器并自动筛选/高亮对应的未绑定或冲突操作;编辑器侧栏加'问题清单'可逐条定位。"}], "feature_ideas": [{"title": "模板变更影响分析 + 受影响批次同步面板", "detail": "保存模板修改时实时计算引用该模板/工序的批次,按 DRAFT/ACTIVATED 分类展示'X 个批次受影响';对 DRAFT 批次提供'一键重新生成(重跑 generate_batch_operation_plans)',对已激活批次标记'需复查'并可推送给计划员。直接补上该角色'改动对下游可控可预览'的核心缺口。", "value": "高", "effort": "中"}, {"title": "工艺模板版本快照与 diff/回滚", "detail": "每次保存(或显式'发布版本')落一份模板全量快照,提供版本列表、任意两版可视化 diff(新增/删除/改时间的工序高亮)、一键回滚为新版本。满足生物制药配方的合规留痕与'改坏了能回去'的安全感,是该角色长期最有价值的能力。", "value": "高", "effort": "中"}, {"title": "V3 编辑器内嵌模板校验 + 问题就地定位", "detail": "在编辑器顶栏接已有的 editor-validate 接口,把未绑定设备/约束冲突/资质无人满足/时间窗与时长矛盾等问题做成侧栏清单,点击逐条跳转高亮对应操作条;保存前自动校验。把下游 solver precheck 才暴露的问题前移到模板编辑当下。", "value": "高", "effort": "低"}, {"title": "在 V3 编辑器直接编辑工序先后约束(precedence)", "detail": "把旧版已有的 predecessor/successor + lag_time 约束编辑能力迁进 V3:框选两操作或在连线上右键'添加前置/后置约束',侧栏可增删改约束。让工程师显式声明工艺顺序约束并喂给求解器,而不是靠拖时间硬凑。", "value": "高", "effort": "中"}, {"title": "自动排程预览(diff)与选择性应用 + 撤销", "detail": "自动排程先返回拟改动列表(操作×原时间→新时间)供工程师勾选应用,保留手工锁定的安排不被覆盖,应用后可一键撤销。把黑盒一键变成可控操作。", "value": "中", "effort": "中"}, {"title": "总包时间线可视化预览", "detail": "总包设计弹窗内嵌 MiniGantt,按当前串联锚点把各模块铺到统一时间轴实时预览,标注锚点连线、总周期、重叠/断档,所见即所得地校验串联正确性。", "value": "中", "effort": "中"}, {"title": "模板对比与从模板快速派生(变体管理)", "detail": "支持选两个模板做工序级 diff(USP-A vs USP-B 差在哪);并支持'基于此模板派生变体'(复制后标注来源模板,后续可看派生关系)。适配 CMO 同一工艺多产品/多规格的现实,比单纯'复制'更有结构。", "value": "中", "effort": "中"}, {"title": "操作主数据'被引用范围'透明化与局部覆盖", "detail": "编辑现有操作时显示'被 N 个模板/M 个排程引用',改共享字段前明确警示影响范围;并允许在单个模板内对人数/资质做局部 override(不动全局主数据),解决'只想给这个模板这道工序多配一人'的高频诉求。", "value": "中", "effort": "中"}], "overall_score": 6, "score_reason": "高频核心动作(甘特拖拽改时间、新增工序、设备绑定、共享组、总包串联)体验成熟且贴合生物制药场景,智能默认/最近使用/团队分组等细节到位,删除工序有批次占用保护——日常'搭模板'是顺手的,这部分值 7-8 分。但该角色明确最关心的两件事被系统性削弱:一是'改动对下游可控可预览'几乎落空(模板编辑不回写批次、零影响提示、静默漂移),二是版本管理彻底缺失(无历史/diff/回滚,叠加无审计无 RBAC,对受 GMP 约束的配方是合规级风险);加上工序先后约束在 V3 不可编辑、编辑器即时写库无草稿/撤销、已有校验接口未接入 V3,几项叠加把分数明显拉低。综合给 6 分:能高效完成模板搭建,但在'安全改、可追溯、可预见下游影响'这些对工艺工程师至关重要的维度上短板突出,尚不足以让人放心地把它当成单一可信的工艺配方管理系统。"}, {"role": "IT / 系统管理员", "role_summary": "负责把这套三服务（React 前端 / Express 后端 / Flask+OR-Tools 求解器 + MySQL）APS 系统部署起来、保证它在生产/类生产环境长期稳定运行的人。日常关注：装得起来跑得稳、数据库 schema 一致且可迁移、谁能访问什么（认证/RBAC）、出问题能查（日志/可观测性）、能和工厂 MES/ERP/LIMS 打通、性能与故障恢复。这个角色在系统里基本没有\"自己的界面\"——它面对的是脚本、配置文件、SQL、容器和日志，而不是前端页面。", "typical_workflow": "1) 初次部署：克隆仓库 → 按 README 手工敲 npm install / venv / pip → 手工建库（CI 里那条 create_aps_database.sql + 一串 SQL 的链）→ 配 DB_* 环境变量 → 本地用 start_all.sh 或容器里用三个 Dockerfile 分别起前端/后端/求解器，自己接 MySQL 和反向代理。2) 升级/打补丁：手工挑 database/migrations/ 下正确顺序的 SQL 一条条灌，自己记住哪些已经跑过（没有 schema_migrations 表）。3) 日常运维：盯进程是否活着（/api/health 只回 OK，不查 DB）、求解超时/卡死时去翻 solver_v4/logs/ 的文本日志和散落的 request_*.json、用 mysqldump 手工备份到 database/backups/。4) 安全/合规：被审计问\"谁改了排班、系统怎么做权限\"时，发现没有登录、没有 RBAC 接线、没有操作审计。5) 集成：被要求和 MES/ERP 对接时，发现只能靠手工导入导出 Excel。", "strengths": [{"title": "三服务都有 Dockerfile，且是多阶段构建、含生产级 WSGI", "detail": "backend/frontend/solver_v4 各自带 Dockerfile：后端是 node:20-alpine 多阶段(build→omit dev)，求解器用 gunicorn(2 workers, timeout 600s) 而非 Flask 开发服务器，前端用 nginx 多阶段并模板化注入 BACKEND_URL/PORT、且对 SSE 做了 proxy_buffering off / read_timeout 600s 的正确处理，还显式拒绝把 BACKEND_URL 指向 loopback。对要上容器平台的管理员来说，基础打包件是现成的、且考虑到了长求解的超时与 SSE。", "evidence": "/Users/zhengfengyi/MFG8APS/backend/Dockerfile、/Users/zhengfengyi/MFG8APS/solver_v4/Dockerfile、/Users/zhengfengyi/MFG8APS/frontend/Dockerfile"}, {"title": "CI 流水线质量不错，含真实 MySQL 集成测试", "detail": ".github/workflows/ci.yml 用 dorny/paths-filter 按改动区域(backend/frontend/v4)条件触发，backend job 起 mysql:8.0 service 容器并跑 init_mysql_ci.sh 灌真实 schema 后执行 test:ci + test:db，v4 job 跑 verify_v4_archive.sh 守护求解链路。对管理员意味着主分支的可部署性有自动门禁兜底，回归不至于裸奔。", "evidence": "/Users/zhengfengyi/MFG8APS/.github/workflows/ci.yml、/Users/zhengfengyi/MFG8APS/scripts/ci/init_mysql_ci.sh"}, {"title": "start_all.sh 一键起栈，且做了端口清理、健康等待、MySQL 自启", "detail": "脚本会自动 kill 占用 3000/3001/5005 的进程、brew services start mysql、按 后端→求解器→前端 顺序拉起并用 wait_for_url 轮询 /api/health 与 /api/v4/health 直到就绪、优先 gunicorn 否则回退 Flask、trap 退出时统一收 PID。本地起一套 demo/验证环境对管理员很省事。", "evidence": "/Users/zhengfengyi/MFG8APS/start_all.sh"}, {"title": "基础安全/防滥用中间件已就位", "detail": "server.ts 里挂了 helmet、express-rate-limit(200 req/min/IP)、CORS 白名单(CORS_ALLOWED_ORIGINS 支持逗号分隔)、trust proxy、50mb body 限制，并有一个 4 参数的全局错误处理器在生产下隐藏堆栈只回通用错误码。这些是管理员不必自己补的卫生层。", "evidence": "/Users/zhengfengyi/MFG8APS/backend/src/server.ts (helmet/rateLimit/cors/global error handler)"}, {"title": "求解器有规范的轮转日志 + 每次 run 独立日志", "detail": "solver_v4/utils/logger.py 用 TimedRotatingFileHandler 做按天轮转、保留 7 天；app.py 里每个 request_id 建 SolveRunLogger，并打印启用/禁用了哪些 enable_* 约束、时间窗、员工数等摘要。排查'这次求解到底用了什么配置/为什么慢'时，求解器侧的可观测性明显好于后端。", "evidence": "/Users/zhengfengyi/MFG8APS/solver_v4/utils/logger.py、/Users/zhengfengyi/MFG8APS/solver_v4/app.py (SolveRunLogger, 约束配置 section)"}, {"title": "DB 连接走连接池且配置全部来自环境变量", "detail": "config/database.ts 用 mysql2 createPool(connectionLimit 10, waitForConnections)，host/user/password/db/port/charset 全部从 DB_* 读取并有默认值。管理员换环境只改环境变量即可，不必动代码。", "evidence": "/Users/zhengfengyi/MFG8APS/backend/src/config/database.ts"}], "painpoints": [{"title": "全系统零认证、零授权——所有 /api/* 对任何能连到端口的人完全敞开", "detail": "server.ts 没有挂任何 auth 中间件，src/ 下根本不存在 middleware/ 目录，routes/controllers 里没有任何 requireAuth/requirePermission/req.userId 的使用，RbacDirectoryService 只在一个测试文件里被引用过。RBAC 的表(users/roles/permissions/user_role_assignments)在 Phase 0A 迁移里建好了，但一行接线都没有。对生物制药 CMO 这是致命的：谁都能改排班、删批次、拉取全员花名册和病假记录，无法满足任何审计/合规(数据完整性、访问控制)要求，也无法做多团队(USP/DSP/SP&I)数据隔离。", "severity": "高", "evidence": "backend/src/server.ts(无 app.use auth)；不存在 backend/src/middleware/；grep 确认 routes/controllers 无 requireAuth/requirePermission/verifyToken；RbacDirectoryService 仅 src/tests/phase0aBoundary.test.ts 引用", "suggestion": "按 PROJECT_MAP 已给的样例实装 requireAuth + requirePermission 中间件并在 server.ts 全局 app.use('/api', requireAuth)，写入操作再叠 requirePermission；身份源先支持一个最简 JWT/会话，长期对接企业 IdP/LDAP。在此之前严禁暴露到内网以外，且要在反代层加 IP allowlist 兜底。"}, {"title": "solver 与 backend 之间的 /callback/progress、/callback/result 也是无鉴权的写入口", "detail": "backend 的 schedulingV4 路由把 /callback/progress 和 /callback/result 直接挂成公开 POST，求解器回填求解结果走这两个口。由于全局无 auth，任何人都能 POST 伪造的求解结果/进度，污染 scheduling_runs 并最终被 apply 到 batch_personnel_assignments / employee_shift_plans。同时求解器的 /api/v4/solve、/api/v4/abort 也无任何鉴权。", "severity": "高", "evidence": "/Users/zhengfengyi/MFG8APS/backend/src/routes/schedulingV4.ts (router.post('/callback/progress'|'/callback/result'))；/Users/zhengfengyi/MFG8APS/solver_v4/app.py (solve/abort 无 auth)", "suggestion": "回调口至少加一个 backend↔solver 之间的共享密钥(HMAC 头或 bearer)校验，并把求解器绑定到内网/仅 backend 可达；abort/solve 同样要校验调用方。"}, {"title": "没有迁移版本表，也没有迁移 runner——升级靠人脑记顺序", "detail": "database/migrations/ 有 44 个文件且命名混杂(有日期前缀的，也有 drop_legacy_tables.sql/finish_migration.sql 这种无序的)，但全库 grep 不到 schema_migrations/schema_version 表，没有任何记录'哪些已执行'的机制。更糟的是 Phase 0A 的迁移文件头部明确写着'请用 scripts/phase0a/run_phase0a_migrations.ts 执行'，但该脚本在仓库里根本不存在(只有同名测试)。npm 的 migrate:* 脚本只覆盖几张老人员表、且读 MYSQL_* 而非运行时的 DB_*。管理员跨环境升级时极易漏跑/重跑/顺序错，且无法回滚。", "severity": "高", "evidence": "ls database/migrations 共 44 个；grep 无 schema_migrations；20260508_phase0a_005_*.sql 头注释指向不存在的 scripts/phase0a/run_phase0a_migrations.ts；backend/package.json 的 migrate:* 用 MYSQL_*", "suggestion": "引入 Knex/TypeORM/Flyway 类迁移器并建 schema_migrations 记录表；把现有 44 个 SQL 收编进有序版本号；提供 npm run migrate:up/down，统一读 DB_* 变量；删掉/补齐被引用却缺失的 phase0a runner。"}, {"title": "健康检查是浅检查，不反映 DB/求解器真实可用性", "detail": "/api/health 只返回 {status:'OK'}，不 ping 数据库；求解器 /api/v4/health 只回静态 version，不报告 worker/活跃求解数。挂在负载均衡或 k8s readiness 探针后面时，DB 宕了或连接池耗尽，健康检查依然绿灯，故障无法被探针发现，会把流量继续打进坏实例。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/backend/src/server.ts:154 (health 仅回 OK)；/Users/zhengfengyi/MFG8APS/solver_v4/app.py:30 (health 仅回 version)", "suggestion": "/api/health 改为 SELECT 1 探活 DB(并可探 SOLVER_V4_URL)，区分 live/ready；求解器 health 暴露活跃 run 数、队列、worker 状态，便于做就绪/存活探针与告警。"}, {"title": "后端可观测性薄弱：只有 morgan('dev') + 388 处 console.*，无结构化日志、无 trace 关联", "detail": "后端没有任何 pino/winston，靠 morgan('dev') 彩色行日志和遍布全代码的 388 处 console.log/error。异步求解链路(DataAssembler→solver→callback→SSE)里没有贯穿的 traceId/request-id(governance 里那套 requestId/correlationId 仅服务于 status_transition 表，没在请求链路用)。生产里'某次求解为什么超时/失败''哪个批次组装慢'几乎无法用日志定位，也接不进 ELK/Loki/Sentry。", "severity": "中", "evidence": "backend/package.json 无 pino/winston；grep console.* 计 388 处；server.ts 用 morgan('dev')；grep 无请求级 traceId/x-request-id", "suggestion": "引入 pino + pino-http，给每个请求注入 request-id 并在跨服务调用(fetch solver)透传，把求解耗时/候选人数/批次数打成结构化字段；接 Sentry 做错误聚合。"}, {"title": "操作审计实际上不存在——合规盲区", "detail": "虽然 Phase 0A 建了 status_transition_events 表(带 actor_user_id/request_id/correlation_id)，但它只被 ScenarioService 这一个地方写过,绝大多数写操作(改批次、改排班、apply 求解结果、删模板)都不落审计;而且 actor_user_id 因为没有登录系统永远是 NULL。GMP 环境下'谁在何时改了什么'查不出来。", "severity": "高", "evidence": "grep StatusTransitionService 仅 src/services/aps/ScenarioService.ts 调用；status_transition_events.actor_user_id 依赖不存在的登录体系", "suggestion": "先落地认证拿到 actor，再在关键写路径(apply 结果、批次/排班/模板 CRUD)统一写审计事件;考虑一个通用审计中间件按路由记录 who/when/what/before-after。"}, {"title": "求解请求被无条件落盘成 request_*.json 且无清理，内含全员 PII", "detail": "app.py 每次 solve 都把整个 payload(含 employee_profiles、资质、unavailable_periods 即请假/病假窗口)写到 solver_v4/logs/request_\u003cid\u003e.json，没有任何轮转/清理逻辑(轮转只覆盖文本日志，cleanup_minutes 与此无关)。现在磁盘上已堆了 169 个这种文件。对处理员工敏感信息的制药系统，这是会无限增长且未受控的 PII 散落,既是磁盘隐患也是数据保护隐患。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/solver_v4/app.py:135-141 (无条件写 request_*.json)；ls solver_v4/logs 已有 169 个 request_*.json；grep 无针对这些文件的 retention/cleanup", "suggestion": "默认关闭 payload 落盘(改为仅 DEBUG 开启)，落盘时脱敏或加保留期+定时清理;把 logs 目录纳入卷管理与访问控制。"}, {"title": "约 217MB 含 PII 的整库 SQL 备份已被 git 跟踪", "detail": ".gitignore 虽然写了 database/backups/*.sql，但 git ls-files 显示 aps_system_2025-12-13_*.sql 等多个 ~108MB 整库 dump 已经在版本控制里(含 zeabur_pre_phase0a dump)。这些是接近生产的全量库(员工、排班、资质)，进了 git 历史就很难真正抹掉,克隆仓库即得全员数据,是明显的数据外泄面。也说明备份完全是手工 mysqldump、无自动化与轮转。", "severity": "高", "evidence": "git ls-files database/backups/ 列出多个 .sql；database/backups/ 下 6 个 ~108MB dump + zeabur_pre_phase0a_20260520 dump；.gitignore:41 规则添加在文件被跟踪之后", "suggestion": "git rm --cached 这些 dump 并考虑用 git-filter-repo 清史；备份改为外部对象存储+定时任务+保留策略+加密;严禁把含 PII 的 dump 放进工作树。"}, {"title": "完全没有 MES/ERP/LIMS 集成,APS 是数据孤岛", "detail": "全栈 grep 不到任何对外集成层,后端唯一的对外 HTTP 调用是 holidayService 调天行假期 API。批次计划只能在本系统手工建或从工艺包派生,排好的班次只能导 Excel/PDF,无法回写 MES、无法从 ERP 拉生产订单。对要把 APS 嵌进工厂系统闭环的管理员,意味着大量手工搬数据和不一致风险。", "severity": "中", "evidence": "backend 无 integration/ 目录或 MES/ERP/LIMS 客户端(grep 仅 solver callback 与 holiday API)；PROJECT_MAP 后端能力地图亦确认无对外集成", "suggestion": "规划一个 integration 网关:对内提供受保护的 REST/OData 只读导出+webhook,对接 MES 班次回写、ERP 订单导入;先做单向导出(已批准班次推 MES)再做双向。"}, {"title": "没有统一编排文件,容器化部署仍要管理员自己拼装", "detail": "README 第 271 行自己承认:有三个 Dockerfile 但没有 docker-compose 等统一编排;仓库里也确实没有 compose/k8s 清单。前端 Dockerfile 还硬编码了 Zeabur 私网 BACKEND_URL 的假设。管理员要自己解决三服务网络、MySQL 容器/外部库、env 注入、启动顺序与依赖,本地一键(start_all.sh)与容器部署之间存在断层。", "severity": "中", "evidence": "/Users/zhengfengyi/MFG8APS/README.md:271 明确无统一编排;根目录无 docker-compose*；frontend/Dockerfile 含 Zeabur 私网 URL 校验", "suggestion": "提供 docker-compose.yml(含 mysql 服务、健康依赖、env 文件)和一份最小 k8s/Helm 示例;把前端 Dockerfile 的 Zeabur 专属假设抽成可配置。"}, {"title": "没有 .env.sample,环境变量靠读 README/源码", "detail": "README 自己写明'仓库里目前没有维护好的 .env.sample',变量清单散在 README 与 CLAUDE.md;而且老 migrate 脚本用 MYSQL_* 与运行时 DB_* 两套命名并存,容易配错。新管理员上手第一步(配置)就缺一份可直接复制的模板。", "severity": "低", "evidence": "README.md '环境变量' 节明确无 .env.sample；backend/package.json migrate:* 用 MYSQL_* 与运行时 DB_* 不同", "suggestion": "补 backend/.env.sample 与 solver_v4/.env.sample(含全部 DB_*/HOST/PORT/SOLVER_V4_URL/CORS/feature flags 注释),统一迁移脚本到 DB_* 命名。"}, {"title": "后端无优雅停机/连接排空,与其容器部署模型相悖", "detail": "server.ts 里没有任何 SIGTERM/SIGINT 处理、没有 server.close()/pool.end()。在 k8s/Zeabur 滚动更新发 SIGTERM 时,正在处理的请求(尤其长链路的求解组装/SSE)会被硬切,连接池不排空可能产生半截写入。既然这套是按容器部署设计的,缺优雅停机是稳定性硬伤。", "severity": "中", "evidence": "grep server.ts 无 SIGTERM/SIGINT/server.close/pool.end", "suggestion": "加 process.on('SIGTERM') 钩子:停止接新请求→等在途完成或超时→pool.end()→退出;SSE 连接给出收尾。"}], "feature_ideas": [{"title": "认证 + RBAC 接线落地(复用现成 Phase 0A 表)", "detail": "实装 requireAuth/requirePermission 中间件并接上已存在的 users/roles/permissions/RbacDirectoryService,先支持本地账号+JWT,按 SYSTEM/APS/ROSTER/MASTER_DATA 等作用域守护写接口,后续对接企业 SSO/LDAP。这是该角色一切合规/隔离工作的前提,且后端已有一半基础(表+服务)。", "value": "高", "effort": "中"}, {"title": "统一迁移器 + schema_migrations 版本表 + 一键 migrate", "detail": "用 Knex/TypeORM 收编现有 44 个 SQL,建版本记录表,提供 npm run migrate:up/down/status 并统一读 DB_*,部署时自动校验当前库版本与目标版本差异。直接消灭'漏跑/重跑/顺序错/无法回滚'这一类最常见的运维事故。", "value": "高", "effort": "中"}, {"title": "docker-compose / Helm 一键栈 + 部署 runbook", "detail": "提供含 mysql、backend、solver、frontend 的 compose(健康依赖、env 文件、卷)和最小 Helm 示例,配一份部署+备份+回滚 runbook 文档。把现有三个 Dockerfile 的价值真正释放,让新环境从'拼装'变成'一条命令'。", "value": "高", "effort": "中"}, {"title": "深度健康检查 + Prometheus 指标 + 结构化日志", "detail": "/api/health 加 DB 探活与求解器连通性;暴露 /metrics(请求量/错误率/求解时长/候选人数/连接池占用);后端换 pino 并贯穿 request-id 到求解器。让管理员能挂监控告警、能在生产定位'为什么这次求解超时'。可分两期:先健康检查+结构化日志,后指标。", "value": "高", "effort": "中"}, {"title": "全链路操作审计(GMP 友好)", "detail": "在认证拿到 actor 后,用一个通用审计中间件/服务对关键写路径(apply 求解结果、批次/排班/模板/资质 CRUD)统一记录 who/when/what 及前后值,落到已有 status_transition_events 或新审计表,并提供按实体/人/时间查询的接口。直接回应制药行业数据完整性审计诉求。", "value": "高", "effort": "中"}, {"title": "求解请求 PII 治理:默认不落盘 + 脱敏 + 保留期清理", "detail": "把 request_*.json 落盘改为仅 DEBUG 开启,落盘时对员工姓名/请假等字段脱敏,并加定时清理(保留 N 天);把 logs 目录纳入卷与访问控制。低成本消除一个持续增长且不受控的 PII 散落点。", "value": "中", "effort": "低"}, {"title": "自动化备份与恢复:定时 mysqldump→对象存储→保留策略 + 演练脚本", "detail": "提供一个定时备份脚本(加密、上传到 S3/MinIO、按天/周保留)和一键恢复脚本,并把已被 git 跟踪的 ~217MB dump 从仓库及历史清除。把当前'人工偶发 dump 还进了 git'的危险现状,变成可审计、可恢复、不外泄的备份体系。", "value": "中", "effort": "低"}, {"title": "对外集成网关(MES/ERP 优先单向导出)", "detail": "建一个受 RBAC 保护的集成层:先做'已批准班次→MES'的 webhook/推送和受控只读导出(OData/REST),再扩展'ERP 生产订单→batch_plans'导入。把 APS 从孤岛接进工厂闭环,减少手工搬运与不一致。建议在认证落地后再做。", "value": "中", "effort": "高"}], "overall_score": 4, "score_reason": "站在 IT/系统管理员视角，这套系统在\"能不能干净地交付与长期运营\"上短板偏硬。亮点确实有：三服务都有质量不错的多阶段 Dockerfile（求解器上 gunicorn、前端 nginx 正确处理 SSE）、一条带真实 MySQL 集成测试的 CI、start_all.sh 一键本地起栈、helmet/rate-limit/CORS/全局错误处理等卫生层、求解器侧有轮转日志和按 run 的配置摘要——这些把分数从\"不及格深处\"拉了上来。但运维与合规面的缺口几乎都踩在该角色最在意的点上：全系统零认证零授权、连求解回调写入口都敞开(高危且违反制药访问控制)；没有迁移版本表、没有可用 runner、被引用的 phase0a 脚本还缺失，44 个 SQL 靠人脑排序(升级高危)；操作审计形同虚设且 actor 永远为空；健康检查是浅检查、后端无结构化日志/无 trace、无优雅停机；约 217MB 含员工 PII 的整库备份被 git 跟踪、求解 payload 无限落盘成 PII 文件；与 MES/ERP/LIMS 零集成、无统一编排、无 .env.sample。综合来看：做个受控内网 demo 勉强可行，但要在生物制药生产环境合规、稳定、可审计地长期运行，管理员需要补的\"地基\"工作量很大，故给 4 分。"}], "synthesis": {"executive_summary": "MFG8APS 是一套围绕生物制药 CMO 排产排班打造的三服务系统（React 前端 / Express 后端 / Flask+OR-Tools 求解器 + MySQL）。从五个角色的独立评估看，它的真实形态是「一台为排班员打造的、功能颇深的内部排产计算器」，而不是一套面向全工厂、可合规上生产的运营系统。核心 V4 链路（批次→甘特→约束配置→资质预检→求解→进度→结果→手动微调→应用→区间增量重排）骨架完整、细节成熟，约束颗粒度、候选人分级推荐、改动可视化/可撤销、锁定保留与区间重排，都是行业平均之上的能力。这解释了为什么离引擎最近的两个角色给了相对高分（排班员 7、工艺工程师 6）。\n\n但越往「核心高频操作之外」走，体验和成熟度断崖式下跌：领导层 5.5、IT/系统管理员 4、一线操作工仅 2。三个分差极大的角色暴露了同一个结构性真相——系统只服务了「制作排班的人」，却几乎没有服务「被排班的人」「为生产经营负责的人」和「让系统合规跑起来的人」。最致命的短板高度集中且被多角色反复点名：(1) 全系统零认证零授权——所有 /api/*（含求解回调写入口）对任何能连到端口的人完全敞开，RBAC 表已建好却一行未接线；(2) 操作审计形同虚设、actor 永远为 NULL，叠加工艺模板无版本/无 diff/无回滚——对受 GMP 约束的配方与排班数据，这是合规级而非体验级风险；(3) 一线员工没有任何入口，连「我哪天上什么班、做哪道工序」都无法自助查询；(4) 求解无解（INFEASIBLE）是个黑盒，无诊断无松弛建议，把试错成本全压在高频排班员身上。\n\n值得决策层警惕的是，多个高危项不只是「缺功能」，而是「已经在产生风险」：约 217MB 含全员 PII 的整库 dump 已被 git 跟踪（克隆即得全员花名册与病假记录），求解 payload 被无限落盘成含 PII 的 request_*.json（磁盘上已堆 137 个），驾驶舱后端失败时会静默降级到 mock 假数据并照常渲染（领导可能据假数据决策）。这些是「随时间恶化」的负债，越晚处理代价越高。\n\n同时也要看到，很多高价值修复的「地基」其实已经存在，撬动成本低于直觉：RBAC 库表（users/roles/permissions）、审计事件表（status_transition_events 带 actor/request 字段）、求解器侧已算出的公平性与成本量（夜班/周末均衡、三倍薪、加班）、按人组装所需的工序-设备-区域数据、后端已有但 V3 编辑器未接的模板校验接口 editor-validate——这些都是「半成品红利」，让若干 P0/P1 从「从零造」变成「接线/复用」。\n\n如果只做三件事，逻辑链条是：先补「认证+RBAC+审计」这块所有合规与多团队隔离的共同地基（它同时解锁一线员工身份、领导按角色着陆、管理员可审计三件事）；再用已算好的指标补「无解诊断+多方案对比+成本 KPI」这条让排班员和领导都能闭环决策的链路；最后用已存在的数据补「一线员工『我的排班』移动页+变更通知」，把系统从「只服务管理层」变成「服务全员」。这三件事分别击中了合规底线、决策闭环、用户覆盖面三个最大缺口，且都建立在现有半成品之上。", "maturity_level": "一台为排班员打造的、单链路功能颇深的内部排产计算器；距离「面向全工厂、可合规上生产、覆盖全角色」的成熟运营系统还有明显距离。", "cross_cutting_strengths": ["V4 自动排班链路骨架完整且细节成熟：批次→甘特→约束配置→资质预检→求解→实时进度→结果→手动微调（带候选人分级与实时校验）→应用→区间增量重排，全流程闭环可走通，约束/目标颗粒度与锁定保留能力达到成熟 APS 水准（排班员、工艺工程师、领导层共同认可）", "求解所需的底层数据其实相当完整且数据驱动：人力韧性驾驶舱按真实 DB 动态算出 Readiness/瓶颈四象限/关键人员依赖；求解器侧已算出夜班均衡、周末均衡、连续工作上限、三倍薪与加班等公平性/成本维度——很多高价值功能缺的是『呈现』而非『计算』（领导层、操作工均指出这是低成本红利）", "全屏甘特拖拽改时间『所见即所得』，并在生产甘特与工艺模板编辑器中复用，支持操作/阶段·设备/设备多视角切换，是系统里最成熟、最贴合现场心智的交互（排班员、工艺工程师共同认可）", "求解结果质量可追溯且评审门槛低：历史用最优解/可行解(Gap%)/无解/已应用标签 + 岗位填充率着色，并可一键导出 PDF/Excel（排班员、领导层共同认可）", "部署与工程基建有底子：三服务均有多阶段 Dockerfile（求解器上 gunicorn、前端 nginx 正确处理 SSE 长连接），CI 含真实 MySQL 集成测试，start_all.sh 一键本地起栈，并有 helmet/rate-limit/CORS 等基础卫生层（IT/系统管理员认可）", "领导参与生产的 allow/soft/ban 三态策略管控按管理职级精准建模（班组长被刻意排除在『领导』之外），精准命中领导层的策略诉求（领导层、排班员认可）"], "cross_cutting_painpoints": [{"title": "全系统零认证、零授权——所有 API 对任何能连到端口的人完全敞开，且无任何操作审计", "detail": "server.ts 未挂任何 auth 中间件、不存在 middleware/ 目录、routes/controllers 无 requireAuth/requirePermission；连 backend↔solver 的 /callback/progress 与 /callback/result 写入口都无鉴权，可被伪造结果污染并最终 apply 到排班库。RBAC 表(users/roles/permissions)与审计表(status_transition_events 带 actor_user_id)Phase 0A 已建好但一行未接线，actor 因无登录永远为 NULL。对生物制药 CMO：谁都能改排班/删批次/拉全员花名册与病假记录，无法满足任何 GMP 访问控制与数据完整性审计要求，也做不到多团队(USP/DSP/SP&I)数据隔离。这是被 IT 管理员、工艺工程师、操作工三个角色从不同侧面反复点名的同一根问题。", "affected_roles": ["IT / 系统管理员", "工艺工程师 / 工艺模板管理员", "一线操作工 / 技术员", "生产领导层 / 车间主任 / 厂长"], "severity": "高"}, {"title": "完全没有一线员工入口，被排班的人不是系统的『用户』而只是『资源』", "detail": "前端无 login/auth 页、无『我是谁』概念，6 大导航分组与全部路由都是管理视角。操作工无法自助查询『我哪天上什么班、做哪道工序、用哪台设备、在哪个区域』——唯一能看到人-工序-岗位明细的视图(AssignmentsView/PersonnelView)内嵌在排班员的求解结果页且按工序而非按人组织，操作工既无入口也读不懂；HR 月度网格里他那行也只显示班次色块，没有工序/设备。讽刺的是按人组装所需数据(batch_personnel_assignments + resourceName/location)后端都有。叠加系统实质桌面专用（排班页仅 1 处 960px 断点），车间手机几乎不可用。", "affected_roles": ["一线操作工 / 技术员"], "severity": "高"}, {"title": "系统是『排产计划器』而非『生产监控器』——看不到批次执行进度/完成率与产能/成本 KPI", "detail": "批次状态只有 DRAFT/ACTIVATED 两种规划态，无 IN_PROGRESS/COMPLETED/ON_HOLD 执行态，无实际开始/结束与完成度，调度中心后端 4 个接口全是人力维度。求解结果只有『岗位填没填满』，没有把求解器已算好的三倍薪/加班/夜班均衡汇总成领导能看的成本/加班 KPI。厂长拿不到产能利用率、批次完成率、计划 vs 实际偏差这类核心经营 KPI，也无法从成本角度评估方案。", "affected_roles": ["生产领导层 / 车间主任 / 厂长", "排班员 / 生产计划排程员"], "severity": "高"}, {"title": "求解无解(INFEASIBLE)是黑盒：无诊断、无冲突定位、无松弛建议", "detail": "求解失败只在历史里显示红色『无解』Tag，FAILED 行连『查看结果』都没有，结果页无 INFEASIBLE 专用界面只有 error toast。求解器 precheck.py 只覆盖候选为零与单点故障两类（连续天数、领导覆盖、共享组的可行性都不查）。排班员遇到无解只能把数十项配置逐个试关反复试错；领导设完某职级 ban 策略才发现无解。这把判断与试错成本全压在高频用户身上。", "affected_roles": ["排班员 / 生产计划排程员", "生产领导层 / 车间主任 / 厂长"], "severity": "高"}, {"title": "求解历史无法多方案并排对比，调参/选型缺乏数据驱动闭环", "detail": "RunHistoryTab 只能逐条单独查看，全仓无 compare/diff 组件。排班员调权重后无法判断『这版比上版好在哪』；领导评审『保守 vs 激进』方案只能靠记忆或 Excel 手拼。求解器明明算了填充率/缺口/夜班均衡/三倍薪成本，却无法横向比较。", "affected_roles": ["排班员 / 生产计划排程员", "生产领导层 / 车间主任 / 厂长"], "severity": "高"}, {"title": "顶部通知铃铛是装饰件，全系统无任何主动预警/推送机制", "detail": "铃铛是无 onClick 的静态按钮带常亮红点，后端无 notification/alert/sms/wechat/push 任何端点。结果：排班变更不通知操作工（易上错班/漏班）、风险(无解/瓶颈恶化/批次延期/缺口超阈)不主动找领导、一切都要人进系统翻。这是操作工与领导层共同的痛点。", "affected_roles": ["一线操作工 / 技术员", "生产领导层 / 车间主任 / 厂长"], "severity": "中"}, {"title": "工艺模板与求解配置都缺『可控、可追溯、可预见影响』的安全机制", "detail": "工艺侧：模板编辑(改时间/资质)不回写已生成批次、零影响提示、静默数据漂移；无版本/diff/回滚；编辑器即时写库无草稿/撤销，误拖即改线上配方。排班侧：solverConfig 仅存 useState、无 localStorage/无后端保存/无场景预设，每次进入或刷新精心调好的数十项配置全部清零。两者本质相同：高风险变更缺乏暂存、回退、影响预览与持久化。", "affected_roles": ["工艺工程师 / 工艺模板管理员", "排班员 / 生产计划排程员"], "severity": "高"}, {"title": "多代共存(模板 V1/V2/V3、排班 V2/V3/V4、甘特 V4/V5)造成认知负担与能力割裂", "detail": "不仅是『改错代次』的风险，更直接造成能力缺失：工序先后约束(precedence)的编辑 UI 只存在于旧版 V2 GanttModals，活跃的 V3 编辑器只能展示连线不能编辑；模板校验接口 editor-validate 只在 V2 接了、V3 未接。功能散落在不同代次里，新代次反而丢了老代次的能力。", "affected_roles": ["工艺工程师 / 工艺模板管理员", "排班员 / 生产计划排程员"], "severity": "中"}, {"title": "含 PII 的数据资产管理失控，已在持续累积风险", "detail": "约 217MB 含全员(姓名/资质/病假窗口)的整库 dump 已被 git 跟踪（克隆即得，进了历史难抹除）；求解 payload 被无条件落盘成含 PII 的 request_*.json 且无清理(磁盘已堆 137 个)；备份纯手工 mysqldump 无加密无轮转。这是会随时间无限恶化的数据保护负债。", "affected_roles": ["IT / 系统管理员"], "severity": "高"}, {"title": "无统一迁移器与版本表、健康检查浅、无结构化日志/trace、无优雅停机、无 .env.sample", "detail": "44 个 SQL 无 schema_migrations 记录、无可用 runner（被引用的 phase0a 脚本缺失），升级靠人脑排序且无法回滚；/api/health 只回 OK 不探 DB（探针失效）；后端无 pino/winston、388 处 console.* 无 trace 贯穿求解链路；无 SIGTERM 优雅停机与容器部署模型相悖。地基性运维缺口让『稳定可审计长期运行』成本很高。", "affected_roles": ["IT / 系统管理员"], "severity": "中"}, {"title": "驾驶舱后端失败时静默降级为 mock 假数据并照常渲染，可能误导决策", "detail": "只读 API 失败时前端 catch 后用 buildMockFallbackSnapshot 生成假数据走正常渲染路径，仅靠角落一个 MOCK_FALLBACK 小标签提示。领导若没注意角标，会把演示用的假瓶颈/假缺口当真实情况做资源决策。", "affected_roles": ["生产领导层 / 车间主任 / 厂长"], "severity": "中"}, {"title": "工作流在页面间割裂，高频路径被多余跳转打断", "detail": "生产甘特『自动排程』是假按钮（只跳转回 /solver-v4 不排，需重新筛月份/勾批次/配 config）；新建批次后被弹回列表，进甘特要再点一次。领导驾驶舱被埋在『人员与排班』三级菜单、无角色定制着陆页。本可一屏闭环的『调时间→排人→看缺口』被拆成多页来回。", "affected_roles": ["排班员 / 生产计划排程员", "生产领导层 / 车间主任 / 厂长"], "severity": "中"}, {"title": "手动改派不按资质过滤/拦截——求解结果合规但人一改就可能破坏合规", "detail": "AssignmentsView 候选人仅按『班次是否覆盖时间』分档，完全不按操作所需资质过滤或标注，底部仅一行小字提示。生物制药岗位资质是硬合规要求，让排班员肉眼核对极易误派无资质人员且系统不拦截。", "affected_roles": ["排班员 / 生产计划排程员"], "severity": "高"}, {"title": "APS 是数据孤岛，与 MES/ERP/LIMS 零集成", "detail": "全栈唯一对外 HTTP 调用是天行假期 API，无 integration 层。批次只能手工建或从工艺包派生，排好的班只能导 Excel/PDF，无法回写 MES、无法从 ERP 拉生产订单。要把 APS 嵌进工厂闭环需大量手工搬数据，且与『无执行态/无完成率』互为因果——没有 MES 回填，生产监控就无源数据。", "affected_roles": ["IT / 系统管理员", "生产领导层 / 车间主任 / 厂长"], "severity": "中"}], "priority_matrix": [{"feature": "认证 + RBAC 接线落地（复用现成 Phase 0A 表与 RbacDirectoryService，先本地账号+JWT/会话，写接口叠 requirePermission，回调口加共享密钥；长期对接企业 SSO/LDAP）", "value": "高", "effort": "中", "roles_benefiting": ["IT / 系统管理员", "工艺工程师 / 工艺模板管理员", "一线操作工 / 技术员", "生产领导层 / 车间主任 / 厂长"], "priority": "P0"}, {"feature": "全链路操作审计（认证拿到 actor 后，对 apply 结果/批次/排班/模板/资质 CRUD 等写路径统一记录 who/when/what/before-after，落已有 status_transition_events 或新审计表，提供按实体/人/时间查询）", "value": "高", "effort": "中", "roles_benefiting": ["IT / 系统管理员", "工艺工程师 / 工艺模板管理员"], "priority": "P0"}, {"feature": "无解诊断与一键松弛助手（求解 INFEASIBLE 时基于 CP-SAT assumptions/IIS 或分层放松定位最小冲突约束集，用业务语言说明并给『关闭该约束/允许此岗位空缺/放宽工时上限』等可点按钮，点了即重排；先把 precheck 的 ERROR 详情完整渲染到结果页）", "value": "高", "effort": "高", "roles_benefiting": ["排班员 / 生产计划排程员", "生产领导层 / 车间主任 / 厂长"], "priority": "P0"}, {"feature": "求解配置预设库（内置标准/激进/保守三套 + 按团队/场景命名保存载入、设默认，localStorage 兜底 + 后端表持久化）", "value": "高", "effort": "低", "roles_benefiting": ["排班员 / 生产计划排程员"], "priority": "P0"}, {"feature": "求解/排产多方案并排对比页（勾选 2-3 条 run diff 填充率/缺口/加班/三倍薪人天/夜班·周末公平度，高亮更优项，附配置摘要，支持一键采用）", "value": "高", "effort": "中", "roles_benefiting": ["排班员 / 生产计划排程员", "生产领导层 / 车间主任 / 厂长"], "priority": "P0"}, {"feature": "方案成本与加班估算面板（复用求解器已算 triple_salary/overtime/夜班量，结果页汇总为预计加班工时、三倍薪日人天、人均工时偏差并折算估算成本区间）", "value": "高", "effort": "中", "roles_benefiting": ["生产领导层 / 车间主任 / 厂长", "排班员 / 生产计划排程员"], "priority": "P0"}, {"feature": "换人时的资质合规护栏（候选列表按操作资质实时过滤/分级，不达标置灰或二次确认，应用前对全部人工改动做资质与工时硬校验并阻断违规）", "value": "高", "effort": "中", "roles_benefiting": ["排班员 / 生产计划排程员", "生产领导层 / 车间主任 / 厂长"], "priority": "P0"}, {"feature": "『我的排班』移动优先个人页（工号身份登录后竖向卡片展示今天/本周班次，点开显示班次时段/批次/工序/岗位/设备/区域/是否夜班三倍薪；新增按人组装的只读接口）", "value": "高", "effort": "中", "roles_benefiting": ["一线操作工 / 技术员"], "priority": "P1"}, {"feature": "排班变更主动通知 + 一键确认闭环（应用/异常修复后对受影响员工推送变更，员工点『已知悉』回写；先做站内消息让铃铛变真实消息中心，二期接企业微信/短信）", "value": "高", "effort": "中", "roles_benefiting": ["一线操作工 / 技术员", "生产领导层 / 车间主任 / 厂长"], "priority": "P1"}, {"feature": "模板变更影响分析 + 受影响批次同步面板（保存时算引用该模板/工序的批次按 DRAFT/ACTIVATED 分类，DRAFT 可一键重新生成，ACTIVATED 标记需复查并通知计划员）", "value": "高", "effort": "中", "roles_benefiting": ["工艺工程师 / 工艺模板管理员", "排班员 / 生产计划排程员"], "priority": "P1"}, {"feature": "工艺模板版本快照与 diff/回滚（每次保存或显式发布落全量快照到 template_versions，提供版本列表/两版可视化 diff/一键回滚为新版本）", "value": "高", "effort": "中", "roles_benefiting": ["工艺工程师 / 工艺模板管理员", "IT / 系统管理员"], "priority": "P1"}, {"feature": "统一迁移器 + schema_migrations 版本表 + 一键 migrate（收编 44 个 SQL，统一读 DB_*，提供 up/down/status，删/补缺失的 phase0a runner）", "value": "高", "effort": "中", "roles_benefiting": ["IT / 系统管理员"], "priority": "P1"}, {"feature": "求解请求 PII 治理 + 自动化加密备份与恢复（request_*.json 默认不落盘/脱敏/保留期清理；定时 mysqldump→加密→对象存储→保留策略；git rm 已跟踪的 dump 并清史）", "value": "中", "effort": "低", "roles_benefiting": ["IT / 系统管理员"], "priority": "P1"}, {"feature": "领导专属管理着陆页 + 风险预警中心（聚合 Readiness/本月缺口加班/在制批次进度/CRITICAL 资质/待处理风险一屏直达，配合通知做主动预警，结合 RBAC 按角色裁剪导航）", "value": "高", "effort": "中", "roles_benefiting": ["生产领导层 / 车间主任 / 厂长"], "priority": "P1"}, {"feature": "生产进度总览看板（计划 vs 实际，按团队/批次；一期用『计划进度』估算，二期对接 MES 回填实际开始/结束/完成度，需先给 batch_plans 加执行态字段）", "value": "高", "effort": "高", "roles_benefiting": ["生产领导层 / 车间主任 / 厂长"], "priority": "P2"}, {"feature": "V3 编辑器内嵌模板校验 + 问题就地定位（接已有 editor-validate，把未绑定/约束冲突/资质缺口做成侧栏清单并高亮对应操作条，保存前自动校验）", "value": "高", "effort": "低", "roles_benefiting": ["工艺工程师 / 工艺模板管理员", "排班员 / 生产计划排程员"], "priority": "P1"}, {"feature": "在 V3 编辑器直接编辑工序先后约束(precedence)（把旧版 predecessor/successor + lag_time 能力迁进 V3，连线右键或框选两操作添加约束，侧栏可增删改）", "value": "高", "effort": "中", "roles_benefiting": ["工艺工程师 / 工艺模板管理员"], "priority": "P1"}, {"feature": "深度健康检查 + 结构化日志(pino+request-id 贯穿求解链)+ Prometheus 指标 + 优雅停机", "value": "高", "effort": "中", "roles_benefiting": ["IT / 系统管理员"], "priority": "P1"}, {"feature": "生产甘特内嵌『就地排人』（对当前筛选批次直接复用 /solve 发起求解，结果以人员覆盖/空岗色块叠回甘特，消除来回跳转）", "value": "高", "effort": "中", "roles_benefiting": ["排班员 / 生产计划排程员"], "priority": "P1"}, {"feature": "求解进度面板增强（真实计时、当前最优目标值/Gap 趋势、阶段文案、停滞提示，停止时提示采用当前最优解）", "value": "中", "effort": "低", "roles_benefiting": ["排班员 / 生产计划排程员"], "priority": "P2"}, {"feature": "按团队(USP/DSP/SP&I)产能/人力利用率横向对比与排行（驾驶舱与方案结果增加按团队分组小多图/排行榜，一屏看全厂横向对比）", "value": "中", "effort": "中", "roles_benefiting": ["生产领导层 / 车间主任 / 厂长"], "priority": "P2"}, {"feature": "个人公平度看板 + 『我的班次』iCal 订阅（抽取 PersonnelView 公平统计只读给员工本人并与同组中位数对比；后端加 ICS 输出生成 webcal 订阅）", "value": "中", "effort": "低", "roles_benefiting": ["一线操作工 / 技术员"], "priority": "P2"}, {"feature": "员工自助请假/不可用申报（个人页提交→主管审批→写入 unavailable_periods 供下次求解规避，减少 HR 代录与错排）", "value": "高", "effort": "中", "roles_benefiting": ["一线操作工 / 技术员", "排班员 / 生产计划排程员"], "priority": "P2"}, {"feature": "docker-compose / Helm 一键栈 + 部署/备份/回滚 runbook + .env.sample（抽掉前端 Dockerfile 的 Zeabur 专属假设）", "value": "高", "effort": "中", "roles_benefiting": ["IT / 系统管理员"], "priority": "P2"}, {"feature": "一页式管理简报导出(PDF/PPT)（驾驶舱/生产总览自动生成一页 KPI + 瓶颈 Top5 + 建议动作，直接拿去经营会）", "value": "中", "effort": "低", "roles_benefiting": ["生产领导层 / 车间主任 / 厂长"], "priority": "P2"}, {"feature": "对外集成网关(MES/ERP 优先单向导出：已批准班次→MES webhook，再扩展 ERP 订单→batch_plans)", "value": "中", "effort": "高", "roles_benefiting": ["IT / 系统管理员", "生产领导层 / 车间主任 / 厂长"], "priority": "P2"}, {"feature": "领导参与生产政策的影响即时预览（调 allow/soft/ban 时基于 precheck 轻量试算『若设 ban 预计 X 天缺领导覆盖/需额外 Y 人』）", "value": "中", "effort": "中", "roles_benefiting": ["生产领导层 / 车间主任 / 厂长", "排班员 / 生产计划排程员"], "priority": "P2"}, {"feature": "清理求解器死开关与统一命名（soft_night_rest 等读取不消费项，解耦罚项混入 leadership_penalty_vars，确保前端每个可调项真实生效）", "value": "中", "effort": "低", "roles_benefiting": ["排班员 / 生产计划排程员"], "priority": "P2"}], "roadmap": [{"phase": "近期（0-1.5 月）：合规地基 + 高频止血", "items": ["实装认证 + RBAC 中间件并全局 app.use('/api', requireAuth)，写接口叠 requirePermission，复用 Phase 0A 现成表（解锁后续所有按角色/合规能力）", "为 backend↔solver 回调口(/callback/progress、/callback/result)与 solver /solve、/abort 加共享密钥校验，求解器绑定内网", "全链路操作审计：在 apply 结果/批次/排班/模板/资质写路径统一记录 who/when/what，落已有 status_transition_events", "求解配置预设库（标准/激进/保守 + 命名保存载入，localStorage 兜底 + 后端表）——effort 低、对每日重复排班的排班员收益立竿见影", "PII 紧急治理：git rm --cached 已跟踪的 217MB 整库 dump 并清史；request_*.json 默认不落盘/加保留期清理", "把 precheck 的 ERROR/WARNING 详情完整渲染到结果页顶部并高亮涉及批次/岗位，FAILED 行开放进入诊断（无解助手的低成本第一步）", "补 .env.sample 并把迁移脚本统一到 DB_* 命名"], "rationale": "认证/授权/审计是被 4 个角色从不同侧面反复点名的同一根问题，也是 GMP 合规与多团队隔离的前提，必须先做且它解锁后续几乎所有按角色能力；PII 失控与无解黑盒是已在持续产生风险/成本的项，预设库是低成本高频止血。这一阶段把『随时间恶化的负债』和『最高频的日常痛点』先按住。"}, {"phase": "中期（1.5-4 月）：决策闭环 + 全角色覆盖 + 工艺安全", "items": ["无解诊断与一键松弛助手（CP-SAT assumptions/IIS 或分层放松定位最小冲突集 + 业务语言松弛按钮，点了即重排）", "求解多方案并排对比页 + 方案成本/加班估算面板（复用求解器已算指标，服务排班员调参与领导拍板）", "换人时的资质合规护栏（候选按资质过滤/分级 + 应用前硬校验阻断违规）——GMP 红线", "『我的排班』移动优先个人页（按人组装现有数据）+ 排班变更主动通知与一键确认（铃铛变真实消息中心）", "工艺侧安全三件套：模板变更影响分析与受影响批次同步、模板版本快照与 diff/回滚、V3 编辑器接 editor-validate 校验并迁入 precedence 约束编辑", "领导专属管理着陆页 + 风险预警中心（结合 RBAC 按角色裁剪导航，修复驾驶舱 mock 静默降级）", "统一迁移器 + schema_migrations 版本表 + 一键 migrate；深度健康检查 + 结构化日志(request-id 贯穿求解链)+ 优雅停机", "生产甘特内嵌『就地排人』消除跳转"], "rationale": "地基铺好后，用『已算好但没呈现』的指标快速补齐排班员与领导共同需要的决策闭环（无解诊断/多方案对比/成本KPI）；同时把操作工真正变成系统用户、把工艺配方变成可追溯可预见影响——这些都建立在中期已有的身份与审计之上，且多为『接线/复用半成品』而非从零造，性价比最高。"}, {"phase": "远期（4 月以后）：生产经营全局 + 工厂闭环", "items": ["生产进度总览看板：先给 batch_plans 加执行态(IN_PROGRESS/COMPLETED/ON_HOLD)/实际开始结束/完成度字段做『计划进度』估算，再对接 MES 回填实际进度", "对外集成网关：先做『已批准班次→MES』单向 webhook/受控只读导出，再扩展『ERP 生产订单→batch_plans』导入", "按团队(USP/DSP/SP&I)产能/人力利用率横向对比与排行 + 一页式管理简报(PDF/PPT)导出", "员工自助请假/不可用申报审批流 + 个人公平度看板 + iCal 订阅 + 扫码看岗", "docker-compose/Helm 一键栈 + 部署/备份/回滚 runbook + Prometheus 指标告警", "对接企业 SSO/LDAP，清理多代共存（沉淀 V4 为唯一活跃链路，下线 V2/V3 冗余）"], "rationale": "补『系统是排产计划器而非生产监控器』这个对厂长最大的盲区——但它强依赖执行态字段与 MES 集成（投入大、依赖外部系统），故置于远期；同时把工厂闭环、企业级身份对接与多代技术债收口，让系统从『可合规运行的内部工具』走向『嵌进工厂运营的成熟系统』。"}], "role_scores": [{"role": "排班员 / 生产计划排程员", "score": 7}, {"role": "生产领导层 / 车间主任 / 厂长", "score": 5.5}, {"role": "一线操作工 / 技术员", "score": 2}, {"role": "工艺工程师 / 工艺模板管理员", "score": 6}, {"role": "IT / 系统管理员", "score": 4}], "top_three": ["补合规地基——认证 + RBAC + 全链路操作审计：复用 Phase 0A 已建好的库表实装 requireAuth/requirePermission 并堵上无鉴权的求解回调写入口，在关键写路径记录 who/when/what。这是被 4 个角色反复点名的同一根问题，是 GMP 合规、多团队数据隔离的前提，并一举解锁『一线员工身份、领导按角色着陆、管理员可审计』三件事。", "补决策闭环——无解诊断 + 多方案对比 + 成本/加班 KPI：把求解器『已经算好但从未呈现』的冲突约束、三倍薪/加班/公平度指标，做成无解时的业务语言松弛建议、历史 run 的并排 diff、结果页的成本估算。直击排班员『出问题就抓瞎、调参无从验证』与领导『没有经营/成本口径、无法 A vs B 拍板』两个最痛点，且多为复用而非从零造。", "补用户覆盖面——『我的排班』移动个人页 + 排班变更主动通知：用后端已有的按人数据(batch_personnel_assignments + resourceName/location)做工号登录后的移动只读个人页，并让排班『应用/变更』后真实推送给受影响员工。把占工厂人数最多、当前评分仅 2 分的一线操作工从『被排进系统的资源』变成『系统的用户』，直接消除上错班/漏班的生产连续性风险。"]}}</script>
+<script>
+(function(){
+  "use strict";
+  function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+  function safe(id,fn){try{fn();}catch(e){var el=document.getElementById("err-"+id);if(el){el.textContent="（渲染出错："+e.message+"）";}if(window.console)console.error(id,e);}}
+  function el(id){return document.getElementById(id);}
+  function shortRole(full){
+    if(/排班员|排程/.test(full))return"排班员";
+    if(/领导|厂长|主任/.test(full))return"领导层";
+    if(/操作工|一线|技术员/.test(full))return"一线员工";
+    if(/工艺/.test(full))return"工艺工程师";
+    if(/IT|管理员|系统/.test(full))return"IT管理员";
+    return full;
+  }
+  function scoreColor(s){if(s<3)return"#dc2626";if(s<5)return"#f59e0b";if(s<6.5)return"#eab308";return"#16a34a";}
+
+  var DATA;
+  try{DATA=JSON.parse(document.getElementById("report-data").textContent);}catch(e){DATA={roles:[],synthesis:{}};}
+  var roles=DATA.roles||[];
+  var syn=DATA.synthesis||{};
+
+  /* ---- hero ---- */
+  safe("hero",function(){
+    var scores=(syn.role_scores||roles.map(function(r){return{role:r.role,score:r.overall_score};}));
+    var avg=scores.reduce(function(a,b){return a+(b.score||0);},0)/(scores.length||1);
+    el("hero-avg").innerHTML=(Math.round(avg*10)/10)+'<small>/10</small>';
+    el("hero-maturity").textContent=syn.maturity_level||"";
+  });
+
+  /* ---- 1 exec ---- */
+  safe("exec",function(){
+    var html="";
+    (syn.executive_summary||"").split(/\n\n+/).forEach(function(p){if(p.trim())html+="<p>"+esc(p.trim())+"</p>";});
+    el("exec-body").innerHTML=html;
+  });
+  safe("maturity",function(){el("maturity").textContent="成熟度定性："+(syn.maturity_level||"");});
+  safe("top3",function(){
+    var html="";(syn.top_three||[]).forEach(function(t){html+='<div class="item"><div class="n"></div><div class="txt">'+esc(t)+'</div></div>';});
+    el("top3-body").innerHTML=html;
+  });
+
+  /* ---- 4a score bar chart ---- */
+  safe("scores",function(){
+    var data=roles.map(function(r){return{name:shortRole(r.role),full:r.role,score:r.overall_score};});
+    var W=460,rowH=46,padL=88,padR=46,top=10,barMax=W-padL-padR;
+    var H=top+data.length*rowH+10;
+    var s='<svg viewBox="0 0 '+W+' '+H+'" role="img">';
+    for(var g=0;g<=10;g+=2){var gx=padL+barMax*g/10;s+='<line x1="'+gx+'" y1="'+top+'" x2="'+gx+'" y2="'+(top+data.length*rowH-8)+'" stroke="#f1f5f9"/><text x="'+gx+'" y="'+(H-2)+'" font-size="9" fill="#cbd5e1" text-anchor="middle">'+g+'</text>';}
+    data.forEach(function(d,i){
+      var y=top+i*rowH, bw=barMax*d.score/10, c=scoreColor(d.score);
+      s+='<text x="'+(padL-8)+'" y="'+(y+22)+'" font-size="12.5" font-weight="700" fill="#334155" text-anchor="end">'+esc(d.name)+'</text>';
+      s+='<rect x="'+padL+'" y="'+(y+8)+'" width="'+barMax+'" height="22" rx="6" fill="#f1f5f9"/>';
+      s+='<rect x="'+padL+'" y="'+(y+8)+'" width="'+bw+'" height="22" rx="6" fill="'+c+'"/>';
+      s+='<text x="'+(padL+bw+7)+'" y="'+(y+24)+'" font-size="13" font-weight="800" fill="'+c+'">'+d.score+'</text>';
+    });
+    s+='</svg>';
+    el("chart-scores").innerHTML=s;
+  });
+
+  /* ---- 4b severity stacked ---- */
+  safe("sev",function(){
+    var data=roles.map(function(r){
+      var c={高:0,中:0,低:0};(r.painpoints||[]).forEach(function(p){if(c[p.severity]!=null)c[p.severity]++;});
+      return{name:shortRole(r.role),c:c,total:(r.painpoints||[]).length};
+    });
+    var maxT=Math.max.apply(null,data.map(function(d){return d.total;}).concat([1]));
+    var W=460,rowH=44,padL=80,padR=40,top=8,barMax=W-padL-padR;
+    var H=top+data.length*rowH+8;
+    var col={高:"#dc2626",中:"#f59e0b",低:"#cbd5e1"};
+    var s='<svg viewBox="0 0 '+W+' '+H+'" role="img">';
+    data.forEach(function(d,i){
+      var y=top+i*rowH, x=padL;
+      s+='<text x="'+(padL-8)+'" y="'+(y+24)+'" font-size="12.5" font-weight="700" fill="#334155" text-anchor="end">'+esc(d.name)+'</text>';
+      ["高","中","低"].forEach(function(k){
+        var w=barMax*d.c[k]/maxT;
+        if(d.c[k]>0){s+='<rect x="'+x+'" y="'+(y+9)+'" width="'+w+'" height="22" fill="'+col[k]+'"/>';
+          if(w>16)s+='<text x="'+(x+w/2)+'" y="'+(y+24)+'" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">'+d.c[k]+'</text>';
+          x+=w;}
+      });
+      s+='<text x="'+(x+6)+'" y="'+(y+24)+'" font-size="11.5" fill="#94a3b8">共 '+d.total+'</text>';
+    });
+    s+='</svg>';
+    el("chart-sev").innerHTML=s;
+  });
+
+  /* ---- 5 roles ---- */
+  safe("roles",function(){
+    var html="";
+    roles.forEach(function(r){
+      var c=scoreColor(r.overall_score);
+      html+='<div class="role-block"><div class="role-bar">';
+      html+='<div class="r-name">'+esc(r.role)+'</div>';
+      html+='<div class="r-score">当前可用性<b>'+r.overall_score+'</b>/10</div></div>';
+      html+='<div class="role-body">';
+      html+='<div class="role-meta"><b>角色定位：</b>'+esc(r.role_summary)+'</div>';
+      html+='<div class="role-meta"><b>典型工作流：</b>'+esc(r.typical_workflow)+'</div>';
+
+      html+='<div class="subhead"><span class="dot dot-s"></span>好用之处 · 优点（'+(r.strengths||[]).length+'）</div>';
+      html+='<table><thead><tr><th style="width:30%">亮点</th><th>说明与证据</th></tr></thead><tbody>';
+      (r.strengths||[]).forEach(function(x){
+        html+='<tr><td class="t-title">'+esc(x.title)+'</td><td><div class="t-detail">'+esc(x.detail)+'</div><span class="evi">证据：<code>'+esc(x.evidence)+'</code></span></td></tr>';
+      });
+      html+='</tbody></table>';
+
+      html+='<div class="subhead"><span class="dot dot-p"></span>待改进之处 · 痛点（'+(r.painpoints||[]).length+'）</div>';
+      html+='<table><thead><tr><th style="width:26%">问题</th><th style="width:8%">严重度</th><th>说明 · 证据 · 建议</th></tr></thead><tbody>';
+      (r.painpoints||[]).forEach(function(x){
+        html+='<tr><td class="t-title">'+esc(x.title)+'</td><td><span class="badge sev-'+x.severity+'">'+esc(x.severity)+'</span></td><td><div class="t-detail">'+esc(x.detail)+'</div><span class="evi">证据：<code>'+esc(x.evidence)+'</code></span><span class="fix">'+esc(x.suggestion)+'</span></td></tr>';
+      });
+      html+='</tbody></table>';
+
+      html+='<div class="subhead"><span class="dot dot-f"></span>可新增功能 · 建议（'+(r.feature_ideas||[]).length+'）</div>';
+      html+='<table><thead><tr><th style="width:28%">功能</th><th style="width:8%">价值</th><th style="width:8%">成本</th><th>说明</th></tr></thead><tbody>';
+      (r.feature_ideas||[]).forEach(function(x){
+        html+='<tr><td class="t-title">'+esc(x.title)+'</td><td><span class="badge val-'+x.value+'">'+esc(x.value)+'</span></td><td><span class="badge sev-'+x.effort+'">'+esc(x.effort)+'</span></td><td><div class="t-detail">'+esc(x.detail)+'</div></td></tr>';
+      });
+      html+='</tbody></table>';
+
+      if(r.score_reason&&r.score_reason!=="见 score_reason"){
+        html+='<div class="score-reason"><b>评分理由（'+r.overall_score+'/10）：</b>'+esc(r.score_reason)+'</div>';
+      }
+      html+='</div></div>';
+    });
+    el("roles-body").innerHTML=html;
+  });
+
+  /* ---- 6 cross ---- */
+  safe("cs",function(){
+    var html="";(syn.cross_cutting_strengths||[]).forEach(function(s){html+="<li>"+esc(s)+"</li>";});
+    el("cross-strengths").innerHTML=html;
+  });
+  safe("cp",function(){
+    var arr=(syn.cross_cutting_painpoints||[]).slice();
+    var sev={高:3,中:2,低:1};
+    arr.sort(function(a,b){var d=(sev[b.severity]||0)-(sev[a.severity]||0);if(d)return d;return (b.affected_roles||[]).length-(a.affected_roles||[]).length;});
+    var html='<table><thead><tr><th style="width:4%">#</th><th style="width:26%">共性痛点</th><th style="width:7%">严重度</th><th style="width:16%">受影响角色</th><th>详情</th></tr></thead><tbody>';
+    arr.forEach(function(p,i){
+      var tags="";(p.affected_roles||[]).forEach(function(rr){tags+='<span class="tag">'+esc(shortRole(rr))+'</span>';});
+      html+='<tr><td class="muted">'+(i+1)+'</td><td class="t-title">'+esc(p.title)+'</td><td><span class="badge sev-'+p.severity+'">'+esc(p.severity)+'</span></td><td>'+tags+'</td><td><div class="t-detail">'+esc(p.detail)+'</div></td></tr>';
+    });
+    html+='</tbody></table>';
+    el("cross-pain").innerHTML=html;
+  });
+
+  /* ---- 7 priority ---- */
+  safe("quad",function(){
+    var pm=syn.priority_matrix||[];
+    el("pm-count").textContent=pm.length;
+    // grid: x=effort(低,中,高) ; y=value(高,中,低)
+    var effIdx={低:0,中:1,高:2}, valIdx={高:0,中:1,低:2};
+    var cells={};pm.forEach(function(p,i){var k=valIdx[p.value]+"_"+effIdx[p.effort];(cells[k]=cells[k]||[]).push({n:i+1,p:p.priority});});
+    var W=720,H=560,padL=86,padT=48,gw=(W-padL-20)/3,gh=(H-padT-66)/3;
+    var priCol={P0:"#dc2626",P1:"#f59e0b",P2:"#2563eb"};
+    var perRow=Math.floor((gw-20)/30);
+    var s='<svg viewBox="0 0 '+W+' '+H+'" role="img">';
+    // quadrant background tint (top-left = quick win)
+    s+='<rect x="'+padL+'" y="'+padT+'" width="'+gw+'" height="'+gh+'" fill="#f0fdf4"/>';
+    // grid
+    for(var r=0;r<3;r++)for(var c=0;c<3;c++){
+      var x=padL+c*gw,y=padT+r*gh;
+      s+='<rect x="'+x+'" y="'+y+'" width="'+gw+'" height="'+gh+'" fill="none" stroke="#e2e8f0"/>';
+      var list=cells[r+"_"+c]||[];
+      list.forEach(function(it,k){
+        var col=k%perRow,row=Math.floor(k/perRow);
+        var cx=x+20+col*30,cy=y+22+row*29;
+        s+='<circle cx="'+cx+'" cy="'+cy+'" r="11" fill="'+priCol[it.p]+'"/><text x="'+cx+'" y="'+(cy+4)+'" font-size="10.5" font-weight="700" fill="#fff" text-anchor="middle">'+it.n+'</text>';
+      });
+    }
+    // axis labels
+    s+='<text x="'+(padL+gw*1.5)+'" y="'+(H-16)+'" font-size="13" font-weight="700" fill="#334155" text-anchor="middle">实现成本 →（越往右越贵）</text>';
+    var exs=["低","中","高"];for(var c2=0;c2<3;c2++)s+='<text x="'+(padL+c2*gw+gw/2)+'" y="'+(H-38)+'" font-size="11.5" fill="#64748b" text-anchor="middle">成本'+exs[c2]+'</text>';
+    s+='<text x="22" y="'+(padT+gh*1.5)+'" font-size="13" font-weight="700" fill="#334155" text-anchor="middle" transform="rotate(-90 22 '+(padT+gh*1.5)+')">价值 →（越往上越值）</text>';
+    var eys=["高","中","低"];for(var r2=0;r2<3;r2++)s+='<text x="'+(padL-12)+'" y="'+(padT+r2*gh+gh/2+4)+'" font-size="11.5" fill="#64748b" text-anchor="end">价值'+eys[r2]+'</text>';
+    s+='<text x="'+(padL+8)+'" y="'+(padT+16)+'" font-size="11" font-weight="800" fill="#16a34a">★ 快赢区（高价值·低成本）</text>';
+    s+='</svg>';
+    el("chart-quad").innerHTML=s;
+  });
+  safe("pm",function(){
+    var pm=syn.priority_matrix||[];
+    var order={P0:0,P1:1,P2:2};
+    var idx=pm.map(function(p,i){return{p:p,n:i+1};});
+    idx.sort(function(a,b){return (order[a.p.priority]||9)-(order[b.p.priority]||9);});
+    var html='<table><thead><tr><th style="width:4%">#</th><th style="width:6%">优先级</th><th style="width:40%">功能</th><th style="width:7%">价值</th><th style="width:7%">成本</th><th>受益角色</th></tr></thead><tbody>';
+    idx.forEach(function(o){
+      var p=o.p,tags="";(p.roles_benefiting||[]).forEach(function(rr){tags+='<span class="tag">'+esc(shortRole(rr))+'</span>';});
+      html+='<tr><td class="muted">'+o.n+'</td><td><span class="badge pri-'+p.priority+'">'+esc(p.priority)+'</span></td><td class="t-title">'+esc(p.feature)+'</td><td><span class="badge val-'+p.value+'">'+esc(p.value)+'</span></td><td><span class="badge sev-'+p.effort+'">'+esc(p.effort)+'</span></td><td>'+tags+'</td></tr>';
+    });
+    html+='</tbody></table>';
+    el("pm-table").innerHTML=html;
+  });
+
+  /* ---- 8 roadmap ---- */
+  safe("rm",function(){
+    var rm=syn.roadmap||[];
+    var colors=["#dc2626","#f59e0b","#2563eb"];
+    // timeline svg
+    var W=960,H=90,padL=20;
+    var seg=(W-2*padL)/rm.length;
+    var s='<div class="chart-wrap"><h3>三阶段演进时间线</h3><svg viewBox="0 0 '+W+' '+H+'" role="img">';
+    s+='<line x1="'+padL+'" y1="45" x2="'+(W-padL)+'" y2="45" stroke="#e2e8f0" stroke-width="3"/>';
+    rm.forEach(function(p,i){
+      var cx=padL+seg*i+seg/2;
+      s+='<line x1="'+(padL+seg*i+10)+'" y1="45" x2="'+(padL+seg*(i+1)-10)+'" y2="45" stroke="'+colors[i%3]+'" stroke-width="5" stroke-linecap="round"/>';
+      s+='<circle cx="'+cx+'" cy="45" r="12" fill="'+colors[i%3]+'"/><text x="'+cx+'" y="49" font-size="12" font-weight="800" fill="#fff" text-anchor="middle">'+(i+1)+'</text>';
+      var label=esc(p.phase.split("：")[0]);
+      s+='<text x="'+cx+'" y="24" font-size="12.5" font-weight="700" fill="#334155" text-anchor="middle">'+label+'</text>';
+      s+='<text x="'+cx+'" y="74" font-size="10.5" fill="#94a3b8" text-anchor="middle">'+(p.items||[]).length+' 项</text>';
+    });
+    s+='</svg></div>';
+    el("chart-roadmap").innerHTML=s;
+
+    var html="";
+    rm.forEach(function(p,i){
+      html+='<div class="card phase"><h3 style="color:'+colors[i%3]+'">阶段 '+(i+1)+' · '+esc(p.phase)+'</h3><ul>';
+      (p.items||[]).forEach(function(it){html+="<li>"+esc(it)+"</li>";});
+      html+='</ul><div class="why"><b>为什么这样排：</b>'+esc(p.rationale)+'</div></div>';
+    });
+    el("roadmap-body").innerHTML=html;
+  });
+
+  /* ---- toc scrollspy ---- */
+  safe("toc",function(){
+    var links=[].slice.call(document.querySelectorAll("#toc a"));
+    var secs=links.map(function(a){return document.querySelector(a.getAttribute("href"));});
+    function onScroll(){
+      var y=window.scrollY+90,cur=0;
+      secs.forEach(function(se,i){if(se&&se.offsetTop<=y)cur=i;});
+      links.forEach(function(a,i){a.classList.toggle("active",i===cur);});
+    }
+    window.addEventListener("scroll",onScroll,{passive:true});onScroll();
+  });
+})();
+</script>
+</body>
+</html>

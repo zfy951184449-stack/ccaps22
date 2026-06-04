@@ -5,6 +5,20 @@
 
 // ===== Data Types =====
 
+export interface GanttPersonnelAssignment {
+  id: number;
+  positionNumber: number;
+  employeeId: number;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  role?: string | null;
+  status?: string | null;
+  shiftPlanId?: number | null;
+  shiftCode?: string | null;
+  shiftName?: string | null;
+  planDate?: string | null;
+}
+
 export interface GanttTask {
   id: string;
   label: string;
@@ -30,6 +44,8 @@ export interface GanttTask {
   requiredPeople?: number;
   /** Assigned people count */
   assignedPeople?: number;
+  /** Detailed personnel assignments by operation position */
+  personnelAssignments?: GanttPersonnelAssignment[];
   /** Visual type for rendering */
   type?: 'operation' | 'stage' | 'timeWindow';
   /** Conflict highlight type */
@@ -160,6 +176,10 @@ export interface WxbGanttChartProps {
   enableFullscreen?: boolean;
   /** Read-only mode (default: false) */
   readOnly?: boolean;
+  /** Clamp single-task drag to each task's [windowStart, windowEnd] (default: true).
+   *  Set false to let tasks move freely across the timeline regardless of their time window;
+   *  the window is then a visual hint only and no longer restricts dragging. */
+  clampDragToWindow?: boolean;
   /** Initial day width in px (default: 120) */
   initialDayWidth?: number;
   /** Zoom range [min, max] dayWidth (default: [40, 600]) */

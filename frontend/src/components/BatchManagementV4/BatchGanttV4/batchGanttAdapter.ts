@@ -146,6 +146,7 @@ export function buildBatchGanttModel(
                         resizable: true,
                         requiredPeople: operation.requiredPeople,
                         assignedPeople: operation.assignedPeople,
+                        personnelAssignments: operation.personnelAssignments,
                         windowStart,
                         windowEnd,
                         data: {

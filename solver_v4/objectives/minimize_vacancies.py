@@ -33,6 +33,7 @@ class MinimizeVacanciesObjective(ObjectiveBase):
         
         config = data.config or {}
         base_weight = int(config.get("objective_weight_vacancy", 10000))
+        standalone_weight = int(config.get("objective_weight_standalone_vacancy", 5000))
         
         # 1. 计算高峰日乘数 (基于需人数)
         date_personnel_demand = defaultdict(int)
@@ -57,7 +58,11 @@ class MinimizeVacanciesObjective(ObjectiveBase):
             meta = op_metadata.get(op_id, {})
             date = meta.get('date', '')
             start_hour = meta.get('start_hour', 12)
-            
+
+            # 独立任务用专属空缺权重，批次操作用通用空缺权重
+            is_standalone = meta.get('source_type', 'BATCH') == 'STANDALONE'
+            term_base = standalone_weight if is_standalone else base_weight
+
             # 高峰日乘数
             peak_mult = peak_multipliers.get(date, 1.0)
             
@@ -70,7 +75,7 @@ class MinimizeVacanciesObjective(ObjectiveBase):
             off_hours_mult = off_hours_mult_setting if is_off_hours else 1.0
             
             # 最终权重
-            final_weight = int(base_weight * peak_mult * off_hours_mult)
+            final_weight = int(term_base * peak_mult * off_hours_mult)
             weighted_terms.append(final_weight * var)
         
         self.log(f"Built weighted vacancy objective: {len(weighted_terms)} terms. Base: {base_weight}, Off-Hours Mult: {config.get('off_hours_multiplier', self.OFF_HOURS_MULTIPLIER)}")

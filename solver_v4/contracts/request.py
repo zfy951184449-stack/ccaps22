@@ -121,6 +121,7 @@ class HistoricalShift:
     is_work: bool   # 是否上班 (PRODUCTION/BASE)
     is_night: bool  # 是否夜班
     consecutive_work_days: int = 0  # 截止该日期的连续工作天数
+    consecutive_rest_days: int = 0  # 截止该日期的连续休息天数（rest 边界约束用）
 
 @dataclass
 class Resource:

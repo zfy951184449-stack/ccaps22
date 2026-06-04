@@ -21,8 +21,10 @@ interface GanttTooltipProps {
   avoidRects?: GanttAvoidRect[];
 }
 
-const TOOLTIP_W = 260;
-const TOOLTIP_H = 168;
+const TOOLTIP_W = 304;
+const TOOLTIP_BASE_H = 142;
+const ASSIGNMENT_ROW_H = 20;
+const MAX_VISIBLE_ASSIGNMENTS = 6;
 const GAP = 12;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -39,12 +41,12 @@ const unionRects = (rects: GanttAvoidRect[]) => rects.reduce((acc, rect) => ({
   bottom: Math.max(acc.bottom, rect.bottom),
 }), rects[0]);
 
-function resolvePosition(x: number, y: number, avoidRects: GanttAvoidRect[] = []) {
+function resolvePosition(x: number, y: number, avoidRects: GanttAvoidRect[] = [], tooltipHeight = TOOLTIP_BASE_H) {
   const vw = typeof window === 'undefined' ? 1440 : window.innerWidth;
   const vh = typeof window === 'undefined' ? 900 : window.innerHeight;
   const margin = 8;
   const maxLeft = Math.max(margin, vw - TOOLTIP_W - margin);
-  const maxTop = Math.max(margin, vh - TOOLTIP_H - margin);
+  const maxTop = Math.max(margin, vh - tooltipHeight - margin);
 
   const normalize = (left: number, top: number) => ({
     left: clamp(left, margin, maxLeft),
@@ -54,7 +56,7 @@ function resolvePosition(x: number, y: number, avoidRects: GanttAvoidRect[] = []
     left,
     top,
     right: left + TOOLTIP_W,
-    bottom: top + TOOLTIP_H,
+    bottom: top + tooltipHeight,
   });
   const fits = (left: number, top: number) => {
     const rect = candidateRect(left, top);
@@ -69,14 +71,34 @@ function resolvePosition(x: number, y: number, avoidRects: GanttAvoidRect[] = []
 
   const avoid = unionRects(avoidRects);
   const candidates = [
-    { left: avoid.right + GAP, top: y - TOOLTIP_H / 2 },
-    { left: avoid.left - TOOLTIP_W - GAP, top: y - TOOLTIP_H / 2 },
+    { left: avoid.right + GAP, top: y - tooltipHeight / 2 },
+    { left: avoid.left - TOOLTIP_W - GAP, top: y - tooltipHeight / 2 },
     { left: x + GAP, top: avoid.bottom + GAP },
-    { left: x + GAP, top: avoid.top - TOOLTIP_H - GAP },
+    { left: x + GAP, top: avoid.top - tooltipHeight - GAP },
   ].map((position) => normalize(position.left, position.top));
 
   return candidates.find((position) => fits(position.left, position.top)) ?? normalize(avoid.right + GAP, y + GAP);
 }
+
+const formatEmployee = (assignment: NonNullable<GanttTask['personnelAssignments']>[number]) => {
+  const name = assignment.employeeName || assignment.employeeCode || (
+    Number.isFinite(assignment.employeeId) ? `员工 ${assignment.employeeId}` : '未指定员工'
+  );
+
+  if (assignment.employeeName && assignment.employeeCode) {
+    return `${assignment.employeeName} (${assignment.employeeCode})`;
+  }
+
+  return name;
+};
+
+const formatPersonnelSummary = (assignedPeople: number | undefined, requiredPeople: number | undefined, detailCount: number) => {
+  const assigned = detailCount > 0 ? detailCount : assignedPeople;
+  if (requiredPeople === undefined) {
+    return assigned !== undefined ? `${assigned} 人` : '—';
+  }
+  return `${assigned ?? 0}/${requiredPeople}`;
+};
 
 const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidRects }) => {
   if (!visible || !task) return null;
@@ -91,7 +113,13 @@ const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidR
   const displayEnd = typeof task.data?.displayEnd === 'string'
     ? task.data.displayEnd
     : formatHour(task.end);
-  const position = resolvePosition(x, y, avoidRects);
+  const personnelAssignments = task.personnelAssignments ?? [];
+  const visibleAssignments = personnelAssignments.slice(0, MAX_VISIBLE_ASSIGNMENTS);
+  const hiddenAssignmentCount = personnelAssignments.length - visibleAssignments.length;
+  const tooltipHeight = TOOLTIP_BASE_H
+    + visibleAssignments.length * ASSIGNMENT_ROW_H
+    + (hiddenAssignmentCount > 0 ? ASSIGNMENT_ROW_H : 0);
+  const position = resolvePosition(x, y, avoidRects, tooltipHeight);
 
   return (
     <div
@@ -133,16 +161,46 @@ const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidR
             <span style={{ color: THEME.fg3 }}>时长</span>
             <span>{durationText}</span>
           </div>
-          {task.progress !== undefined && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: THEME.fg3 }}>进度</span>
-              <span>{task.progress}%</span>
-            </div>
-          )}
           {task.requiredPeople !== undefined && (
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: THEME.fg3 }}>人员</span>
-              <span>{task.assignedPeople ?? '—'}/{task.requiredPeople}</span>
+            <div style={{ marginTop: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ color: THEME.fg3 }}>人员</span>
+                <span>{formatPersonnelSummary(task.assignedPeople, task.requiredPeople, personnelAssignments.length)}</span>
+              </div>
+              {visibleAssignments.length > 0 ? (
+                <div style={{ marginTop: 4, display: 'grid', gap: 2 }}>
+                  {visibleAssignments.map((assignment, index) => {
+                    const meta = [assignment.role, assignment.shiftName].filter(Boolean).join(' · ');
+                    const label = `位置 ${assignment.positionNumber ?? index + 1}`;
+                    return (
+                      <div
+                        key={assignment.id ?? `${assignment.employeeId}-${index}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '64px 1fr',
+                          columnGap: 8,
+                          color: THEME.fg2,
+                        }}
+                      >
+                        <span style={{ color: THEME.fg3 }}>{label}</span>
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {formatEmployee(assignment)}
+                          {meta ? ` · ${meta}` : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {hiddenAssignmentCount > 0 && (
+                    <div style={{ color: THEME.fg3 }}>
+                      另有 {hiddenAssignmentCount} 人已安排
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ marginTop: 2, color: THEME.fg3 }}>
+                  {(task.assignedPeople ?? 0) > 0 ? '已安排人员暂无明细' : '暂无已安排人员'}
+                </div>
+              )}
             </div>
           )}
           {task.status && (

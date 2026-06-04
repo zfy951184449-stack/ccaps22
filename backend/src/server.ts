@@ -1,3 +1,6 @@
+// IMPORTANT: 必须是第一条 import —— 在认证链(requireAuth→JwtService 会在模块加载时
+// fail-fast 读 JWT_SECRET)及其它读 env 的模块求值前加载 .env。详见 config/loadEnv.ts。
+import './config/loadEnv';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -50,6 +53,9 @@ import v3BioprocessRoutes from './routes/v3Bioprocess';
 import standaloneTaskRoutes from './routes/standaloneTaskRoutes';
 import rosterExceptionRoutes from './routes/rosterExceptions';
 import rosterLeadershipCockpitRoutes from './routes/rosterLeadershipCockpit';
+import authRoutes from './routes/auth';
+import governanceRoutes from './routes/governance';
+import requireAuth from './middleware/requireAuth';
 
 dotenv.config();
 
@@ -104,6 +110,32 @@ app.use('/api', apiLimiter);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// --- Auth: 公开认证端点（登录/登出/改密/我），挂在全局 requireAuth 之前，
+// 以便未带令牌也能访问 /api/auth/login。需登录的端点在 routes/auth.ts 内部各自挂 requireAuth。
+app.use('/api/auth', authRoutes);
+
+// --- Auth: 全局认证中间件（默认 AUTH_ENFORCE=false 影子模式：有 token 就装配 req.user，
+// 无/坏 token 也放行，绝不拦现有前端）。以下路径不经此中间件：
+//   - /api/health：存活探针，必须公开。
+//   - solver 机器路径（/api/v4/scheduling/callback/* 与 .../runs/:id/status）：
+//     由 requireServiceAuth（共享密钥）保护或供 solver 轮询，不应被人类 JWT 认证拦截。
+const AUTH_BYPASS_PREFIXES = ['/api/health'];
+const isSolverMachinePath = (urlPath: string): boolean => {
+  // 形如 /api/v4/scheduling/callback/progress、/callback/result
+  if (urlPath.startsWith('/api/v4/scheduling/callback/')) return true;
+  // 形如 /api/v4/scheduling/runs/<id>/status（solver 轮询）
+  if (/^\/api\/v4\/scheduling\/runs\/[^/]+\/status$/.test(urlPath)) return true;
+  return false;
+};
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  // req.path 在 app.use('/api', ...) 下是去掉 '/api' 前缀后的子路径；用 originalUrl 还原完整路径判定。
+  const fullPath = (req.originalUrl || req.url).split('?')[0];
+  if (AUTH_BYPASS_PREFIXES.some((p) => fullPath === p || fullPath.startsWith(p + '/')) || isSolverMachinePath(fullPath)) {
+    next();
+    return;
+  }
+  requireAuth(req, res, next);
+});
 
 // 系统路由放在最前面
 app.use('/api/system', systemRoutes);
@@ -145,6 +177,10 @@ app.use('/api/v3/bioprocess', v3BioprocessRoutes);
 app.use('/api/standalone-tasks', standaloneTaskRoutes);
 app.use('/api/roster-exceptions', rosterExceptionRoutes);
 app.use('/api/roster-leadership-cockpit', rosterLeadershipCockpitRoutes);
+
+// --- Governance: RBAC 管理 API（用户/角色/权限/授权）。挂在全局 requireAuth 之后，
+// 各端点内部再挂 requirePermission(GOVERNANCE_*)。
+app.use('/api/governance', governanceRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

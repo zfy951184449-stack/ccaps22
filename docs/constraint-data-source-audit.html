@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MFG8APS 求解器约束 · 数据源审计报告</title>
+<style>
+  :root{
+    --blue:#1f5eff; --blue-d:#1546c4; --ink:#1a2233; --muted:#5b6680;
+    --line:#e5e9f2; --bg:#f5f7fb; --card:#fff;
+    --green:#15a36e; --green-bg:#e7f7ef; --red:#d8345f; --red-bg:#fdebf1;
+    --amber:#c97a13; --amber-bg:#fdf2e0; --code:#f3f5fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;
+    line-height:1.65;font-size:15px}
+  .wrap{max-width:980px;margin:0 auto;padding:40px 24px 80px}
+  header.hero{background:linear-gradient(135deg,var(--blue),var(--blue-d));color:#fff;
+    border-radius:16px;padding:34px 36px;margin-bottom:28px;box-shadow:0 8px 30px rgba(31,94,255,.18)}
+  header.hero h1{margin:0 0 8px;font-size:26px;letter-spacing:.5px}
+  header.hero p{margin:0;opacity:.92;font-size:14px}
+  .meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+  .meta span{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);
+    padding:4px 12px;border-radius:20px;font-size:12.5px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:26px 30px;margin-bottom:22px;box-shadow:0 2px 10px rgba(20,40,80,.04)}
+  h2{font-size:19px;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid var(--line);
+    display:flex;align-items:center;gap:10px}
+  h2 .n{display:inline-flex;width:26px;height:26px;border-radius:8px;background:var(--blue);
+    color:#fff;font-size:14px;align-items:center;justify-content:center;flex:0 0 auto}
+  h3{font-size:15.5px;margin:22px 0 8px}
+  p{margin:8px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.8px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--code);color:var(--muted);font-weight:600;font-size:12.5px;letter-spacing:.3px}
+  tr:last-child td{border-bottom:none}
+  code{background:var(--code);padding:2px 6px;border-radius:5px;font-size:12.8px;
+    font-family:"SF Mono",Menlo,Consolas,monospace;color:var(--blue-d)}
+  pre{background:#0f1729;color:#d6e0f5;padding:16px 18px;border-radius:10px;overflow-x:auto;
+    font-size:12.8px;line-height:1.6;font-family:"SF Mono",Menlo,Consolas,monospace}
+  pre .c{color:#7d8aa8}
+  pre .k{color:#ff9b6a}
+  pre .g{color:#5fd49a}
+  .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap}
+  .b-fixed{background:var(--green-bg);color:var(--green)}
+  .b-todo{background:var(--amber-bg);color:var(--amber)}
+  .b-ok{background:var(--green-bg);color:var(--green)}
+  .b-crit{background:var(--red-bg);color:var(--red)}
+  .callout{border-left:4px solid var(--blue);background:#f3f7ff;padding:14px 18px;border-radius:0 10px 10px 0;margin:14px 0}
+  .callout.warn{border-color:var(--amber);background:var(--amber-bg)}
+  .callout.bad{border-color:var(--red);background:var(--red-bg)}
+  .formula{background:var(--code);border:1px dashed var(--line);border-radius:10px;padding:14px 18px;margin:14px 0;font-size:14px}
+  .formula b{color:var(--red)}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:5px 0}
+  .foot{text-align:center;color:var(--muted);font-size:12.5px;margin-top:30px}
+  .kv{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>求解器约束 · 数据源审计报告</h1>
+  <p>MFG8APS / Solver V4 — 排查约束是否引用了废弃 / 错误 / 缺失的数据源</p>
+  <div class="meta">
+    <span>审计日期：2026-06-03</span>
+    <span>范围：solver_v4/constraints 全部约束</span>
+    <span>触发案例：run_id = 1306（INFEASIBLE）</span>
+  </div>
+</header>
+
+<section>
+  <h2><span class="n">0</span>触发案例：run_id = 1306 求解失败</h2>
+  <table>
+    <tr><th style="width:130px">项</th><th>值</th></tr>
+    <tr><td class="kv">时间</td><td>北京时间 2026-06-03 02:51:45</td></tr>
+    <tr><td class="kv">窗口</td><td>2026-07-01 ~ 2026-07-31</td></tr>
+    <tr><td class="kv">批次</td><td>MEDIA-POST-PPQ012 ~ 016</td></tr>
+    <tr><td class="kv">团队</td><td>团队 14，共 6 人</td></tr>
+    <tr><td class="kv">状态</td><td><span class="badge b-crit">FAILED · INFEASIBLE</span></td></tr>
+  </table>
+  <div class="callout bad">
+    <b>根因：两个硬约束组合后互相冲突。</b>
+  </div>
+  <h3>① LeadershipCoverage · Rule 1（硬）</h3>
+  <p>要求每个有生产操作的日期至少 1 名 leader 上班。代码：<code>leadership_coverage.py:147</code>。本次 7 月有生产操作的日期共 <b>30 天</b>，而团队里只有 <b>1 名 leader（446 王如月 / TEAM_LEADER）</b> → 等价于要求她覆盖全部 30 个生产日。</p>
+  <h3>② StandardHours（硬）</h3>
+  <p>7 月 23 个工作日，标准工时 184h，默认上浮 +32h → 单人月度硬上限 <b>216h</b>。代码：<code>standard_hours.py:97</code>。</p>
+  <div class="formula">
+    最低工作班次 8h　→　单 leader 覆盖 30 个生产日 ≥ 30 × 8 = <b>240h</b><br>
+    硬上限 = <b>216h</b>　→　240 &gt; 216　→　<b>无可行解</b>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">1</span>审计方法</h2>
+  <p>以 <code>org_role</code> 暴露出的三种「错误源」信号，逐一扫描全部 16 个约束的完整数据链（约束读取字段 → 求解器契约 <code>contracts/request.py</code> → 后端取数 <code>DataAssemblerV4.ts</code> → 数据库实际表/值）：</p>
+  <ul>
+    <li><b>信号 A · 空源</b>：表全空 / 字段全是默认值（如 <code>org_role</code> 全 FRONTLINE）。</li>
+    <li><b>信号 B · 值域错配</b>：判定用的字符串与 DB 实际取值对不上（永远不命中）。</li>
+    <li><b>信号 C · 契约缺口</b>：约束读取的字段，契约 / 取数层根本不提供。</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">2</span>发现汇总</h2>
+  <table>
+    <tr><th style="width:40px">#</th><th>问题</th><th>信号</th><th>影响</th><th style="width:110px">状态</th></tr>
+    <tr>
+      <td>1</td>
+      <td>领导约束读废弃的 <code>employees.org_role</code></td>
+      <td>A 空源</td>
+      <td>约束完全空转，15 名管理岗被当一线使唤</td>
+      <td><span class="badge b-fixed">✓ 已修复</span></td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>Rule 1 生产日覆盖 × StandardHours 硬冲突</td>
+      <td>设计</td>
+      <td>leader 少、生产日多时 INFEASIBLE（本次故障）</td>
+      <td><span class="badge b-fixed">✓ 已修复</span></td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><code>consecutive_rest_days</code> 契约缺口</td>
+      <td>C 契约缺口</td>
+      <td>「最大连续休息天数」跨窗口边界静默失效</td>
+      <td><span class="badge b-fixed">✓ 已修复</span></td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2><span class="n">3</span>问题详情与修复</h2>
+
+  <h3>#1　<code>org_role</code> 废弃字段　<span class="badge b-fixed">✓ 已修复</span></h3>
+  <p>领导约束整条数据链读取的是 <code>employees.org_role</code>，但该字段是未维护的旧字段（全表默认 <code>FRONTLINE</code>）；真实角色在 <code>employees.primary_role_id → employee_roles.role_code</code>。</p>
+  <table>
+    <tr><th>同一批人</th><th><code>org_role</code>（旧）</th><th><code>primary_role</code>（真实）</th><th>人数</th></tr>
+    <tr><td>一线</td><td>FRONTLINE</td><td>FRONTLINE</td><td>40</td></tr>
+    <tr><td>班组长</td><td>FRONTLINE</td><td>SHIFT_LEADER</td><td>8</td></tr>
+    <tr><td>工段长</td><td>FRONTLINE</td><td>GROUP_LEADER</td><td>4</td></tr>
+    <tr><td>团队长</td><td>FRONTLINE</td><td>TEAM_LEADER</td><td>3</td></tr>
+  </table>
+  <p><b>后果：</b>solver 看到的人全是 <code>FRONTLINE</code> → <code>if not leader_emp_ids: return 0</code> → 领导约束永远跳过；且 15 名管理岗 <code>can_schedule=1</code>，被当一线照常分配生产工序。</p>
+  <p><b>修复：</b><code>DataAssemblerV4.ts</code> 的 <code>fetchEmployees</code> 两条查询路径均 JOIN <code>employee_roles</code>，用 <code>COALESCE(er.role_code, e.org_role, 'FRONTLINE')</code> 取权威角色。solver 侧零改动（契约值域一致）。已重新构建并重启 backend。</p>
+
+  <h3>#2　Rule 1 × StandardHours 硬冲突　<span class="badge b-fixed">✓ 已修复</span></h3>
+  <p>Rule 1（生产日 leader 覆盖）此前是不可关闭的硬约束。当 leader 数量远少于生产日数时，必然与 StandardHours 月度工时上限冲突而 INFEASIBLE（即 run_id=1306）。</p>
+  <p><b>修复：</b>把 Rule 1 改为可独立开关，默认开启（保持现状），需要时可手动关闭以获得可行解。</p>
+  <pre><span class="c"># leadership_coverage.py — Rule 1 现在被 config 开关包裹</span>
+<span class="k">if</span> config.get(<span class="g">"enable_leader_production_coverage"</span>, <span class="k">True</span>):
+    <span class="c"># ... 每个生产日 sum(leader_work_vars) &gt;= 1</span>
+<span class="k">else</span>:
+    self.log(<span class="g">"Rule 1: production-day leader coverage DISABLED by config."</span>)</pre>
+  <ul>
+    <li><b>后端/求解器：</b><code>enable_leader_production_coverage</code>（默认 <code>True</code>），透传无需改动。</li>
+    <li><b>前端：</b>求解器配置弹窗「领导层排班约束」下新增缩进子开关 <b>「└ 生产日需领导在岗」</b>，依赖总开关。</li>
+  </ul>
+  <div class="callout">
+    <b>解决 run_id=1306：</b>在求解器配置里关闭「生产日需领导在岗」，即可绕开与月度工时上限的冲突，重新求解可得可行解。（治本方案：增加该团队的 leader 数量，或调整 StandardHours 上浮上限。）
+  </div>
+
+  <h3>#3　<code>consecutive_rest_days</code> 契约缺口　<span class="badge b-fixed">✓ 已修复</span></h3>
+  <p>约束 <code>consecutive_days.py:215</code> 的 <code>_apply_rest_boundary</code> 读取 <code>hist.consecutive_rest_days</code>，但契约 <code>HistoricalShift</code> 只有 <code>consecutive_work_days</code>，<code>DataAssemblerV4.ts</code> 的 <code>fetchHistoricalShifts</code> 也从不计算休息天数。</p>
+  <pre><span class="c"># consecutive_days.py — hasattr 恒为 False → 永远 return 0</span>
+<span class="k">for</span> hist <span class="k">in</span> data.historical_shifts:
+    <span class="k">if</span> hasattr(hist, <span class="g">'consecutive_rest_days'</span>) <span class="k">and</span> hist.consecutive_rest_days &gt; 0:
+        history_map[hist.employee_id] = hist.consecutive_rest_days
+<span class="k">if</span> <span class="k">not</span> history_map:
+    <span class="k">return</span> 0   <span class="c"># &lt;-- 总是走到这里</span></pre>
+  <p><b>后果：</b>「最大连续休息天数」约束在求解窗口<u>内部</u>的滑窗正常，但感知不到员工进入窗口前<u>已连续休息几天</u>——跨月 / 跨冻结区间的边界处可能放任连续休息超限。对比 work limit 有对应的 <code>consecutive_work_days</code>，rest 这侧是不对称的实现遗漏，且静默失效不报错。</p>
+  <p><b>修复：</b><code>HistoricalShift</code> 契约（及后端 <code>V4HistoricalShift</code>）补 <code>consecutive_rest_days</code> 字段；<code>fetchHistoricalShifts</code> 对称增算连续休息天数，并把历史回看窗口从硬编码 6 天改为自适应 <code>max(连续工作上限, 连续休息上限, 6)+1</code>（顺带修好 work 方向的回看不足隐患）。约束侧无需改动（已在读取）。已重启 solver + backend。</p>
+</section>
+
+<section>
+  <h2><span class="n">4</span>已逐项核验无误</h2>
+  <h3>关键字段映射</h3>
+  <table>
+    <tr><th>语义</th><th>DB 来源</th><th>契约字段</th><th>结论</th></tr>
+    <tr><td>班次类别</td><td><code>shift_definitions.category</code>（STANDARD/SPECIAL）</td><td><code>plan_category</code></td><td><span class="badge b-ok">✓ 映射正确</span></td></tr>
+    <tr><td>历史是否上班</td><td><code>employee_shift_plans.plan_category</code>（PRODUCTION/BASE/REST）</td><td><code>is_work</code></td><td><span class="badge b-ok">✓ 值域匹配</span></td></tr>
+    <tr><td>是否夜班</td><td><code>shift_definitions.is_night_shift</code></td><td><code>is_night_shift</code></td><td><span class="badge b-ok">✓ 正确</span></td></tr>
+    <tr><td>是否工作日</td><td><code>calendar_workdays.is_workday</code></td><td><code>is_workday</code></td><td><span class="badge b-ok">✓ 正确</span></td></tr>
+  </table>
+  <p class="kv" style="font-size:13px">说明：曾怀疑 <code>plan_category</code> 判定的 PRODUCTION/BASE 与 DB 值域错配，经核 <code>employee_shift_plans.plan_category</code> 实际取值正是 PRODUCTION/BASE/REST，判定正确，已排除。</p>
+
+  <h3>约束依赖表 · 数据健康度（均有真实数据，无空源）</h3>
+  <table>
+    <tr><th>表</th><th>用途</th><th>行数 / 关键值</th></tr>
+    <tr><td><code>shift_definitions</code></td><td>夜班 / 班次约束</td><td>夜班定义 1 个，工作班 3 个</td></tr>
+    <tr><td><code>calendar_workdays</code></td><td>工时 / 作息</td><td>1096 行 / 747 工作日</td></tr>
+    <tr><td><code>employee_shift_plans</code></td><td>历史班次（边界）</td><td>6256 行</td></tr>
+    <tr><td><code>batch_operation_plans</code></td><td>工序需求</td><td>3170 行</td></tr>
+    <tr><td><code>batch_share_groups</code> / members</td><td>共享组</td><td>768 组 / 2646 成员</td></tr>
+    <tr><td><code>employee_qualifications</code></td><td>资质匹配</td><td>1185 行</td></tr>
+    <tr><td><code>special_shift_occurrences</code></td><td>特殊班次覆盖</td><td>64 行</td></tr>
+  </table>
+  <p class="kv" style="font-size:13px">另：系统对照「约束读取的所有结构属性」与「契约字段集」，除 <code>consecutive_rest_days</code> 外无其它缺口。空表 <code>employee_org_membership</code> 未被任何约束使用，不影响。</p>
+</section>
+
+<section>
+  <h2><span class="n">5</span>结论与待办</h2>
+  <ul>
+    <li>本次审计聚焦「数据源 / 字段引用」类问题，共发现 <b>3 项，现已全部修复并重启生效</b>（<code>org_role</code>、Rule 1 开关、<code>consecutive_rest_days</code>）。</li>
+    <li>全部约束的数据源、字段映射、契约定义均已核验正确，依赖表均有真实数据。</li>
+    <li><b>提醒：</b>本次为数据源专项审计，非全面逻辑正确性审查。</li>
+  </ul>
+</section>
+
+<div class="foot">MFG8APS · Solver V4 数据源审计 · 生成于 2026-06-03</div>
+
+</div>
+</body>
+</html>

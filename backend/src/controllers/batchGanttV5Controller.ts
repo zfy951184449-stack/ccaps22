@@ -19,6 +19,7 @@ interface GanttOperation {
     duration: number;
     requiredPeople: number;
     assignedPeople: number;
+    personnelAssignments: GanttPersonnelAssignment[];
     resourceNodeId?: number | null;
     resourceName?: string | null;
     resourceNodeClass?: string | null;
@@ -27,6 +28,20 @@ interface GanttOperation {
     // Off-screen metadata for connection lines
     isOffScreen?: boolean;
     offScreenDirection?: 'left' | 'right';
+}
+
+interface GanttPersonnelAssignment {
+    id: number;
+    positionNumber: number;
+    employeeId: number;
+    employeeCode: string | null;
+    employeeName: string | null;
+    role: string | null;
+    status: string;
+    shiftPlanId: number | null;
+    shiftCode: string | null;
+    shiftName: string | null;
+    planDate: string | null;
 }
 
 interface GanttStage {
@@ -64,6 +79,8 @@ const parseCsvNumberList = (value: unknown): number[] => {
         .map((item) => Number(item.trim()))
         .filter((item) => Number.isInteger(item) && item > 0);
 };
+
+const placeholders = (items: unknown[]) => items.map(() => '?').join(',');
 
 const parseStatusFilter = (value: unknown): string[] => {
     const rawValue = Array.isArray(value) ? value.join(',') : String(value ?? '');
@@ -167,10 +184,64 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
 
         const [rows] = await pool.execute<RowDataPacket[]>(query, hierarchyParams);
 
+        const visibleOperationPlanIds = rows.map((row) => Number(row.operation_id)).filter(Number.isFinite);
+        const assignmentsByOperation = new Map<number, GanttPersonnelAssignment[]>();
+
+        if (visibleOperationPlanIds.length > 0) {
+            const [assignmentRows] = await pool.execute<RowDataPacket[]>(
+                `
+                    SELECT
+                        bpa.id,
+                        bpa.batch_operation_plan_id,
+                        bpa.position_number,
+                        bpa.employee_id,
+                        e.employee_code,
+                        e.employee_name,
+                        bpa.role,
+                        bpa.assignment_status,
+                        bpa.shift_plan_id,
+                        esp.plan_date,
+                        sd.shift_code,
+                        sd.shift_name
+                    FROM batch_personnel_assignments bpa
+                    LEFT JOIN employees e ON e.id = bpa.employee_id
+                    LEFT JOIN employee_shift_plans esp ON esp.id = bpa.shift_plan_id
+                    LEFT JOIN shift_definitions sd ON sd.id = esp.shift_id
+                    WHERE bpa.batch_operation_plan_id IN (${placeholders(visibleOperationPlanIds)})
+                      AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')
+                    ORDER BY bpa.batch_operation_plan_id, bpa.position_number, bpa.id
+                `,
+                visibleOperationPlanIds
+            );
+
+            assignmentRows.forEach((row) => {
+                const operationPlanId = Number(row.batch_operation_plan_id);
+                if (!assignmentsByOperation.has(operationPlanId)) {
+                    assignmentsByOperation.set(operationPlanId, []);
+                }
+
+                assignmentsByOperation.get(operationPlanId)!.push({
+                    id: Number(row.id),
+                    positionNumber: Number(row.position_number ?? 1),
+                    employeeId: Number(row.employee_id),
+                    employeeCode: row.employee_code ?? null,
+                    employeeName: row.employee_name ?? null,
+                    role: row.role ?? null,
+                    status: row.assignment_status,
+                    shiftPlanId: row.shift_plan_id ? Number(row.shift_plan_id) : null,
+                    shiftCode: row.shift_code ?? null,
+                    shiftName: row.shift_name ?? null,
+                    planDate: row.plan_date ? dayjs(row.plan_date).format('YYYY-MM-DD') : null
+                });
+            });
+        }
+
         // 2. Reconstruct Tree Structure
         const batchMap = new Map<number, GanttBatch>();
 
         rows.forEach(row => {
+            const personnelAssignments = assignmentsByOperation.get(Number(row.operation_id)) ?? [];
+            const assignedPeople = personnelAssignments.length;
             // Find or Create Batch
             if (!batchMap.has(row.batch_id)) {
                 batchMap.set(row.batch_id, {
@@ -207,7 +278,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
             // Determine status/color based on assignments or lock state
             let opStatus = 'PENDING';
             if (row.batch_status === 'ACTIVATED') opStatus = 'READY';
-            if (row.assigned_people >= row.required_people) opStatus = 'COMPLETED'; // Simplified logic
+            if (assignedPeople >= row.required_people) opStatus = 'COMPLETED'; // Simplified logic
 
             stage.operations.push({
                 id: row.operation_id,
@@ -223,7 +294,8 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
                 progress: 0,
                 duration: row.planned_duration,
                 requiredPeople: row.required_people,
-                assignedPeople: row.assigned_people,
+                assignedPeople,
+                personnelAssignments,
                 resourceNodeId: row.resource_node_id ? Number(row.resource_node_id) : null,
                 resourceName: row.resource_name || null,
                 resourceNodeClass: row.resource_node_class || null,

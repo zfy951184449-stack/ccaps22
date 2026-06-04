@@ -47,6 +47,7 @@ interface GanttCanvasProps {
   showHeatmap: boolean;
   collapseEmptyNightShifts?: boolean;
   readOnly: boolean;
+  clampDragToWindow?: boolean;
   zoomRange: [number, number];
   personnelPeaks?: Map<number, { peak: number; peakHour: number }>;
   onTaskClick?: (task: GanttTask) => void;
@@ -76,7 +77,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   tasks, groups, flatRows, taskRowMap, dependencies, links,
   state, stateRef, dispatch,
   startHour, endHour, timelineOriginDate,
-  showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, readOnly, zoomRange,
+  showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, readOnly, clampDragToWindow = true, zoomRange,
   personnelPeaks,
   onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
   onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
@@ -242,6 +243,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     onAutoScroll,
     canvasWidth: state.canvasW,
     timeScale,
+    clampDragToWindow,
   });
 
   // Mirror dragState into a ref so RAF loop can read latest value
