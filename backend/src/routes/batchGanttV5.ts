@@ -1,11 +1,12 @@
 import express from 'express';
 import { getGanttHierarchy, getGanttDependencies, updateGanttOperation, deleteGanttOperation } from '../controllers/batchGanttV5Controller';
+import requirePermission from '../middleware/requirePermission';
 
 const router = express.Router();
 
-router.get('/hierarchy', getGanttHierarchy);
-router.get('/dependencies', getGanttDependencies);
-router.put('/operations/:id', updateGanttOperation);
-router.delete('/operations/:id', deleteGanttOperation);
+router.get('/hierarchy', requirePermission('APS_GANTT_READ'), getGanttHierarchy);
+router.get('/dependencies', requirePermission('APS_GANTT_READ'), getGanttDependencies);
+router.put('/operations/:id', requirePermission('APS_GANTT_WRITE'), updateGanttOperation);
+router.delete('/operations/:id', requirePermission('APS_GANTT_WRITE'), deleteGanttOperation);
 
 export default router;

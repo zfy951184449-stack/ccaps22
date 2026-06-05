@@ -10,17 +10,18 @@ import {
   updateQualification,
   deleteQualification,
 } from '../controllers/qualificationController';
+import requirePermission from '../middleware/requirePermission';
 
 const router = express.Router();
 
-router.get('/overview', getQualificationsOverview);
-router.get('/matrix', getQualificationMatrixView);
-router.get('/shortages', getQualificationShortagesView);
-router.get('/shortages/monitoring', getQualificationShortageMonitoringView);
-router.get('/:id/impact', getQualificationImpactById);
-router.get('/', getQualifications);
-router.post('/', createQualification);
-router.put('/:id', updateQualification);
-router.delete('/:id', deleteQualification);
+router.get('/overview', requirePermission('MASTER_QUALIFICATION_READ'), getQualificationsOverview);
+router.get('/matrix', requirePermission('MASTER_QUALIFICATION_READ'), getQualificationMatrixView);
+router.get('/shortages', requirePermission('MASTER_QUALIFICATION_READ'), getQualificationShortagesView);
+router.get('/shortages/monitoring', requirePermission('MASTER_QUALIFICATION_READ'), getQualificationShortageMonitoringView);
+router.get('/:id/impact', requirePermission('MASTER_QUALIFICATION_READ'), getQualificationImpactById);
+router.get('/', requirePermission('MASTER_QUALIFICATION_READ'), getQualifications);
+router.post('/', requirePermission('MASTER_QUALIFICATION_WRITE'), createQualification);
+router.put('/:id', requirePermission('MASTER_QUALIFICATION_WRITE'), updateQualification);
+router.delete('/:id', requirePermission('MASTER_QUALIFICATION_WRITE'), deleteQualification);
 
 export default router;

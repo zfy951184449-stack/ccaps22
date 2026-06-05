@@ -48,6 +48,10 @@
 - **前端镜像**：新增 `REACT_APP_AUTH_ENFORCE`（默认 false）镜像后端；`App.tsx` 根 `ProtectedRoute allowAnonymousInShadow` 在影子模式放行匿名进入现有页面，`/governance/*` 仍按 `requiredPermission` 把关。
 - **仍待执行**：① 生产部署/启动检查里对生产环境断言 `AUTH_ENFORCE=true`（避免忘记切开关，治理面裸奔）。② 切强制模式后前端同步设 `REACT_APP_AUTH_ENFORCE=true`，并按权限过滤顶部菜单。
 
+### PD-9 backend/.env 被 git 跟踪且含 secret — 🔴 安全债（待处理）
+- `backend/.env` 是 **tracked** 文件且现含 `JWT_SECRET` / `SOLVER_CALLBACK_SECRET` 等真实密钥。commit `038d13f` 已**故意排除** `.env`（secret 未入库），但该文件本身仍在版本控制中（历史可能已有旧值）。
+- 待处理：`git rm --cached backend/.env` + 确认 `.gitignore` 含 `backend/.env`；密钥改由环境/密钥管理注入；历史若含敏感值需考虑清史。与报告中「217MB 整库 dump 被 git 跟踪」属同类数据保护债。
+
 ---
 
 ## 二、已清理

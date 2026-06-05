@@ -20,6 +20,7 @@ import {
 } from '@ant-design/icons';
 import { WxbDropdown } from '../wxb-ui/Dropdown/Dropdown';
 import { useAuth } from '../../contexts/AuthContext';
+import { isAuthEnforced } from '../auth/ProtectedRoute';
 import './TopNavigation.css';
 
 type NavLeaf = {
@@ -49,6 +50,7 @@ const navGroups: NavGroup[] = [
     subtitle: 'Overview',
     path: '/dashboard',
     icon: <DashboardOutlined />,
+    requiredPermission: 'SYSTEM_DASHBOARD_READ',
   },
   {
     key: 'base-data',
@@ -56,11 +58,11 @@ const navGroups: NavGroup[] = [
     subtitle: 'Master Data',
     icon: <SettingOutlined />,
     children: [
-      { key: 'equipment-management', icon: <SettingOutlined />, label: '资源节点管理', path: '/equipment-management' },
-      { key: 'qualifications', icon: <SafetyOutlined />, label: '资质管理', path: '/qualifications' },
-      { key: 'qualification-matrix', icon: <TableOutlined />, label: '资质矩阵', path: '/qualification-matrix' },
-      { key: 'operations', icon: <SettingOutlined />, label: '操作管理', path: '/operations' },
-      { key: 'operation-types', icon: <ProjectOutlined />, label: '操作类型', path: '/operation-types' },
+      { key: 'equipment-management', icon: <SettingOutlined />, label: '资源节点管理', path: '/equipment-management', requiredPermission: 'MASTER_RESOURCE_READ' },
+      { key: 'qualifications', icon: <SafetyOutlined />, label: '资质管理', path: '/qualifications', requiredPermission: 'MASTER_QUALIFICATION_READ' },
+      { key: 'qualification-matrix', icon: <TableOutlined />, label: '资质矩阵', path: '/qualification-matrix', requiredPermission: 'MASTER_QUALIFICATION_READ' },
+      { key: 'operations', icon: <SettingOutlined />, label: '操作管理', path: '/operations', requiredPermission: 'MASTER_OPERATION_READ' },
+      { key: 'operation-types', icon: <ProjectOutlined />, label: '操作类型', path: '/operation-types', requiredPermission: 'MASTER_OPERATION_READ' },
     ],
   },
   {
@@ -69,9 +71,9 @@ const navGroups: NavGroup[] = [
     subtitle: 'Operations',
     icon: <ProjectOutlined />,
     children: [
-      { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates' },
-      { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4' },
-      { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2' },
+      { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4', requiredPermission: 'APS_BATCH_READ' },
+      { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2', requiredPermission: 'APS_BATCH_READ' },
     ],
   },
   {
@@ -80,12 +82,12 @@ const navGroups: NavGroup[] = [
     subtitle: 'Workforce',
     icon: <ApartmentOutlined />,
     children: [
-      { key: 'organization-workbench', icon: <ApartmentOutlined />, label: '组织与人员', path: '/organization-workbench' },
-      { key: 'personnel-scheduling', icon: <ClockCircleOutlined />, label: '人员排班', path: '/personnel-scheduling' },
-      { key: 'roster-leadership-cockpit', icon: <DashboardOutlined />, label: '工厂人力韧性驾驶舱', path: '/roster/leadership-cockpit' },
-      { key: 'roster-exceptions', icon: <ScheduleOutlined />, label: '异常排班快速修复', path: '/roster/exceptions' },
-      { key: 'solver-v4', icon: <RocketOutlined />, label: 'V4 自动排班', path: '/solver-v4' },
-      { key: 'shift-definitions', icon: <ScheduleOutlined />, label: '班次定义', path: '/shift-definitions' },
+      { key: 'organization-workbench', icon: <ApartmentOutlined />, label: '组织与人员', path: '/organization-workbench', requiredPermission: 'MASTER_EMPLOYEE_READ' },
+      { key: 'personnel-scheduling', icon: <ClockCircleOutlined />, label: '人员排班', path: '/personnel-scheduling', requiredPermission: 'ROSTER_SCHEDULE_READ' },
+      { key: 'roster-leadership-cockpit', icon: <DashboardOutlined />, label: '工厂人力韧性驾驶舱', path: '/roster/leadership-cockpit', requiredPermission: 'ROSTER_COCKPIT_READ' },
+      { key: 'roster-exceptions', icon: <ScheduleOutlined />, label: '异常排班快速修复', path: '/roster/exceptions', requiredPermission: 'ROSTER_EXCEPTION_PREVIEW' },
+      { key: 'solver-v4', icon: <RocketOutlined />, label: 'V4 自动排班', path: '/solver-v4', requiredPermission: 'SOLVER_RUN_READ' },
+      { key: 'shift-definitions', icon: <ScheduleOutlined />, label: '班次定义', path: '/shift-definitions', requiredPermission: 'MASTER_SHIFT_DEF_READ' },
     ],
   },
   {
@@ -150,24 +152,34 @@ export default function TopNavigation() {
   const { user, logout, hasPermission } = useAuth();
 
   // 按权限过滤导航：隐藏无权限的菜单项；过滤后子项为空的分组整组隐藏。
+  // 影子模式（REACT_APP_AUTH_ENFORCE !== 'true'）下匿名用户放行全部菜单，
+  // 与 ProtectedRoute 的 allowAnonymousInShadow 语义对齐——避免未登录的现有前端看到空导航。
+  // 一旦登录（即便仍在影子模式），便按权限过滤，与路由守卫对 requiredPermission 的把关一致。
+  const canSee = useCallback(
+    (requiredPermission?: string) => {
+      if (!requiredPermission) return true;
+      if (!user && !isAuthEnforced()) return true;
+      return hasPermission(requiredPermission);
+    },
+    [user, hasPermission],
+  );
+
   const visibleGroups = useMemo(
     () =>
       navGroups.reduce<NavGroup[]>((acc, group) => {
         if (group.children) {
-          const children = group.children.filter(
-            (child) => !child.requiredPermission || hasPermission(child.requiredPermission),
-          );
+          const children = group.children.filter((child) => canSee(child.requiredPermission));
           if (children.length > 0) {
             acc.push({ ...group, children });
           }
           return acc;
         }
-        if (!group.requiredPermission || hasPermission(group.requiredPermission)) {
+        if (canSee(group.requiredPermission)) {
           acc.push(group);
         }
         return acc;
       }, []),
-    [hasPermission],
+    [canSee],
   );
 
   const handleLogout = useCallback(async () => {

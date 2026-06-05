@@ -93,27 +93,146 @@ const AppLayout: React.FC = () => (
         }}
       >
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/organization-workbench" element={<OrganizationWorkbenchPage />} />
-          <Route path="/qualifications" element={<QualificationsPage />} />
-          <Route path="/qualification-matrix" element={<QualificationMatrixPage />} />
-          <Route path="/operations" element={<OperationsPage />} />
-          <Route path="/operation-types" element={<OperationTypesPage />} />
-          <Route path="/process-templates" element={<ProcessTemplatesV3Page />} />
-          <Route path="/process-templates/:templateId" element={<ProcessTemplatesV3Page />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="SYSTEM_DASHBOARD_READ">
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="SYSTEM_DASHBOARD_READ">
+                <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/organization-workbench"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_EMPLOYEE_READ">
+                <OrganizationWorkbenchPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/qualifications"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_QUALIFICATION_READ">
+                <QualificationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/qualification-matrix"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_QUALIFICATION_READ">
+                <QualificationMatrixPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operations"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_OPERATION_READ">
+                <OperationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/operation-types"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_OPERATION_READ">
+                <OperationTypesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/process-templates"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <ProcessTemplatesV3Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/process-templates/:templateId"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <ProcessTemplatesV3Page />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/process-templates-v2" element={<ProcessTemplateLegacyRedirect />} />
           <Route path="/process-templates-v2/:templateId" element={<ProcessTemplateLegacyRedirect />} />
-          <Route path="/batch-management-v4" element={<BatchManagementV4Page />} />
-          <Route path="/batch-management-workbench-v2" element={<BatchManagementWorkbenchV2Page />} />
-          <Route path="/personnel-scheduling" element={<PersonnelSchedulingPage />} />
-          <Route path="/roster/leadership-cockpit" element={<RosterLeadershipCockpitPage />} />
-          <Route path="/roster/exceptions" element={<RosterExceptionRepairPage />} />
-          <Route path="/solver-v4" element={<SolverV4Page />} />
-          <Route path="/shift-definitions" element={<ShiftDefinitionsPage />} />
+          <Route
+            path="/batch-management-v4"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_BATCH_READ">
+                <BatchManagementV4Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/batch-management-workbench-v2"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_BATCH_READ">
+                <BatchManagementWorkbenchV2Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/personnel-scheduling"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_SCHEDULE_READ">
+                <PersonnelSchedulingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roster/leadership-cockpit"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_COCKPIT_READ">
+                <RosterLeadershipCockpitPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roster/exceptions"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_EXCEPTION_PREVIEW">
+                <RosterExceptionRepairPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solver-v4"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="SOLVER_RUN_READ">
+                <SolverV4Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/shift-definitions"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_SHIFT_DEF_READ">
+                <ShiftDefinitionsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/process-templates-v3" element={<ProcessTemplateLegacyRedirect />} />
           <Route path="/process-templates-v3/:templateId" element={<ProcessTemplateLegacyRedirect />} />
-          <Route path="/equipment-management" element={<EquipmentManagementPage />} />
+          <Route
+            path="/equipment-management"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="MASTER_RESOURCE_READ">
+                <EquipmentManagementPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/governance/roles"
             element={
@@ -138,7 +257,14 @@ const AppLayout: React.FC = () => (
               </ProtectedRoute>
             }
           />
-          <Route path="/ui-kit" element={<UiKitShowcasePage />} />
+          <Route
+            path="/ui-kit"
+            element={
+              <ProtectedRoute allowAnonymousInShadow>
+                <UiKitShowcasePage />
+              </ProtectedRoute>
+            }
+          />
           {Object.entries(mvpRedirects).map(([path, target]) => (
             <Route
               key={path}

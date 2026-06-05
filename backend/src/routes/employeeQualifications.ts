@@ -6,13 +6,14 @@ import {
   updateEmployeeQualification, 
   deleteEmployeeQualification 
 } from '../controllers/employeeQualificationController';
+import requirePermission from '../middleware/requirePermission';
 
 const router = express.Router();
 
-router.get('/', getEmployeeQualifications);
-router.get('/employee/:employeeId', getEmployeeQualificationsByEmployeeId);
-router.post('/', createEmployeeQualification);
-router.put('/:id', updateEmployeeQualification);
-router.delete('/:id', deleteEmployeeQualification);
+router.get('/', requirePermission('MASTER_QUALIFICATION_READ'), getEmployeeQualifications);
+router.get('/employee/:employeeId', requirePermission('MASTER_QUALIFICATION_READ'), getEmployeeQualificationsByEmployeeId);
+router.post('/', requirePermission('MASTER_QUALIFICATION_WRITE'), createEmployeeQualification);
+router.put('/:id', requirePermission('MASTER_QUALIFICATION_WRITE'), updateEmployeeQualification);
+router.delete('/:id', requirePermission('MASTER_QUALIFICATION_WRITE'), deleteEmployeeQualification);
 
 export default router;

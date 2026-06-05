@@ -1,8 +1,16 @@
 import express from 'express';
 import * as schedulingV4Controller from '../controllers/schedulingV4';
 import requireServiceAuth from '../middleware/requireServiceAuth';
+import requirePermission from '../middleware/requirePermission';
+import requireScope from '../middleware/requireScope';
+import { ScopeService } from '../services/governance/ScopeService';
 
 const router = express.Router();
+
+// scope resolver：apply 写端点归属 = 该 run 关联批次→模板的 team。
+// run 可跨多团队：单一 team→按常规判定；零/多团队/解析不到→保守要求全局（resolveRunUnit 内返回哨兵）。
+const applyRunScope = (req: express.Request) =>
+  ScopeService.resolveRunUnit(Number(req.params.runId));
 
 // 0. List Run History
 /**
@@ -10,7 +18,7 @@ const router = express.Router();
  * @desc List V4 solver run history
  * @access Private
  */
-router.get('/runs', schedulingV4Controller.listRunsV4);
+router.get('/runs', requirePermission('SOLVER_RUN_READ'), schedulingV4Controller.listRunsV4);
 
 // 1. Trigger Solve
 /**
@@ -18,7 +26,7 @@ router.get('/runs', schedulingV4Controller.listRunsV4);
  * @desc Trigger a new V4 solver task
  * @access Private
  */
-router.post('/solve', schedulingV4Controller.createSolveTaskV4);
+router.post('/solve', requirePermission('SOLVER_RUN_EXECUTE'), schedulingV4Controller.createSolveTaskV4);
 
 // 2. SSE Progress Stream
 /**
@@ -26,7 +34,7 @@ router.post('/solve', schedulingV4Controller.createSolveTaskV4);
  * @desc Get real-time progress via SSE
  * @access Private
  */
-router.get('/runs/:runId/progress', schedulingV4Controller.getSolveProgressSSEV4);
+router.get('/runs/:runId/progress', requirePermission('SOLVER_RUN_READ'), schedulingV4Controller.getSolveProgressSSEV4);
 
 // 3. Internal Callback (for Python Solver) — machine-to-machine, guarded by shared secret.
 // 注意：这两个回调由 solver 进程调用，带 X-Solver-Callback-Token，不走人类用户的 JWT；
@@ -42,7 +50,7 @@ router.post('/callback/result', requireServiceAuth, schedulingV4Controller.recei
  * @desc Get the results of a V4 solver run
  * @access Private
  */
-router.get('/runs/:runId/result', schedulingV4Controller.getSolveResultV4);
+router.get('/runs/:runId/result', requirePermission('SOLVER_RUN_READ'), schedulingV4Controller.getSolveResultV4);
 
 // 5. Stop Solver
 /**
@@ -50,7 +58,7 @@ router.get('/runs/:runId/result', schedulingV4Controller.getSolveResultV4);
  * @desc Manually stop a V4 solver run
  * @access Private
  */
-router.post('/runs/:runId/stop', schedulingV4Controller.stopSolveV4);
+router.post('/runs/:runId/stop', requirePermission('SOLVER_RUN_ABORT'), schedulingV4Controller.stopSolveV4);
 
 // 6. Get Solve Status (Lightweight for polling)
 /**
@@ -72,7 +80,7 @@ router.get('/runs/:runId/status', requireServiceAuth, schedulingV4Controller.get
  * @desc Apply V4 solver result to batch_personnel_assignments and employee_shift_plans
  * @access Private
  */
-router.post('/runs/:runId/apply', schedulingV4Controller.applySolveResultV4);
+router.post('/runs/:runId/apply', requirePermission('SOLVER_RESULT_APPLY'), requireScope(applyRunScope), schedulingV4Controller.applySolveResultV4);
 
 // 8. Precheck (OPT-15 API)
 /**
@@ -80,7 +88,7 @@ router.post('/runs/:runId/apply', schedulingV4Controller.applySolveResultV4);
  * @desc Run pre-solve sanity checks without starting solver
  * @access Private
  */
-router.post('/precheck', schedulingV4Controller.runPrecheckV4);
+router.post('/precheck', requirePermission('SOLVER_RUN_READ'), schedulingV4Controller.runPrecheckV4);
 
 // 9. Preview-only Proposal
 /**
@@ -88,6 +96,6 @@ router.post('/precheck', schedulingV4Controller.runPrecheckV4);
  * @desc Run a preview-only solver proposal with in-memory operation time overrides
  * @access Private
  */
-router.post('/preview-proposal', schedulingV4Controller.createPreviewProposalV4);
+router.post('/preview-proposal', requirePermission('SOLVER_RUN_READ'), schedulingV4Controller.createPreviewProposalV4);
 
 export default router;

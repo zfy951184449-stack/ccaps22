@@ -5,12 +5,13 @@ import {
   getMaintenanceWindows,
   updateMaintenanceWindow,
 } from '../controllers/maintenanceWindowController';
+import requirePermission from '../middleware/requirePermission';
 
 const router = Router();
 
-router.get('/', getMaintenanceWindows);
-router.post('/', createMaintenanceWindow);
-router.patch('/:id', updateMaintenanceWindow);
-router.delete('/:id', deleteMaintenanceWindow);
+router.get('/', requirePermission('MASTER_RESOURCE_READ'), getMaintenanceWindows);
+router.post('/', requirePermission('MASTER_RESOURCE_WRITE'), createMaintenanceWindow);
+router.patch('/:id', requirePermission('MASTER_RESOURCE_WRITE'), updateMaintenanceWindow);
+router.delete('/:id', requirePermission('MASTER_RESOURCE_WRITE'), deleteMaintenanceWindow);
 
 export default router;

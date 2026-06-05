@@ -15,26 +15,27 @@ import {
     getBatchOperationHierarchy
 } from '../controllers/batchConstraintController';
 import { runBatchValidation } from '../services/batchValidationService';
+import requirePermission from '../middleware/requirePermission';
 
 const router = express.Router();
 
 // 获取批次操作的约束
-router.get('/batch-operation-plans/:operationPlanId/constraints', getBatchOperationConstraints);
+router.get('/batch-operation-plans/:operationPlanId/constraints', requirePermission('APS_CONSTRAINT_READ'), getBatchOperationConstraints);
 
 // 获取批次可用操作（用于创建约束）
-router.get('/batches/:batchPlanId/available-operations', getBatchAvailableOperations);
+router.get('/batches/:batchPlanId/available-operations', requirePermission('APS_CONSTRAINT_READ'), getBatchAvailableOperations);
 
 // 搜索批次操作（支持跨批次）
-router.get('/batch-operations/search', searchBatchOperations);
-router.get('/batch-operations/hierarchy', getBatchOperationHierarchy);
+router.get('/batch-operations/search', requirePermission('APS_CONSTRAINT_READ'), searchBatchOperations);
+router.get('/batch-operations/hierarchy', requirePermission('APS_CONSTRAINT_READ'), getBatchOperationHierarchy);
 
 // 约束 CRUD
-router.post('/batch-constraints', createBatchConstraint);
-router.put('/batch-constraints/:id', updateBatchConstraint);
-router.delete('/batch-constraints/:id', deleteBatchConstraint);
+router.post('/batch-constraints', requirePermission('APS_CONSTRAINT_WRITE'), createBatchConstraint);
+router.put('/batch-constraints/:id', requirePermission('APS_CONSTRAINT_WRITE'), updateBatchConstraint);
+router.delete('/batch-constraints/:id', requirePermission('APS_CONSTRAINT_WRITE'), deleteBatchConstraint);
 
 // 批次校验
-router.get('/batches/:batchPlanId/validate', async (req: Request, res: Response) => {
+router.get('/batches/:batchPlanId/validate', requirePermission('APS_CONSTRAINT_READ'), async (req: Request, res: Response) => {
     try {
         const { batchPlanId } = req.params;
         const id = Number(batchPlanId);
