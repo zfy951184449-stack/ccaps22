@@ -34,7 +34,9 @@ class SolverV4:
         
         # Performance Parameters (Environment-aware)
         self.solver.parameters.log_search_progress = os.environ.get("SOLVER_DEBUG", "0") == "1"
-        self.solver.parameters.num_workers = int(os.environ.get("SOLVER_WORKERS", min(8, os.cpu_count() or 4)))
+        # 自适应:按运行机实际核数开线程,留 2 核给系统/后端/MySQL/开发(codex);可用 SOLVER_WORKERS 覆盖
+        _cpu = os.cpu_count() or 4
+        self.solver.parameters.num_workers = int(os.environ.get("SOLVER_WORKERS") or max(4, _cpu - 2))
         self.solver.parameters.linearization_level = 2
         self.solver.parameters.symmetry_level = 2
 

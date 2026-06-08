@@ -28,6 +28,6 @@ export BACKEND_API_URL="http://127.0.0.1:${BACKEND_PORT}/api/v4/scheduling/callb
 # gunicorn 用 venv 内的解释器,无需 activate。绑环回:只允许同机 backend 调用。
 exec "${GUNICORN_BIN}" app:app \
   --bind "${SOLVER_HOST}:${SOLVER_PORT}" \
-  --workers "${SOLVER_WORKERS}" \
+  --workers "${GUNICORN_WORKERS}" \
   --timeout "${SOLVER_TIMEOUT}" \
   --access-logfile - --error-logfile -

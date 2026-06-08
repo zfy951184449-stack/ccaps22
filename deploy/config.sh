@@ -18,7 +18,8 @@ PX_PORT="${PX_PORT:-3128}"
 # 求解器:只绑环回,仅 backend 内部 HTTP 调用,浏览器不直连
 SOLVER_HOST="${SOLVER_HOST:-127.0.0.1}"
 SOLVER_PORT="${SOLVER_PORT:-5005}"
-SOLVER_WORKERS="${SOLVER_WORKERS:-2}"
+# gunicorn web 并发 worker 数(≠ CP-SAT 求解线程;后者在 solver.py 按核数自适应)
+GUNICORN_WORKERS="${GUNICORN_WORKERS:-2}"
 SOLVER_TIMEOUT="${SOLVER_TIMEOUT:-600}"
 
 # Homebrew 前缀(Apple Silicon 固定 /opt/homebrew)
