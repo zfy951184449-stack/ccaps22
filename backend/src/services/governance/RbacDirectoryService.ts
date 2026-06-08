@@ -90,6 +90,33 @@ export class RbacDirectoryService {
     }
   }
 
+  /**
+   * 查当前 user 绑定的员工(ACTIVE 连接)。员工自助接口用它把登录身份解析成 employeeId。
+   * 无绑定 → null(调用方据此拒绝:账号未关联员工)。
+   */
+  static async getLinkedEmployee(
+    userId: number,
+  ): Promise<{ employeeId: number; employeeCode: string; employeeName: string } | null> {
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT e.id AS employeeId, e.employee_code AS employeeCode, e.employee_name AS employeeName
+       FROM user_employee_links uel
+       JOIN employees e ON e.id = uel.employee_id
+       WHERE uel.user_id = ?
+         AND uel.link_status = 'ACTIVE'
+         AND (uel.effective_to IS NULL OR uel.effective_to > NOW())
+       ORDER BY uel.effective_from DESC, uel.id DESC
+       LIMIT 1`,
+      [userId],
+    );
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    return {
+      employeeId: Number(r.employeeId),
+      employeeCode: String(r.employeeCode ?? ''),
+      employeeName: String(r.employeeName ?? ''),
+    };
+  }
+
   static async revokeUserRole(userId: number, roleId: number, revokedBy?: number | null, reasonText?: string | null): Promise<void> {
     // revoked_by 记录撤销人，assigned_by 保留原授予人（不被撤销人覆盖，保全审计）。
     await pool.execute(

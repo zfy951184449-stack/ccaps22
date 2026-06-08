@@ -16,6 +16,7 @@ import BatchManagementWorkbenchV2Page from './pages/BatchManagementWorkbenchV2Pa
 import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
 import SolverV4Page from './pages/SolverV4Page';
 import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
+import EmployeeSchedulePage from './pages/employee-schedule/EmployeeSchedulePage';
 import UiKitShowcasePage from './pages/UiKitShowcasePage';
 import ProcessTemplatesV3Page from './pages/ProcessTemplatesV3Page';
 import EquipmentManagementPage from './pages/EquipmentManagementPage';
@@ -106,6 +107,14 @@ const AppLayout: React.FC = () => (
             element={
               <ProtectedRoute allowAnonymousInShadow requiredPermission="SYSTEM_DASHBOARD_READ">
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-schedule"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_SELF_READ">
+                <EmployeeSchedulePage />
               </ProtectedRoute>
             }
           />

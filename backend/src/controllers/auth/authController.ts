@@ -85,12 +85,16 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
   }
 
   try {
-    const permissions = await RbacDirectoryService.getUserPermissions(req.user.userId);
+    const [permissions, linkedEmployee] = await Promise.all([
+      RbacDirectoryService.getUserPermissions(req.user.userId),
+      RbacDirectoryService.getLinkedEmployee(req.user.userId),
+    ]);
     res.json({
       success: true,
       data: {
         user: req.user,
         permissions: permissions.map((p) => p.permissionCode),
+        linkedEmployee,
       },
     });
   } catch (error) {

@@ -99,6 +99,7 @@ const PERMISSIONS: Perm[] = [
   ['ROSTER_EXCEPTION_PREVIEW', '预览排班异常修复方案', 'ROSTER', 'READ', 'ROSTER_EXCEPTION'],
   ['ROSTER_EXCEPTION_APPLY', '应用排班修复方案落库', 'ROSTER', 'OPERATE', 'ROSTER_EXCEPTION'],
   ['ROSTER_COCKPIT_READ', '查看排班领导驾驶舱', 'ROSTER', 'READ', 'ROSTER_COCKPIT'],
+  ['ROSTER_SELF_READ', '查看本人排班(员工自助)', 'ROSTER', 'READ', 'SELF_SCHEDULE'],
   ['SOLVER_RUN_READ', '查看求解任务(历史/进度/状态/结果/预检/预览)', 'INTEGRATION', 'READ', 'SOLVER_RUN'],
   ['SOLVER_RUN_EXECUTE', '触发求解(发起求解任务)', 'INTEGRATION', 'OPERATE', 'SOLVER_RUN'],
   ['SOLVER_RUN_ABORT', '中止求解任务', 'INTEGRATION', 'OPERATE', 'SOLVER_RUN'],
@@ -149,6 +150,7 @@ const RESOURCE_LABELS: [string, string, string][] = [
   ['ROSTER', 'STANDALONE_TASK', '独立任务'],
   ['ROSTER', 'ROSTER_EXCEPTION', '排班异常修复'],
   ['ROSTER', 'ROSTER_COCKPIT', '排班领导驾驶舱'],
+  ['ROSTER', 'SELF_SCHEDULE', '本人排班(员工自助)'],
   ['INTEGRATION', 'SOLVER_RUN', '求解任务(求解运行)'],
   ['INTEGRATION', 'SOLVER_RESULT', '求解结果应用'],
   ['SYSTEM', 'SYSTEM_SETTING', '系统设置（排班参数/节假日服务）'],
@@ -162,12 +164,15 @@ const RESOURCE_LABELS: [string, string, string][] = [
 const SEED_ROLES: [string, string, string][] = [
   ['GOVERNANCE_ADMIN', '系统管理员', 'GOVERNANCE'],
   ['READONLY_VIEWER', '只读访客', 'SYSTEM'],
+  ['EMPLOYEE_SELF', '一线员工(自助)', 'ROSTER'],
 ];
 const KEEP_ROLE_CODES = SEED_ROLES.map((r) => r[0]);
-type Grant = 'ALL' | 'ALL_READ';
+// 'ALL'=全部权限;'ALL_READ'=全部 READ;string[]=指定权限码列表(精确授权)
+type Grant = 'ALL' | 'ALL_READ' | string[];
 const ROLE_GRANTS: Record<string, Grant> = {
   GOVERNANCE_ADMIN: 'ALL',
   READONLY_VIEWER: 'ALL_READ',
+  EMPLOYEE_SELF: ['ROSTER_SELF_READ'],
 };
 
 async function ensureTable(name: string, ddl: string): Promise<void> {
@@ -372,15 +377,24 @@ async function seedRolePermissions(): Promise<void> {
          WHERE r.role_code = ? AND p.permission_status = 'ACTIVE'`,
         [roleCode],
       );
-    } else {
+    } else if (grant === 'ALL_READ') {
       await pool.query(
         `INSERT IGNORE INTO role_permissions (role_id, permission_id)
          SELECT r.id, p.id FROM roles r JOIN permissions p
          WHERE r.role_code = ? AND p.action_code = 'READ' AND p.permission_status = 'ACTIVE'`,
         [roleCode],
       );
+    } else {
+      // string[]:按指定权限码列表精确授权(如员工自助只授 ROSTER_SELF_READ)
+      const ph = grant.map(() => '?').join(',');
+      await pool.query(
+        `INSERT IGNORE INTO role_permissions (role_id, permission_id)
+         SELECT r.id, p.id FROM roles r JOIN permissions p
+         WHERE r.role_code = ? AND p.permission_code IN (${ph}) AND p.permission_status = 'ACTIVE'`,
+        [roleCode, ...grant],
+      );
     }
-    console.log(`[auth] mapped role_permissions: ${roleCode} (${grant})`);
+    console.log(`[auth] mapped role_permissions: ${roleCode} (${Array.isArray(grant) ? grant.join('+') : grant})`);
   }
 }
 

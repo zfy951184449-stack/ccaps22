@@ -56,6 +56,7 @@ import rosterLeadershipCockpitRoutes from './routes/rosterLeadershipCockpit';
 import authRoutes from './routes/auth';
 import governanceRoutes from './routes/governance';
 import requireAuth from './middleware/requireAuth';
+import meRoutes from './routes/me';
 
 dotenv.config();
 
@@ -181,6 +182,9 @@ app.use('/api/roster-leadership-cockpit', rosterLeadershipCockpitRoutes);
 // --- Governance: RBAC 管理 API（用户/角色/权限/授权）。挂在全局 requireAuth 之后，
 // 各端点内部再挂 requirePermission(GOVERNANCE_*)。
 app.use('/api/governance', governanceRoutes);
+
+// 员工自助(只看自己):路由内 requireAuthStrict 单独强制登录,不受全局影子模式影响
+app.use('/api/me', meRoutes);
 
 // V4 Gantt API
 app.use('/api/v4/gantt', batchGanttV4Routes);

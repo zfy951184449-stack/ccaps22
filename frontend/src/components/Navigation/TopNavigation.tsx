@@ -53,6 +53,14 @@ const navGroups: NavGroup[] = [
     requiredPermission: 'SYSTEM_DASHBOARD_READ',
   },
   {
+    key: 'my-schedule',
+    label: '我的排班',
+    subtitle: 'My Shifts',
+    path: '/my-schedule',
+    icon: <ClockCircleOutlined />,
+    requiredPermission: 'ROSTER_SELF_READ',
+  },
+  {
     key: 'base-data',
     label: '基础数据',
     subtitle: 'Master Data',

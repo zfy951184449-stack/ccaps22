@@ -20,6 +20,13 @@ export interface AuthenticatedUser {
   source: AuthSource;
 }
 
+/** 当前用户绑定的员工（员工自助视角用）。无绑定为 null。 */
+export interface LinkedEmployee {
+  employeeId: number;
+  employeeCode: string;
+  employeeName: string;
+}
+
 /** POST /api/auth/login 的 data。 */
 export interface LoginResult {
   token: string;
@@ -32,6 +39,8 @@ export interface MeResult {
   user: AuthenticatedUser;
   /** 该用户的权限码列表（permission_code）。 */
   permissions: string[];
+  /** 当前用户绑定的员工（员工自助）。无绑定为 null。 */
+  linkedEmployee: LinkedEmployee | null;
 }
 
 interface Envelope<T> {
