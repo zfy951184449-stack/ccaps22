@@ -24,9 +24,14 @@ export PATH="${HOME}/Library/Python/3.9/bin:${BREW_PREFIX}/bin:/usr/bin:/bin:/us
 PX_BIN="${HOME}/Library/Python/3.9/bin/px"
 [ -x "${PX_BIN}" ] || PX_BIN="px"
 
+# PAC 来自 px.env(setup 时从目标机系统现读,不硬编码)
+if [ -z "${PX_PAC}" ]; then
+  echo "[run-px] px.env 缺 PX_PAC —— 重跑 ./deploy/setup-automation.sh" >&2
+  exit 1
+fi
 # --pac 智能分流;--username + PX_PASSWORD(环境变量)做 NTLM;只监听本机
 exec "${PX_BIN}" \
-  --pac="${PX_PAC:-http://proxy.wuxibiologics.com:4713/files/proxy.pac}" \
+  --pac="${PX_PAC}" \
   --username="${PX_USERNAME}" \
   --listen=127.0.0.1 \
   --port="${PX_PORT}"

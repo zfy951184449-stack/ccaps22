@@ -30,10 +30,19 @@ printf "  域账号(直接回车用默认 %s): " "${DEF_USER}"
 read -r PXU; [ -z "${PXU}" ] && PXU="${DEF_USER}"
 printf "  域密码(输入时不显示,回车确认): "
 stty -echo 2>/dev/null || true; read -r PXP; stty echo 2>/dev/null || true; echo
+
+# 从【本机】系统读取当前 PAC(不硬编码,自动适配目标机真实代理配置)
+SYS_PAC="$(scutil --proxy 2>/dev/null | awk '/ProxyAutoConfigURLString/{print $NF}')"
+if [ -z "${SYS_PAC}" ]; then
+  log_warn "未从系统读到自动代理(PAC)地址。"
+  printf "  请粘贴本机 PAC 地址(scutil --proxy 里 ProxyAutoConfigURLString 那行的网址): "
+  read -r SYS_PAC
+fi
+log_info "本机 PAC: ${SYS_PAC}"
 {
   printf 'PX_USERNAME=%s\n' "${PXU}"
   printf 'PX_PASSWORD=%s\n' "${PXP}"
-  printf 'PX_PAC=%s\n' "http://proxy.wuxibiologics.com:4713/files/proxy.pac"
+  printf 'PX_PAC=%s\n' "${SYS_PAC}"
 } > "${PX_ENV}"
 chmod 600 "${PX_ENV}"
 log_pass "账号已保存(${PXU})"
