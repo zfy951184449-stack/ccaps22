@@ -12,6 +12,9 @@ PROJECT_ROOT="$(cd "${DEPLOY_DIR}/.." && pwd)"
 BACKEND_PORT="${BACKEND_PORT:-8080}"
 BIND_HOST="${BIND_HOST:-0.0.0.0}"
 
+# 本地 px 代理端口(开机自启的智能分流代理,见 setup-automation.sh)
+PX_PORT="${PX_PORT:-3128}"
+
 # 求解器:只绑环回,仅 backend 内部 HTTP 调用,浏览器不直连
 SOLVER_HOST="${SOLVER_HOST:-127.0.0.1}"
 SOLVER_PORT="${SOLVER_PORT:-5005}"
