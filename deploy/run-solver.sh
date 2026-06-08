@@ -21,6 +21,10 @@ if [ -z "${SOLVER_CALLBACK_SECRET}" ]; then
 fi
 export PORT="${SOLVER_PORT}"
 
+# solver 回调 backend 的地址(进度/结果/状态轮询),必须指向 backend 的实际端口。
+# 缺它时 solver 用代码默认 localhost:3001 → Connection refused,求解卡在"等待求解器日志"。
+export BACKEND_API_URL="http://127.0.0.1:${BACKEND_PORT}/api/v4/scheduling/callback/progress"
+
 # gunicorn 用 venv 内的解释器,无需 activate。绑环回:只允许同机 backend 调用。
 exec "${GUNICORN_BIN}" app:app \
   --bind "${SOLVER_HOST}:${SOLVER_PORT}" \
