@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 import requests
 import json
 from ortools.sat.python import cp_model
@@ -17,7 +18,7 @@ class APICallback(cp_model.CpSolverSolutionCallback):
     IMPORTANT: StopSearch() must be called from within this callback to work reliably.
     """
 
-    def __init__(self, run_id, api_url, log_search_progress=True, max_time_seconds=300, stagnation_limit=60):
+    def __init__(self, run_id, api_url, log_search_progress=True, max_time_seconds=300, stagnation_limit=90):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self.run_id = run_id
         self.api_url = api_url
@@ -58,8 +59,15 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         
         # Polling
         self.last_poll_time = time.time()
-        self.poll_interval = 1.0 # Check server every 1s
-        
+        self.poll_interval = 5.0 # 轮询后端停止信号的间隔(P1-12:从 1s 降到 5s)
+
+        # 🔧 异步推送(P0-1):求解期把进度/日志写进内存,由 monitor 线程每秒 flush 实发,
+        # 避免在 CP-SAT 求解线程里做同步 HTTP,阻塞 worker。
+        self._lock = threading.Lock()
+        self._defer_sends = False
+        self._latest_solution = None   # (status, metrics, log_line) 只留最新解(顺带解决 P0-4)
+        self._pending = []             # 其它待发(LOG 等),按序保留
+
         # Construct Status Check URL
         base_url = api_url.split("/callback/progress")[0]
         self.status_url = f"{base_url}/runs/{run_id}/status"
@@ -241,10 +249,43 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         return {}
 
     def push_progress(self, status, progress=None, metrics=None, message=None, log_line=None, type="STATUS"):
+        """求解期(self._defer_sends=True)只把内容写进内存,由 monitor 线程 flush 实发,
+        避免在 CP-SAT 求解线程做同步 HTTP 阻塞 worker(P0-1)。其它时候直接同步发。"""
+        if self._defer_sends:
+            with self._lock:
+                if type == "SOLUTION":
+                    self._latest_solution = (status, metrics, log_line)  # 覆盖,只留最新(P0-4)
+                else:
+                    self._pending.append((status, progress, metrics, message, log_line, type))
+            return
+        self._send_now(status, progress, metrics, message, log_line, type)
+
+    def flush(self):
+        """由 monitor 线程每秒调用:把求解期积压的进度/日志实际发出去(节流,最新解只发一条)。"""
+        with self._lock:
+            sol = self._latest_solution
+            self._latest_solution = None
+            pend = self._pending
+            self._pending = []
+        if sol is not None:
+            self._send_now(sol[0], metrics=sol[1], log_line=sol[2], type="SOLUTION")
+        for args in pend:
+            self._send_now(*args)
+
+    def begin_deferred(self):
+        """进入求解期:推送/日志改为写内存(由 monitor flush)。"""
+        self._defer_sends = True
+
+    def end_deferred(self):
+        """退出求解期:发完残留并恢复同步(之后 final/result_summary 直接发)。"""
+        self._defer_sends = False
+        self.flush()
+
+    def _send_now(self, status, progress=None, metrics=None, message=None, log_line=None, type="STATUS"):
         """Sends POST request to backend with retry logic."""
         max_retries = 2
         retry_delay = 0.5  # 500ms
-        
+
         payload = {
             "run_id": self.run_id,
             "status": status,
@@ -258,7 +299,7 @@ class APICallback(cp_model.CpSolverSolutionCallback):
             payload["message"] = message
         if log_line:
             payload["log_line"] = log_line
-        
+
         for attempt in range(max_retries + 1):
             try:
                 requests.post(self.api_url, json=payload, headers=self._auth_headers(), timeout=2)

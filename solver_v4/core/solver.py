@@ -39,6 +39,8 @@ class SolverV4:
         self.solver.parameters.num_workers = int(os.environ.get("SOLVER_WORKERS") or max(4, _cpu - 2))
         self.solver.parameters.linearization_level = 2
         self.solver.parameters.symmetry_level = 2
+        # 目标为整数,绝对 gap < 1 即最优;让 C++ 层自动终止,省去 Python callback 判 gap 再 StopSearch(P0-5)
+        self.solver.parameters.absolute_gap_limit = 0.99
 
     # ──────────────────────────────────────────────
     # Public Entry Point
@@ -108,7 +110,7 @@ class SolverV4:
     def _init_callback(self, config: dict):
         """Parse config, create APICallback if run_id exists."""
         max_time_s = float(config.get("max_time_seconds", 300))
-        stagnation_s = float(config.get("stagnation_limit", 300))
+        stagnation_s = float(config.get("stagnation_limit", 90))
         
         run_id = None
         if "metadata" in config:
@@ -466,7 +468,7 @@ class SolverV4:
                     special_cover_vars, special_shortage_vars):
         """Register variables, start monitor thread, and run CP-SAT."""
         max_time_s = float(config.get("max_time_seconds", 300))
-        stagnation_s = float(config.get("stagnation_limit", 300))
+        stagnation_s = float(config.get("stagnation_limit", 90))
 
         self.solver.parameters.max_time_in_seconds = max_time_s + 10.0
 
@@ -489,11 +491,13 @@ class SolverV4:
                 target=self._monitor_loop, args=(callback,))
             monitor_thread.start()
 
+            callback.begin_deferred()  # 求解期推送/日志走内存,由 monitor flush(不阻塞 worker)
             try:
                 status = self.solver.Solve(self.model, callback)
             finally:
                 self.stopping_event.set()
                 monitor_thread.join()
+                callback.end_deferred()  # 发完残留并恢复同步(供后续 final result)
         else:
             self.solver.parameters.max_time_in_seconds = max_time_s
             status = self.solver.Solve(self.model)
@@ -501,11 +505,14 @@ class SolverV4:
         return status
 
     def _monitor_loop(self, cb):
-        """Background thread: monitors stop conditions with 5s heartbeat."""
+        """Background thread: 每秒 flush 求解期积压的进度/日志、检查停止条件;轮询后端每 5s。"""
         last_heartbeat = time.time()
 
         while not self.stopping_event.is_set():
             time.sleep(1.0)
+
+            # 把求解线程攒下的进度/日志实际发出去(HTTP 在本线程,不阻塞 CP-SAT worker)
+            cb.flush()
 
             if cb.should_stop:
                 return
@@ -526,9 +533,12 @@ class SolverV4:
                 cb.request_stop(f"📉 Stagnation detected ({stagnation:.1f}s > {cb.stagnation_limit}s)")
                 return
 
-            if cb.poll_server_stop():
-                cb.request_stop("🛑 Received Manual Stop Signal from server")
-                return
+            # 轮询后端停止信号:每 poll_interval(5s)一次,而非每秒(P1-12)
+            if now - cb.last_poll_time > cb.poll_interval:
+                cb.last_poll_time = now
+                if cb.poll_server_stop():
+                    cb.request_stop("🛑 Received Manual Stop Signal from server")
+                    return
 
     # ──────────────────────────────────────────────
     # Result Handling
