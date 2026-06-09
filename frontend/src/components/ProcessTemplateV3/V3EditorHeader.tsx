@@ -29,6 +29,8 @@ export interface V3EditorHeaderProps {
   yAxisMode: YAxisMode;
   /** Y-axis mode change handler */
   onYAxisModeChange: (mode: YAxisMode) => void;
+  /** Open the "add stage" dialog */
+  onAddStage: () => void;
 }
 
 const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
@@ -42,6 +44,7 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
   onAutoSchedule,
   yAxisMode,
   onYAxisModeChange,
+  onAddStage,
 }) => {
   const navigate = useNavigate();
 
@@ -110,6 +113,26 @@ const V3EditorHeader: React.FC<V3EditorHeaderProps> = ({
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
+          {/* Add stage — primary entry so empty templates can be filled */}
+          <WxbButton
+            variant="primary"
+            size="sm"
+            onClick={onAddStage}
+            style={{ flexShrink: 0 }}
+          >
+            + 新增阶段
+          </WxbButton>
+
+          {/* Separator */}
+          <div
+            style={{
+              width: 1,
+              height: 20,
+              background: 'var(--wx-border, #E4EAF1)',
+              flexShrink: 0,
+            }}
+          />
+
           {/* Y-axis mode toggle */}
           <WxbSegmented
             size="sm"

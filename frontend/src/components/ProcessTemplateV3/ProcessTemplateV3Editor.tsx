@@ -121,6 +121,11 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [newEquipName, setNewEquipName] = useState('');
   const [newEquipSystemType, setNewEquipSystemType] = useState<string>('SUS');
   const [newEquipClass, setNewEquipClass] = useState('');
+  // ---- Add-stage state ----
+  const [addStageModalOpen, setAddStageModalOpen] = useState(false);
+  const [newStageName, setNewStageName] = useState('');
+  const [newStageStartDay, setNewStageStartDay] = useState('1');
+  const [stageSubmitting, setStageSubmitting] = useState(false);
   const [pendingBindTask, setPendingBindTask] = useState<GanttTask | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<GanttTask[]>([]);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
@@ -370,6 +375,45 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     },
     [actions, ganttData, loadResourceEditorData, resourceView, shareService],
   );
+
+  // Create the first / next stage. Restores the stage-management entry that
+  // the V3 rewrite dropped (audit V3-STAGE-001): without it a brand-new empty
+  // template can never be filled. Backend POST /process-stages is unchanged.
+  const handleCreateStage = useCallback(async () => {
+    const name = newStageName.trim();
+    if (!name) {
+      message.warning('请输入阶段名称');
+      return;
+    }
+    const startDay = Number(newStageStartDay);
+    if (!Number.isInteger(startDay) || startDay < 0) {
+      message.warning('起始天需为 0 或正整数');
+      return;
+    }
+    try {
+      setStageSubmitting(true);
+      const existingStages = resourceEditorData?.stages?.length ?? 0;
+      await processTemplateV2Api.createStage(templateId, {
+        stageName: name,
+        stageOrder: existingStages + 1,
+        startDay,
+      });
+      message.success('阶段已创建');
+      setAddStageModalOpen(false);
+      setNewStageName('');
+      setNewStageStartDay('1');
+      // allSettled: 任一刷新挂起/失败都不拖死提交(参考审计 DYN-B2 卡死)
+      await Promise.allSettled([
+        ganttData.refreshData(),
+        actions.refreshAll(),
+        loadResourceEditorData(),
+      ]);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '创建阶段失败');
+    } finally {
+      setStageSubmitting(false);
+    }
+  }, [newStageName, newStageStartDay, resourceEditorData, templateId, ganttData, actions, loadResourceEditorData]);
 
   const backgroundMenuItems = useMemo<ContextMenuItem[]>(
     () =>
@@ -763,6 +807,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         onAutoSchedule={actions.handleAutoSchedule}
         yAxisMode={yAxisMode}
         onYAxisModeChange={setYAxisMode}
+        onAddStage={() => setAddStageModalOpen(true)}
       />
 
       <div style={{ flex: 1, minHeight: 0 }}>
@@ -933,6 +978,34 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
               提示：创建后将自动绑定到操作「{pendingBindTask.label}」
             </div>
           )}
+        </div>
+      </WxbModal>
+
+      {/* Add Stage Modal — Wxb Design System (restores missing stage entry) */}
+      <WxbModal
+        open={addStageModalOpen}
+        title="新增阶段"
+        okText="创建阶段"
+        cancelText="取消"
+        confirmLoading={stageSubmitting}
+        onOk={() => void handleCreateStage()}
+        onCancel={() => { setAddStageModalOpen(false); setNewStageName(''); setNewStageStartDay('1'); }}
+        width={440}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <WxbInput
+            label="阶段名称"
+            value={newStageName}
+            onChange={e => setNewStageName(e.target.value)}
+            placeholder="例如: 配制阶段"
+          />
+          <WxbInput
+            label="起始天（第几天开始，从 1 起）"
+            value={newStageStartDay}
+            onChange={e => setNewStageStartDay(e.target.value)}
+            placeholder="1"
+          />
         </div>
       </WxbModal>
 
