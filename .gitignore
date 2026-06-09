@@ -78,3 +78,6 @@ docs/exec-plans/active/harness-runs/*
 test_e2e_*.png
 test_frontend_e2e_*.ts
 playwright-artifacts/
+
+# 审计工具产物(大体积 HTML/JSON/截图,不入库;目标机自动更新也不必拉)
+docs/audit-process-template/
