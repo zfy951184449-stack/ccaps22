@@ -862,14 +862,23 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       setRecentOperationIds(
         writeSavedConfig(templateId, resolvedOperationId, draft, recentOperationIds),
       );
-      await onCreated({
-        scheduleId: createdScheduleId,
-        stageId: Number(draft.stageId),
-        openAdvanced: Boolean(options?.openAdvanced),
-        initialAdvancedTab: options?.initialAdvancedTab,
-      });
       message.success('操作已创建');
       onCancel();
+      // 刷新视图不应阻塞提交完成与弹窗关闭：旧实现 `await onCreated(...)`
+      // 在 onCreated 内某刷新挂起时会让 finally 永不执行 → saving 卡死、
+      // 弹窗（含取消按钮）全禁用、只能刷新页面（审计 DYN-B2）。
+      // 改为后台触发并独立兜底，提交在 createStageOperationFromCanvas 成功即完成。
+      void Promise.resolve(
+        onCreated({
+          scheduleId: createdScheduleId,
+          stageId: Number(draft.stageId),
+          openAdvanced: Boolean(options?.openAdvanced),
+          initialAdvancedTab: options?.initialAdvancedTab,
+        }),
+      ).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('刷新视图失败:', err);
+      });
     } catch (error: any) {
       console.error('Failed to quick create operation:', error);
       const rawMessage = error?.response?.data?.error || error?.message || '创建操作失败';

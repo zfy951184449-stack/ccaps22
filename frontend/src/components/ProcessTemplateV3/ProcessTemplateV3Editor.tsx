@@ -365,7 +365,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
   const handleCreatedOperation = useCallback(
     async (_result: OperationCreatedResult) => {
-      await Promise.all([
+      // allSettled：任一刷新失败/挂起都不应拖垮其余刷新（审计 DYN-B2）。
+      await Promise.allSettled([
         ganttData.refreshData(),
         actions.refreshAll(),
         shareService.refresh(),
