@@ -3,19 +3,19 @@ import pool from '../config/database';
 
 // 生成下一个操作编码
 const generateNextOperationCode = async (): Promise<string> => {
+  // 仅在规范的 OP-NNNNN 编码中取最大序号；忽略历史/脏的非规范编码
+  // （如 SPI_*、TAT9_*、SUS-BAG-*，乃至 OP-00NaN）。
+  // 旧实现用 `ORDER BY operation_code DESC LIMIT 1` 取到非数字编码后
+  // `parseInt(code.split('-')[1])` 得到 NaN，生成出 "OP-00NaN"，写入时
+  // 唯一键冲突直接 500（审计 OPCRUD-02）。
   const [rows] = await pool.execute(
-    'SELECT operation_code FROM operations ORDER BY operation_code DESC LIMIT 1'
+    `SELECT MAX(CAST(SUBSTRING(operation_code, 4) AS UNSIGNED)) AS max_num
+     FROM operations
+     WHERE operation_code REGEXP '^OP-[0-9]+$'`
   ) as any;
 
-  if (rows.length === 0) {
-    return 'OP-00001';
-  }
-
-  const lastCode = rows[0].operation_code;
-  const lastNumber = parseInt(lastCode.split('-')[1]);
-  const nextNumber = lastNumber + 1;
-
-  return `OP-${nextNumber.toString().padStart(5, '0')}`;
+  const maxNum = Number(rows[0]?.max_num ?? 0);
+  return `OP-${(maxNum + 1).toString().padStart(5, '0')}`;
 };
 
 // 获取所有操作
