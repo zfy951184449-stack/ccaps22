@@ -42,13 +42,13 @@ logts "发现新版本 ${OLD} → ${NEW}"
 #    纯数据 migration(INSERT 等)一概不碰数据库、照常更新代码。
 NEW_MIGS="$(git diff --name-only "${OLD}" "origin/main" | grep '^database/migrations/.*\.sql$' || true)"
 for m in ${NEW_MIGS}; do
-  if git show "origin/main:${m}" 2>/dev/null | sql_has_ddl; then
-    logts "含数据库【结构】变更(${m}),暂停自动更新,等人工处理后手动 ./deploy/update.sh"
-    notify "新版本含数据库结构变更,已暂停。请手动处理后再更新。"
+  if git show "origin/main:${m}" 2>/dev/null | sql_is_risky; then
+    logts "含数据库结构变更或改/删数据(${m}),暂停自动更新,等人工处理后手动 ./deploy/update.sh"
+    notify "新版本含数据库结构/改删变更,已暂停。请手动处理后再更新。"
     exit 0
   fi
 done
-# 无结构变更(纯数据/无 migration)→ 继续;update.sh 只更新代码,绝不跑 SQL
+# 无危险操作(纯 INSERT 配置种子/无 migration)→ 继续;update.sh 会自动跑纯 INSERT
 
 # 3. 执行更新(update.sh 内部 pull→按需构建→重启→自检),并确认后端健康
 if bash "${DEPLOY_DIR}/update.sh" >>"${LOG}" 2>&1 \

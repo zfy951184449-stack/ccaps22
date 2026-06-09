@@ -71,19 +71,26 @@ else
 fi
 
 # 5) 数据库 migration 只提示、不自动跑 ──────────────────────────
-log_step "4/6 数据库结构变更检查"
-STRUCT_MIGS=""
+log_step "4/6 数据库 migration"
+RISKY=""; SAFE=""
 for m in $(printf '%s\n' "${CHANGED}" | grep '^database/migrations/.*\.sql$' || true); do
-  if git show "${NEW}:${m}" 2>/dev/null | sql_has_ddl; then
-    STRUCT_MIGS="${STRUCT_MIGS}${m}\n"
+  if git show "${NEW}:${m}" 2>/dev/null | sql_is_risky; then
+    RISKY="${RISKY}${m}\n"
+  else
+    SAFE="${SAFE} ${m}"
   fi
 done
-if [ -n "${STRUCT_MIGS}" ]; then
-  log_warn "本次含【数据库结构变更】,需你手动执行(脚本不碰库):"
-  printf '%b' "${STRUCT_MIGS}" | sed 's/^/    /'
-else
-  log_pass "无数据库结构变更(纯数据/无 migration 一律不碰库)"
+if [ -n "${RISKY}" ]; then
+  log_warn "含结构变更或改/删数据,脚本不碰、需你手动执行:"
+  printf '%b' "${RISKY}" | sed 's/^/    /'
 fi
+if [ -n "${SAFE}" ]; then
+  for m in ${SAFE}; do
+    log_info "执行纯新增配置种子: ${m}"
+    run_sql_file "${PROJECT_ROOT}/${m}" && log_pass "已跑 ${m}" || log_warn "跑 ${m} 失败(看上面报错)"
+  done
+fi
+[ -z "${RISKY}" ] && [ -z "${SAFE}" ] && log_pass "无 migration"
 
 # 6) 重启服务(前端是 backend 静态托管,重启 backend 即加载新 build)──
 log_step "5/6 重启服务"

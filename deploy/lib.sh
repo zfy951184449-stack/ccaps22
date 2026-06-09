@@ -76,8 +76,19 @@ wait_for_url() {
   log_block "${name} 启动超时 (${url}) —— 看日志 ${LOG_DIR}"; return 1
 }
 
-# 判断一段 SQL(从 stdin 读)是否含【结构变更 DDL】:去掉 -- 注释行后,看有没有
-# CREATE/ALTER/DROP/TRUNCATE/RENAME。纯 INSERT/UPDATE/DELETE 数据操作 → 返回 false(不算)。
-sql_has_ddl() {
-  grep -v '^[[:space:]]*--' | grep -iqE '\b(CREATE|ALTER|DROP|TRUNCATE|RENAME)[[:space:]]'
+# 判断一段 SQL(从 stdin 读)是否含【危险操作】:去掉 -- 注释行后,看有没有
+# 结构变更(CREATE/ALTER/DROP/TRUNCATE/RENAME)或 改/删现有数据(UPDATE/DELETE)。
+# 纯 INSERT/REPLACE(配置种子)→ 返回 false(安全,可自动跑)。
+sql_is_risky() {
+  grep -v '^[[:space:]]*--' | grep -iqE '\b(CREATE|ALTER|DROP|TRUNCATE|RENAME|UPDATE|DELETE)[[:space:]]'
+}
+
+# 用 backend/.env 的 DB 账号跑一个 SQL 文件(只给纯 INSERT 配置种子用)
+run_sql_file() {
+  local f="$1" dbn dbu dbp mysqlbin
+  dbn="$(env_get DB_NAME)"; : "${dbn:=aps_system}"
+  dbu="$(env_get DB_USER)"; : "${dbu:=root}"
+  dbp="$(env_get DB_PASSWORD)"
+  mysqlbin="${BREW_PREFIX}/bin/mysql"; [ -x "${mysqlbin}" ] || mysqlbin="mysql"
+  MYSQL_PWD="${dbp}" "${mysqlbin}" --protocol=TCP -h127.0.0.1 -P3306 -u"${dbu}" "${dbn}" < "${f}"
 }
