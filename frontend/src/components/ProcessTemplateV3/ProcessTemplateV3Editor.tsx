@@ -121,6 +121,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [newEquipName, setNewEquipName] = useState('');
   const [newEquipSystemType, setNewEquipSystemType] = useState<string>('SUS');
   const [newEquipClass, setNewEquipClass] = useState('');
+  const [newEquipModel, setNewEquipModel] = useState('');
   // ---- Add-stage state ----
   const [addStageModalOpen, setAddStageModalOpen] = useState(false);
   const [newStageName, setNewStageName] = useState('');
@@ -730,6 +731,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // ---- Create equipment handler ----
   const handleCreateEquipment = useCallback(async () => {
     if (!newEquipName.trim()) { message.warning('请输入设备名称'); return; }
+    // 后端对非 VIRTUAL 设备要求 equipment_class 与 equipment_model 皆必填（审计 RV-01）。
+    if (!newEquipClass.trim() || !newEquipModel.trim()) { message.warning('请填写设备类别与设备型号'); return; }
     try {
       // Find the first ROOM node as parent (fallback to ID 11)
       const allNodes = await processTemplateV2Api.listResourceNodes({ tree: false });
@@ -741,7 +744,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         nodeClass: 'EQUIPMENT_UNIT',
         parentId,
         equipmentSystemType: newEquipSystemType as any,
-        equipmentClass: newEquipClass || undefined,
+        equipmentClass: newEquipClass.trim(),
+        equipmentModel: newEquipModel.trim(),
         nodeScope: 'DEPARTMENT',
         departmentCode: 'USP',
       } as any);
@@ -758,11 +762,11 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         message.success(`设备 ${newEquipName} 已创建`);
       }
       setShowCreateEquipModal(false);
-      setNewEquipName(''); setNewEquipClass(''); setPendingBindTask(null);
+      setNewEquipName(''); setNewEquipClass(''); setNewEquipModel(''); setPendingBindTask(null);
     } catch (err: any) {
       message.error(err?.response?.data?.error || '创建设备失败');
     }
-  }, [newEquipName, newEquipSystemType, newEquipClass, pendingBindTask, resourceView, refreshEquipmentNodes]);
+  }, [newEquipName, newEquipSystemType, newEquipClass, newEquipModel, pendingBindTask, resourceView, refreshEquipmentNodes]);
 
   // ---- Loading / error states ----
   if (templateLoading) {
@@ -974,6 +978,12 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
               />
             </div>
           </div>
+          <WxbInput
+            label="设备型号"
+            value={newEquipModel}
+            onChange={e => setNewEquipModel(e.target.value)}
+            placeholder="例如: XDR-200"
+          />
           {pendingBindTask && (
             <div className="wxb-equip-bind-hint">
               提示：创建后将自动绑定到操作「{pendingBindTask.label}」
