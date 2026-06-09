@@ -146,10 +146,41 @@ class SolverV4:
     # Phase 2: Variable Creation
     # ──────────────────────────────────────────────
 
+    def _shift_relevant_employee_ids(self, req: SolverRequest, index) -> set:
+        """
+        [P0-2] 需要建立 shift_assignments 变量的员工集合。
+
+        = 所有"可能被排班 / 被班次约束按 employee_id 点名"的员工:
+            · 操作候选       index.get_all_employees() (position_qualifications.candidate_employee_ids)
+            · 领导           org_role ∈ LEADER_ROLES  (leadership_coverage Rule1 需领导的 shift 变量)
+            · 专项班次相关   special_shift_requirements 的 eligible_employee_ids + candidates
+            · 锁定操作强制人 locked_operations.enforced_employee_ids
+            · 锁定班次       locked_shifts.employee_id
+            · 冻结班次/分配  frozen_shifts / frozen_assignments 的 employee_id
+        排除的只有"从头到尾没被任何需求/约束引用"的无关员工 —— 正是本优化要省掉的。
+
+        ⚠️ 维护铁律: 任何新增的、按 employee_id 指定班次或操作分配的 contract 字段,
+           都必须在此并入。漏掉会让该员工缺失 shift 变量, 相关硬约束(领导在岗 / 专项覆盖 /
+           锁定 / 冻结)会**静默失效**: 不抛异常, 但排出违反约束的班次。
+        """
+        from constraints.leadership_coverage import LEADER_ROLES
+        emps = set(index.get_all_employees())
+        emps |= {ep.employee_id for ep in req.employee_profiles
+                 if getattr(ep, "org_role", "FRONTLINE") in LEADER_ROLES}
+        for r in req.special_shift_requirements:
+            emps |= set(getattr(r, "eligible_employee_ids", None) or [])
+            emps |= {c.employee_id for c in (getattr(r, "candidates", None) or [])}
+        for lo in req.locked_operations:
+            emps |= set(getattr(lo, "enforced_employee_ids", None) or [])
+        emps |= {ls.employee_id for ls in req.locked_shifts}
+        emps |= {fs.employee_id for fs in req.frozen_shifts}
+        emps |= {fa.employee_id for fa in req.frozen_assignments}
+        return emps
+
     def _build_variables(self, req: SolverRequest, config: dict, callback):
         """
         Create assignment, vacancy, and shift variables.
-        
+
         Returns:
             (assignments, vacancy_vars, shift_assignments, special_cover_vars, special_shortage_vars, index, shift_index)
             OR a dict (early exit result) if infeasible.
@@ -221,7 +252,9 @@ class SolverV4:
         if req.window and req.shift_definitions:
             shift_index = ShiftIndex(req)
             dates = get_date_range(req.window['start_date'], req.window['end_date'])
-            all_employees = {ep.employee_id for ep in req.employee_profiles}
+            # [P0-2] 只为"需要排班的员工"建 shift 变量,排除从未被任何需求/约束点名的
+            # 无关员工(典型场景省 30%+ shift BoolVar)。完整来源见 _shift_relevant_employee_ids。
+            all_employees = self._shift_relevant_employee_ids(req, index)
             
             for date in dates:
                 for emp_id in all_employees:
@@ -231,7 +264,7 @@ class SolverV4:
                         total_vars += 1
             
             if callback:
-                callback.log_metric("班次变量", f"Days {len(dates)} x Emps {len(all_employees)} x Shifts {len(req.shift_definitions)}")
+                callback.log_metric("班次变量", f"Days {len(dates)} x Emps {len(all_employees)}/{len(req.employee_profiles)}(收窄后/全员) x Shifts {len(req.shift_definitions)}")
 
         for requirement in req.special_shift_requirements:
             special_shortage_vars[requirement.occurrence_id] = self.model.NewIntVar(
