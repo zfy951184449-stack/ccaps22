@@ -217,6 +217,32 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             ? JSON.parse(run.result_summary)
             : run.result_summary;
         const runSummary = parseRunSummary(run.summary_json);
+
+        // === L1: 解析本次求解责任域(scope),决定 apply 的删除收窄范围 ===
+        // 旧 run(summary_json 无 scope)→ is_global 视为 true → 全部退回按时间窗删除(=改动前行为),100% 向后兼容。
+        const scope = (runSummary as any)?.scope;
+        const hasScope: boolean = !!scope && typeof scope === 'object';
+        const scopeTeamIds: number[] = Array.isArray(scope?.team_ids)
+            ? scope.team_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+            : [];
+        const scopeBatchIds: number[] = Array.isArray(scope?.batch_ids)
+            ? scope.batch_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+            : [];
+        const scopeEmployeeIds: number[] = Array.isArray(scope?.employee_ids)
+            ? scope.employee_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+            : [];
+        const scopeStandaloneTaskIds: number[] = Array.isArray(scope?.standalone_task_ids)
+            ? scope.standalone_task_ids.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id) && id > 0)
+            : [];
+        // 删除策略(守住 I2「责任域外零影响」)——三个维度【各自独立】判断:
+        //   · 真全局(无 scope 的旧 run,或 既没限团队也没限批次):责任域=整窗全部 → 按时间窗全删(=改动前行为);
+        //   · 否则属「局部求解」:每个维度只在拿到自己的责任域键时收窄删除,
+        //     键缺失则【跳过该维度删除】(保守,绝不退回全删而误删别团队)。
+        // 关键:bpa 只看 batch_ids、esp 只看 employee_ids、standalone 只看 standalone_task_ids——
+        //   主 bug(在「全部」视图下只勾 USP 批次、team_ids=[])下,bpa 仍按批次收窄,不依赖是否选了团队。
+        const isFullyGlobal: boolean = !hasScope || (scopeTeamIds.length === 0 && scopeBatchIds.length === 0);
+        console.log(`[SchedulingV4][L1] Run ${runId} scope: fullyGlobal=${isFullyGlobal}, teams=${scopeTeamIds.length}, batches=${scopeBatchIds.length}, emps=${scopeEmployeeIds.length}, standalone=${scopeStandaloneTaskIds.length}`);
+
         const specialShiftRequirements = normalizeSpecialShiftRequirements(runSummary.special_shift_requirements);
         const specialShiftAssignments = normalizeSpecialShiftAssignments(rawResult.special_shift_assignments);
         const specialShiftShortages = normalizeSpecialShiftShortages(rawResult.special_shift_shortages);
@@ -325,13 +351,29 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                 );
             });
 
-            const [shiftPlansToDelete] = await connection.execute<RowDataPacket[]>(
-                `SELECT id
-                 FROM employee_shift_plans
-                 WHERE plan_date BETWEEN ? AND ?
-                   AND IFNULL(is_locked, 0) = 0`,
-                [cleanupStart, cleanupEnd]
-            );
+            // L1 esp 维度:有员工责任域→按员工收窄删;真全局→按时间窗全删(原行为);局部但无员工键→跳过(保守)。
+            let shiftPlansToDelete: RowDataPacket[] = [];
+            if (scopeEmployeeIds.length > 0) {
+                const empPlaceholders = scopeEmployeeIds.map(() => '?').join(',');
+                const [rows] = await connection.execute<RowDataPacket[]>(
+                    `SELECT id FROM employee_shift_plans
+                     WHERE plan_date BETWEEN ? AND ?
+                       AND IFNULL(is_locked, 0) = 0
+                       AND employee_id IN (${empPlaceholders})`,
+                    [cleanupStart, cleanupEnd, ...scopeEmployeeIds],
+                );
+                shiftPlansToDelete = rows;
+            } else if (isFullyGlobal) {
+                const [rows] = await connection.execute<RowDataPacket[]>(
+                    `SELECT id FROM employee_shift_plans
+                     WHERE plan_date BETWEEN ? AND ?
+                       AND IFNULL(is_locked, 0) = 0`,
+                    [cleanupStart, cleanupEnd],
+                );
+                shiftPlansToDelete = rows;
+            } else {
+                console.warn(`[SchedulingV4][L1] Run ${runId} 局部求解但无员工责任域键(未选团队),跳过 esp 清理(避免误删别团队)`);
+            }
 
             if (shiftPlansToDelete.length > 0) {
                 const shiftPlanIds = shiftPlansToDelete.map(row => Number(row.id));
@@ -366,21 +408,52 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
                 }
             }
 
-            await connection.execute(
-                `DELETE bpa FROM batch_personnel_assignments bpa
-                 JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
-                 WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
-                   AND IFNULL(bpa.is_locked, 0) = 0`,
-                [cleanupStart, cleanupEnd]
-            );
-            console.log(`[SchedulingV4] Cleaned up non-locked assignments in ${isIntervalSolve ? 'solve range' : 'window'} ${cleanupStart} ~ ${cleanupEnd}`);
+            // L1 bpa 维度:有批次责任域→按批次收窄删(主 bug 修复,不依赖是否选团队);
+            //   真全局→按时间窗全删(原行为);局部但无批次键→跳过(保守)。
+            if (scopeBatchIds.length > 0) {
+                const batchPlaceholders = scopeBatchIds.map(() => '?').join(',');
+                await connection.execute(
+                    `DELETE bpa FROM batch_personnel_assignments bpa
+                     JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+                     WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
+                       AND IFNULL(bpa.is_locked, 0) = 0
+                       AND bop.batch_plan_id IN (${batchPlaceholders})`,
+                    [cleanupStart, cleanupEnd, ...scopeBatchIds],
+                );
+                console.log(`[SchedulingV4] Cleaned up non-locked assignments in ${isIntervalSolve ? 'solve range' : 'window'} ${cleanupStart} ~ ${cleanupEnd} (batches ${scopeBatchIds.join(',')})`);
+            } else if (isFullyGlobal) {
+                await connection.execute(
+                    `DELETE bpa FROM batch_personnel_assignments bpa
+                     JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+                     WHERE DATE(bop.planned_start_datetime) BETWEEN ? AND ?
+                       AND IFNULL(bpa.is_locked, 0) = 0`,
+                    [cleanupStart, cleanupEnd],
+                );
+                console.log(`[SchedulingV4] Cleaned up non-locked assignments in ${isIntervalSolve ? 'solve range' : 'window'} ${cleanupStart} ~ ${cleanupEnd}`);
+            } else {
+                console.warn(`[SchedulingV4][L1] Run ${runId} 局部求解但无批次责任域键,跳过 bpa 清理(避免误删别团队)`);
+            }
 
-            await connection.execute(
-                `DELETE sta FROM standalone_task_assignments sta
-                 WHERE sta.scheduling_run_id IS NOT NULL 
-                   AND sta.assigned_date >= ? AND sta.assigned_date <= ?`,
-                [cleanupStart, cleanupEnd]
-            );
+            // L1 standalone 维度:有独立任务责任域→按任务收窄删;真全局→按时间窗全删(原行为);局部但无任务键→跳过(保守)。
+            if (scopeStandaloneTaskIds.length > 0) {
+                const staPlaceholders = scopeStandaloneTaskIds.map(() => '?').join(',');
+                await connection.execute(
+                    `DELETE sta FROM standalone_task_assignments sta
+                     WHERE sta.scheduling_run_id IS NOT NULL
+                       AND sta.assigned_date >= ? AND sta.assigned_date <= ?
+                       AND sta.task_id IN (${staPlaceholders})`,
+                    [cleanupStart, cleanupEnd, ...scopeStandaloneTaskIds],
+                );
+            } else if (isFullyGlobal) {
+                await connection.execute(
+                    `DELETE sta FROM standalone_task_assignments sta
+                     WHERE sta.scheduling_run_id IS NOT NULL
+                       AND sta.assigned_date >= ? AND sta.assigned_date <= ?`,
+                    [cleanupStart, cleanupEnd],
+                );
+            } else {
+                console.warn(`[SchedulingV4][L1] Run ${runId} 局部求解但无独立任务责任域键,跳过 standalone 清理(避免误删别团队)`);
+            }
         }
 
         let assignmentsInserted = 0;

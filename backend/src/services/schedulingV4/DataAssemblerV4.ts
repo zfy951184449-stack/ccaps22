@@ -350,7 +350,7 @@ export class DataAssemblerV4 {
         // [NEW] Fetch and enrich Standalone Tasks (conditionally based on config)
         const enableStandalone = config?.enable_standalone_tasks !== false; // default: true
         const standaloneTasks = enableStandalone
-            ? await this.fetchAndEnrichStandaloneTasks(startDate, endDate, employees)
+            ? await this.fetchAndEnrichStandaloneTasks(startDate, endDate, employees, teamIds)
             : [];
 
         // Merge operations and standalone tasks
@@ -420,14 +420,36 @@ export class DataAssemblerV4 {
 
     // --- Private Fetchers ---
 
-    private static async fetchAndEnrichStandaloneTasks(startDate: string, endDate: string, employees: V4EmployeeProfile[]): Promise<V4OperationDemand[]> {
-        // Fetch valid standalone tasks that overlap with the scheduling window
-        const [taskRows] = await pool.execute<RowDataPacket[]>(`
+    private static async fetchAndEnrichStandaloneTasks(startDate: string, endDate: string, employees: V4EmployeeProfile[], teamIds: number[] = []): Promise<V4OperationDemand[]> {
+        // Fetch valid standalone tasks that overlap with the scheduling window.
+        // L1: 局部团队求解只取「本团队子树(含)或无团队归属(team_id IS NULL,视为全局任务)」的独立任务,
+        //     与 batch(按批次)/esp(按员工)的责任域口径对称——避免把别团队的独立任务带进来又排不上,
+        //     进而在 apply 阶段被误删。全局求解(teamIds 为空)取全部(原行为)。
+        let taskQuery = `
             SELECT id, task_code, task_name, task_type, earliest_start, deadline, duration_minutes, required_people, preferred_shift_ids, allowed_employee_ids, related_batch_id
             FROM standalone_tasks
             WHERE status IN ('PENDING', 'SCHEDULED')
               AND earliest_start <= ? AND deadline >= ?
-        `, [`${endDate} 23:59:59`, `${startDate} 00:00:00`]);
+        `;
+        let taskParams: any[] = [`${endDate} 23:59:59`, `${startDate} 00:00:00`];
+        if (teamIds.length > 0) {
+            const teamPlaceholders = teamIds.map(() => '?').join(',');
+            taskQuery = `
+            WITH RECURSIVE unit_tree AS (
+                SELECT id FROM organization_units WHERE id IN (${teamPlaceholders})
+                UNION ALL
+                SELECT ou.id FROM organization_units ou
+                INNER JOIN unit_tree ut ON ou.parent_id = ut.id
+            )
+            SELECT id, task_code, task_name, task_type, earliest_start, deadline, duration_minutes, required_people, preferred_shift_ids, allowed_employee_ids, related_batch_id
+            FROM standalone_tasks
+            WHERE status IN ('PENDING', 'SCHEDULED')
+              AND earliest_start <= ? AND deadline >= ?
+              AND (team_id IN (SELECT id FROM unit_tree) OR team_id IS NULL)
+            `;
+            taskParams = [...teamIds, `${endDate} 23:59:59`, `${startDate} 00:00:00`];
+        }
+        const [taskRows] = await pool.execute<RowDataPacket[]>(taskQuery, taskParams);
 
         if (taskRows.length === 0) return [];
 

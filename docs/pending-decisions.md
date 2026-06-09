@@ -54,12 +54,23 @@
 
 ---
 
-## 二、已清理
+## 二、排班 / 调度
+
+### PD-10 排班 apply 责任域隔离 — standalone 求解行为变更 + 测试缺口 — 🟢 已定待执行
+- **背景**：修复「只跑单团队（如 USP）求解并 apply，会覆盖其他团队已应用排班，每日操作人员分配只剩最后一个团队」。根因：apply 原本按时间窗全删未锁定的 bpa/esp/standalone，删除粒度（整窗全部）≠ 求解粒度（单团队）。已改为「替换边界 = 本次求解责任域」，批次/员工/独立任务三维度各自独立收窄；责任域快照存于 `scheduling_runs.summary_json.scope`（零 DDL）。改动文件：`applyResultController.ts` / `DataAssemblerV4.ts` / `solveOrchestrator.ts` / `helpers.ts`；集成测试 `applyScopeIsolationV4.test.ts`。
+- **行为变更（需团队知晓）**：`DataAssemblerV4.fetchAndEnrichStandaloneTasks` 现在在**局部团队求解**时只取「本团队子树(含) 或 team_id IS NULL（无归属=全局任务）」的独立任务；以前不分团队全取（却只能用本团队员工排，排不上还被 apply 误删）。即**局部求解不再尝试给别团队的独立任务派人**——符合「局部只管本团队」直觉，但属求解侧行为改变。
+- **边界**：`team_id IS NULL` 的独立任务被任何局部求解纳入（视为全局任务），会被每次局部 apply 重排/覆盖；当前数据 standalone `team_id` 全为 2(USP)，暂不触发跨团队场景。
+- **测试缺口（待补）**：apply 端隔离已有集成测试（3 用例）；但 **assembler 端的 team 过滤**（局部求解只取本团队 standalone）尚无专项集成测试，待补。
+- **未做（更大范围，本次不碰）**：apply 之外其它 6+ 个写入口（手工编辑 `calendarController`、旧 V2/V3 `schedulingPersistenceService` 等）仍各用各的隐含删除范围，缺统一的「数据归属/scope」契约——更底层的债（原 L2 方案），需要时再开题。
+
+---
+
+## 三、已清理
 - ✅ `backend/src/routes/independentOperations.ts` + `backend/src/controllers/independentOperationController.ts`：纯死代码（未挂载、前后端零引用），已删除。
 
 ---
 
-## 三、鉴权后续阶段（来自实施计划，非"坑"但需跟踪）
+## 四、鉴权后续阶段（来自实施计划，非"坑"但需跟踪）
 - 🟡 后端 auth 模块（JwtService / AuthService / 可插拔 provider / `/api/auth/login` / requireAuth·requirePermission·requireServiceAuth）+ `user_role_assignments` 加 `scope_unit_id`。
 - 🟡 RBAC 管理 API（角色 CRUD / 权限目录查询 / 用户授权+scope）。
 - 🟡 **配置界面**（管理员自定义权限组+分配+组织树范围）。

@@ -178,6 +178,16 @@ export const updateRunSummary = async (runId: number, patch: Record<string, any>
     );
 };
 
+// L1: 只读取 run 的 summary_json 并解析为对象,供 orchestrator 在补写 scope.employee_ids 前读出已有 scope
+// (team/batch/is_global),避免 updateRunSummary 的浅合并把它们覆盖掉。
+export const getRunSummary = async (runId: number): Promise<Record<string, any>> => {
+    const [rows] = await pool.execute<RowDataPacket[]>(
+        'SELECT summary_json FROM scheduling_runs WHERE id = ?',
+        [runId],
+    );
+    return rows.length > 0 ? parseRunSummary(rows[0].summary_json) : {};
+};
+
 export const markSpecialShiftOccurrencesScheduled = async (runId: number) => {
     const [rows] = await pool.execute<RowDataPacket[]>(
         'SELECT summary_json FROM scheduling_runs WHERE id = ?',
@@ -214,12 +224,35 @@ export const derivePlanCategory = (
     return hasAssignedTasks ? 'PRODUCTION' : 'BASE';
 };
 
-export async function createRunRecord(start: string, end: string, batchIds: number[], solveStart?: string, solveEnd?: string) {
+export async function createRunRecord(
+    start: string,
+    end: string,
+    batchIds: number[],
+    teamIds: number[] = [],
+    solveStart?: string,
+    solveEnd?: string,
+) {
     const runCode = `V4-${Date.now()}`;
+    // L1: 把"本次求解责任域"快照进 summary_json.scope,apply 时据此把删除范围收窄到本团队/本批次,
+    // 避免跨团队覆盖(I1/I2/I3 不变量)。employee_ids 此刻未知,assemble 后由 orchestrator 步骤B补全;
+    // 全域(无 team)时 is_global=true、employee_ids 保持 null → apply 退回按时间窗删除(原行为)。
+    const normalizedTeamIds = Array.isArray(teamIds) ? teamIds : [];
+    const normalizedBatchIds = Array.isArray(batchIds) ? batchIds : [];
+    const initialSummary = {
+        scope: {
+            is_global: normalizedTeamIds.length === 0,
+            team_ids: normalizedTeamIds,
+            batch_ids: normalizedBatchIds,
+            employee_ids: null,
+            standalone_task_ids: null,
+            scope_version: 1,
+        },
+    };
     const [res] = await pool.execute<any>(
-        `INSERT INTO scheduling_runs (run_code, run_key, status, stage, window_start, window_end, period_start, period_end, solve_start, solve_end, target_batch_ids, solver_progress, created_at)
-         VALUES (?, ?, 'QUEUED', 'INIT', ?, ?, ?, ?, ?, ?, ?, '{"logs": []}', NOW())`,
-        [runCode, runCode, start, end, start, end, solveStart || null, solveEnd || null, JSON.stringify(batchIds)]
+        `INSERT INTO scheduling_runs (run_code, run_key, status, stage, window_start, window_end, period_start, period_end, solve_start, solve_end, target_batch_ids, summary_json, solver_progress, created_at)
+         VALUES (?, ?, 'QUEUED', 'INIT', ?, ?, ?, ?, ?, ?, ?, ?, '{"logs": []}', NOW())`,
+        [runCode, runCode, start, end, start, end, solveStart || null, solveEnd || null,
+         JSON.stringify(normalizedBatchIds), JSON.stringify(initialSummary)]
     );
     return res.insertId;
 }
