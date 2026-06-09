@@ -64,8 +64,14 @@ fi
 
 if has "^solver_v4/"; then
   log_info "求解器有改动…"
-  ( cd solver_v4; has "requirements" && ./.venv/bin/pip install -r requirements.txt )
-  log_pass "求解器已更新"
+  # ⚠️ set -e 陷阱: 不能写 `( cd solver_v4; has requirements && pip install )` ——
+  # 当 solver 有改动但 requirements.txt 没变时(纯 .py 改动的常态),has 返回非0,而它是
+  # subshell 的最后一条命令 → subshell 退出码=1 → set -euo pipefail 中断 update.sh →
+  # auto-update 误判失败并回滚(回滚还把本脚本退回旧版,形成死循环)。用 if 包裹规避。
+  if has "requirements"; then
+    ( cd solver_v4 && ./.venv/bin/pip install -r requirements.txt )
+  fi
+  log_pass "求解器已更新(代码随 gunicorn 重启热加载)"
 else
   log_info "求解器无改动,跳过"
 fi
