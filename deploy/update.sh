@@ -72,12 +72,17 @@ fi
 
 # 5) 数据库 migration 只提示、不自动跑 ──────────────────────────
 log_step "4/6 数据库结构变更检查"
-if has "^database/migrations/"; then
-  log_warn "本次更新带了新的数据库 migration,需你【手动】执行(用 mysql 按顺序导入):"
-  printf '%s\n' "${CHANGED}" | grep "^database/migrations/" | sed 's/^/    /'
-  log_warn "脚本不自动跑,避免误改生产数据。执行完再继续用系统。"
+STRUCT_MIGS=""
+for m in $(printf '%s\n' "${CHANGED}" | grep '^database/migrations/.*\.sql$' || true); do
+  if git show "${NEW}:${m}" 2>/dev/null | sql_has_ddl; then
+    STRUCT_MIGS="${STRUCT_MIGS}${m}\n"
+  fi
+done
+if [ -n "${STRUCT_MIGS}" ]; then
+  log_warn "本次含【数据库结构变更】,需你手动执行(脚本不碰库):"
+  printf '%b' "${STRUCT_MIGS}" | sed 's/^/    /'
 else
-  log_pass "无数据库结构变更"
+  log_pass "无数据库结构变更(纯数据/无 migration 一律不碰库)"
 fi
 
 # 6) 重启服务(前端是 backend 静态托管,重启 backend 即加载新 build)──

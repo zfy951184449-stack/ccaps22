@@ -75,3 +75,9 @@ wait_for_url() {
   done
   log_block "${name} 启动超时 (${url}) —— 看日志 ${LOG_DIR}"; return 1
 }
+
+# 判断一段 SQL(从 stdin 读)是否含【结构变更 DDL】:去掉 -- 注释行后,看有没有
+# CREATE/ALTER/DROP/TRUNCATE/RENAME。纯 INSERT/UPDATE/DELETE 数据操作 → 返回 false(不算)。
+sql_has_ddl() {
+  grep -v '^[[:space:]]*--' | grep -iqE '\b(CREATE|ALTER|DROP|TRUNCATE|RENAME)[[:space:]]'
+}

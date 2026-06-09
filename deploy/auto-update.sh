@@ -38,12 +38,17 @@ NEW="$(git rev-parse --short origin/main)"
 
 logts "发现新版本 ${OLD} → ${NEW}"
 
-# 2. 护栏:数据库结构变更 → 暂停,不自动改库
-if git diff --name-only "${OLD}" "origin/main" | grep -q "^database/migrations/"; then
-  logts "新版本含 database/migrations/,已暂停自动更新,等人工执行 SQL 后手动 ./deploy/update.sh"
-  notify "发现新版本但含数据库变更,已暂停。请手动处理 migration。"
-  exit 0
-fi
+# 2. 护栏:只在 migration 含【结构变更】(建表/改表/删表)时暂停提醒;
+#    纯数据 migration(INSERT 等)一概不碰数据库、照常更新代码。
+NEW_MIGS="$(git diff --name-only "${OLD}" "origin/main" | grep '^database/migrations/.*\.sql$' || true)"
+for m in ${NEW_MIGS}; do
+  if git show "origin/main:${m}" 2>/dev/null | sql_has_ddl; then
+    logts "含数据库【结构】变更(${m}),暂停自动更新,等人工处理后手动 ./deploy/update.sh"
+    notify "新版本含数据库结构变更,已暂停。请手动处理后再更新。"
+    exit 0
+  fi
+done
+# 无结构变更(纯数据/无 migration)→ 继续;update.sh 只更新代码,绝不跑 SQL
 
 # 3. 执行更新(update.sh 内部 pull→按需构建→重启→自检),并确认后端健康
 if bash "${DEPLOY_DIR}/update.sh" >>"${LOG}" 2>&1 \
