@@ -127,6 +127,10 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const [newStageName, setNewStageName] = useState('');
   const [newStageStartDay, setNewStageStartDay] = useState('1');
   const [stageSubmitting, setStageSubmitting] = useState(false);
+  const [newStageDesc, setNewStageDesc] = useState('');
+  const [editingStageId, setEditingStageId] = useState<number | null>(null);
+  const [deleteStageTarget, setDeleteStageTarget] = useState<TemplateStageSummary | null>(null);
+  const [deleteStageSubmitting, setDeleteStageSubmitting] = useState(false);
   const [pendingBindTask, setPendingBindTask] = useState<GanttTask | null>(null);
   const [deleteTargets, setDeleteTargets] = useState<GanttTask[]>([]);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
@@ -381,7 +385,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // Create the first / next stage. Restores the stage-management entry that
   // the V3 rewrite dropped (audit V3-STAGE-001): without it a brand-new empty
   // template can never be filled. Backend POST /process-stages is unchanged.
-  const handleCreateStage = useCallback(async () => {
+  // 新建/编辑阶段。补全 V3 重构时漏掉的阶段管理 UI（审计 V3-STAGE-001 及其
+  // 编辑/删除延伸）。后端 /process-stages 的 POST/PUT/DELETE 均已存在。
+  const handleSubmitStage = useCallback(async () => {
     const name = newStageName.trim();
     if (!name) {
       message.warning('请输入阶段名称');
@@ -394,16 +400,27 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     }
     try {
       setStageSubmitting(true);
-      const existingStages = resourceEditorData?.stages?.length ?? 0;
-      await processTemplateV2Api.createStage(templateId, {
-        stageName: name,
-        stageOrder: existingStages + 1,
-        startDay,
-      });
-      message.success('阶段已创建');
+      if (editingStageId != null) {
+        await processTemplateV2Api.updateStage(editingStageId, {
+          stageName: name,
+          startDay,
+          description: newStageDesc.trim() || null,
+        });
+        message.success('阶段已更新');
+      } else {
+        await processTemplateV2Api.createStage(templateId, {
+          stageName: name,
+          stageOrder: (resourceEditorData?.stages?.length ?? 0) + 1,
+          startDay,
+          description: newStageDesc.trim() || undefined,
+        });
+        message.success('阶段已创建');
+      }
       setAddStageModalOpen(false);
+      setEditingStageId(null);
       setNewStageName('');
-      setNewStageStartDay('1');
+      setNewStageStartDay('0');
+      setNewStageDesc('');
       // allSettled: 任一刷新挂起/失败都不拖死提交(参考审计 DYN-B2 卡死)
       await Promise.allSettled([
         ganttData.refreshData(),
@@ -411,11 +428,58 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         loadResourceEditorData(),
       ]);
     } catch (error: any) {
-      message.error(error?.response?.data?.error || '创建阶段失败');
+      message.error(error?.response?.data?.error || (editingStageId != null ? '更新阶段失败' : '创建阶段失败'));
     } finally {
       setStageSubmitting(false);
     }
-  }, [newStageName, newStageStartDay, resourceEditorData, templateId, ganttData, actions, loadResourceEditorData]);
+  }, [newStageName, newStageStartDay, newStageDesc, editingStageId, resourceEditorData, templateId, ganttData, actions, loadResourceEditorData]);
+
+  // 打开"新增阶段"：起始天默认接续上一阶段（无阶段则首日 0）。
+  const openCreateStage = useCallback(() => {
+    const stages = resourceEditorData?.stages ?? [];
+    const maxStart = stages.reduce((m, s) => Math.max(m, s.start_day ?? 0), -1);
+    setEditingStageId(null);
+    setNewStageName('');
+    setNewStageStartDay(String(maxStart >= 0 ? maxStart + 1 : 0));
+    setNewStageDesc('');
+    setAddStageModalOpen(true);
+  }, [resourceEditorData]);
+
+  // 打开"编辑阶段"：预填当前阶段值。
+  const openEditStage = useCallback((stageId: number) => {
+    const stage = (resourceEditorData?.stages ?? []).find(s => s.id === stageId);
+    if (!stage) { message.warning('未找到该阶段'); return; }
+    setEditingStageId(stage.id);
+    setNewStageName(stage.stage_name ?? '');
+    setNewStageStartDay(String(stage.start_day ?? 0));
+    setNewStageDesc(stage.description ?? '');
+    setAddStageModalOpen(true);
+  }, [resourceEditorData]);
+
+  const openDeleteStage = useCallback((stageId: number) => {
+    const stage = (resourceEditorData?.stages ?? []).find(s => s.id === stageId);
+    if (!stage) { message.warning('未找到该阶段'); return; }
+    setDeleteStageTarget(stage);
+  }, [resourceEditorData]);
+
+  const handleConfirmDeleteStage = useCallback(async () => {
+    if (!deleteStageTarget) return;
+    try {
+      setDeleteStageSubmitting(true);
+      await processTemplateV2Api.deleteStage(deleteStageTarget.id);
+      message.success('阶段已删除');
+      setDeleteStageTarget(null);
+      await Promise.allSettled([
+        ganttData.refreshData(),
+        actions.refreshAll(),
+        loadResourceEditorData(),
+      ]);
+    } catch (error: any) {
+      message.error(error?.response?.data?.error || '删除阶段失败');
+    } finally {
+      setDeleteStageSubmitting(false);
+    }
+  }, [deleteStageTarget, ganttData, actions, loadResourceEditorData]);
 
   const backgroundMenuItems = useMemo<ContextMenuItem[]>(
     () =>
@@ -429,7 +493,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
   const groupMenuItems = useMemo<ContextMenuItem[]>(
     () => [
-      { key: 'add-task', label: '新增操作', icon: CtxIcons.plus, disabled: resourceEditorLoading, divider: true },
+      { key: 'add-task', label: '新增操作', icon: CtxIcons.plus, disabled: resourceEditorLoading },
+      { key: 'edit-stage', label: '编辑阶段', disabled: resourceEditorLoading },
+      { key: 'delete-stage', label: '删除阶段', danger: true, disabled: resourceEditorLoading, divider: true },
       ...DEFAULT_GROUP_MENU_ITEMS,
     ],
     [resourceEditorLoading],
@@ -559,6 +625,16 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         await openCreateOperationFromGantt(context);
         return;
       }
+      if (action === 'edit-stage') {
+        const sid = parseStageIdFromGroupId(context.groupId);
+        if (sid) openEditStage(sid); else message.warning('请在阶段行上右键');
+        return;
+      }
+      if (action === 'delete-stage') {
+        const sid = parseStageIdFromGroupId(context.groupId);
+        if (sid) openDeleteStage(sid); else message.warning('请在阶段行上右键');
+        return;
+      }
 
       if (!task) return;
 
@@ -612,7 +688,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           break;
       }
     },
-    [shareService, handleTaskEdit, handleTaskDelete, equipmentNodes, resourceView, openCreateOperationFromGantt],
+    [shareService, handleTaskEdit, handleTaskDelete, equipmentNodes, resourceView, openCreateOperationFromGantt, openEditStage, openDeleteStage],
   );
 
   // ---- Build final task menu including share sub-items + equipment ----
@@ -812,7 +888,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         onAutoSchedule={actions.handleAutoSchedule}
         yAxisMode={yAxisMode}
         onYAxisModeChange={setYAxisMode}
-        onAddStage={() => setAddStageModalOpen(true)}
+        onAddStage={openCreateStage}
       />
 
       <div style={{ flex: 1, minHeight: 0 }}>
@@ -992,15 +1068,15 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         </div>
       </WxbModal>
 
-      {/* Add Stage Modal — Wxb Design System (restores missing stage entry) */}
+      {/* Add / Edit Stage Modal — Wxb Design System (audit V3-STAGE-001 + 编辑/删除补全) */}
       <WxbModal
         open={addStageModalOpen}
-        title="新增阶段"
-        okText="创建阶段"
+        title={editingStageId != null ? '编辑阶段' : '新增阶段'}
+        okText={editingStageId != null ? '保存修改' : '创建阶段'}
         cancelText="取消"
         confirmLoading={stageSubmitting}
-        onOk={() => void handleCreateStage()}
-        onCancel={() => { setAddStageModalOpen(false); setNewStageName(''); setNewStageStartDay('1'); }}
+        onOk={() => void handleSubmitStage()}
+        onCancel={() => { setAddStageModalOpen(false); setEditingStageId(null); setNewStageName(''); setNewStageStartDay('0'); setNewStageDesc(''); }}
         width={440}
         destroyOnClose
       >
@@ -1012,11 +1088,38 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
             placeholder="例如: 配制阶段"
           />
           <WxbInput
-            label="起始天（第几天开始，从 1 起）"
+            label="起始天（阶段从模版第几天开始，首日 = 0）"
             value={newStageStartDay}
             onChange={e => setNewStageStartDay(e.target.value)}
-            placeholder="1"
+            placeholder="0"
           />
+          <WxbInput
+            label="描述（可选）"
+            value={newStageDesc}
+            onChange={e => setNewStageDesc(e.target.value)}
+            placeholder="阶段说明"
+          />
+        </div>
+      </WxbModal>
+
+      {/* Delete Stage Confirm */}
+      <WxbModal
+        open={!!deleteStageTarget}
+        title="删除阶段"
+        okText="删除阶段"
+        cancelText="取消"
+        okVariant="danger"
+        confirmLoading={deleteStageSubmitting}
+        onOk={() => void handleConfirmDeleteStage()}
+        onCancel={() => setDeleteStageTarget(null)}
+        width={440}
+        destroyOnClose
+      >
+        <div className="wxb-template-delete-confirm">
+          <p>确定删除阶段「{deleteStageTarget?.stage_name}」吗？</p>
+          <p style={{ color: 'var(--wx-fg-3, #5A6B7E)', fontSize: 13 }}>
+            该阶段下的工序{deleteStageTarget?.operation_count ? `（${deleteStageTarget.operation_count} 个）` : ''}将被一并删除；若已被批次引用则无法删除。此操作不可撤销。
+          </p>
         </div>
       </WxbModal>
 
