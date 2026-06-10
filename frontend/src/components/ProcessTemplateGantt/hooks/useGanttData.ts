@@ -73,12 +73,16 @@ export const useGanttData = (options: UseGanttDataOptions | ProcessTemplate) => 
             const operationsResponse = await axios.get(`${API_BASE_URL}/stage-operations/available`);
             setAvailableOperations(operationsResponse.data);
 
-            // 获取每个阶段的操作
+            // 并行获取每个阶段的操作（Promise.all，任一失败则整体 catch）
             const stageOpsMap: { [key: number]: StageOperation[] } = {};
-            for (const stage of fetchedStages) {
-                const opsResponse = await axios.get(`${API_BASE_URL}/stage-operations/stage/${stage.id}`);
-                stageOpsMap[stage.id] = opsResponse.data;
-            }
+            const stageOpsResults = await Promise.all(
+                fetchedStages.map((stage: ProcessStage) =>
+                    axios.get(`${API_BASE_URL}/stage-operations/stage/${stage.id}`)
+                )
+            );
+            fetchedStages.forEach((stage: ProcessStage, idx: number) => {
+                stageOpsMap[stage.id] = stageOpsResults[idx].data;
+            });
             setStageOperations(stageOpsMap);
 
             // 构建甘特图节点

@@ -82,7 +82,7 @@ export const createStage = async (req: Request, res: Response) => {
 
     const [result] = await pool.execute(
       'INSERT INTO process_stages (template_id, stage_code, stage_name, stage_order, start_day, description) VALUES (?, ?, ?, ?, ?, ?)',
-      [templateId, stage_code, stage_name, finalOrder, start_day || 1, description || null]
+      [templateId, stage_code, stage_name, finalOrder, start_day ?? 1, description || null]
     ) as any;
 
     // 更新模版的总天数
@@ -94,7 +94,7 @@ export const createStage = async (req: Request, res: Response) => {
       stage_code,
       stage_name,
       stage_order: finalOrder,
-      start_day: start_day || 1,
+      start_day: start_day ?? 1,
       description
     });
   } catch (error) {

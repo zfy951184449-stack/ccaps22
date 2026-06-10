@@ -468,25 +468,33 @@ const toHourValue = (value: number) => {
   return remainder < 0 ? remainder + 24 : remainder;
 };
 
-const buildRelativeScheduleFields = (
-  absoluteStartHour: number,
-  stageStartDay: number,
-  durationHours: number,
-) => {
+// 由画布落点（absoluteStartHour）反推「定位」字段：operation_day / recommended_*。
+// 仅负责落点，不涉及时间窗——时间窗是否沿用画布推算由调用方决定（见下方 from-canvas）。
+const buildPositionFields = (absoluteStartHour: number, stageStartDay: number) => {
   const absoluteDay = Math.floor(absoluteStartHour / 24);
   const operationDay = Math.max(0, absoluteDay - stageStartDay);
   const recommendedDayOffset = absoluteDay - stageStartDay - operationDay;
-  const recommendedTime = toHourValue(absoluteStartHour);
 
+  return {
+    operation_day: operationDay,
+    recommended_time: toHourValue(absoluteStartHour),
+    recommended_day_offset: recommendedDayOffset,
+  };
+};
+
+// 自动时间窗：推荐开始 -2h ~ 推荐开始 +max(时长,2h)。仅在请求未显式给窗时兜底使用。
+const buildDerivedWindowFields = (
+  absoluteStartHour: number,
+  stageStartDay: number,
+  operationDay: number,
+  durationHours: number,
+) => {
   const windowStartAbsolute = absoluteStartHour - 2;
   const windowEndAbsolute = absoluteStartHour + Math.max(durationHours, 2);
   const windowStartDay = Math.floor(windowStartAbsolute / 24);
   const windowEndDay = Math.floor(windowEndAbsolute / 24);
 
   return {
-    operation_day: operationDay,
-    recommended_time: recommendedTime,
-    recommended_day_offset: recommendedDayOffset,
     window_start_time: toHourValue(windowStartAbsolute),
     window_start_day_offset: windowStartDay - stageStartDay - operationDay,
     window_end_time: toHourValue(windowEndAbsolute),
@@ -548,19 +556,50 @@ export const createStageOperationFromCanvas = async (req: Request, res: Response
 
     const stageStartDay = Number(stageRows[0].start_day ?? 0);
     const durationHours = Number(operationRows[0].standard_time ?? 2);
-    const derivedFields =
+
+    // 请求是否显式携带完整时间窗（四项齐全）。手动时间窗模式下前端会传齐这四个字段，
+    // 此时必须原样采用、不得被画布推算覆盖（与编辑路径 updateStageOperation 语义一致）。
+    const hasExplicitWindow =
+      window_start_time !== undefined &&
+      window_start_time !== null &&
+      window_end_time !== undefined &&
+      window_end_time !== null;
+
+    // 定位字段：有画布落点就用落点反推，否则取请求里的相对值。落点职责始终保留。
+    const positionFields =
       absolute_start_hour !== undefined && absolute_start_hour !== null
-        ? buildRelativeScheduleFields(Number(absolute_start_hour), stageStartDay, durationHours)
+        ? buildPositionFields(Number(absolute_start_hour), stageStartDay)
         : {
             operation_day: Number(operation_day ?? 0),
             recommended_time: Number(recommended_time ?? 9),
             recommended_day_offset: Number(recommended_day_offset ?? 0),
-            window_start_time: window_start_time !== undefined ? Number(window_start_time) : Number(recommended_time ?? 9) - 2,
+          };
+
+    // 时间窗字段：显式传窗优先采用；否则按落点/推荐开始 ±2h 兜底推算。
+    const windowFields = hasExplicitWindow
+      ? {
+          window_start_time: Number(window_start_time),
+          window_start_day_offset: Number(window_start_day_offset ?? 0),
+          window_end_time: Number(window_end_time),
+          window_end_day_offset: Number(window_end_day_offset ?? 0),
+        }
+      : absolute_start_hour !== undefined && absolute_start_hour !== null
+        ? buildDerivedWindowFields(
+            Number(absolute_start_hour),
+            stageStartDay,
+            positionFields.operation_day,
+            durationHours,
+          )
+        : {
+            window_start_time:
+              window_start_time !== undefined ? Number(window_start_time) : Number(recommended_time ?? 9) - 2,
             window_start_day_offset: Number(window_start_day_offset ?? 0),
             window_end_time:
               window_end_time !== undefined ? Number(window_end_time) : Number(recommended_time ?? 9) + Math.max(durationHours, 2),
             window_end_day_offset: Number(window_end_day_offset ?? 0),
           };
+
+    const derivedFields = { ...positionFields, ...windowFields };
 
     const [maxOrderRows] = await connection.execute<RowDataPacket[]>(
       'SELECT COALESCE(MAX(operation_order), 0) AS max_order FROM stage_operation_schedules WHERE stage_id = ?',

@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Modal, Button, Tag, Spin, Input, Empty, Select, Badge } from 'antd';
-import { SearchOutlined, CheckCircleFilled, FilterOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { debounce } from 'lodash';
 import dayjs from 'dayjs';
+import {
+    WxbBadge,
+    WxbButton,
+    WxbEmpty,
+    WxbIcon,
+    WxbModal,
+    WxbSearchInput,
+    WxbSelect,
+    WxbSpinner,
+    WxbTag,
+} from '../../wxb-ui';
+import './OperationSelectorModal.css';
 
 interface OperationSelectorModalProps {
     visible: boolean;
@@ -36,8 +46,6 @@ interface SearchResult {
     batch_id: number;
     stage_id: number;
 }
-
-const { Option } = Select;
 
 const OperationSelectorModal: React.FC<OperationSelectorModalProps> = ({
     visible,
@@ -179,191 +187,147 @@ const OperationSelectorModal: React.FC<OperationSelectorModalProps> = ({
     const currentBatchNode = hierarchy.find(b => b.id === selectedFilterBatchId);
     const stageOptions = currentBatchNode?.children || [];
 
+    const footer = (
+        <div className="operation-selector__footer">
+            <WxbButton variant="ghost" onClick={onCancel}>
+                取消
+            </WxbButton>
+            <WxbButton
+                onClick={handleConfirm}
+                disabled={selectedIds.length === 0 || submitting}
+            >
+                {submitting
+                    ? '添加中...'
+                    : selectedIds.length > 0
+                        ? `添加 ${selectedIds.length} 个操作`
+                        : '添加操作'}
+            </WxbButton>
+        </div>
+    );
+
     return (
-        <Modal
-            title={null}
-            footer={null}
+        <WxbModal
+            className="operation-selector-modal"
+            title="关联操作"
+            footer={footer}
             open={visible}
             onCancel={onCancel}
             width={900}
             centered
             getContainer={getContainer}
-            styles={{
-                content: {
-                    padding: 0,
-                    borderRadius: 24,
-                    // overflow: 'hidden', // REMOVED to allow dropdowns to overflow if needed, and verify visibility
-                    backgroundColor: 'rgba(255,255,255,0.85)',
-                    backdropFilter: 'blur(16px)',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                },
-                body: { height: '650px', display: 'flex', flexDirection: 'column' }
-            }}
         >
-            {/* Top Filter Area - Manually apply top radius */}
-            <div style={{
-                padding: '20px 24px',
-                borderBottom: '1px solid rgba(0,0,0,0.06)',
-                display: 'flex',
-                gap: '16px',
-                backgroundColor: 'rgba(255,255,255,0.4)',
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24
-            }}>
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 4, fontWeight: 500 }}>Select Batch</div>
-                    <Select
-                        showSearch
-                        optionFilterProp="children"
-                        value={selectedFilterBatchId}
-                        onChange={handleBatchChange}
-                        style={{ width: '100%' }}
-                        placeholder="Select Batch"
-                        size="large"
-                        loading={loadingHierarchy}
-                        getPopupContainer={(trigger) => trigger.parentNode as HTMLElement} // FIX: Attach to parent to work in Fullscreen
-                    >
-                        {hierarchy.map(b => (
-                            <Option key={b.id} value={b.id}>{b.title}</Option>
-                        ))}
-                    </Select>
-                </div>
-                <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 4, fontWeight: 500 }}>Select Stage</div>
-                    <Select
-                        value={selectedFilterStageId}
-                        onChange={setSelectedFilterStageId}
-                        style={{ width: '100%' }}
-                        placeholder="Select Stage"
-                        size="large"
-                        disabled={!selectedFilterBatchId}
-                        getPopupContainer={(trigger) => trigger.parentNode as HTMLElement} // FIX: Attach to parent to work in Fullscreen
-                    >
-                        {stageOptions.map(s => (
-                            <Option key={s.id} value={s.id}>{s.title}</Option>
-                        ))}
-                    </Select>
-                </div>
-            </div>
-
-            {/* Status Bar & Search */}
-            <div style={{ padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(249, 250, 251, 0.5)' }}>
-                <div style={{ fontWeight: 600, fontSize: 16, color: '#374151', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Badge count={selectedIds.length} overflowCount={99} style={{ backgroundColor: '#3B82F6' }} showZero />
-                    <span>Operations Selected</span>
-                </div>
-
-                <Input
-                    placeholder="Search visible operations..."
-                    prefix={<SearchOutlined style={{ color: '#9CA3AF' }} />}
-                    onChange={e => debouncedSearch(e.target.value)}
-                    style={{ width: 280, borderRadius: 20, backgroundColor: 'white' }}
-                    allowClear
-                />
-            </div>
-
-            {/* Main Grid Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', backgroundColor: 'rgba(255,255,255,0.3)' }}>
-                {loadingOps ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}><Spin size="large" /></div>
-                ) : operations.length === 0 ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '40px', flexDirection: 'column', alignItems: 'center' }}>
-                        <Empty description="No operations found in this stage" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                        {(!selectedFilterBatchId || !selectedFilterStageId) && <div style={{ color: '#999', marginTop: 10 }}>Please select a Batch and Stage</div>}
+            <div className="operation-selector">
+                {/* Top Filter Area */}
+                <div className="operation-selector__filters">
+                    <div className="operation-selector__filter">
+                        <WxbSelect
+                            label="选择批次"
+                            showSearch
+                            optionFilterProp="label"
+                            value={selectedFilterBatchId ?? undefined}
+                            onChange={(val) => handleBatchChange(val as number)}
+                            placeholder="选择批次"
+                            size="large"
+                            loading={loadingHierarchy}
+                            options={hierarchy.map(b => ({ label: b.title, value: b.id }))}
+                            getPopupContainer={(trigger) => trigger.parentNode as HTMLElement} // FIX: Attach to parent to work in Fullscreen
+                        />
                     </div>
-                ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-                        {operations.map(op => {
-                            const isSelected = selectedIds.includes(op.operation_plan_id);
-                            const isCurrent = op.operation_plan_id === currentOperationId;
-                            return (
-                                <div
-                                    key={op.operation_plan_id}
-                                    onClick={() => !isCurrent && toggleSelection(op.operation_plan_id)}
-                                    className={`group transition-all duration-300`}
-                                    style={{
-                                        position: 'relative',
-                                        padding: '16px',
-                                        borderRadius: '16px',
-                                        cursor: isCurrent ? 'not-allowed' : 'pointer',
-                                        border: isSelected ? '2px solid #3B82F6' : '1px solid rgba(229, 231, 235, 0.8)',
-                                        backgroundColor: isCurrent
-                                            ? 'rgba(243, 244, 246, 0.6)'
-                                            : isSelected ? 'rgba(239, 246, 255, 0.9)' : 'rgba(255, 255, 255, 0.8)',
-                                        backdropFilter: 'blur(4px)',
-                                        boxShadow: isCurrent
-                                            ? 'none'
-                                            : isSelected ? '0 10px 15px -3px rgba(59, 130, 246, 0.2)' : '0 1px 3px 0 rgba(0, 0, 0, 0.05)',
-                                        transform: isCurrent ? 'none' : isSelected ? 'scale(1.02)' : 'scale(1)',
-                                        opacity: isCurrent ? 0.6 : 1,
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                                        <div style={{ fontWeight: 600, color: '#1F2937', fontSize: '15px', lineHeight: '1.2' }} title={op.operation_name}>
-                                            {op.operation_name}
+                    <div className="operation-selector__filter">
+                        <WxbSelect
+                            label="选择阶段"
+                            value={selectedFilterStageId ?? undefined}
+                            onChange={(val) => setSelectedFilterStageId(val as number)}
+                            placeholder="选择阶段"
+                            size="large"
+                            disabled={!selectedFilterBatchId}
+                            options={stageOptions.map(s => ({ label: s.title, value: s.id }))}
+                            getPopupContainer={(trigger) => trigger.parentNode as HTMLElement} // FIX: Attach to parent to work in Fullscreen
+                        />
+                    </div>
+                </div>
+
+                {/* Status Bar & Search */}
+                <div className="operation-selector__statusbar">
+                    <div className="operation-selector__count">
+                        <WxbBadge variant="bar" status="info" label={String(selectedIds.length)} />
+                        <span>已选操作</span>
+                    </div>
+
+                    <WxbSearchInput
+                        className="operation-selector__search"
+                        placeholder="搜索当前可见操作..."
+                        onChange={(val) => debouncedSearch(val)}
+                    />
+                </div>
+
+                {/* Main Grid Content */}
+                <div className="operation-selector__grid-area">
+                    {loadingOps ? (
+                        <div className="operation-selector__loading">
+                            <WxbSpinner size={40} />
+                        </div>
+                    ) : operations.length === 0 ? (
+                        <div className="operation-selector__empty">
+                            <WxbEmpty description="暂无匹配操作" />
+                            {(!selectedFilterBatchId || !selectedFilterStageId) && (
+                                <div className="operation-selector__empty-hint">请选择批次与阶段</div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="operation-selector__grid">
+                            {operations.map(op => {
+                                const isSelected = selectedIds.includes(op.operation_plan_id);
+                                const isCurrent = op.operation_plan_id === currentOperationId;
+                                const cardClass = [
+                                    'operation-selector__card',
+                                    isSelected ? 'is-selected' : '',
+                                    isCurrent ? 'is-current' : '',
+                                ].filter(Boolean).join(' ');
+                                return (
+                                    <button
+                                        type="button"
+                                        key={op.operation_plan_id}
+                                        className={cardClass}
+                                        disabled={isCurrent}
+                                        onClick={() => !isCurrent && toggleSelection(op.operation_plan_id)}
+                                    >
+                                        <div className="operation-selector__card-head">
+                                            <div className="operation-selector__card-name" title={op.operation_name}>
+                                                {op.operation_name}
+                                            </div>
+                                            {isSelected && (
+                                                <WxbIcon
+                                                    name="released"
+                                                    size={20}
+                                                    className="operation-selector__card-check"
+                                                />
+                                            )}
+                                            {isCurrent && <WxbTag color="neutral">当前操作</WxbTag>}
                                         </div>
-                                        {isSelected && <CheckCircleFilled style={{ color: '#3B82F6', fontSize: '20px' }} />}
-                                        {isCurrent && <Tag style={{ margin: 0 }}>This Op</Tag>}
-                                    </div>
 
-                                    <div style={{ fontSize: '12px', color: '#6B7280', marginBottom: 6 }}>
-                                        {op.operation_code || '#NoCode'}
-                                    </div>
+                                        <div className="operation-selector__card-code">
+                                            {op.operation_code || '#无编码'}
+                                        </div>
 
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
-                                        <Tag color="geekblue" style={{ margin: 0, borderRadius: '6px', fontSize: '11px', border: 'none' }}>
-                                            {op.batch_code}
-                                        </Tag>
-                                        <Tag style={{ margin: 0, borderRadius: '6px', fontSize: '11px', border: 'none', background: '#F3F4F6' }}>
-                                            {op.stage_name}
-                                        </Tag>
-                                    </div>
+                                        <div className="operation-selector__card-tags">
+                                            <WxbTag color="blue">{op.batch_code}</WxbTag>
+                                            <WxbTag color="neutral">{op.stage_name}</WxbTag>
+                                        </div>
 
-                                    <div style={{ fontSize: '12px', color: isSelected ? '#3B82F6' : '#9CA3AF', fontWeight: 500 }}>
-                                        {op.planned_start_datetime
-                                            ? dayjs(op.planned_start_datetime).format('MMM D, HH:mm')
-                                            : 'Unscheduled'}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                                        <div className="operation-selector__card-time">
+                                            {op.planned_start_datetime
+                                                ? dayjs(op.planned_start_datetime).format('MM-DD HH:mm')
+                                                : '未排程'}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </div>
-
-            {/* Footer Buttons - Manually apply bottom radius */}
-            <div style={{
-                padding: '16px 24px',
-                borderTop: '1px solid rgba(229, 231, 235, 0.5)',
-                backgroundColor: 'rgba(255, 255, 255, 0.6)',
-                backdropFilter: 'blur(10px)',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: '12px',
-                borderBottomLeftRadius: 24,
-                borderBottomRightRadius: 24
-            }}>
-                <Button onClick={onCancel} size="large" style={{ borderRadius: '12px', padding: '0 32px' }}>
-                    Cancel
-                </Button>
-                <Button
-                    type="primary"
-                    onClick={handleConfirm}
-                    loading={submitting}
-                    disabled={selectedIds.length === 0}
-                    size="large"
-                    style={{
-                        borderRadius: '12px',
-                        padding: '0 32px',
-                        background: 'linear-gradient(to right, #3B82F6, #4F46E5)',
-                        border: 'none',
-                        boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.3)'
-                    }}
-                >
-                    Add {selectedIds.length > 0 ? `${selectedIds.length} Operations` : ''}
-                </Button>
-            </div>
-        </Modal>
+        </WxbModal>
     );
 };
 

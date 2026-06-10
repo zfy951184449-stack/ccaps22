@@ -50,6 +50,9 @@ export interface UseGanttDragProps {
   onDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
+  /** Batch handler for multi-select moves. When set, the multi-select branch calls this once
+   *  instead of looping onDragEnd per task. Falls back to onDragEnd when omitted. */
+  onTasksDragEnd?: (updates: Array<{ taskId: string; newStart: number; newEnd: number }>) => void | boolean | Promise<boolean | void>;
   onAutoScroll?: (dx: number) => void;
   canvasWidth: number;
   timeScale?: GanttTimeScale;
@@ -105,6 +108,7 @@ export function useGanttDrag({
   onDragEnd,
   onTaskResizeEnd,
   onGroupDragEnd,
+  onTasksDragEnd,
   onAutoScroll,
   canvasWidth,
   timeScale,
@@ -247,24 +251,33 @@ export function useGanttDrag({
       restorations.push({ taskId, start: orig.start, end: orig.end });
     }
 
-    // Push undo
-    undoStack.current.push({
-      type: state.isGroupDrag ? 'group' : 'task',
-      primaryId: state.primaryId,
-      restorations,
-    });
-    if (undoStack.current.length > MAX_UNDO) undoStack.current.shift();
+    const pushUndo = () => {
+      undoStack.current.push({
+        type: state.isGroupDrag ? 'group' : 'task',
+        primaryId: state.primaryId,
+        restorations,
+      });
+      if (undoStack.current.length > MAX_UNDO) undoStack.current.shift();
+    };
 
     if (state.isGroupDrag) {
-      // Cascade drag end
-      if (onGroupDragEnd) {
-        const result = await onGroupDragEnd(state.primaryId, deltaHours, state.affectedTaskIds);
-        if (result === false) {
-          // Rollback — consumer rejected
-          cleanup();
-          return;
-        }
+      // Defensive: with no group-drag handler wired there is nothing to persist.
+      // Only clean up the canvas — do NOT push undo or show a success toast that
+      // would otherwise promise a move the consumer never saved.
+      if (!onGroupDragEnd) {
+        cleanup();
+        return;
       }
+
+      // Cascade drag end
+      const result = await onGroupDragEnd(state.primaryId, deltaHours, state.affectedTaskIds);
+      if (result === false) {
+        // Rollback — consumer rejected
+        cleanup();
+        return;
+      }
+
+      pushUndo();
 
       // Show Undo Toast
       const affectedCount = state.affectedTaskIds.length;
@@ -274,9 +287,10 @@ export function useGanttDrag({
       const toastData: UndoToastData = {
         message: `已移动 "${label}" 下 ${affectedCount} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
         onUndo: () => {
-          // Restore from undo stack
+          // Restore by re-invoking the cascade handler with the reverse offset.
+          // The handler shifts current positions, so -deltaHours undoes the move.
           const entry = undoStack.current.pop();
-          if (entry && onGroupDragEnd) {
+          if (entry) {
             onGroupDragEnd(state.primaryId, -deltaHours, state.affectedTaskIds);
           }
           dismissToast();
@@ -284,7 +298,14 @@ export function useGanttDrag({
       };
       setUndoToast(toastData);
       toastTimer.current = setTimeout(() => setUndoToast(null), 3000);
-    } else if (state.type === 'resize-start' || state.type === 'resize-end') {
+      cleanup();
+      return;
+    }
+
+    // Non-group branches all persist via onDragEnd-style handlers; record undo first.
+    pushUndo();
+
+    if (state.type === 'resize-start' || state.type === 'resize-end') {
       // Resize end — compute new start/end based on resize direction
       const orig = state.originals.get(state.primaryId)!;
       let newStart = orig.start, newEnd = orig.end;
@@ -316,19 +337,26 @@ export function useGanttDrag({
         }
       }
     } else {
-      // Multi-select drag end — fire for each task
-      if (onDragEnd) {
-        for (const taskId of state.affectedTaskIds) {
-          const orig = state.originals.get(taskId)!;
-          const newStart = snapHour(orig.start + deltaHours, SNAP_HOURS);
-          const newEnd = newStart + (orig.end - orig.start);
-          await onDragEnd(taskId, newStart, newEnd);
+      // Multi-select drag end
+      const updates = state.affectedTaskIds.map((taskId) => {
+        const orig = state.originals.get(taskId)!;
+        const newStart = snapHour(orig.start + deltaHours, SNAP_HOURS);
+        const newEnd = newStart + (orig.end - orig.start);
+        return { taskId, newStart, newEnd };
+      });
+      if (onTasksDragEnd) {
+        // Batch path: one call, consumer persists concurrently + refreshes once.
+        await onTasksDragEnd(updates);
+      } else if (onDragEnd) {
+        // Fallback: per-task (preserves behaviour for consumers without a batch handler).
+        for (const u of updates) {
+          await onDragEnd(u.taskId, u.newStart, u.newEnd);
         }
       }
     }
 
     cleanup();
-  }, [cleanup, handleMouseMove, onDragEnd, onTaskResizeEnd, onGroupDragEnd, dismissToast]);
+  }, [cleanup, handleMouseMove, onDragEnd, onTaskResizeEnd, onGroupDragEnd, onTasksDragEnd, dismissToast]);
 
   // ===== Start Single Task Drag =====
   const startDrag = useCallback((

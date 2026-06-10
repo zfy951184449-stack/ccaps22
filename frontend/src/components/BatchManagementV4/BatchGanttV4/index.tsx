@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import dayjs, { Dayjs } from 'dayjs';
-import { message } from 'antd';
 import {
     WxbButton,
     WxbEmpty,
@@ -14,6 +13,7 @@ import {
     WxbSwitch,
     WxbTag,
     WxbTooltip,
+    wxbToast,
 } from '../../wxb-ui';
 import type { GanttTask, YAxisMode } from '../../wxb-ui/GanttChart/types';
 import type { ContextMenuItem } from '../../wxb-ui/GanttChart/GanttContextMenu';
@@ -308,7 +308,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
             } catch (error) {
                 if (!cancelled) {
                     console.error('Failed to auto-fit batch gantt data', error);
-                    message.error('加载甘特图数据失败');
+                    wxbToast.error('加载甘特图数据失败');
                     clearGanttData();
                     setHasAutoFit(true);
                 }
@@ -358,7 +358,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
             } catch (error) {
                 if (!cancelled) {
                     console.error('Failed to fetch batch gantt data', error);
-                    message.error('加载甘特图数据失败');
+                    wxbToast.error('加载甘特图数据失败');
                     clearGanttData();
                 }
             } finally {
@@ -417,24 +417,24 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
     const handleSaveOperation = useCallback(async (id: number, values: any) => {
         try {
             await axios.put(`/api/v5/gantt/operations/${id}`, values);
-            message.success('操作更新成功');
+            wxbToast.success('操作更新成功');
             setEditingOperation(null);
             requestReload();
         } catch (error: any) {
             console.error('Failed to update operation:', error);
-            message.error(error?.response?.data?.error || '更新失败，请重试');
+            wxbToast.error(error?.response?.data?.error || '更新失败，请重试');
         }
     }, [requestReload]);
 
     const handleDeleteOperation = useCallback(async (id: number) => {
         try {
             await axios.delete(`/api/v5/gantt/operations/${id}`);
-            message.success('操作删除成功');
+            wxbToast.success('操作删除成功');
             setEditingOperation(null);
             requestReload();
         } catch (error: any) {
             console.error('Failed to delete operation:', error);
-            message.error(error?.response?.data?.error || '删除失败，请重试');
+            wxbToast.error(error?.response?.data?.error || '删除失败，请重试');
         }
     }, [requestReload]);
 
@@ -464,7 +464,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
             return true;
         } catch (error: any) {
             console.error('Failed to persist task timing', error);
-            message.error(error?.response?.data?.error || '时间调整失败');
+            wxbToast.error(error?.response?.data?.error || '时间调整失败');
             return false;
         }
     }, [model.operationByTaskId, originDate, requestReload, requestReloadSoon]);
@@ -496,11 +496,11 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                     return false;
                 }
             }
-            message.success(`已移动 ${affectedTaskIds.length} 个操作`);
+            wxbToast.success(`已移动 ${affectedTaskIds.length} 个操作`);
             return true;
         } catch (error) {
             console.error('Failed to persist group timing', error);
-            message.error('批量调整失败');
+            wxbToast.error('批量调整失败');
             return false;
         }
     }, [model.operationByTaskId, originDate, persistTaskTime]);
@@ -511,7 +511,7 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
             .filter((id): id is number => typeof id === 'number');
 
         if (operationIds.length < 2) {
-            message.warning('至少选择 2 个操作才能创建共享组');
+            wxbToast.warning('至少选择 2 个操作才能创建共享组');
             return;
         }
 
@@ -521,16 +521,16 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                 group_name: `共享组-${shareGroups.length + 1}`,
                 share_mode: 'SAME_TEAM',
             });
-            message.success('共享组创建成功');
+            wxbToast.success('共享组创建成功');
             requestReload();
         } catch (error: any) {
             console.error('Failed to create share group', error);
-            message.error(error?.response?.data?.error || '创建共享组失败');
+            wxbToast.error(error?.response?.data?.error || '创建共享组失败');
         }
     }, [model.operationByTaskId, requestReload, shareGroups.length]);
 
     const handleAutoSchedule = useCallback(() => {
-        message.info('真实批次的自动排班请在 V4 自动排班中运行；当前甘特图保留生产日期编辑。');
+        wxbToast.info('真实批次的自动排班请在 V4 自动排班中运行；当前甘特图保留生产日期编辑。');
         navigate('/solver-v4');
     }, [navigate]);
 

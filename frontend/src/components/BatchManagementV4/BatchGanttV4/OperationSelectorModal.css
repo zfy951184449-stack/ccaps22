@@ -1,0 +1,175 @@
+/* OperationSelectorModal —— 工序选择弹窗，迁移自 antd 到 wxb-ui */
+
+/* 弹窗内容区去掉 WxbModal 默认 32px 内边距，交由内部分区自管 */
+.operation-selector-modal .ant-modal-content {
+  padding: 0;
+  overflow: hidden;
+}
+
+.operation-selector-modal .ant-modal-header {
+  margin: 0;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--wx-border);
+}
+
+.operation-selector-modal .ant-modal-close {
+  top: 18px;
+  inset-inline-end: 20px;
+}
+
+/* 整体竖向布局，固定高度便于内部滚动 */
+.operation-selector {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+}
+
+/* 顶部筛选区：批次 + 阶段 */
+.operation-selector__filters {
+  display: flex;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--wx-border);
+  background: var(--wx-surface-1);
+}
+
+.operation-selector__filter {
+  flex: 1;
+}
+
+/* 状态条 + 搜索 */
+.operation-selector__statusbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--wx-surface-2);
+}
+
+.operation-selector__count {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--wx-fs-16);
+  font-weight: 600;
+  color: var(--wx-fg-1);
+}
+
+.operation-selector__search {
+  width: 280px;
+}
+
+/* 卡片网格区 */
+.operation-selector__grid-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--wx-bg);
+}
+
+.operation-selector__loading,
+.operation-selector__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.operation-selector__empty-hint {
+  margin-top: 10px;
+  color: var(--wx-fg-4);
+  font-size: var(--wx-fs-13);
+}
+
+.operation-selector__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+/* 单张工序卡片 */
+.operation-selector__card {
+  position: relative;
+  padding: 16px;
+  border-radius: var(--wx-radius-12);
+  border: 1px solid var(--wx-border);
+  background: var(--wx-bg);
+  box-shadow: var(--wx-sh-1);
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  text-align: left;
+  width: 100%;
+}
+
+.operation-selector__card:hover:not(.is-current) {
+  border-color: var(--wx-blue-200);
+  box-shadow: var(--wx-sh-2);
+}
+
+.operation-selector__card.is-selected {
+  border-color: var(--wx-blue-500);
+  background: var(--wx-blue-50);
+  box-shadow: var(--wx-sh-2);
+}
+
+.operation-selector__card.is-current {
+  cursor: not-allowed;
+  background: var(--wx-surface-2);
+  box-shadow: none;
+  opacity: 0.6;
+}
+
+.operation-selector__card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.operation-selector__card-name {
+  font-size: var(--wx-fs-14);
+  font-weight: 600;
+  color: var(--wx-fg-1);
+  line-height: 1.3;
+}
+
+.operation-selector__card-check {
+  flex-shrink: 0;
+  color: var(--wx-blue-500);
+}
+
+.operation-selector__card-code {
+  margin-bottom: 6px;
+  font-size: var(--wx-fs-12);
+  color: var(--wx-fg-3);
+}
+
+.operation-selector__card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.operation-selector__card-time {
+  font-size: var(--wx-fs-12);
+  font-weight: 500;
+  color: var(--wx-fg-4);
+}
+
+.operation-selector__card.is-selected .operation-selector__card-time {
+  color: var(--wx-blue-500);
+}
+
+/* 底部操作栏 */
+.operation-selector__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--wx-border);
+  background: var(--wx-surface-1);
+}

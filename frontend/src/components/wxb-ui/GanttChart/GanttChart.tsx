@@ -211,6 +211,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   onTaskDuplicate,
   onContextAction,
   onGroupDragEnd,
+  onTasksDragEnd,
   onUndoCascade,
   // Menu customization
   taskMenuItems,
@@ -604,6 +605,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onTaskDragEnd={onTaskDragEnd}
           onTaskResizeEnd={onTaskResizeEnd}
           onGroupDragEnd={onGroupDragEnd}
+          onTasksDragEnd={onTasksDragEnd}
           onTooltipShow={handleTooltipShow}
           onTooltipHide={handleTooltipHide}
           onContextMenu={handleContextMenu}

@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Button, List, Avatar, Empty, message, Tag, Spin, Popconfirm } from 'antd';
-import { UserOutlined, PlusOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
+import {
+    WxbButton,
+    WxbList,
+    WxbAvatar,
+    WxbEmpty,
+    WxbTag,
+    WxbSpinner,
+    WxbPopconfirm,
+    wxbToast,
+} from '../../wxb-ui';
 import axios from 'axios';
 import OperationSelectorModal from './OperationSelectorModal';
 
@@ -9,6 +17,28 @@ interface ShareGroupMembersTabProps {
     onUpdate?: () => void;
     getContainer?: () => HTMLElement;
 }
+
+// 用户图标（人形轮廓）
+const IconUser = () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="8" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+        <path d="M2 14c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+);
+
+// 加号图标
+const IconPlus = () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+);
+
+// 删除图标
+const IconDelete = () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2 3.5h10M5.5 3.5V2.5h3V3.5M3.5 3.5l.75 8h5.5l.75-8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+);
 
 const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, onUpdate, getContainer }) => {
     const [loading, setLoading] = useState(false);
@@ -25,10 +55,10 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
     const fetchGroupInfo = async () => {
         setLoading(true);
         try {
-            // Get groups for this operation
+            // 获取该操作所在的共享组
             const res = await axios.get(`/api/share-groups/batch-operation/${operation.id}`);
             if (res.data && res.data.length > 0) {
-                // Assuming one group for now as per design simplicity, pick the first one
+                // 当前设计一个操作最多归属一个共享组，取第一个
                 const group = res.data[0];
                 setCurrentGroup(group);
                 setMembers(group.members || []);
@@ -52,13 +82,13 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
                 target_operation_id: operation.id,
                 member_operation_ids: selectedIds
             });
-            message.success('已添加操作到共享组');
+            wxbToast.success('已添加操作到共享组');
             setSelectorVisible(false);
-            fetchGroupInfo(); // Reload info
-            onUpdate?.(); // Notify parent
+            fetchGroupInfo(); // 重新加载数据
+            onUpdate?.(); // 通知父组件
         } catch (error) {
             console.error('Merge failed', error);
-            message.error('添加失败');
+            wxbToast.error('添加失败');
         } finally {
             setLoading(false);
         }
@@ -68,28 +98,26 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
         if (!currentGroup) return;
         try {
             await axios.delete(`/api/share-groups/${currentGroup.id}/operations/${memberOpId}`);
-            message.success('已移除成员');
+            wxbToast.success('已移除成员');
             fetchGroupInfo();
             onUpdate?.();
         } catch (error) {
-            message.error('移除失败');
+            wxbToast.error('移除失败');
         }
     };
 
-    // If no group, we just show "Current Operation" effectively as a potential list or empty state?
-    // Design says: "If no group, show 'No share members' or just self"
-    // Let's create a virtual list containing self if no group exists, to make it clear.
+    // 若无共享组，显示当前操作自身作为唯一成员，使界面意图清晰
     const displayMembers = members.length > 0 ? members : [
         {
             operation_plan_id: operation.id,
             operation_name: operation.name,
-            stage_name: '当前', // Mock stage or fetch? simple mock for "Self" logic
+            stage_name: '当前', // 自身标记
             isSelf: true
         }
     ];
 
-    // Mark self in real list
-    const processedMembers = displayMembers.map(m => ({
+    // 在真实列表中标记自身
+    const processedMembers = displayMembers.map((m: any) => ({
         ...m,
         isSelf: m.operation_plan_id === operation.id
     }));
@@ -98,63 +126,112 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center' }}>
-                    Current Share Group Members
+                    当前共享组成员
                     {currentGroup && (
-                        <Tag color="blue" style={{ marginLeft: 8 }}>{currentGroup.group_name}</Tag>
+                        <WxbTag color="blue" style={{ marginLeft: 8 }}>{currentGroup.group_name}</WxbTag>
                     )}
                 </div>
 
                 {loading && !selectorVisible ? (
-                    <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>
+                    <div style={{ textAlign: 'center', padding: 20 }}>
+                        <WxbSpinner size={28} />
+                    </div>
                 ) : (
                     <div style={{
-                        border: '1px solid #f0f0f0',
+                        border: '1px solid var(--wx-border-default, #E2E8F0)',
                         borderRadius: 8,
                         maxHeight: 300,
                         overflowY: 'auto',
-                        backgroundColor: '#fff'
+                        backgroundColor: 'var(--wx-surface-1, #fff)'
                     }}>
-                        <List
-                            itemLayout="horizontal"
-                            dataSource={processedMembers}
-                            renderItem={(item: any) => (
-                                <List.Item
-                                    style={{ padding: '8px 12px' }}
-                                    actions={!item.isSelf && currentGroup ? [
-                                        <Popconfirm title="移除此成员?" onConfirm={() => handleRemoveMember(item.operation_plan_id)}>
-                                            <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-                                        </Popconfirm>
-                                    ] : []}
-                                >
-                                    <List.Item.Meta
-                                        avatar={<Avatar icon={<UserOutlined />} style={{ backgroundColor: item.isSelf ? '#1890ff' : '#d9d9d9' }} />}
-                                        title={
-                                            <span style={{ fontWeight: item.isSelf ? 600 : 400 }}>
-                                                {item.operation_name}
-                                                {item.isSelf && <span style={{ color: '#999', fontSize: 12, marginLeft: 4 }}>(Current)</span>}
-                                            </span>
-                                        }
-                                        description={item.stage_name ? <Tag style={{ margin: 0 }}>{item.stage_name}</Tag> : null}
-                                    />
-                                </List.Item>
-                            )}
-                        />
-                        {processedMembers.length === 0 && <Empty description="暂无共享成员" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+                        {processedMembers.length > 0 ? (
+                            <WxbList
+                                bordered={false}
+                                dataSource={processedMembers}
+                                renderItem={(item: any) => (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '8px 12px',
+                                    }}>
+                                        {/* 左侧：头像 + 信息 */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                                            <WxbAvatar
+                                                size={32}
+                                                color={item.isSelf ? 'var(--wx-blue-600, #1563DC)' : 'var(--wx-surface-3, #EDF1F6)'}
+                                                style={{ color: item.isSelf ? 'var(--wx-white, #fff)' : 'var(--wx-fg-2, #4B5563)', flexShrink: 0 }}
+                                            >
+                                                <IconUser />
+                                            </WxbAvatar>
+                                            <div style={{ minWidth: 0 }}>
+                                                <div style={{
+                                                    fontWeight: item.isSelf ? 600 : 400,
+                                                    fontSize: 13,
+                                                    color: 'var(--wx-fg-1, #111827)',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                }}>
+                                                    {item.operation_name}
+                                                    {item.isSelf && (
+                                                        <span style={{
+                                                            color: 'var(--wx-fg-4, #8898A8)',
+                                                            fontSize: 11,
+                                                            marginLeft: 4,
+                                                        }}>
+                                                            (当前)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {item.stage_name && (
+                                                    <WxbTag color="neutral" style={{ marginTop: 2 }}>
+                                                        {item.stage_name}
+                                                    </WxbTag>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* 右侧：移除按钮（非自身且有共享组时显示） */}
+                                        {!item.isSelf && currentGroup && (
+                                            <WxbPopconfirm
+                                                title="移除此成员?"
+                                                onConfirm={() => handleRemoveMember(item.operation_plan_id)}
+                                            >
+                                                <WxbButton
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    style={{
+                                                        color: 'var(--wx-red-600, #DC2626)',
+                                                        padding: '2px 6px',
+                                                        marginLeft: 8,
+                                                        flexShrink: 0,
+                                                    }}
+                                                >
+                                                    <IconDelete />
+                                                </WxbButton>
+                                            </WxbPopconfirm>
+                                        )}
+                                    </div>
+                                )}
+                            />
+                        ) : (
+                            <WxbEmpty description="暂无共享成员" />
+                        )}
                     </div>
                 )}
             </div>
 
             <div style={{ marginTop: 'auto' }}>
-                <Button
-                    type="primary"
-                    block
-                    icon={<PlusOutlined />}
+                <WxbButton
+                    variant="primary"
+                    size="lg"
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     onClick={() => setSelectorVisible(true)}
-                    className="h-10 text-base shadow-lg shadow-blue-500/20 bg-gradient-to-r from-blue-500 to-blue-600 border-0 hover:scale-[1.02] transition-transform rounded-xl"
-                    style={{ height: 40 }} // Keep inline height for AntD consistency just in case
                 >
-                    Add Operations
-                </Button>
+                    <IconPlus />
+                    添加操作
+                </WxbButton>
             </div>
 
             <OperationSelectorModal

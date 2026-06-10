@@ -1,0 +1,107 @@
+/* EditOperationModal —— 编辑甘特工序弹窗（wxb-ui 设计系统） */
+
+.edit-op-modal__alert {
+  margin-bottom: var(--wx-space-24);
+}
+
+.edit-op-modal__divider {
+  margin: var(--wx-space-20) 0 var(--wx-space-16);
+}
+
+.edit-op-modal__field-hint {
+  font-size: var(--wx-fs-12);
+  color: var(--wx-fg-3);
+  margin-top: 4px;
+}
+
+.edit-op-modal__time-row {
+  display: flex;
+  gap: var(--wx-space-16);
+}
+
+.edit-op-modal__time-col {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 预计结束时间：只读展示框（label 与左侧日期选择器对齐） */
+.edit-op-modal__time-col > .wxb-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.edit-op-modal__readonly {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 var(--wx-space-12);
+  background: var(--wx-surface-2);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-4);
+  color: var(--wx-fg-2);
+  font-size: var(--wx-fs-14);
+}
+
+.edit-op-modal__duration {
+  font-size: var(--wx-fs-12);
+  color: var(--wx-fg-3);
+  margin-top: var(--wx-space-8);
+}
+
+/* 约束页 —— 新增前置约束工具条 */
+.edit-op-modal__constraint-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--wx-space-12);
+  padding: var(--wx-space-12);
+  margin-bottom: var(--wx-space-16);
+  background: var(--wx-surface-1);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+}
+
+.edit-op-modal__constraint-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-op-modal__constraint-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 约束表格单元格 */
+.edit-op-modal__cell-name {
+  font-weight: 500;
+  color: var(--wx-fg-1);
+}
+
+.edit-op-modal__cell-code {
+  font-size: var(--wx-fs-12);
+  color: var(--wx-fg-3);
+}
+
+.edit-op-modal__type-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: var(--wx-fs-12);
+  color: var(--wx-green-700);
+  background: var(--wx-green-100);
+}
+
+/* 弹窗底部按钮区 */
+.edit-op-modal__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-12);
+}
+
+.edit-op-modal__footer-delete {
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

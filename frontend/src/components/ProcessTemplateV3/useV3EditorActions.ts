@@ -38,6 +38,10 @@ export interface UseV3EditorActionsReturn {
   handleDragEnd: (taskId: string, newStart: number, newEnd: number) => Promise<boolean>;
   /** Handle resize end on a task bar */
   handleResizeEnd: (taskId: string, newStart: number, newEnd: number) => Promise<boolean>;
+  /** Handle cascade group/equipment summary-bar drag end — shifts all affected operations by deltaHours */
+  handleGroupDragEnd: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => Promise<boolean>;
+  /** Handle multi-select drag end — moves each task to its provided new start/end in one batch */
+  handleTasksDragEnd: (updates: Array<{ taskId: string; newStart: number; newEnd: number }>) => Promise<boolean>;
   /** Delete a scheduled operation */
   handleDeleteTask: (taskId: string) => Promise<void>;
   /** Trigger auto-schedule for the template */
@@ -165,8 +169,10 @@ export function useV3EditorActions({
     return map;
   }, []);
 
-  // ---- Drag end handler ----
-  const handleDragEnd = useCallback(
+  // ---- Persist a single operation's new timing (no refresh) ----
+  // Returns true on success, false when the task can't be resolved or the PUT fails.
+  // Callers are responsible for refreshing once after a batch.
+  const persistOperationTime = useCallback(
     async (taskId: string, newStart: number, newEnd: number): Promise<boolean> => {
       const scheduleId = parseScheduleId(taskId);
       if (!scheduleId) return false;
@@ -181,20 +187,29 @@ export function useV3EditorActions({
       // API expects: operation_day (relative to stage), recommended_time (0-23.9)
       //
       // We need the stage's start_day to compute relative operation_day.
-      // The stage start_day can be found from the parent node or from opData.
       // Since opData stores operation_day relative to stage, and
       // node.start_day was computed as stageStartDay + opData.operation_day + dayOffset,
-      // we can derive stageStartDay from the original absolute position.
+      // we can derive stageStartDay from the current absolute position.
       const originalAbsoluteDay = node.start_day ?? 0;
       const originalOpDay = opData.operation_day ?? 0;
       const originalDayOffset = opData.recommended_day_offset ?? 0;
       const stageStartDay = originalAbsoluteDay - originalOpDay - originalDayOffset;
 
+      await processTemplateV2Api.updateStageOperation(
+        scheduleId,
+        buildDraggedOperationTimingUpdate(newStart, newEnd, stageStartDay),
+      );
+      return true;
+    },
+    [ganttNodes],
+  );
+
+  // ---- Drag end handler (single task) ----
+  const handleDragEnd = useCallback(
+    async (taskId: string, newStart: number, newEnd: number): Promise<boolean> => {
       try {
-        await processTemplateV2Api.updateStageOperation(
-          scheduleId,
-          buildDraggedOperationTimingUpdate(newStart, newEnd, stageStartDay),
-        );
+        const ok = await persistOperationTime(taskId, newStart, newEnd);
+        if (!ok) return false;
         await refreshData();
         return true;
       } catch (err: any) {
@@ -202,7 +217,7 @@ export function useV3EditorActions({
         return false;
       }
     },
-    [ganttNodes, refreshData],
+    [persistOperationTime, refreshData],
   );
 
   // ---- Resize end handler ----
@@ -211,6 +226,83 @@ export function useV3EditorActions({
       return handleDragEnd(taskId, newStart, newEnd);
     },
     [handleDragEnd],
+  );
+
+  // ---- Compute a task's current absolute start/end (hours) from the node tree ----
+  // start_day is the absolute day; recommended_time is hour-of-day; standard_time is duration.
+  const getTaskCurrentSpan = useCallback(
+    (taskId: string): { start: number; end: number } | null => {
+      const scheduleId = parseScheduleId(taskId);
+      if (!scheduleId) return null;
+      const node = findOperationNode(ganttNodes, scheduleId);
+      if (!node) return null;
+      const opData = node.data as StageOperation | undefined;
+      if (!opData) return null;
+
+      const absoluteDay = node.start_day ?? 0;
+      const startHour = absoluteDay * 24 + (opData.recommended_time ?? 0);
+      const rawDuration =
+        typeof opData.standard_time === 'string'
+          ? parseFloat(opData.standard_time)
+          : opData.standard_time;
+      const duration = rawDuration && rawDuration > 0 ? rawDuration : 4;
+      return { start: startHour, end: startHour + duration };
+    },
+    [ganttNodes],
+  );
+
+  // ---- Persist a batch of operation moves concurrently, refresh once, report failures ----
+  // Always refreshes (even on partial failure) so the canvas snaps back to server truth.
+  // Returns true only when every update succeeded.
+  const persistBatch = useCallback(
+    async (updates: Array<{ taskId: string; newStart: number; newEnd: number }>): Promise<boolean> => {
+      if (updates.length === 0) return true;
+
+      const results = await Promise.allSettled(
+        updates.map((u) => persistOperationTime(u.taskId, u.newStart, u.newEnd)),
+      );
+
+      let failed = 0;
+      for (const r of results) {
+        if (r.status === 'rejected' || r.value === false) failed += 1;
+      }
+
+      // Refresh once regardless — partial failures must fall back to server truth.
+      await refreshData();
+
+      if (failed > 0) {
+        message.error(`${updates.length} 条中 ${failed} 条更新失败，已回到服务端最新状态`);
+        return false;
+      }
+      return true;
+    },
+    [persistOperationTime, refreshData],
+  );
+
+  // ---- Cascade group/equipment drag end ----
+  // Shifts every affected operation by deltaHours from its CURRENT span, in one batch.
+  // Reading current spans (not a captured snapshot) keeps the undo path — which re-invokes
+  // this handler with -deltaHours against the refreshed positions — self-consistent.
+  const handleGroupDragEnd = useCallback(
+    async (_groupId: string, deltaHours: number, affectedTaskIds: string[]): Promise<boolean> => {
+      const updates: Array<{ taskId: string; newStart: number; newEnd: number }> = [];
+      for (const taskId of affectedTaskIds) {
+        const span = getTaskCurrentSpan(taskId);
+        if (!span) continue;
+        updates.push({ taskId, newStart: span.start + deltaHours, newEnd: span.end + deltaHours });
+      }
+      return persistBatch(updates);
+    },
+    [getTaskCurrentSpan, persistBatch],
+  );
+
+  // ---- Multi-select drag end ----
+  // Each update already carries its target absolute start/end from the canvas.
+  const handleTasksDragEnd = useCallback(
+    async (updates: Array<{ taskId: string; newStart: number; newEnd: number }>): Promise<boolean> => {
+      return persistBatch(updates);
+    },
+    [persistBatch],
   );
 
   // ---- Delete task ----
@@ -258,6 +350,8 @@ export function useV3EditorActions({
     loading,
     handleDragEnd,
     handleResizeEnd,
+    handleGroupDragEnd,
+    handleTasksDragEnd,
     handleDeleteTask,
     handleAutoSchedule,
     refreshAll,

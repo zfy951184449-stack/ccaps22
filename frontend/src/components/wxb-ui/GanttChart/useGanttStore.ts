@@ -100,7 +100,17 @@ function ganttReducer(state: GanttState, action: GanttAction): GanttState {
       if (state.expandedDay !== null) return state;
       const clamped = Math.max(MIN_DAY_WIDTH, Math.min(MAX_DAY_WIDTH, action.dayWidth));
       if (clamped === state.dayWidth) return state;
-      const newScrollX = clampScroll(state.scrollX * (clamped / state.dayWidth), state.maxScrollX);
+      const ratio = clamped / state.dayWidth;
+      let newScrollX: number;
+      if (action.anchorX !== undefined) {
+        // 锚点缩放: 保持鼠标所在世界坐标在缩放后仍映射到同一屏幕位置
+        // worldX = scrollX + anchorX  (anchorX 是 canvas 局部 x，与 scrollX 同坐标系)
+        const worldX = state.scrollX + action.anchorX;
+        newScrollX = clampScroll(worldX * ratio - action.anchorX, state.maxScrollX);
+      } else {
+        // 无锚点(工具栏 +/- 按钮等): 等比保持可见区域中心
+        newScrollX = clampScroll(state.scrollX * ratio, state.maxScrollX);
+      }
       return { ...state, dayWidth: clamped, scrollX: newScrollX, dirty: true };
     }
     case 'SET_VIEW': {

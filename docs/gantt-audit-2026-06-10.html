@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>甘特图审计报告（工艺模版 + 批次管理）· 2026-06-10</title>
+<style>
+  :root {
+    --fg-1: #1f2329;
+    --fg-2: #4b5563;
+    --fg-3: #8a919f;
+    --border: #e5e7eb;
+    --bg-soft: #f7f8fa;
+    --blue: #0b5fd7;
+    --blue-bg: #eef4fe;
+    --red: #c5221f;
+    --red-bg: #fdecec;
+    --orange: #b45309;
+    --orange-bg: #fef3e2;
+    --gray-chip: #5f6673;
+    --gray-chip-bg: #eef0f3;
+    --green: #15803d;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0; background: #fff; color: var(--fg-1);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.75;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 48px 32px 96px; }
+  h1 { font-size: 26px; line-height: 1.4; margin: 0 0 8px; }
+  .meta { color: var(--fg-3); font-size: 13px; margin-bottom: 28px; }
+  .meta b { color: var(--fg-2); font-weight: 600; }
+  h2 {
+    font-size: 20px; margin: 48px 0 16px; padding-bottom: 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 { font-size: 16px; margin: 28px 0 10px; color: var(--fg-1); }
+  p { margin: 8px 0; }
+  .summary {
+    background: var(--bg-soft); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 20px 0 8px;
+  }
+  .summary ul { margin: 6px 0 0; padding-left: 20px; }
+  .summary li { margin: 4px 0; }
+  .legend { font-size: 13px; color: var(--fg-2); margin: 12px 0 0; }
+  .toc {
+    border: 1px solid var(--border); border-radius: 10px; padding: 14px 22px; margin: 24px 0;
+    font-size: 14px;
+  }
+  .toc a { color: var(--blue); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ol { margin: 6px 0; padding-left: 22px; }
+  .finding {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; margin: 12px 0;
+  }
+  .finding.p0 { border-left: 4px solid var(--red); }
+  .finding.p1 { border-left: 4px solid var(--orange); }
+  .finding.p2 { border-left: 4px solid #c2c9d4; }
+  .f-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .f-title { font-weight: 650; font-size: 15px; }
+  .chip {
+    display: inline-block; font-size: 12px; font-weight: 700; line-height: 1;
+    padding: 4px 8px; border-radius: 99px; white-space: nowrap;
+  }
+  .chip.p0 { color: var(--red); background: var(--red-bg); }
+  .chip.p1 { color: var(--orange); background: var(--orange-bg); }
+  .chip.p2 { color: var(--gray-chip); background: var(--gray-chip-bg); }
+  .chip.kind { color: var(--blue); background: var(--blue-bg); font-weight: 600; }
+  .chip.fixed { color: #fff; background: var(--green); }
+  .fixnote {
+    font-size: 13px; color: var(--green); background: #e9f7ee;
+    border: 1px solid #bfe5cc; border-radius: 6px; padding: 6px 10px; margin-top: 8px;
+  }
+  .fixnote b { color: var(--green); }
+  .f-body { margin-top: 8px; font-size: 14px; color: var(--fg-2); }
+  .f-body .lbl { font-weight: 650; color: var(--fg-1); }
+  code, .path {
+    font-family: var(--mono); font-size: 12.5px;
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 5px; padding: 1px 6px; color: #9b2226; word-break: break-all;
+  }
+  .path { color: #0b5fd7; }
+  .note {
+    font-size: 13px; color: var(--fg-3); background: var(--bg-soft);
+    border-radius: 6px; padding: 6px 10px; margin-top: 8px;
+  }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  th { background: var(--bg-soft); font-weight: 650; }
+  ol.fixorder li { margin: 6px 0; }
+  .rejected li { margin: 5px 0; font-size: 14px; color: var(--fg-2); }
+  @media print {
+    .page { padding: 0; max-width: none; }
+    .finding { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>甘特图审计报告：工艺模版 + 批次管理</h1>
+<div class="meta">
+  日期 <b>2026-06-10</b> ｜ 方法 <b>9 维度并行代码审查（opus 4.8 / sonnet）+ 逐条反驳式核实</b> ｜
+  原始 <b>67</b> 条 → 否决误报 <b>13</b> 条 → 确认 <b>54</b> 条 → 合并去重后 <b>47 个独立问题</b>
+</div>
+
+<div class="fixnote" style="margin-bottom:20px">
+  <b>修复进展（2026-06-10）：</b>A1–A6、B13、B14 已修复并通过验证（前端 tsc 零错误、后端构建通过、前端 9 套件 43 用例 + 后端 4 文件 20 用例全绿）。
+  涉及 16 个修改文件 + 4 个新增文件（含 useGanttStore.test.ts、stageOperationFromCanvas.test.ts 两个新测试）。详见各条目绿色「已修复」标记。
+</div>
+
+<div class="summary">
+  <b>TL;DR</b>
+  <ul>
+    <li><b>1 个 P0：</b>模版甘特拖动阶段组条整体平移「假成功」——弹成功提示但从不落库，刷新即回弹。</li>
+    <li><b>数据正确性 P1 一串：</b>批次拖拽缩放被编辑弹窗静默吞回、批量拖拽半截落库、新建操作时间窗被后端覆盖、起始天 0 被存成 1。</li>
+    <li><b>结构性根源：</b>仓库内四套以上甘特实现并存，约 <b>8000+ 行死代码</b>（BatchGanttV4 目录内整套 DOM 甘特已死、ProcessTemplateGantt 活死混杂），是「半成品观感」与误改风险的最大来源。</li>
+    <li><b>半成品清单：</b>右键死菜单项 ×4、conflictMap 恒空、自动排程按钮空壳、共享组无法解散/模式写死/改完不刷新、offScreenOperations 后端算了前端丢弃等。</li>
+    <li><b>规范债：</b>批次甘特 17 处裸 axios 无 services 层、弹窗用原生 antd、英文文案、硬编码色值、Unicode 字符当图标。</li>
+  </ul>
+  <div class="legend">严重级：<span class="chip p0">P0</span> 功能坏掉/数据错误且误导用户 ｜ <span class="chip p1">P1</span> 数据正确性风险或明显功能缺口 ｜ <span class="chip p2">P2</span> 半成品入口/优化点/规范债</div>
+</div>
+
+<div class="toc">
+  <b>目录</b>
+  <ol>
+    <li><a href="#chain-a">链A：工艺模版甘特（/process-templates）</a></li>
+    <li><a href="#chain-b">链B：批次管理甘特（/batch-management-v4）</a></li>
+    <li><a href="#cross">跨链：多套甘特实现并存与死代码盘点</a></li>
+    <li><a href="#rejected">被否决的 13 条误报</a></li>
+    <li><a href="#order">建议修复顺序</a></li>
+  </ol>
+</div>
+
+<!-- ============================ 链 A ============================ -->
+<h2 id="chain-a">一、链A：工艺模版甘特</h2>
+<p class="meta">路由 <code>/process-templates</code> → <span class="path">ProcessTemplateV3Editor.tsx</span> + <span class="path">wxb-ui/GanttChart</span>（canvas 渲染），复用 <span class="path">ProcessTemplateGantt/</span> 的 adapter/hooks。</p>
+
+<h3>P0</h3>
+
+<div class="finding p0">
+  <div class="f-head"><span class="chip p0">P0</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">A1 · 拖动阶段/设备组条整体平移后「假成功」——提示已移动但从不落库</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>拖动阶段（或设备分组）的汇总条，组内工序跟着平移，松手弹「已移动 N 个任务 +Xh」撤销提示；但没有任何请求发出，下次刷新全部弹回原位。</p>
+    <p><span class="lbl">根因：</span><span class="path">wxb-ui/GanttChart/useGanttDrag.ts:258-286</span> 组拖拽结束时 <code>onGroupDragEnd</code> 为 undefined 就跳过持久化，却仍无条件弹成功 toast；<span class="path">ProcessTemplateV3/ProcessTemplateV3Editor.tsx:904-910</span> 只传了 <code>onTaskDragEnd</code> / <code>onTaskResizeEnd</code>，从未传 <code>onGroupDragEnd</code>。</p>
+    <p><span class="lbl">对照：</span>批次甘特 <span class="path">BatchGanttV4/index.tsx:635</span> 是传了 <code>onGroupDragEnd</code> 的，只有模版编辑器漏接。</p>
+    <p><span class="lbl">建议：</span>实现 onGroupDragEnd（按 deltaHours 批量 updateStageOperation 后刷新）；或未接通前禁用组拖拽且不弹成功提示。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>useV3EditorActions 新增 handleGroupDragEnd（Promise.allSettled 并发落库 + 单次刷新 + 部分失败提示「N 条中 M 条失败」）并接入 WxbGanttChart；useGanttDrag 防御性修复——无 onGroupDragEnd 时只做画布 cleanup，不入 undo 栈、不弹成功提示；撤销 toast 走反向回调同样持久化，阶段/设备两种视图通用。</p>
+  </div>
+</div>
+
+<h3>P1</h3>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">A2 · 新建操作的「时间窗」输入被后端静默覆盖</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>新增操作弹窗里手动填的时间窗保存后不生效，被后端按推荐开始 ±2h 重算覆盖；编辑已有操作时同样字段却能正常保存，行为不一致。</p>
+    <p><span class="lbl">根因：</span><span class="path">ProcessTemplateV3/QuickCreateOperationModal.tsx:859</span> 新建时无条件传 <code>absoluteStartHour</code>；后端 <span class="path">backend/src/controllers/stageOperationController.ts:551-563</span> 见此字段即走 <code>buildRelativeScheduleFields</code> 重算窗、忽略请求里的 window_*。</p>
+    <p><span class="lbl">建议：</span>手动窗模式不传 absoluteStartHour；或后端收到显式 window_* 时优先采用、不重算。</p>
+    <p class="fixnote"><b>已修复（2026-06-10，后端侧）：</b>把 buildRelativeScheduleFields 拆为 buildPositionFields（落点定位）与 buildDerivedWindowFields（±2h 兜底窗）；请求带显式 window_* 时原样落库不再重算，absoluteStartHour 继续承担画布定位，自动模式行为不变。新增 stageOperationFromCanvas.test.ts 3 用例。边角说明：自动模式 duration=1 时窗结束改按前端预览 +1 落库（修正了预览与存库不一致）。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">A3 · 起始天填 0 的阶段被存成第 1 天</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>弹窗文案明确写「首日 = 0」且默认填 0，但创建后该阶段实际从第 1 天开始，首阶段及其所有操作整体右移一天。</p>
+    <p><span class="lbl">根因：</span><span class="path">backend/src/controllers/processStageController.ts:85,97</span> 用 <code>start_day || 1</code>，0 被当假值替换为 1。from-canvas 路径用 <code>?? 0</code> 是对的，只有 createStage 错。</p>
+    <p><span class="lbl">建议：</span>改为 <code>start_day ?? 1</code> 或显式判空。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>两处 <code>start_day || 1</code> 均改为 <code>?? 1</code>，0 原样保存；同文件其余 <code>||</code> 写法排查后无同类问题（max_order 处属合理防御）。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">A4 · Ctrl/⌘+滚轮缩放不以光标为锚点</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>按住 Ctrl/⌘ 滚轮缩放时，缩放中心始终在时间轴最左端而非鼠标位置，放大后目标工序跑出视野。</p>
+    <p><span class="lbl">根因：</span><span class="path">wxb-ui/GanttChart/GanttCanvas.tsx:398</span> 已传 <code>anchorX</code>，但 <span class="path">useGanttStore.ts:98-104</span> 的 ZOOM reducer 根本不读它，只等比缩放 scrollX。</p>
+    <p><span class="lbl">建议：</span>reducer 按锚点世界坐标在缩放后回调 scrollX，保持锚点像素位置不变。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>ZOOM reducer 实现锚点保持——<code>newScrollX = clamp(worldX × ratio − anchorX)</code>；anchorX 缺省（工具栏 ± 按钮）回退原等比行为。新增 useGanttStore.test.ts 覆盖锚点/等比/边界 clamp 共 9 用例。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A5 · 多选拖拽逐条 await 保存且每条都全量刷新</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>框选多条工序一次拖动，松手后明显卡顿（条数越多越久）；中途失败则前面已写、后面未写，处于半更新不一致状态。</p>
+    <p><span class="lbl">根因：</span><span class="path">wxb-ui/GanttChart/useGanttDrag.ts:320-327</span> for-await 串行，且 <span class="path">ProcessTemplateV3/useV3EditorActions.ts:194-198</span> 每条更新后都全量 refreshData()。</p>
+    <p><span class="lbl">建议：</span>批量接口或并发提交后只刷新一次；失败时整体回滚或明确提示部分失败。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>wxb-ui 新增可选批量回调 <code>onTasksDragEnd(updates[])</code>（types→GanttChart→GanttCanvas→useGanttDrag 透传），多选拖拽单次批量并发落库 + 只刷新一次 + 部分失败提示；未传该 prop 的消费方（如批次甘特）回退原逐条逻辑，零影响。遗留：Ctrl+Z 对组拖拽仍走逐条还原（独立低优路径）。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A6 · useGanttData 串行逐阶段请求，N 个阶段发 N+2 次 HTTP</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>打开模版时加载时间随阶段数线性增长（5 个阶段约 7 次串行请求），白屏/转圈偏长。</p>
+    <p><span class="lbl">根因：</span><span class="path">ProcessTemplateGantt/hooks/useGanttData.ts:78-81</span> for 循环内 await。</p>
+    <p><span class="lbl">建议：</span>改 <code>Promise.all</code> 并行拉取。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>改为 Promise.all 并行拉取，stage→operations 映射与顺序不变，错误语义保持整体失败，对外返回结构未动。</p>
+  </div>
+</div>
+
+<h3>P2 · 功能缺口 / 半成品</h3>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">A7 · 组右键菜单「级联延后/提前排程」是死项</span></div>
+  <div class="f-body"><p>阶段行右键菜单含这两项（<span class="path">wxb-ui/GanttChart/GanttContextMenu.tsx:224-225</span>），但 <span class="path">ProcessTemplateV3Editor.tsx:622</span> 的 handleContextAction 无 cascade-* 分支，点击静默无反应。→ 接上整组位移逻辑或删菜单项。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">A8 · 背景右键「粘贴任务」「适配视图」是死项</span></div>
+  <div class="f-body"><p><span class="path">GanttContextMenu.tsx:231-232</span> 定义 paste / zoom-fit，但 GanttChart.handleCtxAction 与编辑器 handleContextAction 均无对应分支，点击毫无反应。→ 实现 zoom-fit / 移除两项。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">A9 · 纯设备视图下右键编辑/删除阶段永远失败</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3/createOperationContext.ts:5</span> 只解析 <code>stage_(\d+)</code>，而设备视图组 id 是 <code>res-equip-N</code> / <code>res-unbound</code>（<span class="path">useResourceView.ts:296</span>），永远弹「请在阶段行上右键」；「新增操作」也只能落到第一个阶段。→ 组数据携带 stageId，或设备视图下禁用相关菜单项。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">A10 · conflictMap 恒为空，自动排程冲突标记从不显示</span></div>
+  <div class="f-body"><p><span class="path">useV3EditorActions.ts:161-166</span> 直接返回空对象（注释自承待接入）；且 toGanttTasks 调用处也没透传 conflictMap，双重失效——后端检出冲突也不会在图上标红。→ 接校验端点并透传。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">A11 · 拖拽边缘自动滚动坐标系错误</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/useGanttDrag.ts:217-221</span> 用 <code>e.clientX</code> 与 <code>window.innerWidth</code> 判边缘（注释自承 approximate）：左侧 200px 侧边栏区域就触发左滚，画布真正右缘却不触发。→ 用画布 getBoundingClientRect 换算成画布内坐标再比较。</p></div>
+</div>
+
+<h3>P2 · 性能</h3>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A12 · resource-editor 聚合接口挂载时被打两遍</span></div>
+  <div class="f-body"><p><span class="path">useV3EditorActions.ts:146</span> 与 <span class="path">ProcessTemplateV3Editor.tsx:227</span> 各自在挂载时请求同一最重接口；且前者取回的 shareGroups 从未被使用。→ 复用一份数据源。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A13 · share-hover 回调在全量 tasks 里线性 find，O(P×N)</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttCanvas.tsx:504</span> 对 peers 每个成员做全量扫描。→ 维护 <code>taskById: Map</code> 查表。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A14 · 设备冲突检测 O(n²) 双重循环</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3/useResourceView.ts:108-121</span>，每个设备组都调用。→ 扫描线 O(n log n)，或直接复用 splitIntoLayers 结果（layer&gt;1 即重叠）。<span class="note">核实置信 medium：常规规模（单设备十几条操作）未必可感知。</span></p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A15 · zoomRange 默认数组每次渲染新引用，wheel 监听反复重绑</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttChart.tsx:199</span> 默认参数数组 + <span class="path">GanttCanvas.tsx:405</span> useEffect 依赖它，每渲染解绑/重绑一轮。→ 模块级常量或 useMemo。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A16 · selectionPanelExtraActions 内联函数令选中面板 memo 失效</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3Editor.tsx:913</span> JSX 内联渲染函数，GanttSelectionPanel 虽是 React.memo 但 prop 每次新引用。→ useCallback / useMemo 固定。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A17 · buildShareColorMap 每次重算都走 getComputedStyle</span></div>
+  <div class="f-body"><p><span class="path">GanttChart.tsx:46-49</span>，tasks/links 变化即触发 CSSOM 读取。→ 挂载时读一次缓存。<span class="note">核实置信 medium：每次调用数 = 颜色组数，量级小。</span></p></div>
+</div>
+
+<h3>P2 · 规范</h3>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="f-title">A18 · canvas 主题色硬编码 hex 与 readWxbToken 双轨并存</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/constants.ts:8-32</span> THEME 全硬编码；<span class="path">GanttChart.tsx:46</span> 又有运行时读 CSS 变量的 readWxbToken，两套不同步。<span class="note">核实备注：canvas 2D 无法直接消费 CSS 变量，属技术限制；应统一经 readWxbToken 初始化。</span></p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="f-title">A19 · 侧边栏用 Unicode「▶」「⠿」当图标</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttSidebar.tsx:216,233</span>，违反「No emoji/Unicode as UI icons」硬规则，部分系统字体下对齐偏移。→ inline SVG（chevron / grip-dots）。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="f-title">A20 · handleQuickLink 裸 axios 创建共享组，三轨并行</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3Editor.tsx:756</span> 裸 <code>axios.post</code>，与 <span class="path">useShareGroupService.ts:181</span>、<span class="path">services/processTemplateV2Api.ts:754</span> 已有封装重复。→ 收敛到 service 层。</p></div>
+</div>
+
+<!-- ============================ 链 B ============================ -->
+<h2 id="chain-b">二、链B：批次管理甘特</h2>
+<p class="meta">路由 <code>/batch-management-v4</code> → <span class="path">BatchManagementV4/index.tsx</span> → <span class="path">BatchGanttV4/index.tsx</span>（实际渲染走 wxb-ui GanttChart）。</p>
+
+<h3>P1</h3>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="f-title">B1 · 画布拖长操作条后再开编辑弹窗保存，缩放被静默吞回</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>把操作条从 4 小时拉长到 8 小时，再双击打开「编辑操作」点保存，结束时间被悄悄改回 4 小时。</p>
+    <p><span class="lbl">根因：</span><span class="path">BatchGanttV4/index.tsx:453-458</span> persistTaskTime 只 PUT start/end 不更新 planned_duration；<span class="path">EditOperationModal.tsx:54-65,183</span> 用旧 duration 初始化并以 <code>end = start + duration</code> 重算覆盖，duration 字段又只读不可编辑。</p>
+    <p><span class="lbl">建议：</span>拖拽/缩放时同步写 planned_duration（或后端按 end-start 重算）；弹窗 duration 可编辑或按真实跨度推导。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="f-title">B2 · 分组批量拖拽中途失败留下「半截已落库」的移动</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>拖动带多条操作的批次/阶段分组，中间某条保存失败时画布整组视觉回弹，但前面几条已写库——界面说没改，库里移了一半。</p>
+    <p><span class="lbl">根因：</span><span class="path">BatchGanttV4/index.tsx:482-498</span> for 循环逐条 await PUT，失败 return false 不回滚；成功条目触发的 requestReloadSoon 还会把半截结果拉回画布。</p>
+    <p><span class="lbl">建议：</span>后端原子批量接口；或失败时对已成功操作反向补偿再回弹。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="f-title">B3 · 共享组改成员后甘特连线不刷新</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>编辑弹窗「共享组」页里增删成员成功（有 toast），关弹窗后图上连线/分组没变，必须手动刷新。</p>
+    <p><span class="lbl">根因：</span><span class="path">EditOperationModal.tsx:441</span> 渲染 ShareGroupMembersTab 没传 <code>onUpdate</code>，其内部 <code>onUpdate?.()</code> 空调用；弹窗 onClose（<span class="path">index.tsx:666</span>）也不触发重载。</p>
+    <p><span class="lbl">建议：</span>接通 onUpdate → requestReload，或关弹窗时无条件重载一次。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">half-finished</span><span class="f-title">B4 · 无法解散整个共享组，只能逐个移除成员</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>批次甘特里能创建共享组、逐个增删成员，但没有任何入口一键解散整组，建错只能一个个删。</p>
+    <p><span class="lbl">根因：</span><span class="path">BatchGanttV4/ShareGroupMembersTab.tsx:67-77</span> 只有单成员 DELETE；后端 <code>DELETE /api/share-groups/:id</code>（<span class="path">backend/src/routes/shareGroupRoutes.ts:70</span>）已存在但批次侧零调用。</p>
+    <p><span class="lbl">建议：</span>补「解散共享组」按钮调用已有端点。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">quality</span><span class="f-title">B5 · 17 处裸 axios 散落 4 个组件，无 services 层（项目硬规则违规）</span></div>
+  <div class="f-body">
+    <p><span class="path">index.tsx:3,233</span>、<span class="path">EditOperationModal.tsx:40,84,98,139,163</span>、<span class="path">ShareGroupMembersTab.tsx:29,51,70</span>、<span class="path">OperationSelectorModal.tsx:108,127</span>；hierarchy、dependencies、share-groups、operations CRUD 全部直调，<span class="path">services/</span> 下无对应文件。→ 新建 <code>services/batchGanttApi.ts</code> 收口。</p>
+  </div>
+</div>
+
+<h3>P2 · 功能缺口 / 半成品</h3>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">B6 · 「自动排程」按钮是空壳</span></div>
+  <div class="f-body"><p><span class="path">BatchGanttV4/index.tsx:532-535</span> 只 message.info + navigate('/solver-v4')，不在本页排程，文案误导。→ 改「前往自动排程」或链接样式。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">B7 · 从选区创建共享组写死 SAME_TEAM 与默认组名</span></div>
+  <div class="f-body"><p><span class="path">index.tsx:519-523</span> 硬编码 <code>group_name: 共享组-N</code>、<code>share_mode: 'SAME_TEAM'</code>；创建时不可选、批次侧事后也无修改入口（PUT 仅模版侧在用）。→ 创建前轻量配置弹窗（组名 + 模式）。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="f-title">B8 · 无组时用假成员「当前」占位</span></div>
+  <div class="f-body"><p><span class="path">ShareGroupMembersTab.tsx:82-89</span> members 为空时注入伪造的「自己」成员，stage_name 写死「当前」（注释自承 mock），误导已有组。→ 空态展示「暂无共享组」。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">B9 · 后端算好的 offScreenOperations 前端整体丢弃</span></div>
+  <div class="f-body"><p>后端 <span class="path">batchGanttV5Controller.ts:329-443</span> 专门查询返回屏幕外关联操作；<span class="path">index.tsx:234</span> fetchHierarchy 只取 batches。跨窗约束/共享关系在图上凭空消失，后端查询白做。→ 消费它生成屏幕外指示桩，或删掉后端这段查询。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">B10 · 日期快捷段控件非受控，高亮与实际范围脱节</span></div>
+  <div class="f-body"><p><span class="path">index.tsx:545</span> WxbSegmented 用 <code>defaultValue="autoFit"</code>（非受控），autoFit 流程或手动改区间后高亮不回写，与右侧实际范围不符。→ 受控 + activePreset state，手动改区间时清空。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">B11 · 替换操作后弹窗「工时」文本不刷新</span></div>
+  <div class="f-body"><p><span class="path">EditOperationModal.tsx:303</span> 直接 <code>form.getFieldValue('duration')</code> 渲染（非响应式），替换操作改了 duration 后提示已更新、结束时间也变了，工时文本却还是旧值。→ <code>Form.useWatch('duration')</code>。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">B12 · 时区隐患：DATETIME 读写对运行时区有隐式假设</span></div>
+  <div class="f-body"><p><span class="path">backend/src/config/database.ts:19-29</span> 未配 dateStrings/timezone：mysql2 按本地时区转 Date → res.json 序列化成 UTC ISO → 前端按浏览器时区解析；写回却是本地壁钟串原样存。当前单机同时区无症状，后端一旦跑 UTC 全图平移 8 小时。→ <code>dateStrings: true</code>，全链按壁钟串处理。</p></div>
+</div>
+
+<h3>P2 · 规范</h3>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="chip fixed">已修复</span><span class="f-title">B13 · 两个弹窗整体用原生 antd 而非 wxb-ui</span></div>
+  <div class="f-body"><p><span class="path">EditOperationModal.tsx:2</span>、<span class="path">OperationSelectorModal.tsx:2</span> 整套 Modal/Form/Button/Tabs/Table 原生导入，视觉与全局 wxb 主题割裂。→ 逐步替换为 WxbModal/WxbButton/WxbInput 等。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>EditOperationModal、OperationSelectorModal、ShareGroupMembersTab 三个组件全面迁移 wxb-ui（WxbModal/WxbSelect/WxbDatePicker/WxbRangePicker/WxbTabs/WxbDataTable/WxbPopconfirm/WxbSpinner/WxbList 等），antd Form 按团队惯例改 useState 手写校验，@ant-design/icons 换 inline SVG，硬编码 hex 全部清除并新增配套 CSS（var(--wx-*)）；另将 ProcessTemplateV3Editor / ProcessTemplateV3List / BatchGanttV4 index 共 60+ 处 antd message 迁移为 wxbToast。备注：原 info 型 Alert 因 WxbAlert 无 info 变体改用默认样式（外观差异，非行为变化）。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">ux</span><span class="chip fixed">已修复</span><span class="f-title">B14 · OperationSelectorModal 全英文文案</span></div>
+  <div class="f-body"><p><span class="path">OperationSelectorModal.tsx:214,232,253,271,346,363</span>：Select Batch / Select Stage / Operations Selected / No operations found / Cancel / Add N Operations，与全中文产品不一致。→ 统一中文。</p>
+    <p class="fixnote"><b>已修复（2026-06-10）：</b>随 wxb-ui 迁移一并完成，OperationSelectorModal 与 ShareGroupMembersTab 的全部 UI 文案中文化（仅剩 onCancel 等代码标识符为英文）。</p></div>
+</div>
+
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="f-title">B15 · 批次色板 7 组全硬编码 rgba</span></div>
+  <div class="f-body"><p><span class="path">BatchGanttV4/constants.ts:2-9</span>，脱离 wxb 色板。→ 引用 var(--wx-*) 或 color-mix 生成透明度变体。</p></div>
+</div>
+
+<!-- ============================ 跨链 ============================ -->
+<h2 id="cross">三、跨链：多套甘特实现并存（“半成品观感”的结构性根源）</h2>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">dead-code</span><span class="f-title">C1 · BatchGanttV4 目录内一整套 DOM 甘特是死代码</span></div>
+  <div class="f-body">
+    <p><span class="path">GanttContext.tsx</span>、<span class="path">GanttTimeline.tsx</span>、<span class="path">GanttSidebar.tsx</span>、<span class="path">GanttMinimap.tsx</span>、<span class="path">ConstraintConnections.tsx</span>、<span class="path">ShareGroupConnections.tsx</span>、<span class="path">rowUtils.ts(+test)</span>、<span class="path">BatchGanttV4.css</span>——活跃入口 index.tsx 已改用 WxbGanttChart，这套文件只互相引用、无外部 import；其中单日模式（enterSingleDayMode）等能力用户永远触达不了。</p>
+    <p class="note">佐证其误导力：本次审查中有 4 条「性能/颜色」finding（GanttContext value 未 memo、BatchGanttV4.css 34 处硬编码 hex、usePeakPersonnelV4 重复调用、GanttTimeline 内联色 #1F2937）实际全落在这批死文件上——运行时无影响，已并入本项，不再单列。</p>
+    <p><span class="lbl">建议：</span>整套删除，或目录 README 标注废弃。</p>
+  </div>
+</div>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">dead-code</span><span class="f-title">C2 · ProcessTemplateGantt 目录活死混杂：~4700 行 V1 死链 + 7 个 V3 活文件同目录</span></div>
+  <div class="f-body">
+    <p>死链入口 <span class="path">ProcessTemplateGantt/index.tsx</span>（723 行，仅被无路由的 ProcessTemplate.tsx → ProcessTemplatesPage.tsx 引用）；死文件含 hooks/useGanttDrag(539)、useGanttInteraction(669)、useGanttViewport(223)、usePeakPersonnel(197)、components/GanttBars(551) 等共 32 个。
+    而 <span class="path">ganttAdapter.ts</span>、<span class="path">hooks/useGanttData.ts</span>、<span class="path">useShareGroupService.ts</span>、<span class="path">components/WxbShareGroupModal.tsx</span>、<span class="path">types.ts</span>、<span class="path">utils.ts</span>、<span class="path">constants.ts</span> 仍被 V3 编辑器活跃引用。「全活」「全死」两种误判都会出事故。</p>
+    <p><span class="lbl">建议：</span>活文件迁出（如并入 ProcessTemplateV3/ 或公共目录），其余删除。</p>
+  </div>
+</div>
+
+<table>
+  <tr><th style="width:54px">编号</th><th>P2 盘点项</th><th>证据 / 建议</th></tr>
+  <tr><td>C3</td><td><span class="path">pages/ProcessTemplatesPage.tsx</span> + <span class="path">components/ProcessTemplate.tsx</span>（V1 入口）</td><td>App.tsx 无路由引用，~544 行；删除即切断 C2 死链的最后调用方。</td></tr>
+  <tr><td>C4</td><td><span class="path">ProcessTemplateV2/</span> 整条链 23 个文件</td><td>/process-templates-v2 已重定向（App.tsx:177-178），V2 编辑器永不渲染。确认弃用后删除。</td></tr>
+  <tr><td>C5</td><td>5 个空目录脚手架</td><td><span class="path">EnhancedBatchGantt</span>、<span class="path">ActivatedBatchGantt</span>、<span class="path">UniversalGantt</span>、<span class="path">BatchGanttAdapter</span>、<span class="path">TaskPool</span>——只有空子目录、零源文件、零 import。直接删除。</td></tr>
+  <tr><td>C6</td><td><span class="path">components/gantt/ScrollSync.ts</span></td><td>孤立文件，全仓零引用。删除。</td></tr>
+  <tr><td>C7</td><td>usePeakPersonnel 平行两份</td><td><span class="path">ProcessTemplateGantt/hooks/usePeakPersonnel.ts</span>（197 行，死）与 <span class="path">BatchGanttV4/hooks/usePeakPersonnelV4.ts</span>（216 行，活）同算法（Union-Find + 热力色阶）。死的随 V1 删；将来模版侧要峰值就扩展 V4 版。</td></tr>
+  <tr><td>C8</td><td>useGanttDrag 平行两份</td><td><span class="path">ProcessTemplateGantt/hooks/useGanttDrag.ts</span>（539 行，死）与 <span class="path">wxb-ui/GanttChart/useGanttDrag.ts</span>（537 行，活）几乎等量重复。wxb 版为唯一标准。</td></tr>
+  <tr><td>C9</td><td>STAGE_COLORS 跨目录隐式耦合 ⚠</td><td><span class="path">BatchGanttV4/batchGanttAdapter.ts:9</span> import <span class="path">ProcessTemplateGantt/constants</span>——直接清理 V1 目录会把活的批次甘特编译弄崩。<b>清理前先把色板上提</b>到公共位置。</td></tr>
+  <tr><td>C10</td><td><span class="path">ProcessTemplateGantt/components/</span> 下 18 个文件 ~2200 行死代码</td><td>与活文件 WxbShareGroupModal.tsx 同目录混杂。活的迁出，其余删除。</td></tr>
+  <tr><td>C11</td><td><span class="path">wxb-ui/MiniGantt</span> 无业务接入</td><td>仅 /ui-kit 演示页引用。有规划场景就接入，没有就标注 demo-only。</td></tr>
+</table>
+
+<!-- ============================ 否决 ============================ -->
+<h2 id="rejected">四、被否决的 13 条误报（核查质量记录）</h2>
+<p>每条 finding 均由独立核查 agent 反驳式复核，以下为被否决的代表性误报及理由：</p>
+<ul class="rejected">
+  <li>「级联拖拽撤销链全部失效」——批次侧 index.tsx:635 实际传了 onGroupDragEnd，撤销路径是通的（模版侧的缺口已由 A1 覆盖）。</li>
+  <li>「画布拖拽不校验硬时间窗」——后端 batchGanttV5Controller.ts:520-532 对每次 PUT 都有窗口硬校验，违窗返回 400。</li>
+  <li>「人员峰值热力图漏最后一天」——数学上不成立（endOf('day') 的小数小时差覆盖了边界）。</li>
+  <li>「mousemove 每帧渲染 2 次」——reducer 有相等性早退 + React 18 自动批处理。</li>
+  <li>「RAF 循环每帧重建 TimeScale」——有 dirty 门控，并非每帧执行。</li>
+  <li>「首帧空任务重置缩放」——三个调用方都在 tasks 非空后才挂载组件，不可触发。</li>
+  <li>「共享组三数据源口径不一致」——连线与徽标实际只消费 shareService 一个来源。</li>
+  <li>另有 2 条性能 finding（GanttTimeline 未 memo 化、EditOperationModal destroyOnClose 重复拉取）因关键证据与代码不符或目标文件本身是死代码被否决。</li>
+</ul>
+
+<!-- ============================ 顺序 ============================ -->
+<h2 id="order">五、建议修复顺序</h2>
+<p class="fixnote"><b>进度（2026-06-10）：</b>A1、A2、A3、A4、A5、A6、B13、B14 已完成 ✓。下一批建议：B1/B2（批次侧数据正确性）→ 死代码大扫除（C9 解耦先行）→ B3/B10。</p>
+<ol class="fixorder">
+  <li><b>数据正确性四件套：</b>A1（组拖拽假成功，已修复 ✓）→ B1（planned_duration 脱节）→ B2（半截落库）→ A2/A3（时间窗覆盖、start_day=0，均已修复 ✓）。</li>
+  <li><b>死代码大扫除</b>（C1/C2/C3/C5/C6，<b>C9 解耦先行</b>）：约 8000+ 行；删完后「半成品观感」与误改风险大幅下降，给后续重构腾出清晰边界。</li>
+  <li><b>刷新/同步类：</b>B3（共享组不刷新）、B10（段控件高亮）、A5（多选串行保存）。</li>
+  <li><b>死菜单项与空壳入口：</b>A7/A8/A9/A10、B6——要么接通要么删，别留假入口。</li>
+  <li><b>共享组补全：</b>B4（解散）、B7（模式可配）。</li>
+  <li><b>规范收口：</b>B5（services 层）、B13/B14（wxb-ui 化与中文化）、A19/A20、B15。</li>
+  <li><b>性能微调：</b>A6/A12 优先，其余（A13–A17）按需。</li>
+</ol>
+
+<p class="meta" style="margin-top:40px">生成方式：Claude Code workflow（9 个发现维度 × opus 4.8/sonnet + 54 个独立核查 agent），共 76 个 agent。所有确认项均经代码级反驳式核实。</p>
+
+</div>
+</body>
+</html>

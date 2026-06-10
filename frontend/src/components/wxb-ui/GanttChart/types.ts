@@ -197,6 +197,11 @@ export interface WxbGanttChartProps {
   onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   /** Cascade group drag end handler — consumer decides how to apply the offset */
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
+  /** Multi-select drag end handler — receives every moved task's target span in one batch.
+   *  When provided, the multi-select branch calls this once instead of firing onTaskDragEnd per task,
+   *  letting the consumer persist concurrently and refresh a single time.
+   *  When omitted, the chart falls back to calling onTaskDragEnd for each task. */
+  onTasksDragEnd?: (updates: Array<{ taskId: string; newStart: number; newEnd: number }>) => void | boolean | Promise<boolean | void>;
   /** Undo cascade handler — restores tasks to pre-drag snapshots */
   onUndoCascade?: (restorations: Array<{ taskId: string; start: number; end: number }>) => void;
   /** Group toggle handler */

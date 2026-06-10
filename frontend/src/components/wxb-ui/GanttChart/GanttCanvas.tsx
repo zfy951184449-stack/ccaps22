@@ -55,6 +55,7 @@ interface GanttCanvasProps {
   onTaskDragEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onTaskResizeEnd?: (taskId: string, newStart: number, newEnd: number) => void | boolean | Promise<boolean | void>;
   onGroupDragEnd?: (groupId: string, deltaHours: number, affectedTaskIds: string[]) => void | boolean | Promise<boolean | void>;
+  onTasksDragEnd?: (updates: Array<{ taskId: string; newStart: number; newEnd: number }>) => void | boolean | Promise<boolean | void>;
   onTooltipShow?: (task: GanttTask, x: number, y: number, avoidRects?: GanttAvoidRect[]) => void;
   onTooltipHide?: () => void;
   onContextMenu?: (
@@ -79,7 +80,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   startHour, endHour, timelineOriginDate,
   showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, readOnly, clampDragToWindow = true, zoomRange,
   personnelPeaks,
-  onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd,
+  onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd, onTasksDragEnd,
   onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
   highlightedLinkIds,
   shareColorMap,
@@ -240,6 +241,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     onDragEnd: onTaskDragEnd,
     onTaskResizeEnd,
     onGroupDragEnd,
+    onTasksDragEnd,
     onAutoScroll,
     canvasWidth: state.canvasW,
     timeScale,

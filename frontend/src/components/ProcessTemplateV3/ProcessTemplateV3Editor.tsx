@@ -6,9 +6,8 @@
  */
 
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import { message } from 'antd';
 import axios from 'axios';
-import { WxbGanttChart, WxbSkeleton, WxbEmpty, WxbCard, WxbModal, WxbInput, WxbSelect, WxbButton } from '../wxb-ui';
+import { WxbGanttChart, WxbSkeleton, WxbEmpty, WxbCard, WxbModal, WxbInput, WxbSelect, WxbButton, wxbToast } from '../wxb-ui';
 import type { GanttContextActionContext, GanttTask, YAxisMode } from '../wxb-ui/GanttChart/types';
 import {
   CtxIcons,
@@ -161,7 +160,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         }
       } catch (err: any) {
         if (!cancelled) {
-          message.error(err?.response?.data?.error || '加载工艺模版失败');
+          wxbToast.error(err?.response?.data?.error || '加载工艺模版失败');
           setTemplate(null);
         }
       } finally {
@@ -228,7 +227,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       setResourceEditorData(data);
       return data;
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '加载新增操作参考数据失败');
+      wxbToast.error(err?.response?.data?.error || '加载新增操作参考数据失败');
       return null;
     } finally {
       setResourceEditorLoading(false);
@@ -267,9 +266,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       void actions.refreshAll();
     },
     onMessage: (_type, text) => {
-      if (_type === 'error') message.error(text);
-      else if (_type === 'warning') message.warning(text);
-      else message.success(text);
+      if (_type === 'error') wxbToast.error(text);
+      else if (_type === 'warning') wxbToast.warning(text);
+      else wxbToast.success(text);
     },
   });
 
@@ -346,7 +345,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
     const stage = resolveCreateStage(context, editorData);
     if (!stage) {
-      message.warning('请先创建阶段，再新增操作');
+      wxbToast.warning('请先创建阶段，再新增操作');
       return;
     }
 
@@ -390,12 +389,12 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const handleSubmitStage = useCallback(async () => {
     const name = newStageName.trim();
     if (!name) {
-      message.warning('请输入阶段名称');
+      wxbToast.warning('请输入阶段名称');
       return;
     }
     const startDay = Number(newStageStartDay);
     if (!Number.isInteger(startDay) || startDay < 0) {
-      message.warning('起始天需为 0 或正整数');
+      wxbToast.warning('起始天需为 0 或正整数');
       return;
     }
     try {
@@ -406,7 +405,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           startDay,
           description: newStageDesc.trim() || null,
         });
-        message.success('阶段已更新');
+        wxbToast.success('阶段已更新');
       } else {
         await processTemplateV2Api.createStage(templateId, {
           stageName: name,
@@ -414,7 +413,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           startDay,
           description: newStageDesc.trim() || undefined,
         });
-        message.success('阶段已创建');
+        wxbToast.success('阶段已创建');
       }
       setAddStageModalOpen(false);
       setEditingStageId(null);
@@ -428,7 +427,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         loadResourceEditorData(),
       ]);
     } catch (error: any) {
-      message.error(error?.response?.data?.error || (editingStageId != null ? '更新阶段失败' : '创建阶段失败'));
+      wxbToast.error(error?.response?.data?.error || (editingStageId != null ? '更新阶段失败' : '创建阶段失败'));
     } finally {
       setStageSubmitting(false);
     }
@@ -448,7 +447,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   // 打开"编辑阶段"：预填当前阶段值。
   const openEditStage = useCallback((stageId: number) => {
     const stage = (resourceEditorData?.stages ?? []).find(s => s.id === stageId);
-    if (!stage) { message.warning('未找到该阶段'); return; }
+    if (!stage) { wxbToast.warning('未找到该阶段'); return; }
     setEditingStageId(stage.id);
     setNewStageName(stage.stage_name ?? '');
     setNewStageStartDay(String(stage.start_day ?? 0));
@@ -458,7 +457,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
 
   const openDeleteStage = useCallback((stageId: number) => {
     const stage = (resourceEditorData?.stages ?? []).find(s => s.id === stageId);
-    if (!stage) { message.warning('未找到该阶段'); return; }
+    if (!stage) { wxbToast.warning('未找到该阶段'); return; }
     setDeleteStageTarget(stage);
   }, [resourceEditorData]);
 
@@ -467,7 +466,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     try {
       setDeleteStageSubmitting(true);
       await processTemplateV2Api.deleteStage(deleteStageTarget.id);
-      message.success('阶段已删除');
+      wxbToast.success('阶段已删除');
       setDeleteStageTarget(null);
       await Promise.allSettled([
         ganttData.refreshData(),
@@ -475,7 +474,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         loadResourceEditorData(),
       ]);
     } catch (error: any) {
-      message.error(error?.response?.data?.error || '删除阶段失败');
+      wxbToast.error(error?.response?.data?.error || '删除阶段失败');
     } finally {
       setDeleteStageSubmitting(false);
     }
@@ -526,7 +525,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     if (!scheduleId) return;
     const op = findStageOperation(scheduleId);
     if (!op) {
-      message.warning('未找到该操作的排程数据，请刷新后重试');
+      wxbToast.warning('未找到该操作的排程数据，请刷新后重试');
       return;
     }
     const libItem = resourceEditorData?.operationLibrary?.find(
@@ -562,7 +561,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     });
 
     if (deletableTargets.length === 0) {
-      message.warning('请选择可删除的操作');
+      wxbToast.warning('请选择可删除的操作');
       return;
     }
 
@@ -587,7 +586,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       .map(getScheduleIdFromTask)
       .filter((id): id is number => typeof id === 'number');
     if (scheduleIds.length === 0) {
-      message.error('未找到可删除的排程操作');
+      wxbToast.error('未找到可删除的排程操作');
       return;
     }
 
@@ -600,12 +599,12 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       const deletedCount = results.length - failed.length;
 
       if (deletedCount > 0) {
-        message.success(deletedCount === 1 ? '操作已删除' : `已删除 ${deletedCount} 个操作`);
+        wxbToast.success(deletedCount === 1 ? '操作已删除' : `已删除 ${deletedCount} 个操作`);
       }
       if (failed.length > 0) {
         const firstError = failed[0] as PromiseRejectedResult;
         const detail = firstError.reason?.response?.data?.error || '部分操作删除失败';
-        message.error(detail);
+        wxbToast.error(detail);
       }
 
       await ganttData.refreshData();
@@ -613,7 +612,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       await resourceView.refreshBindings();
       setDeleteTargets([]);
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '删除操作失败');
+      wxbToast.error(err?.response?.data?.error || '删除操作失败');
     } finally {
       setDeleteSubmitting(false);
     }
@@ -627,12 +626,12 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       }
       if (action === 'edit-stage') {
         const sid = parseStageIdFromGroupId(context.groupId);
-        if (sid) openEditStage(sid); else message.warning('请在阶段行上右键');
+        if (sid) openEditStage(sid); else wxbToast.warning('请在阶段行上右键');
         return;
       }
       if (action === 'delete-stage') {
         const sid = parseStageIdFromGroupId(context.groupId);
-        if (sid) openDeleteStage(sid); else message.warning('请在阶段行上右键');
+        if (sid) openDeleteStage(sid); else wxbToast.warning('请在阶段行上右键');
         return;
       }
 
@@ -646,10 +645,10 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         try {
           await processTemplateV2Api.batchUpdateBindings([scheduleId], nodeId, 'PRIMARY');
           const equipName = equipmentNodes.find(n => n.id === nodeId)?.nodeName || '';
-          message.success(`已绑定到 ${equipName}`);
+          wxbToast.success(`已绑定到 ${equipName}`);
           await resourceView.refreshBindings();
         } catch (err: any) {
-          message.error(err?.response?.data?.error || '绑定失败');
+          wxbToast.error(err?.response?.data?.error || '绑定失败');
         }
         return;
       }
@@ -658,10 +657,10 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         if (!scheduleId) return;
         try {
           await processTemplateV2Api.batchUpdateBindings([scheduleId], null, 'PRIMARY');
-          message.success('已解除设备绑定');
+          wxbToast.success('已解除设备绑定');
           await resourceView.refreshBindings();
         } catch (err: any) {
-          message.error('解除绑定失败');
+          wxbToast.error('解除绑定失败');
         }
         return;
       }
@@ -741,7 +740,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         .map(id => parseInt(id.replace(/\D/g, ''), 10))
         .filter(Number.isFinite);
       if (scheduleIds.length < 2) {
-        message.warning('至少选择 2 个操作才能创建共享组');
+        wxbToast.warning('至少选择 2 个操作才能创建共享组');
         return;
       }
 
@@ -758,11 +757,11 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           share_mode: 'SAME_TEAM',
           member_ids: scheduleIds,
         });
-        message.success('已链接为共享');
+        wxbToast.success('已链接为共享');
         await shareService.refresh();
         await ganttData.refreshData();
       } catch (err: any) {
-        message.error(err?.response?.data?.error || '创建共享组失败');
+        wxbToast.error(err?.response?.data?.error || '创建共享组失败');
       }
     },
     [templateId, ganttData, shareService],
@@ -774,16 +773,16 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       .map(id => parseInt(id.replace(/\D/g, ''), 10))
       .filter(Number.isFinite);
     if (!scheduleIds.length) {
-      message.warning('请先在甘特图中选择操作');
+      wxbToast.warning('请先在甘特图中选择操作');
       return;
     }
     try {
       await processTemplateV2Api.batchUpdateBindings(scheduleIds, nodeId, 'PRIMARY');
       const name = equipmentNodes.find(n => n.id === nodeId)?.nodeName || '';
-      message.success(`已绑定 ${scheduleIds.length} 个操作到 ${name}`);
+      wxbToast.success(`已绑定 ${scheduleIds.length} 个操作到 ${name}`);
       await resourceView.refreshBindings();
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '批量绑定失败');
+      wxbToast.error(err?.response?.data?.error || '批量绑定失败');
     }
   }, [equipmentNodes, resourceView]);
 
@@ -792,23 +791,23 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       .map(id => parseInt(id.replace(/\D/g, ''), 10))
       .filter(Number.isFinite);
     if (!scheduleIds.length) {
-      message.warning('请先在甘特图中选择操作');
+      wxbToast.warning('请先在甘特图中选择操作');
       return;
     }
     try {
       await processTemplateV2Api.batchUpdateBindings(scheduleIds, null, 'PRIMARY');
-      message.success(`已解除 ${scheduleIds.length} 个操作的设备绑定`);
+      wxbToast.success(`已解除 ${scheduleIds.length} 个操作的设备绑定`);
       await resourceView.refreshBindings();
     } catch (err: any) {
-      message.error('解除绑定失败');
+      wxbToast.error('解除绑定失败');
     }
   }, [resourceView]);
 
   // ---- Create equipment handler ----
   const handleCreateEquipment = useCallback(async () => {
-    if (!newEquipName.trim()) { message.warning('请输入设备名称'); return; }
+    if (!newEquipName.trim()) { wxbToast.warning('请输入设备名称'); return; }
     // 后端对非 VIRTUAL 设备要求 equipment_class 与 equipment_model 皆必填（审计 RV-01）。
-    if (!newEquipClass.trim() || !newEquipModel.trim()) { message.warning('请填写设备类别与设备型号'); return; }
+    if (!newEquipClass.trim() || !newEquipModel.trim()) { wxbToast.warning('请填写设备类别与设备型号'); return; }
     try {
       // Find the first ROOM node as parent (fallback to ID 11)
       const allNodes = await processTemplateV2Api.listResourceNodes({ tree: false });
@@ -832,15 +831,15 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         if (sid) {
           await processTemplateV2Api.batchUpdateBindings([sid], newId, 'PRIMARY');
           await resourceView.refreshBindings();
-          message.success(`已创建设备 ${newEquipName} 并绑定`);
+          wxbToast.success(`已创建设备 ${newEquipName} 并绑定`);
         }
       } else {
-        message.success(`设备 ${newEquipName} 已创建`);
+        wxbToast.success(`设备 ${newEquipName} 已创建`);
       }
       setShowCreateEquipModal(false);
       setNewEquipName(''); setNewEquipClass(''); setNewEquipModel(''); setPendingBindTask(null);
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '创建设备失败');
+      wxbToast.error(err?.response?.data?.error || '创建设备失败');
     }
   }, [newEquipName, newEquipSystemType, newEquipClass, newEquipModel, pendingBindTask, resourceView, refreshEquipmentNodes]);
 
@@ -903,6 +902,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           backgroundMenuItems={backgroundMenuItems}
           onTaskDragEnd={actions.handleDragEnd}
           onTaskResizeEnd={actions.handleResizeEnd}
+          onGroupDragEnd={actions.handleGroupDragEnd}
+          onTasksDragEnd={actions.handleTasksDragEnd}
           onTaskEdit={handleTaskEdit}
           onTaskDoubleClick={handleTaskEdit}
           onTaskDelete={handleTaskDelete}

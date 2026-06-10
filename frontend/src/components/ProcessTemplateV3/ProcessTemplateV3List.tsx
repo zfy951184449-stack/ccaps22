@@ -8,7 +8,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { message } from 'antd';
 import { processTemplateV2Api } from '../../services';
 import { exportTemplateWorkbook } from '../../services/templateWorkbookApi';
 import { exportTemplateToExcel, TemplateExportData } from '../../utils/exportTemplateExcel';
@@ -35,6 +34,7 @@ import {
   WxbFilterBar,
   WxbSelectionSummary,
   WxbToolbarActions,
+  wxbToast,
 } from '../wxb-ui';
 import type { WxbTabItem } from '../wxb-ui/Tabs/Tabs';
 import './ProcessTemplateV3List.css';
@@ -144,7 +144,7 @@ const ProcessTemplateV3List: React.FC = () => {
       } catch {
         if (!cancelled) {
           setPackageTemplates([]);
-          message.error('加载总包可选模板失败');
+          wxbToast.error('加载总包可选模板失败');
         }
       } finally {
         if (!cancelled) setPackageTemplateLoading(false);
@@ -202,14 +202,14 @@ const ProcessTemplateV3List: React.FC = () => {
       const res = await processTemplateV2Api.copyTemplate(t.id);
       navigate(`/process-templates/${res.newTemplateId}`, { state: { flashMessage: '模版复制成功' } });
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '复制模版失败');
+      wxbToast.error(err?.response?.data?.error || '复制模版失败');
     }
   }, [navigate]);
 
   const handleCreate = useCallback(async () => {
     if (!createName.trim()) {
       setCreateNameError(true);
-      message.warning('请输入模板名称');
+      wxbToast.warning('请输入模板名称');
       return;
     }
     try {
@@ -226,19 +226,19 @@ const ProcessTemplateV3List: React.FC = () => {
       setCreateNameError(false);
       navigate(`/process-templates/${created.id}`, { state: { flashMessage: '工艺模版已创建' } });
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '创建工艺模版失败');
+      wxbToast.error(err?.response?.data?.error || '创建工艺模版失败');
     } finally {
       setCreating(false);
     }
   }, [createName, createTeamId, createDesc, navigate]);
 
   const handleExportWorkbook = useCallback(async () => {
-    if (!selectedTemplate) { message.warning('请先选中一个模板'); return; }
+    if (!selectedTemplate) { wxbToast.warning('请先选中一个模板'); return; }
     try {
       setExportingWb(true);
       await exportTemplateWorkbook(selectedTemplate.id);
-      message.success(`已导出 ${selectedTemplate.template_code}`);
-    } catch { message.error('导出 Excel 失败'); }
+      wxbToast.success(`已导出 ${selectedTemplate.template_code}`);
+    } catch { wxbToast.error('导出 Excel 失败'); }
     finally { setExportingWb(false); }
   }, [selectedTemplate]);
 
@@ -268,8 +268,8 @@ const ProcessTemplateV3List: React.FC = () => {
         })),
       };
       await exportTemplateToExcel(data);
-      message.success('模版总览导出成功');
-    } catch { message.error('导出模版总览失败'); }
+      wxbToast.success('模版总览导出成功');
+    } catch { wxbToast.error('导出模版总览失败'); }
     finally { setExportingOv(false); }
   }, [activeTeamId]);
 
