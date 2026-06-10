@@ -54,8 +54,9 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
         if (batchIds.length > 0 && windowStart && windowEnd) {
             const placeholders = batchIds.map(() => '?').join(',');
             const [opRows] = await pool.execute<RowDataPacket[]>(`
-                SELECT 
+                SELECT
                     bop.id as operation_plan_id,
+                    bop.operation_id,
                     pbp.batch_code,
                     o.operation_name,
                     bop.required_people,
@@ -74,8 +75,8 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                 WHERE pbp.id IN (${placeholders})
                   AND bop.planned_start_datetime >= ?
                   AND bop.planned_start_datetime <= DATE_ADD(?, INTERVAL 1 DAY)
-                GROUP BY bop.id, pbp.batch_code, o.operation_name, bop.required_people, 
-                         bop.planned_start_datetime, bop.planned_end_datetime, ps.stage_name
+                GROUP BY bop.id, bop.operation_id, pbp.batch_code, bop.required_people,
+                         bop.planned_start_datetime, bop.planned_end_datetime, o.operation_name, ps.stage_name
             `, [...batchIds, windowStart, windowEnd]);
 
             opRows.forEach(r => opMap.set(r.operation_plan_id, r));
@@ -104,7 +105,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
             const taskIds = Array.from(standaloneTaskIds);
             const placeholders = taskIds.map(() => '?').join(',');
             const [taskRows] = await pool.execute<RowDataPacket[]>(`
-                SELECT id, task_code, task_name, required_people, earliest_start, deadline
+                SELECT id, task_code, task_name, required_people, earliest_start, deadline, allowed_employee_ids
                 FROM standalone_tasks
                 WHERE id IN (${placeholders})
             `, taskIds);
@@ -122,6 +123,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                     planned_end_datetime: taskRow.deadline || taskRow.earliest_start || null,
                     share_group_ids: null,
                     share_group_name: null,
+                    allowed_employee_ids: taskRow.allowed_employee_ids ?? null,
                 });
             });
         }
@@ -334,6 +336,78 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
         const totalPositionsCount = Array.from(opMap.values()).reduce((sum, Op) => sum + (Op.required_people || 1), 0);
         const assignedCount = enrichedAssignments.length;
 
+        // ── Qualification requirements + eligible employees per position ──
+        // Same eligibility rule as DataAssemblerV4: every mandatory requirement must be
+        // met at >= required_level; standalone tasks additionally honor allowed_employee_ids.
+        const defOperationIds = [...new Set(
+            Array.from(opMap.values())
+                .map(op => Number(op.operation_id))
+                .filter(id => Number.isFinite(id) && id > 0)
+        )];
+
+        const opReqMap = new Map<number, any[]>();
+        if (defOperationIds.length > 0) {
+            const ph = defOperationIds.map(() => '?').join(',');
+            const [reqRows] = await pool.execute<RowDataPacket[]>(`
+                SELECT oqr.operation_id, oqr.position_number, oqr.qualification_id,
+                       oqr.required_level, oqr.is_mandatory, q.qualification_name
+                FROM operation_qualification_requirements oqr
+                LEFT JOIN qualifications q ON q.id = oqr.qualification_id
+                WHERE oqr.operation_id IN (${ph})
+            `, defOperationIds);
+            reqRows.forEach(r => {
+                if (!opReqMap.has(r.operation_id)) opReqMap.set(r.operation_id, []);
+                opReqMap.get(r.operation_id)!.push(r);
+            });
+        }
+
+        const taskReqMap = new Map<number, any[]>();
+        if (standaloneTaskIds.size > 0) {
+            const taskIds = Array.from(standaloneTaskIds);
+            const ph = taskIds.map(() => '?').join(',');
+            const [reqRows] = await pool.execute<RowDataPacket[]>(`
+                SELECT stq.task_id, stq.position_number, stq.qualification_id,
+                       stq.min_level AS required_level, stq.is_mandatory, q.qualification_name
+                FROM standalone_task_qualifications stq
+                LEFT JOIN qualifications q ON q.id = stq.qualification_id
+                WHERE stq.task_id IN (${ph})
+            `, taskIds);
+            reqRows.forEach(r => {
+                if (!taskReqMap.has(r.task_id)) taskReqMap.set(r.task_id, []);
+                taskReqMap.get(r.task_id)!.push(r);
+            });
+        }
+
+        const empQualMap = new Map<number, { qualification_id: number; qualification_level: number }[]>();
+        if (empIds.length > 0 && (opReqMap.size > 0 || taskReqMap.size > 0)) {
+            const ph = empIds.map(() => '?').join(',');
+            const [eqRows] = await pool.execute<RowDataPacket[]>(`
+                SELECT employee_id, qualification_id, qualification_level
+                FROM employee_qualifications
+                WHERE employee_id IN (${ph})
+            `, empIds);
+            eqRows.forEach(r => {
+                if (!empQualMap.has(r.employee_id)) empQualMap.set(r.employee_id, []);
+                empQualMap.get(r.employee_id)!.push({
+                    qualification_id: r.qualification_id,
+                    qualification_level: r.qualification_level,
+                });
+            });
+        }
+
+        const computeEligible = (posReqs: any[], allowedSet: Set<number> | null): number[] | null => {
+            const mandatory = posReqs.filter(r => !!r.is_mandatory);
+            if (mandatory.length === 0 && !allowedSet) return null;
+            return empIds.filter(empId => {
+                if (allowedSet && !allowedSet.has(empId)) return false;
+                const quals = empQualMap.get(empId) || [];
+                return mandatory.every(req =>
+                    quals.some(q => q.qualification_id === req.qualification_id
+                        && q.qualification_level >= Number(req.required_level))
+                );
+            });
+        };
+
         const operationsMap = new Map<number, any>();
 
         opMap.forEach((op, opId) => {
@@ -350,11 +424,43 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                 positions: []
             });
 
+            const reqs = opId < 0
+                ? (taskReqMap.get(-opId) || [])
+                : (opReqMap.get(Number(op.operation_id)) || []);
+            const reqsByPos = new Map<number, any[]>();
+            reqs.forEach(r => {
+                const pn = Number(r.position_number) || 1;
+                if (!reqsByPos.has(pn)) reqsByPos.set(pn, []);
+                reqsByPos.get(pn)!.push(r);
+            });
+
+            let allowedSet: Set<number> | null = null;
+            if (opId < 0 && op.allowed_employee_ids) {
+                try {
+                    const arr = typeof op.allowed_employee_ids === 'string'
+                        ? JSON.parse(op.allowed_employee_ids)
+                        : op.allowed_employee_ids;
+                    if (Array.isArray(arr) && arr.length > 0) {
+                        allowedSet = new Set(arr.map(Number).filter(Number.isFinite));
+                    }
+                } catch {
+                    allowedSet = null;
+                }
+            }
+
             for (let i = 1; i <= (op.required_people || 1); i++) {
+                const posReqs = reqsByPos.get(i) || [];
                 operationsMap.get(opId).positions.push({
                     position_number: i,
                     employee: null,
-                    status: 'UNASSIGNED'
+                    status: 'UNASSIGNED',
+                    qualification_requirements: posReqs.map(r => ({
+                        qualification_id: r.qualification_id,
+                        qualification_name: r.qualification_name || `资质${r.qualification_id}`,
+                        required_level: Number(r.required_level),
+                        is_mandatory: !!r.is_mandatory,
+                    })),
+                    eligible_employee_ids: computeEligible(posReqs, allowedSet),
                 });
             }
         });

@@ -100,6 +100,11 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
     // Tab state: matrix vs assignments
     const [activeTab, setActiveTab] = useState<'matrix' | 'assignments'>('matrix');
 
+    // External filter signal for AssignmentsView (set by KPI card click)
+    const [assignFilterSignal, setAssignFilterSignal] = useState<{
+        status: 'ALL' | 'UNASSIGNED' | 'PARTIAL' | 'COMPLETE'; nonce: number;
+    } | null>(null);
+
     const fetchResult = useCallback(async () => {
         if (!runId) return;
         setLoading(true);
@@ -245,6 +250,10 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
         const standaloneTotal = standaloneOps.length;
         const standaloneAssigned = standaloneOps.filter((op: any) => op.status === 'COMPLETE').length;
 
+        // Uncovered / partially covered operation counts
+        const uncoveredOps = (data.operations || []).filter((op: any) => op.status === 'UNASSIGNED').length;
+        const partialOps = (data.operations || []).filter((op: any) => op.status === 'PARTIAL').length;
+
         return {
             completion_rate: data.metrics.completion_rate,
             coverage_rate: data.metrics.coverage_rate,
@@ -253,6 +262,8 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
             qualityScore,
             standaloneTotal,
             standaloneAssigned,
+            uncoveredOps,
+            partialOps,
         };
     }, [data, uniqueEmployeeCount]);
 
@@ -721,6 +732,24 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                     {kpiMetrics.qualityScore}<span style={{ fontSize: 14, color: '#999' }}>/100</span>
                                 </span>
                             </div>
+                            <div className="v4-kpi-item" style={{ cursor: 'pointer' }}
+                                title="点击查看未覆盖操作清单"
+                                onClick={() => {
+                                    setActiveTab('assignments');
+                                    setAssignFilterSignal(prev => ({
+                                        status: 'UNASSIGNED', nonce: (prev?.nonce || 0) + 1,
+                                    }));
+                                }}>
+                                <span className="v4-kpi-label">未覆盖操作</span>
+                                <span className="v4-kpi-value" data-color={kpiMetrics.uncoveredOps > 0 ? 'red' : 'green'}>
+                                    {kpiMetrics.uncoveredOps}
+                                    {kpiMetrics.partialOps > 0 && (
+                                        <span style={{ fontSize: 12, color: 'var(--v4-color-warning, #d97706)', marginLeft: 6 }}>
+                                            +{kpiMetrics.partialOps}部分
+                                        </span>
+                                    )}
+                                </span>
+                            </div>
                             {kpiMetrics.standaloneTotal > 0 && (
                                 <div className="v4-kpi-item">
                                     <span className="v4-kpi-label"><ToolOutlined style={{ marginRight: 2 }} />独立任务</span>
@@ -801,6 +830,8 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                 operations={data.operations || []}
                                 shiftAssignments={data.shift_assignments || []}
                                 shiftOptions={shiftOptions}
+                                calendarDays={data.calendar_days || []}
+                                externalFilter={assignFilterSignal}
                                 onAssign={handleAssign}
                                 onUnassign={handleUnassign}
                                 onAssignWithShiftChange={handleAssignWithShiftChange}
