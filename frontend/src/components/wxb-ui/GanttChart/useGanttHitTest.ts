@@ -15,7 +15,12 @@ export function useGanttHitTest(
   taskRowMap: Map<string, number>,
   startHour: number,
   hourWidth: number,
-  timeScale?: GanttTimeScale
+  timeScale?: GanttTimeScale,
+  // Gate edge-resize on the consumer having wired a resize handler. When false,
+  // bars never report a resize edge, so the cursor stays 'move' and mousedown
+  // routes to move/drag instead of startResize. Defaults to enabled to preserve
+  // behaviour for consumers that pass onTaskResizeEnd (e.g. the template gantt).
+  resizeEnabled: boolean = true
 ) {
   // Build row→tasks index via useMemo (auto-syncs with data changes)
   const rowTasksMap = useMemo(() => {
@@ -104,9 +109,10 @@ export function useGanttHitTest(
         // Check X bounds
         if (worldX < taskX || worldX > taskX + taskW) continue;
 
-        // Determine edge (resize enabled for timeWindow or resizable tasks)
+        // Determine edge (resize enabled for timeWindow or resizable tasks).
+        // Skipped entirely when the consumer did not wire a resize handler.
         let edge: HitTestResult['edge'] = 'body';
-        if (task.type === 'timeWindow' || task.resizable) {
+        if (resizeEnabled && (task.type === 'timeWindow' || task.resizable)) {
           if (Math.abs(worldX - taskX) < EDGE_THRESHOLD) edge = 'resize-start';
           else if (Math.abs(worldX - (taskX + taskW)) < EDGE_THRESHOLD) edge = 'resize-end';
         }
@@ -160,7 +166,7 @@ export function useGanttHitTest(
     }
 
     return null;
-  }, [startHour, hourWidth, timeScale, rowTasksMap, groupSpanMap, flatRows, groupById]);
+  }, [startHour, hourWidth, timeScale, rowTasksMap, groupSpanMap, flatRows, groupById, resizeEnabled]);
 
   return { hitTest };
 }

@@ -503,64 +503,118 @@ export const getGanttDependencies = async (req: Request, res: Response) => {
     }
 }
 
-export const updateGanttOperation = async (req: Request, res: Response) => {
-    const connection = await pool.getConnection();
-    try {
-        const { id } = req.params;
-        const { startDate, endDate, windowStartDate, windowEndDate, newOperationId, plannedDuration, requiredPeople } = req.body;
-        const normalizedStartDate = normalizeDateTimeForMysql(startDate);
-        const normalizedEndDate = normalizeDateTimeForMysql(endDate);
-        const normalizedWindowStartDate = normalizeDateTimeForMysql(windowStartDate);
-        const normalizedWindowEndDate = normalizeDateTimeForMysql(windowEndDate);
+// ===== Shared operation-time update helpers =====
+// Single-operation and batch endpoints share these so the validation and SQL stay
+// in lock-step (window constraint + optional operation replacement). Changing the
+// rules in one place updates both paths.
 
-        if (!normalizedStartDate || !normalizedEndDate) {
-            return res.status(400).json({ error: 'Start date and end date are required' });
-        }
+interface NormalizedOperationTime {
+    startDate: string;
+    endDate: string;
+    windowStartDate: string | null;
+    windowEndDate: string | null;
+    newOperationId?: number | null;
+    plannedDuration?: number | null;
+    requiredPeople?: number | null;
+}
 
-        // Validation: Window Constraint
-        // Although frontend validates, double-check to prevent bypassing
-        const start = dayjs(normalizedStartDate);
-        const end = dayjs(normalizedEndDate);
-        const winStart = normalizedWindowStartDate ? dayjs(normalizedWindowStartDate) : null;
-        const winEnd = normalizedWindowEndDate ? dayjs(normalizedWindowEndDate) : null;
+// Normalize raw request body into MySQL-ready datetimes. Returns an error reason
+// (caller maps to a 400) when the required start/end are missing.
+const normalizeOperationTimePayload = (
+    body: any,
+): { value?: NormalizedOperationTime; error?: string } => {
+    const normalizedStartDate = normalizeDateTimeForMysql(body?.startDate);
+    const normalizedEndDate = normalizeDateTimeForMysql(body?.endDate);
+    const normalizedWindowStartDate = normalizeDateTimeForMysql(body?.windowStartDate);
+    const normalizedWindowEndDate = normalizeDateTimeForMysql(body?.windowEndDate);
 
-        if (winStart && start.isBefore(winStart)) {
-            return res.status(400).json({ error: 'Start date cannot be earlier than window start date' });
-        }
-        if (winEnd && end.isAfter(winEnd)) {
-            return res.status(400).json({ error: 'End date cannot be later than window end date' });
-        }
+    if (!normalizedStartDate || !normalizedEndDate) {
+        return { error: 'Start date and end date are required' };
+    }
 
-        await connection.beginTransaction();
+    return {
+        value: {
+            startDate: normalizedStartDate,
+            endDate: normalizedEndDate,
+            windowStartDate: normalizedWindowStartDate,
+            windowEndDate: normalizedWindowEndDate,
+            newOperationId: body?.newOperationId,
+            plannedDuration: body?.plannedDuration,
+            requiredPeople: body?.requiredPeople,
+        },
+    };
+};
 
-        // Update Operation Plan
-        // Note: is_locked is NOT set automatically per V4 Solver logic (Time is fixed input)
-        let updateQuery = `
+// Hard time-window guard. Although the frontend validates, double-check here to
+// prevent bypassing. Returns an error reason or null when valid.
+const validateOperationTimeWindow = (normalized: NormalizedOperationTime): string | null => {
+    const start = dayjs(normalized.startDate);
+    const end = dayjs(normalized.endDate);
+    const winStart = normalized.windowStartDate ? dayjs(normalized.windowStartDate) : null;
+    const winEnd = normalized.windowEndDate ? dayjs(normalized.windowEndDate) : null;
+
+    if (winStart && start.isBefore(winStart)) {
+        return 'Start date cannot be earlier than window start date';
+    }
+    if (winEnd && end.isAfter(winEnd)) {
+        return 'End date cannot be later than window end date';
+    }
+    return null;
+};
+
+// Build the UPDATE statement + params for one operation. Mirrors the single-update
+// behaviour: time fields always, plus optional operation replacement (Phase 3).
+// Note: is_locked is NOT set automatically per V4 Solver logic (time is fixed input).
+const buildOperationUpdate = (
+    operationId: number | string,
+    normalized: NormalizedOperationTime,
+): { query: string; params: any[] } => {
+    let query = `
             UPDATE batch_operation_plans
-            SET 
+            SET
                 planned_start_datetime = ?,
                 planned_end_datetime = ?,
                 window_start_datetime = ?,
                 window_end_datetime = ?
         `;
 
-        const params: any[] = [
-            normalizedStartDate,
-            normalizedEndDate,
-            normalizedWindowStartDate,
-            normalizedWindowEndDate
-        ];
+    const params: any[] = [
+        normalized.startDate,
+        normalized.endDate,
+        normalized.windowStartDate,
+        normalized.windowEndDate,
+    ];
 
-        // If replacing operation (Phase 3)
-        if (newOperationId) {
-            updateQuery += `, operation_id = ?, planned_duration = ?, required_people = ?`;
-            params.push(newOperationId, plannedDuration, requiredPeople);
+    if (normalized.newOperationId) {
+        query += `, operation_id = ?, planned_duration = ?, required_people = ?`;
+        params.push(normalized.newOperationId, normalized.plannedDuration, normalized.requiredPeople);
+    }
+
+    query += ` WHERE id = ?`;
+    params.push(operationId);
+
+    return { query, params };
+};
+
+export const updateGanttOperation = async (req: Request, res: Response) => {
+    const connection = await pool.getConnection();
+    try {
+        const { id } = req.params;
+
+        const { value: normalized, error: normalizeError } = normalizeOperationTimePayload(req.body);
+        if (!normalized) {
+            return res.status(400).json({ error: normalizeError });
         }
 
-        updateQuery += ` WHERE id = ?`;
-        params.push(id);
+        const windowError = validateOperationTimeWindow(normalized);
+        if (windowError) {
+            return res.status(400).json({ error: windowError });
+        }
 
-        await connection.execute(updateQuery, params);
+        await connection.beginTransaction();
+
+        const { query, params } = buildOperationUpdate(id, normalized);
+        await connection.execute(query, params);
 
         await connection.commit();
         res.json({ message: 'Operation updated successfully', id });
@@ -569,6 +623,66 @@ export const updateGanttOperation = async (req: Request, res: Response) => {
         await connection.rollback();
         console.error('Error updating operation:', error);
         res.status(500).json({ error: 'Failed to update operation' });
+    } finally {
+        connection.release();
+    }
+};
+
+// Atomic batch time update — used by the gantt group/multi-select drag so a single
+// rejected operation rolls back the whole move (all-or-nothing). Reuses the same
+// normalize + window validation + UPDATE builder as the single endpoint.
+export const updateGanttOperationsBatch = async (req: Request, res: Response) => {
+    const operations = req.body?.operations;
+    if (!Array.isArray(operations) || operations.length === 0) {
+        return res.status(400).json({ error: 'operations array is required' });
+    }
+
+    // Pre-validate every item before opening a transaction so a bad payload fails
+    // fast with the offending operationId, without touching the DB.
+    const prepared: Array<{ operationId: number; query: string; params: any[] }> = [];
+    for (const op of operations) {
+        const operationId = Number(op?.operationId);
+        if (!Number.isInteger(operationId) || operationId <= 0) {
+            return res.status(400).json({ error: 'Each operation requires a valid operationId', operationId: op?.operationId ?? null });
+        }
+
+        const { value: normalized, error: normalizeError } = normalizeOperationTimePayload(op);
+        if (!normalized) {
+            return res.status(400).json({ error: normalizeError, operationId });
+        }
+
+        const windowError = validateOperationTimeWindow(normalized);
+        if (windowError) {
+            return res.status(400).json({ error: windowError, operationId });
+        }
+
+        prepared.push({ operationId, ...buildOperationUpdate(operationId, normalized) });
+    }
+
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        for (const item of prepared) {
+            const [result] = await connection.execute(item.query, item.params) as any;
+            // A zero-row update means the operation no longer exists — fail the whole
+            // batch rather than silently dropping part of the move.
+            if (result && typeof result.affectedRows === 'number' && result.affectedRows === 0) {
+                await connection.rollback();
+                return res.status(400).json({
+                    error: 'Operation not found',
+                    operationId: item.operationId,
+                });
+            }
+        }
+
+        await connection.commit();
+        res.json({ message: 'Operations updated successfully', count: prepared.length });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error batch-updating operations:', error);
+        res.status(500).json({ error: 'Failed to update operations' });
     } finally {
         connection.release();
     }

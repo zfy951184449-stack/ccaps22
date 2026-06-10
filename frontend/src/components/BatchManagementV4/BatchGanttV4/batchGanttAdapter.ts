@@ -143,7 +143,8 @@ export function buildBatchGanttModel(
                         status: getOperationStatusLabel(operation.status),
                         type: 'operation',
                         draggable: true,
-                        resizable: true,
+                        // Duration is fixed by the domain model; operations move but
+                        // never resize on the batch gantt (no resize handler wired).
                         requiredPeople: operation.requiredPeople,
                         assignedPeople: operation.assignedPeople,
                         personnelAssignments: operation.personnelAssignments,

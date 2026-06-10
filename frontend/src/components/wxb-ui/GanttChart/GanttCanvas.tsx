@@ -220,7 +220,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   const shareHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoveredShareRef = useRef<{ taskIds: Set<string>; color: string } | null>(null);
 
-  const { hitTest } = useGanttHitTest(tasks, groups, flatRows, taskRowMap, effectiveStartHour, hourWidth, timeScale);
+  // Only expose resize edges (handles + ew-resize cursor) when the consumer wired
+  // a resize handler. Batch gantt omits it to lock operation durations.
+  const resizeEnabled = !!onTaskResizeEnd;
+  const { hitTest } = useGanttHitTest(tasks, groups, flatRows, taskRowMap, effectiveStartHour, hourWidth, timeScale, resizeEnabled);
 
   const onAutoScroll = useCallback((dx: number) => {
     dispatch({ type: 'SCROLL', dx, dy: 0 });

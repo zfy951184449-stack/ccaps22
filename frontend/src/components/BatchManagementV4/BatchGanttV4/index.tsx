@@ -473,37 +473,66 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
         return persistTaskTime(taskId, newStart, newEnd);
     }, [persistTaskTime]);
 
+    const persistTasksBatch = useCallback(async (
+        updates: Array<{ taskId: string; newStart: number; newEnd: number }>,
+    ): Promise<boolean> => {
+        const operations = updates
+            .map(({ taskId, newStart, newEnd }) => {
+                const operation = model.operationByTaskId.get(taskId);
+                if (!operation) {
+                    return null;
+                }
+                return {
+                    operationId: operation.id,
+                    startDate: formatApiDate(hourOffsetToDate(originDate, newStart)),
+                    endDate: formatApiDate(hourOffsetToDate(originDate, newEnd)),
+                    windowStartDate: operation.windowStartDate,
+                    windowEndDate: operation.windowEndDate,
+                };
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
+
+        if (operations.length === 0) {
+            return false;
+        }
+
+        try {
+            // Atomic: backend commits all or rolls back all. Only reload on success so
+            // a rejected move leaves both the canvas and the DB untouched.
+            await axios.put('/api/v5/gantt/operations/batch-time', { operations });
+            wxbToast.success(`已移动 ${operations.length} 个操作`);
+            requestReload();
+            return true;
+        } catch (error: any) {
+            console.error('Failed to persist batch timing', error);
+            wxbToast.error(error?.response?.data?.error || '批量调整失败');
+            return false;
+        }
+    }, [model.operationByTaskId, originDate, requestReload]);
+
     const handleGroupDragEnd = useCallback(async (
         _groupId: string,
         deltaHours: number,
         affectedTaskIds: string[],
     ) => {
-        try {
-            for (const taskId of affectedTaskIds) {
+        const updates = affectedTaskIds
+            .map((taskId) => {
                 const operation = model.operationByTaskId.get(taskId);
                 if (!operation) {
-                    continue;
+                    return null;
                 }
                 const currentStart = dayjs(operation.startDate).diff(originDate, 'hour', true);
                 const currentEnd = dayjs(operation.endDate).diff(originDate, 'hour', true);
-                const ok = await persistTaskTime(
+                return {
                     taskId,
-                    currentStart + deltaHours,
-                    currentEnd + deltaHours,
-                    'debounced',
-                );
-                if (ok === false) {
-                    return false;
-                }
-            }
-            wxbToast.success(`已移动 ${affectedTaskIds.length} 个操作`);
-            return true;
-        } catch (error) {
-            console.error('Failed to persist group timing', error);
-            wxbToast.error('批量调整失败');
-            return false;
-        }
-    }, [model.operationByTaskId, originDate, persistTaskTime]);
+                    newStart: currentStart + deltaHours,
+                    newEnd: currentEnd + deltaHours,
+                };
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null);
+
+        return persistTasksBatch(updates);
+    }, [model.operationByTaskId, originDate, persistTasksBatch]);
 
     const handleCreateShareGroup = useCallback(async (selectedTaskIds: string[]) => {
         const operationIds = selectedTaskIds
@@ -631,8 +660,8 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                         onTaskDoubleClick={handleEditTask}
                         onTaskEdit={handleEditTask}
                         onTaskDragEnd={handleTaskDragEnd}
-                        onTaskResizeEnd={handleTaskDragEnd}
                         onGroupDragEnd={handleGroupDragEnd}
+                        onTasksDragEnd={persistTasksBatch}
                         onCreateShareGroup={handleCreateShareGroup}
                         clampDragToWindow={false}
                         collapseEmptyNightShifts

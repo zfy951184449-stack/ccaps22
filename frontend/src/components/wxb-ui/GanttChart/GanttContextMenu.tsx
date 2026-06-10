@@ -29,11 +29,8 @@ const Icons = {
   x:         <svg {...S}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   trash:     <svg {...S}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>,
   plus:      <svg {...S}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-  paste:     <svg {...S}><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>,
-  zoomFit:   <svg {...S}><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6M11 8v6"/></svg>,
   folderOpen:<svg {...S}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>,
   folderClose:<svg {...S}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/><path d="M2 10h20"/></svg>,
-  cascade:   <svg {...S}><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>,
   selectAll: <svg {...S}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/></svg>,
 } as const;
 
@@ -221,15 +218,11 @@ export const DEFAULT_GROUP_MENU_ITEMS: ContextMenuItem[] = [
   { key: 'collapse-group', label: '折叠所有子组', icon: Icons.folderClose, divider: true },
   { key: 'select-children', label: '选中所有子任务', icon: Icons.selectAll },
   { key: 'deselect-children', label: '取消选中子任务', icon: Icons.x, divider: true },
-  { key: 'cascade-later', label: '级联延后排程', icon: Icons.forward },
-  { key: 'cascade-earlier', label: '级联提前排程', icon: Icons.backward },
 ];
 
 /** Background (no target) menu */
 export const DEFAULT_BG_MENU_ITEMS: ContextMenuItem[] = [
   { key: 'add-task', label: '新建任务', icon: Icons.plus },
-  { key: 'paste', label: '粘贴任务', icon: Icons.paste, divider: true },
-  { key: 'zoom-fit', label: '适配视图', icon: Icons.zoomFit },
   { key: 'expand-all', label: '全部展开', icon: Icons.folderOpen },
   { key: 'collapse-all', label: '全部折叠', icon: Icons.folderClose, divider: true },
   { key: 'select-all', label: '全选', icon: Icons.selectAll, shortcut: 'Ctrl+A' },

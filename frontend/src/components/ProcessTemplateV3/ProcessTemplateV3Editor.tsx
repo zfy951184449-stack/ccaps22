@@ -490,15 +490,19 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     [resourceEditorLoading],
   );
 
-  const groupMenuItems = useMemo<ContextMenuItem[]>(
-    () => [
+  const groupMenuItems = useMemo<ContextMenuItem[]>(() => {
+    // In pure-equipment view (res-equip-N / res-unbound), group ids cannot be
+    // resolved to a stageId, so stage-dependent actions are omitted entirely.
+    if (yAxisMode === 'equipment') {
+      return DEFAULT_GROUP_MENU_ITEMS;
+    }
+    return [
       { key: 'add-task', label: '新增操作', icon: CtxIcons.plus, disabled: resourceEditorLoading },
       { key: 'edit-stage', label: '编辑阶段', disabled: resourceEditorLoading },
       { key: 'delete-stage', label: '删除阶段', danger: true, disabled: resourceEditorLoading, divider: true },
       ...DEFAULT_GROUP_MENU_ITEMS,
-    ],
-    [resourceEditorLoading],
-  );
+    ];
+  }, [yAxisMode, resourceEditorLoading]);
 
   // ---- Callbacks ----
   // Find the StageOperation row for a schedule ID within the gantt node tree.

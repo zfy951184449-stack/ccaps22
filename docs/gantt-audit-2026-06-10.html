@@ -108,8 +108,8 @@
 </div>
 
 <div class="fixnote" style="margin-bottom:20px">
-  <b>修复进展（2026-06-10）：</b>A1–A6、B13、B14 已修复并通过验证（前端 tsc 零错误、后端构建通过、前端 9 套件 43 用例 + 后端 4 文件 20 用例全绿）。
-  涉及 16 个修改文件 + 4 个新增文件（含 useGanttStore.test.ts、stageOperationFromCanvas.test.ts 两个新测试）。详见各条目绿色「已修复」标记。
+  <b>修复进展：</b>第一轮（2026-06-10）A1–A6、B13、B14；第二轮（2026-06-11）A7、A8、A9、B1、B2。共 11 项已修复并通过验证
+  （前端 tsc 零错误 + 9 套件 43 用例、后端构建通过 + 24 用例全绿，含 useGanttStore / stageOperationFromCanvas / batchGanttOperationsBatch 三个新测试文件）。详见各条目绿色「已修复」标记。
 </div>
 
 <div class="summary">
@@ -207,18 +207,21 @@
 <h3>P2 · 功能缺口 / 半成品</h3>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">A7 · 组右键菜单「级联延后/提前排程」是死项</span></div>
-  <div class="f-body"><p>阶段行右键菜单含这两项（<span class="path">wxb-ui/GanttChart/GanttContextMenu.tsx:224-225</span>），但 <span class="path">ProcessTemplateV3Editor.tsx:622</span> 的 handleContextAction 无 cascade-* 分支，点击静默无反应。→ 接上整组位移逻辑或删菜单项。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="chip fixed">已修复</span><span class="f-title">A7 · 组右键菜单「级联延后/提前排程」是死项</span></div>
+  <div class="f-body"><p>阶段行右键菜单含这两项（<span class="path">wxb-ui/GanttChart/GanttContextMenu.tsx:224-225</span>），但 <span class="path">ProcessTemplateV3Editor.tsx:622</span> 的 handleContextAction 无 cascade-* 分支，点击静默无反应。→ 接上整组位移逻辑或删菜单项。</p>
+    <p class="fixnote"><b>已修复（2026-06-11，按决策移除）：</b>全仓确认无任何 handler 后，从 DEFAULT_GROUP_MENU_ITEMS 删除 cascade-later/cascade-earlier 两项及其专属 icon（forward/backward icon 因任务菜单仍在用而保留）。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">A8 · 背景右键「粘贴任务」「适配视图」是死项</span></div>
-  <div class="f-body"><p><span class="path">GanttContextMenu.tsx:231-232</span> 定义 paste / zoom-fit，但 GanttChart.handleCtxAction 与编辑器 handleContextAction 均无对应分支，点击毫无反应。→ 实现 zoom-fit / 移除两项。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="chip fixed">已修复</span><span class="f-title">A8 · 背景右键「粘贴任务」「适配视图」是死项</span></div>
+  <div class="f-body"><p><span class="path">GanttContextMenu.tsx:231-232</span> 定义 paste / zoom-fit，但 GanttChart.handleCtxAction 与编辑器 handleContextAction 均无对应分支，点击毫无反应。→ 实现 zoom-fit / 移除两项。</p>
+    <p class="fixnote"><b>已修复（2026-06-11，按决策移除）：</b>从 DEFAULT_BG_MENU_ITEMS 删除 paste/zoom-fit 两项及仅被其使用的 icon 定义；模版与批次两条链的兜底菜单同时生效。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">A9 · 纯设备视图下右键编辑/删除阶段永远失败</span></div>
-  <div class="f-body"><p><span class="path">ProcessTemplateV3/createOperationContext.ts:5</span> 只解析 <code>stage_(\d+)</code>，而设备视图组 id 是 <code>res-equip-N</code> / <code>res-unbound</code>（<span class="path">useResourceView.ts:296</span>），永远弹「请在阶段行上右键」；「新增操作」也只能落到第一个阶段。→ 组数据携带 stageId，或设备视图下禁用相关菜单项。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">A9 · 纯设备视图下右键编辑/删除阶段永远失败</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3/createOperationContext.ts:5</span> 只解析 <code>stage_(\d+)</code>，而设备视图组 id 是 <code>res-equip-N</code> / <code>res-unbound</code>（<span class="path">useResourceView.ts:296</span>），永远弹「请在阶段行上右键」；「新增操作」也只能落到第一个阶段。→ 组数据携带 stageId，或设备视图下禁用相关菜单项。</p>
+    <p class="fixnote"><b>已修复（2026-06-11，按决策禁用）：</b>纯设备视图（yAxisMode='equipment'）下 groupMenuItems 不再包含「新增操作/编辑阶段/删除阶段」这三个依赖 stageId 的项，菜单中直接不出现；wxbToast 警告兜底保留。备注：stage-equipment 混合视图的设备子组行仍走原警告兜底，行为与之前一致。</p></div>
 </div>
 
 <div class="finding p2">
@@ -287,20 +290,22 @@
 <h3>P1</h3>
 
 <div class="finding p1">
-  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="f-title">B1 · 画布拖长操作条后再开编辑弹窗保存，缩放被静默吞回</span></div>
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">B1 · 画布拖长操作条后再开编辑弹窗保存，缩放被静默吞回</span></div>
   <div class="f-body">
     <p><span class="lbl">现象：</span>把操作条从 4 小时拉长到 8 小时，再双击打开「编辑操作」点保存，结束时间被悄悄改回 4 小时。</p>
     <p><span class="lbl">根因：</span><span class="path">BatchGanttV4/index.tsx:453-458</span> persistTaskTime 只 PUT start/end 不更新 planned_duration；<span class="path">EditOperationModal.tsx:54-65,183</span> 用旧 duration 初始化并以 <code>end = start + duration</code> 重算覆盖，duration 字段又只读不可编辑。</p>
     <p><span class="lbl">建议：</span>拖拽/缩放时同步写 planned_duration（或后端按 end-start 重算）；弹窗 duration 可编辑或按真实跨度推导。</p>
+    <p class="fixnote"><b>已修复（2026-06-11，按决策禁用 resize）：</b>工序时长由域模型钉死，批次甘特不再允许拖拽改时长——index.tsx 移除 onTaskResizeEnd、adapter 移除 resizable 标记；wxb-ui 的 resize 命中区/光标改为门控在「传了 onTaskResizeEnd」上（useGanttHitTest 新增 resizeEnabled 参数，默认 true，模版甘特行为不变）。工序条平移（时长不变）保留，planned_duration 与 start/end 不再可能脱节。</p>
   </div>
 </div>
 
 <div class="finding p1">
-  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="f-title">B2 · 分组批量拖拽中途失败留下「半截已落库」的移动</span></div>
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">B2 · 分组批量拖拽中途失败留下「半截已落库」的移动</span></div>
   <div class="f-body">
     <p><span class="lbl">现象：</span>拖动带多条操作的批次/阶段分组，中间某条保存失败时画布整组视觉回弹，但前面几条已写库——界面说没改，库里移了一半。</p>
     <p><span class="lbl">根因：</span><span class="path">BatchGanttV4/index.tsx:482-498</span> for 循环逐条 await PUT，失败 return false 不回滚；成功条目触发的 requestReloadSoon 还会把半截结果拉回画布。</p>
     <p><span class="lbl">建议：</span>后端原子批量接口；或失败时对已成功操作反向补偿再回弹。</p>
+    <p class="fixnote"><b>已修复（2026-06-11，原子批量接口）：</b>后端新增 <code>PUT /api/v5/gantt/operations/batch-time</code>——复用单条端点抽出的校验 helper（含硬时间窗），先全量预校验再单事务执行，任一失败 rollback + 400 带 operationId，全有或全无；前端组拖拽与多选拖拽（onTasksDragEnd）均改为单次调用该端点，失败 wxbToast 报因 + 画布回弹、库里零写入。新增 batchGanttOperationsBatch.test.ts 4 用例（成功提交/中途失败全回滚/窗越界不开事务/空数组）。</p>
   </div>
 </div>
 
@@ -435,7 +440,7 @@
 
 <!-- ============================ 顺序 ============================ -->
 <h2 id="order">五、建议修复顺序</h2>
-<p class="fixnote"><b>进度（2026-06-10）：</b>A1、A2、A3、A4、A5、A6、B13、B14 已完成 ✓。下一批建议：B1/B2（批次侧数据正确性）→ 死代码大扫除（C9 解耦先行）→ B3/B10。</p>
+<p class="fixnote"><b>进度：</b>第一轮（06-10）A1–A6、B13、B14 ✓；第二轮（06-11）A7、A8、A9、B1、B2 ✓，共 11 项完成。下一批建议：死代码大扫除（C1/C2/C3/C5/C6，C9 解耦先行）→ B3（共享组刷新）/B10（段控件）→ B4/B7（共享组补全）。</p>
 <ol class="fixorder">
   <li><b>数据正确性四件套：</b>A1（组拖拽假成功，已修复 ✓）→ B1（planned_duration 脱节）→ B2（半截落库）→ A2/A3（时间窗覆盖、start_day=0，均已修复 ✓）。</li>
   <li><b>死代码大扫除</b>（C1/C2/C3/C5/C6，<b>C9 解耦先行</b>）：约 8000+ 行；删完后「半成品观感」与误改风险大幅下降，给后续重构腾出清晰边界。</li>
