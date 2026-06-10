@@ -9,7 +9,6 @@ import {
     SafetyCertificateOutlined, ArrowRightOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import SegmentedControl from '../components/SegmentedControl';
 import AssignmentCalendarView from './AssignmentCalendarView';
 import '../SolverV4.css';
 
@@ -91,7 +90,6 @@ interface Candidate {
 }
 
 export type AssignmentStatusFilter = 'ALL' | 'UNASSIGNED' | 'PARTIAL' | 'COMPLETE';
-type ViewMode = 'list' | 'calendar';
 
 interface AssignmentsViewProps {
     operations: Operation[];
@@ -193,7 +191,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     const [selectedOpId, setSelectedOpId] = useState<number | null>(null);
     const [searchText, setSearchText] = useState('');
     const [statusFilter, setStatusFilter] = useState<AssignmentStatusFilter>('ALL');
-    const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const [standaloneOnly, setStandaloneOnly] = useState(false);
     const [collapsedDays, setCollapsedDays] = useState<Set<string>>(new Set());
     const [pendingScroll, setPendingScroll] = useState<{ date?: string; opId?: number } | null>(null);
     const listBodyRef = useRef<HTMLDivElement>(null);
@@ -234,7 +232,6 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     useEffect(() => {
         if (!externalFilter) return;
         setStatusFilter(externalFilter.status);
-        setViewMode('list');
     }, [externalFilter?.nonce]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const statusCounts = useMemo(() => {
@@ -245,8 +242,17 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         return c;
     }, [operations]);
 
+    const standaloneStats = useMemo(() => {
+        const ops = operations.filter(op => op.batch_code === 'STANDALONE');
+        return {
+            total: ops.length,
+            vacancies: ops.reduce((s, op) => s + countVacancies(op), 0),
+        };
+    }, [operations]);
+
     const visibleOps = useMemo(() => {
         let ops = operations;
+        if (standaloneOnly) ops = ops.filter(op => op.batch_code === 'STANDALONE');
         if (statusFilter !== 'ALL') ops = ops.filter(op => op.status === statusFilter);
         if (searchText) {
             const q = searchText.toLowerCase();
@@ -256,7 +262,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
             );
         }
         return ops;
-    }, [operations, statusFilter, searchText]);
+    }, [operations, statusFilter, standaloneOnly, searchText]);
 
     // Date groups, chronologically sorted; undated ops go last
     const dayGroups = useMemo(() => {
@@ -282,9 +288,9 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         return groups;
     }, [visibleOps]);
 
-    // Scroll to a date group / operation after view switches back to list
+    // Scroll the list to a date group / operation (triggered by calendar clicks etc.)
     useEffect(() => {
-        if (viewMode !== 'list' || !pendingScroll || !listBodyRef.current) return;
+        if (!pendingScroll || !listBodyRef.current) return;
         const timer = setTimeout(() => {
             const root = listBodyRef.current;
             if (!root) return;
@@ -295,7 +301,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
             setPendingScroll(null);
         }, 60);
         return () => clearTimeout(timer);
-    }, [viewMode, pendingScroll, dayGroups]);
+    }, [pendingScroll, dayGroups]);
 
     // ── Candidate Calculation (qualification-aware) ──
 
@@ -452,7 +458,6 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     }, [problemOpsByTime, selectedOpId]);
 
     const handleCalendarSelectDate = useCallback((date: string) => {
-        setViewMode('list');
         setCollapsedDays(prev => {
             if (!prev.has(date)) return prev;
             const n = new Set(prev); n.delete(date); return n;
@@ -462,7 +467,6 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
 
     const handleCalendarSelectOperation = useCallback((opId: number, date: string) => {
         setSelectedOpId(opId);
-        setViewMode('list');
         setCollapsedDays(prev => {
             if (!prev.has(date)) return prev;
             const n = new Set(prev); n.delete(date); return n;
@@ -770,7 +774,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
 
     return (
         <div className="asgn-root">
-            {/* ── Toolbar: status chips + search + view switch ── */}
+            {/* ── Toolbar: status chips + standalone metric + search ── */}
             <div className="asgn-toolbar">
                 <div className="asgn-chip-group">
                     {CHIP_DEFS.map(c => (
@@ -781,46 +785,54 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                             <span className="asgn-chip-count">{statusCounts[c.key]}</span>
                         </button>
                     ))}
+                    {standaloneStats.total > 0 && (
+                        <>
+                            <span className="asgn-toolbar-divider" />
+                            <button
+                                className={`asgn-chip standalone ${standaloneOnly ? 'active' : ''}`}
+                                title="只看独立任务(可与状态过滤叠加)"
+                                onClick={() => setStandaloneOnly(v => !v)}>
+                                <ToolOutlined /> 独立任务
+                                <span className="asgn-chip-count">{standaloneStats.total}</span>
+                                {standaloneStats.vacancies > 0 && (
+                                    <span className="asgn-chip-vac">缺{standaloneStats.vacancies}</span>
+                                )}
+                            </button>
+                        </>
+                    )}
                 </div>
                 <span className="asgn-toolbar-spacer" />
                 <Input placeholder="搜索操作或批次..." prefix={<SearchOutlined />}
                     value={searchText} onChange={e => setSearchText(e.target.value)}
                     size="small" allowClear className="asgn-toolbar-search" />
-                <SegmentedControl
-                    options={[{ key: 'list', label: '清单' }, { key: 'calendar', label: '日历' }]}
-                    value={viewMode}
-                    onChange={k => setViewMode(k as ViewMode)}
-                />
             </div>
 
-            {viewMode === 'calendar' ? (
-                <AssignmentCalendarView
-                    operations={visibleOps}
-                    calendarDays={calendarDays}
-                    selectedOpId={selectedOpId}
-                    onSelectDate={handleCalendarSelectDate}
-                    onSelectOperation={handleCalendarSelectOperation}
-                />
-            ) : (
-                <div className="asgn-master-detail">
-                    {/* ── Left: Day-grouped List ── */}
-                    <div className="asgn-list-panel">
-                        <div className="asgn-list-body" ref={listBodyRef}>
-                            {dayGroups.length === 0 ? (
-                                <Empty description="无匹配的操作" style={{ padding: 32 }}
-                                    image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                            ) : (
-                                dayGroups.map(renderDayGroup)
-                            )}
-                        </div>
-                    </div>
+            {/* ── Top: Calendar overview ── */}
+            <AssignmentCalendarView
+                operations={visibleOps}
+                calendarDays={calendarDays}
+                selectedOpId={selectedOpId}
+                onSelectDate={handleCalendarSelectDate}
+                onSelectOperation={handleCalendarSelectOperation}
+            />
 
-                    {/* ── Right: Detail ── */}
-                    <div className="asgn-detail-panel">
-                        {renderDetailPanel()}
+            {/* ── Bottom: Day-grouped list + detail ── */}
+            <div className="asgn-master-detail">
+                <div className="asgn-list-panel">
+                    <div className="asgn-list-body" ref={listBodyRef}>
+                        {dayGroups.length === 0 ? (
+                            <Empty description="无匹配的操作" style={{ padding: 32 }}
+                                image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        ) : (
+                            dayGroups.map(renderDayGroup)
+                        )}
                     </div>
                 </div>
-            )}
+
+                <div className="asgn-detail-panel">
+                    {renderDetailPanel()}
+                </div>
+            </div>
 
             {/* ── Shift Confirmation Modal ── */}
             <Modal

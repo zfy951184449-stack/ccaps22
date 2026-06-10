@@ -63,10 +63,16 @@
 - **测试缺口（待补）**：apply 端隔离已有集成测试（3 用例）；但 **assembler 端的 team 过滤**（局部求解只取本团队 standalone）尚无专项集成测试，待补。
 - **未做（更大范围，本次不碰）**：apply 之外其它 6+ 个写入口（手工编辑 `calendarController`、旧 V2/V3 `schedulingPersistenceService` 等）仍各用各的隐含删除范围，缺统一的「数据归属/scope」契约——更底层的债（原 L2 方案），需要时再开题。
 
+### PD-11 排班结果缺「未排根因」诊断 — 🟡 待议（需 solver 支持）
+- **背景**：操作分配明细（`SolveResultV4Page` → `AssignmentsView`）已重做为「日历总览 + 按日清单」，空缺岗位的手动分配按资质筛选候选人——result 接口（`solveResultHandler.getSolveResultV4`）为每个岗位返回 `qualification_requirements` + `eligible_employee_ids`（口径与 `DataAssemblerV4` 一致：mandatory 且 level 达标，独立任务叠加 `allowed_employee_ids` 白名单；集成测试 `solveResultQualificationsV4.test.ts`）。
+- **缺口**：界面上的「当天 N 人可选 / 无人可选」是**前端代理诊断**（当天有班次 ∩ 资质合格）；「求解器为什么没排上」的真实根因（资质不足 / 工时上限 / 夜班间隔 / 约束冲突等）solver 不返回，排班员只能猜。
+- **若做**：需 solver_v4 在 solve 结果中输出 per-operation 未分配归因（infeasibility 原因），涉及 `solver_v4/contracts/`（response 契约）+ `core/solver.py`/`callback.py`，backend 透传、前端在空缺操作详情展示。成本不小，待有真实「排不满且看不懂」的场景再立项。
+
 ---
 
 ## 三、已清理
 - ✅ `backend/src/routes/independentOperations.ts` + `backend/src/controllers/independentOperationController.ts`：纯死代码（未挂载、前后端零引用），已删除。
+- ✅ `frontend/src/components/SolverV4/views/` 下 `TimelineView` / `OverviewView` / `PersonnelView` / `PrecheckView` 及 `components/SegmentedControl`：零引用死代码，随操作分配明细重构一并删除。
 
 ---
 

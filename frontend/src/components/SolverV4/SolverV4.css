@@ -897,42 +897,6 @@
 }
 
 /* ==========================================================================
-   Segmented Control
-   ========================================================================== */
-
-.v4-segmented-control {
-    display: inline-flex;
-    background: var(--v4-bg-card);
-    border-radius: var(--v4-radius-md);
-    padding: var(--v4-space-xs);
-    box-shadow: var(--v4-shadow-sm);
-    margin-bottom: var(--v4-space-xl);
-}
-
-.v4-segment {
-    padding: var(--v4-space-sm) var(--v4-space-xl);
-    border-radius: var(--v4-radius-sm);
-    font-size: var(--v4-font-size-md);
-    font-weight: 500;
-    color: var(--v4-text-secondary);
-    cursor: pointer;
-    transition: all var(--v4-transition-fast);
-    border: none;
-    background: transparent;
-}
-
-.v4-segment:hover {
-    color: var(--v4-text-primary);
-    background: var(--v4-bg-hover);
-}
-
-.v4-segment.active {
-    color: var(--v4-text-primary);
-    background: var(--v4-bg-card);
-    box-shadow: var(--v4-shadow-sm);
-}
-
-/* ==========================================================================
    Content Cards
    ========================================================================== */
 
@@ -2043,6 +2007,32 @@
     background: var(--v4-color-success-bg, rgba(34, 197, 94, 0.08));
 }
 
+.asgn-toolbar-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--v4-border-color, #e5e7eb);
+    margin: 0 2px;
+}
+
+.asgn-chip.standalone { color: var(--v4-accent-purple, #7c3aed); }
+.asgn-chip.standalone .asgn-chip-count {
+    background: var(--v4-accent-purple-light, rgba(124, 58, 237, 0.1));
+}
+
+.asgn-chip.standalone.active {
+    border-color: var(--v4-accent-purple, #7c3aed);
+    background: var(--v4-accent-purple-light, rgba(124, 58, 237, 0.08));
+}
+
+.asgn-chip-vac {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--v4-color-error, #dc2626);
+    background: var(--v4-color-error-bg, rgba(239, 68, 68, 0.1));
+    padding: 0 5px;
+    border-radius: 8px;
+}
+
 /* ══════════════════════════════════════════════════════
    ASSIGNMENTS: DAY-GROUPED LIST
    ══════════════════════════════════════════════════════ */
@@ -2278,13 +2268,11 @@
    ══════════════════════════════════════════════════════ */
 
 .asgn-cal-container {
-    height: calc(100vh - 368px);
-    min-height: 480px;
-    overflow-y: auto;
     border: 1px solid var(--v4-border-color, #e5e7eb);
     border-radius: var(--v4-radius-lg, 10px);
     background: var(--v4-bg-card, #fff);
     padding: var(--v4-space-md, 12px);
+    margin-bottom: var(--v4-space-md, 12px);
 }
 
 .asgn-cal-grid {

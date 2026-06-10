@@ -200,7 +200,7 @@ const AssignmentCalendarView: React.FC<AssignmentCalendarViewProps> = ({
                 {undatedCount > 0 && (
                     <span className="asgn-cal-legend-note">另有 {undatedCount} 个未定时间的任务,请在清单视图查看</span>
                 )}
-                <span className="asgn-cal-legend-hint">点击日期查看当日清单,点击操作直达详情</span>
+                <span className="asgn-cal-legend-hint">点击日期定位下方清单,点击操作直达详情</span>
             </div>
         </div>
     );
