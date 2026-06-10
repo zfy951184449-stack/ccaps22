@@ -3,6 +3,7 @@ import dayjs from 'dayjs';
 import pool from '../config/database';
 import { SqlExecutor } from './operationResourceBindingService';
 import { generateBatchOperationPlansWithResources } from './batchOperationGenerationService';
+import { getTemplateMinDays } from './templateDayOffsetService';
 
 export type MfgPackageStatus = 'DRAFT' | 'ACTIVE' | 'RETIRED';
 
@@ -794,27 +795,6 @@ export class MfgTemplatePackageService {
     return prefixes;
   }
 
-  private static async getTemplateMinDays(
-    executor: SqlExecutor,
-    templateIds: number[],
-  ): Promise<Map<number, number>> {
-    if (!templateIds.length) return new Map();
-    const placeholders = templateIds.map(() => '?').join(', ');
-    const [rows] = await executor.execute<RowDataPacket[]>(
-      `SELECT
-         pt.id AS template_id,
-         COALESCE(MIN(ps.start_day + sos.operation_day), 0) AS min_day
-       FROM process_templates pt
-       LEFT JOIN process_stages ps ON ps.template_id = pt.id
-       LEFT JOIN stage_operation_schedules sos ON sos.stage_id = ps.id
-       WHERE pt.id IN (${placeholders})
-       GROUP BY pt.id`,
-      templateIds,
-    );
-
-    return new Map(rows.map((row) => [Number(row.template_id), Number(row.min_day ?? 0)]));
-  }
-
   private static async insertDepartmentBatchesFromPackagePreview(
     executor: SqlExecutor,
     preview: MfgPackagePreview,
@@ -824,9 +804,9 @@ export class MfgTemplatePackageService {
     const baseBatchCode = payload.batch_code.trim();
     const baseBatchName = payload.batch_name.trim() || baseBatchCode;
     const prefixes = this.buildModuleBatchPrefixes(preview.modules);
-    const templateMinDays = await this.getTemplateMinDays(
+    const templateMinDays = await getTemplateMinDays(
       executor,
-      Array.from(new Set(preview.modules.map((module) => module.template_id))),
+      preview.modules.map((module) => module.template_id),
     );
     const batches: RowDataPacket[] = [];
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import {
     WxbDatePicker,
@@ -25,7 +25,8 @@ interface CreateBatchFormValues {
     source_kind: 'template' | 'package';
     template_id?: number;
     mfg_package_id?: number;
-    planned_start_date: Dayjs;
+    // 恒为基准日期 Day0。与库里 planned_start_date（最早工序日）的换算全部在后端完成
+    day0_date: Dayjs;
     batch_code: string;
     batch_name: string;
     plan_status: BatchPlan['plan_status'];
@@ -43,7 +44,7 @@ const createDefaultValues = (): CreateBatchFormValues => ({
     source_kind: 'template',
     template_id: undefined,
     mfg_package_id: undefined,
-    planned_start_date: dayjs(),
+    day0_date: dayjs(),
     batch_code: '',
     batch_name: '',
     plan_status: 'DRAFT',
@@ -63,7 +64,11 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     const [errors, setErrors] = useState<CreateBatchErrors>({});
     const [day0Offset, setDay0Offset] = useState<{ offset: number; has_pre_day0: boolean; pre_day0_count: number } | null>(null);
 
+    // day0Offset 仅驱动「提前投料」提示横幅，不参与提交换算；
+    // 序号守卫防止快速切换模板时旧响应晚到覆盖新模板的提示
+    const offsetRequestSeq = useRef(0);
     const handleTemplateChange = useCallback(async (templateId?: number) => {
+        const seq = ++offsetRequestSeq.current;
         if (!templateId) {
             setDay0Offset(null);
             return;
@@ -71,10 +76,14 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
 
         try {
             const data = await batchPlanApi.getTemplateDay0Offset(templateId);
-            setDay0Offset(data);
+            if (seq === offsetRequestSeq.current) {
+                setDay0Offset(data);
+            }
         } catch (error) {
             console.warn('Failed to load template offset', error);
-            setDay0Offset(null);
+            if (seq === offsetRequestSeq.current) {
+                setDay0Offset(null);
+            }
         }
     }, []);
 
@@ -103,11 +112,14 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         setDay0Offset(null);
 
         if (initialValues) {
+            // day0_date 由后端按模板 min_day 从最早工序日还原；旧缓存行没有该字段时
+            // 退回 planned_start_date（无提前投料的模板两者相等）
+            const initialDay0 = initialValues.day0_date ?? initialValues.planned_start_date;
             const nextValues: CreateBatchFormValues = {
                 source_kind: initialValues.mfg_package_id ? 'package' : 'template',
                 template_id: initialValues.template_id,
                 mfg_package_id: initialValues.mfg_package_id ?? undefined,
-                planned_start_date: initialValues.planned_start_date ? dayjs(initialValues.planned_start_date) : dayjs(),
+                day0_date: initialDay0 ? dayjs(initialDay0) : dayjs(),
                 batch_code: initialValues.batch_code,
                 batch_name: initialValues.batch_name,
                 plan_status: initialValues.plan_status,
@@ -121,11 +133,11 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     }, [handleTemplateChange, initialValues, visible]);
 
     const actualStartPreview = useMemo(() => {
-        if (!day0Offset || day0Offset.offset >= 0) {
+        if (!day0Offset || day0Offset.offset >= 0 || !values.day0_date?.isValid()) {
             return null;
         }
-        return values.planned_start_date.add(day0Offset.offset, 'day').format('YYYY-MM-DD');
-    }, [day0Offset, values.planned_start_date]);
+        return values.day0_date.add(day0Offset.offset, 'day').format('YYYY-MM-DD');
+    }, [day0Offset, values.day0_date]);
 
     const selectedPackage = useMemo(
         () => mfgPackages.find((item) => item.id === values.mfg_package_id) ?? null,
@@ -149,8 +161,8 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         if (values.source_kind === 'package' && !values.mfg_package_id) {
             nextErrors.mfg_package_id = '请选择总包';
         }
-        if (!values.planned_start_date?.isValid()) {
-            nextErrors.planned_start_date = '请选择日期';
+        if (!values.day0_date?.isValid()) {
+            nextErrors.day0_date = '请选择日期';
         }
         if (!values.batch_code.trim()) {
             nextErrors.batch_code = '请输入批次代码';
@@ -175,7 +187,8 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
                     mfg_package_id: Number(values.mfg_package_id),
                     batch_code: values.batch_code.trim(),
                     batch_name: values.batch_name.trim(),
-                    planned_start_date: values.planned_start_date.format('YYYY-MM-DD'),
+                    // 总包接口的 planned_start_date 即总包基准日，偏移由后端 service 换算
+                    planned_start_date: values.day0_date.format('YYYY-MM-DD'),
                 });
                 wxbToast.success(result.message || '已按总包创建部门批次');
                 onSuccess();
@@ -187,16 +200,13 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
                 wxbToast.error('请选择模板');
                 return;
             }
-            const actualStartDate = day0Offset && day0Offset.offset < 0
-                ? values.planned_start_date.add(day0Offset.offset, 'day')
-                : values.planned_start_date;
 
             const payload = {
                 template_id: templateId,
                 batch_code: values.batch_code.trim(),
                 batch_name: values.batch_name.trim(),
                 plan_status: values.plan_status,
-                planned_start_date: actualStartDate.format('YYYY-MM-DD'),
+                day0_date: values.day0_date.format('YYYY-MM-DD'),
             };
 
             if (initialValues) {
@@ -213,7 +223,7 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         } finally {
             setLoading(false);
         }
-    }, [day0Offset, initialValues, onSuccess, validate, values]);
+    }, [initialValues, onSuccess, validate, values]);
 
     return (
         <WxbModal
@@ -284,10 +294,10 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
                     <WxbDatePicker
                         label={values.source_kind === 'package' ? '总包基准日期 (Day 0)' : '基准日期 (Day 0)'}
                         format="YYYY-MM-DD"
-                        value={values.planned_start_date}
-                        error={errors.planned_start_date}
+                        value={values.day0_date}
+                        error={errors.day0_date}
                         disabled={Boolean(initialValues?.mfg_package_id)}
-                        onChange={(date) => updateValue('planned_start_date', (date ?? dayjs()) as Dayjs)}
+                        onChange={(date) => updateValue('day0_date', (date ?? dayjs()) as Dayjs)}
                     />
                     {selectedPackage && (
                         <div className="batch-modal-v4__info" role="status">

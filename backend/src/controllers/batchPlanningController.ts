@@ -1,12 +1,45 @@
 import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2';
+import dayjs from 'dayjs';
 import pool from '../config/database';
 import BatchLifecycleService, { BatchLifecycleError } from '../services/batchLifecycleService';
 import { generateBatchOperationPlansWithResources } from '../services/batchOperationGenerationService';
 import { MfgTemplatePackageService } from '../services/mfgTemplatePackageService';
+import { TEMPLATE_MIN_DAY_SQL, getTemplateMinDay } from '../services/templateDayOffsetService';
 
 // 只有 DRAFT 状态的批次可以通过 API 直接修改，ACTIVATED 需要通过生命周期接口
 const MUTABLE_BATCH_STATUSES = new Set(['DRAFT']);
+
+// planned_start_date 列存「最早工序日」(= Day0 + min_day)，day0_date 是面向用户的基准日。
+// 读侧统一经此片段换算回 Day0；写侧统一经 resolvePlannedStartDate 换算入库。
+const DAY0_DATE_SELECT = `DATE_FORMAT(DATE_SUB(pbp.planned_start_date, INTERVAL COALESCE(tmd.min_day, 0) DAY), '%Y-%m-%d') AS day0_date`;
+const TEMPLATE_MIN_DAY_JOIN = `LEFT JOIN (${TEMPLATE_MIN_DAY_SQL} GROUP BY ps.template_id) tmd ON tmd.template_id = pbp.template_id`;
+
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+class InvalidDay0DateError extends Error {}
+
+// 写入口统一换算：优先 day0_date（新契约，按当前模板 min_day 推回最早工序日），
+// 兼容仅传 planned_start_date 的旧调用方（视为最早工序日原样入库）。
+const resolvePlannedStartDate = async (
+  executor: { execute: typeof pool.execute },
+  input: { day0_date?: unknown; planned_start_date?: unknown; template_id: number },
+): Promise<string | null> => {
+  if (input.day0_date !== undefined && input.day0_date !== null && input.day0_date !== '') {
+    const day0 = String(input.day0_date);
+    if (!DATE_ONLY_PATTERN.test(day0) || !dayjs(day0).isValid()) {
+      throw new InvalidDay0DateError(`非法的基准日期: ${day0}`);
+    }
+    const minDay = await getTemplateMinDay(executor, input.template_id);
+    return dayjs(day0).add(minDay, 'day').format('YYYY-MM-DD');
+  }
+
+  if (input.planned_start_date !== undefined && input.planned_start_date !== null && input.planned_start_date !== '') {
+    return String(input.planned_start_date);
+  }
+
+  return null;
+};
 
 interface BatchPlan {
   id: number;
@@ -48,6 +81,7 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
         pbp.project_code,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
         DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date,
+        ${DAY0_DATE_SELECT},
         pbp.template_duration_days,
         pbp.plan_status,
         pbp.description,
@@ -64,6 +98,7 @@ export const getAllBatchPlans = async (req: Request, res: Response) => {
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
       LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
       LEFT JOIN organization_units ou ON pt.team_id = ou.id
+      ${TEMPLATE_MIN_DAY_JOIN}
       WHERE 1=1
     `;
 
@@ -108,6 +143,7 @@ export const getBatchPlanById = async (req: Request, res: Response) => {
         pbp.project_code,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
         DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date,
+        ${DAY0_DATE_SELECT},
         pbp.template_duration_days,
         pbp.plan_status,
         pbp.description,
@@ -117,6 +153,7 @@ export const getBatchPlanById = async (req: Request, res: Response) => {
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
       LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
+      ${TEMPLATE_MIN_DAY_JOIN}
       WHERE pbp.id = ?
     `;
 
@@ -145,6 +182,7 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       template_id,
       project_code,
       planned_start_date,
+      day0_date,
       plan_status = 'DRAFT',
       description,
       notes
@@ -153,6 +191,16 @@ export const createBatchPlan = async (req: Request, res: Response) => {
     if (!MUTABLE_BATCH_STATUSES.has(normalizedStatus)) {
       await connection.rollback();
       return res.status(400).json({ error: '非法的批次状态，请通过生命周期接口激活批次' });
+    }
+
+    const resolvedStartDate = await resolvePlannedStartDate(connection, {
+      day0_date,
+      planned_start_date,
+      template_id: Number(template_id),
+    });
+    if (!resolvedStartDate) {
+      await connection.rollback();
+      return res.status(400).json({ error: '缺少基准日期 (day0_date)' });
     }
 
     const insertQuery = `
@@ -167,7 +215,7 @@ export const createBatchPlan = async (req: Request, res: Response) => {
       batch_name,
       template_id,
       project_code || null,
-      planned_start_date,
+      resolvedStartDate,
       normalizedStatus,
       description || null,
       notes || null
@@ -187,10 +235,12 @@ export const createBatchPlan = async (req: Request, res: Response) => {
         pkg.package_code AS mfg_package_code,
         pkg.package_name AS mfg_package_name,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
-        DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date
+        DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date,
+        ${DAY0_DATE_SELECT}
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
       LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
+      ${TEMPLATE_MIN_DAY_JOIN}
       WHERE pbp.id = ?`,
       [batchPlanId]
     );
@@ -200,7 +250,9 @@ export const createBatchPlan = async (req: Request, res: Response) => {
     await connection.rollback();
     console.error('Error creating batch plan:', error);
 
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error instanceof InvalidDay0DateError) {
+      res.status(400).json({ error: error.message });
+    } else if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Batch code already exists' });
     } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
       res.status(400).json({ error: 'Invalid template ID' });
@@ -344,6 +396,7 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       template_id,
       project_code,
       planned_start_date,
+      day0_date,
       plan_status,
       description,
       notes
@@ -379,7 +432,14 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
     const nextPlanStatus = existingStatus === 'ACTIVATED' ? existingStatus : requestedStatus;
 
     const nextTemplateId = template_id ?? existingPlan.template_id;
-    const nextPlannedStartDate = planned_start_date ?? existingPlan.planned_start_date;
+    // day0_date 按目标模板（可能刚被替换）的 min_day 换算，确保「换模板但 Day0 不变」时
+    // 各工序仍锚定同一基准日，而不是沿用旧模板偏移出来的最早工序日
+    const nextPlannedStartDate =
+      (await resolvePlannedStartDate(connection, {
+        day0_date,
+        planned_start_date,
+        template_id: Number(nextTemplateId),
+      })) ?? existingPlan.planned_start_date;
 
     if (
       existingStatus === 'ACTIVATED' &&
@@ -431,10 +491,12 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
         pkg.package_code AS mfg_package_code,
         pkg.package_name AS mfg_package_name,
         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
-        DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date
+        DATE_FORMAT(pbp.planned_end_date, '%Y-%m-%d') as planned_end_date,
+        ${DAY0_DATE_SELECT}
       FROM production_batch_plans pbp
       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
       LEFT JOIN mfg_template_packages pkg ON pbp.mfg_package_id = pkg.id
+      ${TEMPLATE_MIN_DAY_JOIN}
       WHERE pbp.id = ?`,
       [id]
     );
@@ -444,7 +506,9 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
     await connection.rollback();
     console.error('Error updating batch plan:', error);
 
-    if (error.code === 'ER_DUP_ENTRY') {
+    if (error instanceof InvalidDay0DateError) {
+      res.status(400).json({ error: error.message });
+    } else if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Batch code already exists' });
     } else {
       res.status(500).json({ error: 'Failed to update batch plan' });
@@ -579,22 +643,7 @@ export const getTemplateDay0Offset = async (req: Request, res: Response) => {
   try {
     const { templateId } = req.params;
 
-    // 查询模版中所有操作的最小天数（相对于day0）
-    const query = `
-      SELECT 
-        COALESCE(MIN(ps.start_day + sos.operation_day), 0) as min_day
-      FROM process_stages ps
-      JOIN stage_operation_schedules sos ON ps.id = sos.stage_id
-      WHERE ps.template_id = ?
-    `;
-
-    const [rows] = await pool.execute<RowDataPacket[]>(query, [templateId]);
-
-    if (rows.length === 0) {
-      return res.json({ offset: 0, min_day: 0 });
-    }
-
-    const minDay = Number(rows[0].min_day) || 0;
+    const minDay = await getTemplateMinDay(pool, Number(templateId));
     // offset是负数表示有day-x操作，0表示从day0开始
     // 如果min_day=0，表示从day0开始，offset=0
     // 如果min_day=-1，表示有day-1操作，offset=-1
@@ -637,14 +686,7 @@ export const createBatchPlansInBulk = async (req: Request, res: Response) => {
     }
 
     // 获取模版的day0偏移量
-    const [offsetRows] = await connection.execute<RowDataPacket[]>(`
-      SELECT COALESCE(MIN(ps.start_day + sos.operation_day), 0) as min_day
-      FROM process_stages ps
-      JOIN stage_operation_schedules sos ON ps.id = sos.stage_id
-      WHERE ps.template_id = ?
-    `, [template_id]);
-
-    const minDay = Number(offsetRows[0]?.min_day) || 0;
+    const minDay = await getTemplateMinDay(connection, Number(template_id));
 
     // 计算所有Day0日期
     const startDate = new Date(day0_start_date);

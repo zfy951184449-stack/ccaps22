@@ -209,7 +209,8 @@ type BatchPlanPayload = {
   batch_name: string;
   template_id: number;
   project_code?: string | null;
-  planned_start_date: string;
+  // 基准日期 Day0。后端按模板 min_day 自行换算最早工序日入库，前端不做偏移数学
+  day0_date: string;
   plan_status?: BatchPlan['plan_status'];
   description?: string | null;
   notes?: string | null;

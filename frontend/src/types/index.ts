@@ -426,6 +426,9 @@ export interface BatchPlan {
   project_code?: string | null;
   planned_start_date: string;
   planned_end_date?: string | null;
+  // 基准日期 Day0；planned_start_date 是「最早工序日」（含提前投料时早于 Day0），
+  // 编辑回填与提交都必须用 day0_date，不要拿 planned_start_date 当 Day0
+  day0_date?: string | null;
   template_duration_days?: number | null;
   plan_status: 'DRAFT' | 'ACTIVATED';
   description?: string | null;
