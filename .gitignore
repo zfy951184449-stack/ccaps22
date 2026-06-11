@@ -8,11 +8,13 @@ admin/node_modules/
 # Python virtual environments and caches
 solver/.venv/
 solver_v4/.venv/
+solver_v5/.venv/
 solver_v4/.pytest_cache/
 **/__pycache__/
 *.pyc
 
 # Build output
+.vite/
 build/
 dist/
 frontend/build/

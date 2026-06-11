@@ -15,6 +15,7 @@ import BatchManagementV4Page from './pages/BatchManagementV4Page';
 import BatchManagementWorkbenchV2Page from './pages/BatchManagementWorkbenchV2Page';
 import PersonnelSchedulingPage from './pages/PersonnelSchedulingPage';
 import SolverV4Page from './pages/SolverV4Page';
+import SolverV5Page from './pages/SolverV5Page';
 import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
 import EmployeeSchedulePage from './pages/employee-schedule/EmployeeSchedulePage';
 import UiKitShowcasePage from './pages/UiKitShowcasePage';
@@ -221,6 +222,14 @@ const AppLayout: React.FC = () => (
             element={
               <ProtectedRoute allowAnonymousInShadow requiredPermission="SOLVER_RUN_READ">
                 <SolverV4Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/solver-v5"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="SOLVER_RUN_READ">
+                <SolverV5Page />
               </ProtectedRoute>
             }
           />

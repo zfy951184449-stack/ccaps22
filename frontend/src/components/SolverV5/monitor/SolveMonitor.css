@@ -1,0 +1,397 @@
+/**
+ * SolveMonitor.css — 求解监视器抽屉布局样式
+ *
+ * F4 实现规则：
+ * - 仅使用 var(--wx-*) CSS 变量，无硬编码 hex
+ * - 白色主题（无暗色模式）
+ * - 响应式：< 1280px 退化为单列堆叠
+ */
+
+/* ── 抽屉顶部工具栏 ─────────────────────────────────────────────────────────── */
+
+.solve-monitor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+}
+
+.solve-monitor-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--wx-fg-1);
+  margin: 0;
+}
+
+.solve-monitor-run-id {
+  font-size: 12px;
+  color: var(--wx-fg-3);
+  font-family: var(--wx-font-mono, monospace);
+}
+
+.solve-monitor-gap-badge {
+  font-size: 12px;
+  color: var(--wx-fg-2);
+  background: var(--wx-surface-2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--wx-border);
+}
+
+.solve-monitor-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── 抽屉主体内容区 ──────────────────────────────────────────────────────────── */
+
+.solve-monitor-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── 中间内容区（左主栏 + 右侧栏） ──────────────────────────────────────────── */
+
+.solve-monitor-content {
+  display: grid;
+  grid-template-columns: 62fr 38fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 小屏退化为单列 */
+@media (max-width: 1280px) {
+  .solve-monitor-content {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+/* ── 左主栏 ────────────────────────────────────────────────────────────────── */
+
+.solve-monitor-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── 右侧栏 ────────────────────────────────────────────────────────────────── */
+
+.solve-monitor-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ── 通用区块卡片 ──────────────────────────────────────────────────────────── */
+
+.solve-monitor-block {
+  background: var(--wx-surface-1);
+  border: 1px solid var(--wx-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.solve-monitor-block-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wx-fg-2);
+  margin: 0 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── 底部全宽日志区 ───────────────────────────────────────────────────────────── */
+
+.solve-monitor-log-section {
+  flex-shrink: 0;
+  border-top: 1px solid var(--wx-border);
+  margin-top: 12px;
+}
+
+.solve-monitor-log-toggle-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 6px 0;
+  cursor: pointer;
+  user-select: none;
+  color: var(--wx-fg-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.solve-monitor-log-toggle-bar:hover {
+  color: var(--wx-fg-1);
+}
+
+.solve-monitor-log-count {
+  color: var(--wx-fg-3);
+  font-size: 11px;
+}
+
+.solve-monitor-log-caret {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--wx-fg-3);
+}
+
+/* ── 日志面板（SolveLogPanel）─────────────────────────────────────────────── */
+
+.solve-log-panel {
+  font-family: var(--wx-font-mono, "Menlo", "Consolas", monospace);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-y: auto;
+  max-height: 220px;
+  background: var(--wx-surface-2);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--wx-fg-1);
+}
+
+.solve-log-panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60px;
+  color: var(--wx-fg-3);
+  font-size: 12px;
+}
+
+.solve-log-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 0;
+  border-bottom: 1px solid var(--wx-divider);
+}
+
+.solve-log-line:last-child {
+  border-bottom: none;
+}
+
+.solve-log-time {
+  color: var(--wx-fg-4);
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.solve-log-category {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* category pill 颜色 */
+.solve-log-cat-constraint {
+  background: var(--wx-blue-100);
+  color: var(--wx-blue-700);
+}
+.solve-log-cat-conflict {
+  background: var(--wx-red-100);
+  color: var(--wx-red-700);
+}
+.solve-log-cat-solver {
+  background: var(--wx-green-100);
+  color: var(--wx-green-700);
+}
+.solve-log-cat-progress {
+  background: var(--wx-amber-100);
+  color: var(--wx-amber-700);
+}
+
+/* 日志级别颜色 */
+.solve-log-info {
+  color: var(--wx-fg-1);
+}
+.solve-log-success {
+  color: var(--wx-green-600);
+}
+.solve-log-warning {
+  color: var(--wx-amber-500);
+}
+.solve-log-error {
+  color: var(--wx-red-500);
+}
+
+.solve-log-message {
+  flex: 1;
+  word-break: break-all;
+}
+
+.solve-log-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 11px;
+  background: var(--wx-blue-500);
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* category 过滤 pill 组 */
+.solve-log-filter-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.solve-log-filter-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid var(--wx-border);
+  color: var(--wx-fg-2);
+  background: var(--wx-surface-1);
+  transition: background 0.1s, color 0.1s;
+}
+
+.solve-log-filter-pill.active {
+  background: var(--wx-blue-600);
+  color: var(--wx-surface-1);
+  border-color: var(--wx-blue-600);
+}
+
+/* ── InfeasibilityPanel（F8）──────────────────────────────────────────────── */
+
+.infeasibility-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* V4 风格降级：红色横幅 */
+.infeasibility-panel-fallback .infeasibility-fallback-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--wx-red-50, var(--wx-red-100));
+  border: 1px solid var(--wx-red-200, var(--wx-red-100));
+  border-radius: 6px;
+  color: var(--wx-red-700, var(--wx-red-600));
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* 面板标题行 */
+.infeasibility-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.infeasibility-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wx-fg-1);
+}
+
+/* 说明文字 */
+.infeasibility-panel-desc {
+  font-size: 12px;
+  color: var(--wx-fg-3);
+  margin: 0 0 10px 0;
+  line-height: 1.5;
+}
+
+/* 冲突卡片列表 */
+.infeasibility-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* 单张冲突卡片 */
+.infeasibility-conflict-card {
+  /* 覆盖 WxbCard 默认 padding（通过行内 style 控制） */
+}
+
+/* 卡片顶部：标签 + lit_key */
+.infeasibility-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.infeasibility-lit-key {
+  font-size: 10px;
+  color: var(--wx-fg-4);
+  font-family: var(--wx-font-mono, monospace);
+  background: var(--wx-surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--wx-border);
+}
+
+/* 冲突说明文字 */
+.infeasibility-card-message {
+  font-size: 13px;
+  color: var(--wx-fg-1);
+  line-height: 1.55;
+  margin-bottom: 6px;
+}
+
+/* 建议行（灯泡） */
+.infeasibility-card-suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--wx-fg-2);
+  background: var(--wx-amber-50, var(--wx-amber-100));
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-bottom: 6px;
+  line-height: 1.5;
+  border-left: 2px solid var(--wx-amber-400, var(--wx-amber-500));
+}
+
+/* 关联员工/日期 */
+.infeasibility-card-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--wx-fg-3);
+  margin-bottom: 6px;
+}
+
+.infeasibility-related-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 跳到配置按钮区 */
+.infeasibility-card-action {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--wx-divider);
+  margin-top: 4px;
+}

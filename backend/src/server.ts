@@ -35,6 +35,7 @@ import HolidayScheduler from './scheduler/holidayScheduler';
 import HolidayService from './services/holidayService';
 import systemRoutes from './routes/system';
 import schedulingV4Routes from './routes/schedulingV4';
+import schedulingV5Routes from './routes/schedulingV5';
 import schedulingRoutes from './routes/scheduling';
 import dashboardRoutes from './routes/dashboard';
 import operationTypesRoutes from './routes/operationTypes';
@@ -126,6 +127,9 @@ const isSolverMachinePath = (urlPath: string): boolean => {
   if (urlPath.startsWith('/api/v4/scheduling/callback/')) return true;
   // 形如 /api/v4/scheduling/runs/<id>/status（solver 轮询）
   if (/^\/api\/v4\/scheduling\/runs\/[^/]+\/status$/.test(urlPath)) return true;
+  // V5 机器路径（同 V4，仅前缀不同）
+  if (urlPath.startsWith('/api/v5/scheduling/callback/')) return true;
+  if (/^\/api\/v5\/scheduling\/runs\/[^/]+\/status$/.test(urlPath)) return true;
   return false;
 };
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
@@ -163,6 +167,7 @@ app.use('/api/organization', organizationRoutes);
 app.use('/api/org-structure', organizationHierarchyRoutes);
 app.use('/api/shift-definitions', shiftDefinitionRoutes);
 app.use('/api/v4/scheduling', schedulingV4Routes);
+app.use('/api/v5/scheduling', schedulingV5Routes);
 app.use('/api/scheduling', schedulingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/operation-types', operationTypesRoutes);

@@ -9,6 +9,7 @@ HOST="${HOST:-0.0.0.0}"
 BACKEND_PORT="${BACKEND_PORT:-3001}"
 FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 SOLVER_V4_PORT="${SOLVER_V4_PORT:-5005}"
+SOLVER_V5_PORT="${SOLVER_V5_PORT:-5006}"
 BREW_MYSQL_SERVICE="${BREW_MYSQL_SERVICE:-mysql}"
 
 declare -a PIDS=()
@@ -62,6 +63,7 @@ wait_for_url() {
 ensure_port_available "${BACKEND_PORT}" "后端"
 ensure_port_available "${FRONTEND_PORT}" "老前端"
 ensure_port_available "${SOLVER_V4_PORT}" "V4求解器"
+ensure_port_available "${SOLVER_V5_PORT}" "V5求解器"
 
 # 2. 检查 MySQL (macOS brew)
 if command -v brew >/dev/null 2>&1; then
@@ -120,7 +122,44 @@ else
   echo "⚠️ 未检测到 V4 求解器虚拟环境(solver_v4/.venv)，跳过启动"
 fi
 
-# 5. 老版本前端
+# 5. 求解器V5启动
+echo "🧠 启动V5求解器服务 (端口${SOLVER_V5_PORT})..."
+if [[ -d "solver_v5/.venv" ]]; then
+  cd solver_v5
+  source .venv/bin/activate
+  # V5 回调端点静态固定指向 /api/v5/scheduling/callback/progress
+  export BACKEND_API_URL="http://localhost:${BACKEND_PORT}/api/v5/scheduling/callback/progress"
+  # 共用与 V4 相同的 SOLVER_CALLBACK_SECRET
+  if [[ -z "${SOLVER_CALLBACK_SECRET:-}" && -f "${SCRIPT_DIR}/backend/.env" ]]; then
+    SOLVER_CALLBACK_SECRET="$(grep -E '^SOLVER_CALLBACK_SECRET=' "${SCRIPT_DIR}/backend/.env" 2>/dev/null | head -n1 | cut -d '=' -f2- | tr -d '[:space:]' || true)"
+  fi
+  export SOLVER_CALLBACK_SECRET="${SOLVER_CALLBACK_SECRET:-}"
+  if [[ -z "${SOLVER_CALLBACK_SECRET}" ]]; then
+    echo "  ⚠️ 未找到 SOLVER_CALLBACK_SECRET（backend/.env 也没有）；solver V5 回调将缺少鉴权头，backend 会以 401 拒绝。"
+  fi
+  if command -v gunicorn >/dev/null 2>&1; then
+    gunicorn app:app \
+      --bind "0.0.0.0:${SOLVER_V5_PORT}" \
+      --workers 1 \
+      --threads 4 \
+      --timeout 600 \
+      --access-logfile - \
+      --error-logfile - &
+    PIDS+=($!)
+    echo "  → 使用 Gunicorn (1 worker, 4 threads, timeout=600s)"
+  else
+    echo "  ⚠️ Gunicorn 未安装，使用 Flask 开发服务器"
+    python app.py &
+    PIDS+=($!)
+  fi
+  deactivate 2>/dev/null || true
+  cd "${SCRIPT_DIR}"
+  wait_for_url "http://127.0.0.1:${SOLVER_V5_PORT}/api/v5/health" "V5求解器 API" 60 1
+else
+  echo "⚠️ 未检测到 V5 求解器虚拟环境(solver_v5/.venv)，跳过启动"
+fi
+
+# 6. 老版本前端
 echo "🎨 启动老前端服务 (端口${FRONTEND_PORT})..."
 cd frontend
 if [[ ! -d "node_modules" ]]; then npm install; fi
@@ -135,6 +174,7 @@ echo "✅ 所有服务均已启动/就绪!"
 echo "📱 前端:         http://localhost:${FRONTEND_PORT}"
 echo "🔗 后端 API:     http://localhost:${BACKEND_PORT}"
 echo "🧠 求解器 V4:    http://localhost:${SOLVER_V4_PORT}"
+echo "🧬 求解器 V5:    http://localhost:${SOLVER_V5_PORT}"
 echo "==========================================="
 echo "按 Ctrl+C 停止所有服务"
 
