@@ -18,11 +18,19 @@ jest.mock('../../services', () => ({
   },
 }));
 
-const mockMessageError = jest.fn();
-jest.mock('antd', () => ({
-  message: {
-    error: (...args: unknown[]) => mockMessageError(...args),
-    success: jest.fn(),
+// The hook reports errors through wxbToast (re-exported from the wxb-ui barrel).
+// Mock the barrel directly rather than antd: importing the real barrel would
+// eagerly evaluate every wxb-ui module (e.g. RangePicker destructures
+// AntdDatePicker.RangePicker at module load), which throws once antd is mocked.
+const mockToastError = jest.fn();
+const mockToastSuccess = jest.fn();
+jest.mock('../wxb-ui', () => ({
+  wxbToast: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+    warning: jest.fn(),
+    info: jest.fn(),
+    loading: jest.fn(),
   },
 }));
 
@@ -125,7 +133,8 @@ describe('useV3EditorActions batch handlers', () => {
     refreshData = jest.fn().mockResolvedValue(undefined);
     (processTemplateV2Api.getResourceEditor as jest.Mock).mockResolvedValue({ constraints: [], shareGroups: [] });
     (processTemplateV2Api.updateStageOperation as jest.Mock).mockReset().mockResolvedValue(undefined);
-    mockMessageError.mockReset();
+    mockToastError.mockReset();
+    mockToastSuccess.mockReset();
   });
 
   afterEach(() => {
@@ -173,7 +182,7 @@ describe('useV3EditorActions batch handlers', () => {
 
     // Single refresh for the whole batch, no error toast.
     expect(refreshData).toHaveBeenCalledTimes(1);
-    expect(mockMessageError).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
   it('handleGroupDragEnd still refreshes once and reports failures on partial failure', async () => {
@@ -192,8 +201,9 @@ describe('useV3EditorActions batch handlers', () => {
     expect(result).toBe(false);
     expect(updateMock).toHaveBeenCalledTimes(2); // both attempted (concurrent, not short-circuited)
     expect(refreshData).toHaveBeenCalledTimes(1); // refresh even on partial failure
-    expect(mockMessageError).toHaveBeenCalledTimes(1);
-    expect(String(mockMessageError.mock.calls[0][0])).toContain('2 条中 1 条');
+    expect(mockToastError).toHaveBeenCalledTimes(1);
+    // wxbToast.error receives the message string directly as its first argument.
+    expect(String(mockToastError.mock.calls[0][0])).toContain('2 条中 1 条');
   });
 
   it('handleTasksDragEnd persists each provided update and refreshes once', async () => {

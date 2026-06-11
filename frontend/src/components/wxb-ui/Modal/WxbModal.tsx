@@ -2,14 +2,15 @@ import React from 'react';
 import { Modal, ModalProps } from 'antd';
 import { WxbButton } from '../Button/Button';
 import { WxbIcon } from '../Icon/Icon';
+import { resolvePortalContainer } from '../_internal/portalContainer';
 import './WxbModal.css';
 
 export interface WxbModalProps extends ModalProps {
   okVariant?: 'primary' | 'danger';
 }
 
-export const WxbModal: React.FC<WxbModalProps> = ({ 
-  children, 
+export const WxbModal: React.FC<WxbModalProps> = ({
+  children,
   className = '',
   rootClassName = '',
   wrapClassName = '',
@@ -22,7 +23,10 @@ export const WxbModal: React.FC<WxbModalProps> = ({
   footer,
   closeIcon,
   okVariant = 'primary',
-  ...props 
+  // 默认挂进当前全屏元素(无全屏时为 document.body),避免全屏下被 top layer 遮挡;
+  // 调用方显式传 getContainer 则尊重其值。
+  getContainer = resolvePortalContainer,
+  ...props
 }) => {
   const customFooter = footer === undefined ? (
     <div className="wxb-modal-footer">
@@ -46,6 +50,7 @@ export const WxbModal: React.FC<WxbModalProps> = ({
       wrapClassName={`wxb-modal-wrap ${wrapClassName}`}
       title={customTitle}
       footer={customFooter}
+      getContainer={getContainer}
       onCancel={onCancel}
       closeIcon={closeIcon ?? (
         <span className="wxb-modal-close-icon" aria-label="关闭">

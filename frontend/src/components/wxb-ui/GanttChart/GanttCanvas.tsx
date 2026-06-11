@@ -184,10 +184,10 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
 
     const peerIds = shareColorMap?.get(task.id)?.peers;
     if (peerIds) {
-      const taskById = new Map(dataRef.current.tasks.map((item) => [item.id, item]));
+      const lookup = taskByIdRef.current;
       peerIds.forEach((peerId) => {
         if (peerId === task.id) return;
-        const peerTask = taskById.get(peerId);
+        const peerTask = lookup.get(peerId);
         const peerRow = taskRowMap.get(peerId);
         if (!peerTask || peerRow === undefined) return;
         const peerRect = getTaskScreenRect(peerTask, peerRow, canvasRect, s);
@@ -215,6 +215,17 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
     highlightedLinkIds,
     shareColorMap,
   };
+
+  // O(1) task lookup, rebuilt only when the tasks array identity changes.
+  // Hot paths (share-hover peers, tooltip avoid-rects) consult this instead of
+  // scanning `tasks` with .find() per peer.
+  const taskById = React.useMemo(() => {
+    const map = new Map<string, GanttTask>();
+    for (const task of tasks) map.set(task.id, task);
+    return map;
+  }, [tasks]);
+  const taskByIdRef = useRef(taskById);
+  taskByIdRef.current = taskById;
 
   // Share-hover debounce state
   const shareHoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -502,11 +513,11 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
           if (!info) return;
           hoveredShareRef.current = { taskIds: info.peers, color: info.color };
           dispatch({ type: 'MARK_DIRTY' });
-          // Build task list for panel
-          const d = dataRef.current;
+          // Build task list for panel — O(1) lookup per peer instead of scanning tasks
+          const lookup = taskByIdRef.current;
           const panelTasks = Array.from(info.peers)
             .map(id => {
-              const t = d.tasks.find(task => task.id === id);
+              const t = lookup.get(id);
               return t ? { id: t.id, label: t.label, color: t.color, isHovered: t.id === newHover } : null;
             })
             .filter(Boolean) as Array<{ id: string; label: string; color?: string; isHovered: boolean }>;

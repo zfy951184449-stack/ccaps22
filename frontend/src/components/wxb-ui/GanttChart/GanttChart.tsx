@@ -24,7 +24,13 @@ import GanttSharePanel from './GanttSharePanel';
 import type { ShareHoverTask } from './GanttSharePanel';
 import type { GanttLink } from './types';
 import { THEME } from './constants';
+import { setupFullscreenToast } from '../Toast/Toast';
 import './GanttChart.css';
+
+// Stable default zoom range — promoted to a module constant so the array
+// reference never changes between renders (a fresh default-param array would
+// retrigger GanttCanvas's wheel-listener effect every render).
+const DEFAULT_ZOOM_RANGE: [number, number] = [MIN_DAY_WIDTH, MAX_DAY_WIDTH];
 
 // Shared-operation body colors are derived from WXB tokens. Red is intentionally
 // excluded because it is reserved for conflict/error states in the Gantt.
@@ -43,10 +49,18 @@ const SHARE_COMPONENT_TOKENS: Array<[string, string]> = [
   ['--wx-fg-4', THEME.fg4],
 ];
 
+// Lazy per-token cache. Safe because this app ships a single white theme and CSS
+// custom properties don't change at runtime, so each token reads CSSOM only once.
+const wxbTokenCache = new Map<string, string>();
+
 function readWxbToken(name: string, fallback: string): string {
   if (typeof window === 'undefined') return fallback;
+  const cached = wxbTokenCache.get(name);
+  if (cached !== undefined) return cached;
   const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return value || fallback;
+  const resolved = value || fallback;
+  wxbTokenCache.set(name, resolved);
+  return resolved;
 }
 
 function mixHexColor(a: string, b: string, bWeight: number): string {
@@ -196,7 +210,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   readOnly = false,
   clampDragToWindow = true,
   initialDayWidth = DEFAULT_DAY_WIDTH,
-  zoomRange = [MIN_DAY_WIDTH, MAX_DAY_WIDTH],
+  zoomRange = DEFAULT_ZOOM_RANGE,
   personnelPeaks,
   onTaskClick,
   onTaskDoubleClick,
@@ -274,16 +288,6 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
       setIsFullscreen(prev => !prev);
       setTimeout(() => dispatch({ type: 'MARK_DIRTY' }), 0);
     }
-  }, [dispatch]);
-
-  React.useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === containerRef.current);
-      setTimeout(() => dispatch({ type: 'MARK_DIRTY' }), 0);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, [dispatch]);
 
   // Undo toast state (forwarded from GanttCanvas drag system)
@@ -376,6 +380,24 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   const handleCtxClose = useCallback(() => {
     setCtxMenu(prev => ({ ...prev, visible: false }));
   }, []);
+
+  React.useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === containerRef.current);
+      // 进/出全屏时关闭右键菜单等瞬态浮层:它们 inline 渲染在容器内,
+      // 切换全屏后定位上下文已变,直接关闭最稳妥(getContainer 只在挂载那刻求值)。
+      handleCtxClose();
+      setTimeout(() => dispatch({ type: 'MARK_DIRTY' }), 0);
+    };
+
+    // 让全局 wxbToast 在全屏期间挂进全屏元素,否则会被 top layer 遮挡。
+    const teardownToast = setupFullscreenToast();
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      teardownToast();
+    };
+  }, [dispatch, handleCtxClose]);
 
   const collectDeletableTasks = useCallback((fallbackTask: GanttTask | null = null): GanttTask[] => {
     const selectedIds = stateRef.current.selectedTaskIds;

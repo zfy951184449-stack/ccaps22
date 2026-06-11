@@ -16,10 +16,11 @@ import {
   type ContextMenuItem,
 } from '../wxb-ui/GanttChart/GanttContextMenu';
 import { processTemplateV2Api } from '../../services';
-import type { ProcessTemplate, GanttNode, StageOperation } from '../ProcessTemplateGantt/types';
+import type { ProcessTemplate, GanttNode, StageOperation, GanttConstraint } from '../ProcessTemplateGantt/types';
 import type {
   OperationCreateContext,
   OperationCreatedResult,
+  TemplateConstraintLink,
   TemplateResourceEditorResponse,
   TemplateStageSummary,
 } from '../ProcessTemplateV2/types';
@@ -88,6 +89,38 @@ function collectOperations(
   }
 
   return result;
+}
+
+/**
+ * Map a TemplateConstraintLink (resource-editor aggregate) → GanttConstraint
+ * (legacy renderer type consumed by toGanttDeps). Keeps the constraint graph
+ * sourced from the single resource-editor fetch instead of a duplicate request.
+ */
+function mapConstraint(c: TemplateConstraintLink): GanttConstraint {
+  return {
+    constraint_id: c.constraintId,
+    from_schedule_id: c.fromScheduleId,
+    from_operation_id: c.fromOperationId,
+    from_operation_name: c.fromOperationName,
+    from_operation_code: c.fromOperationCode,
+    to_schedule_id: c.toScheduleId,
+    to_operation_id: c.toOperationId,
+    to_operation_name: c.toOperationName,
+    to_operation_code: c.toOperationCode,
+    constraint_type: c.constraintType,
+    lag_time: c.lagTime,
+    share_mode: c.shareMode ?? undefined,
+    constraint_level: c.constraintLevel ?? undefined,
+    constraint_name: c.constraintName ?? undefined,
+    from_stage_name: c.fromStageName,
+    to_stage_name: c.toStageName,
+    from_operation_day: c.fromOperationDay,
+    from_recommended_time: c.fromRecommendedTime,
+    to_operation_day: c.toOperationDay,
+    to_recommended_time: c.toRecommendedTime,
+    from_stage_start_day: c.fromStageStartDay,
+    to_stage_start_day: c.toStageStartDay,
+  };
 }
 
 function getScheduleIdFromTask(task: GanttTask): number | null {
@@ -245,11 +278,21 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const ganttData = useGanttData(ganttTemplate);
 
   // ---- Editor actions (drag / resize / delete / auto-schedule) ----
+  // The resource-editor aggregate (constraints / share groups / stages) is
+  // fetched once here via loadResourceEditorData and shared as the single
+  // source of truth; the actions hook only re-triggers that fetch after CRUD.
   const actions = useV3EditorActions({
     templateId,
     ganttNodes: ganttData.ganttNodes,
     refreshData: ganttData.refreshData,
+    onResourceRefresh: loadResourceEditorData,
   });
+
+  // Constraint graph derived from the shared resource-editor aggregate.
+  const constraints = useMemo<GanttConstraint[]>(
+    () => (resourceEditorData?.constraints ?? []).map(mapConstraint),
+    [resourceEditorData],
+  );
 
   // ---- Operations list for share group modal (from ganttNodes tree) ----
   const operationsList = useMemo(
@@ -263,7 +306,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     operations: operationsList,
     onDataChange: () => {
       void ganttData.refreshData();
-      void actions.refreshAll();
+      // 重拉 resource-editor 聚合，同步约束图(actions.refreshAll 现已收敛到它)。
+      void loadResourceEditorData();
     },
     onMessage: (_type, text) => {
       if (_type === 'error') wxbToast.error(text);
@@ -271,6 +315,34 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       else wxbToast.success(text);
     },
   });
+
+  // ---- Close editor-level overlays when the gantt leaves native fullscreen ----
+  // These modals (QuickCreate / ShareGroup / equipment / stage dialogs) render as
+  // siblings of WxbGanttChart. While the gantt is fullscreen they portal into the
+  // fullscreen element (resolvePortalContainer); antd evaluates getContainer only
+  // at mount, so on exit-fullscreen that host collapses and an already-open modal
+  // would be left mis-positioned or stranded in the torn-down subtree. The gantt
+  // already closes its own transient overlays on the same event — we mirror that
+  // here for the business modals it can't reach. Closing on *exit* only keeps the
+  // common open-while-fullscreen flow intact.
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) return; // only act when leaving fullscreen
+      setCreateOperationModalOpen(false);
+      setCreateOperationContext(null);
+      setEditOperationModalOpen(false);
+      setEditOperationTarget(null);
+      setShowCreateEquipModal(false);
+      setPendingBindTask(null);
+      setAddStageModalOpen(false);
+      setEditingStageId(null);
+      setDeleteStageTarget(null);
+      setDeleteTargets([]);
+      shareService.closeModal();
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [shareService]);
 
   // ---- Gantt adapter (memo-ized transforms) ----
   const rawTasks = useMemo(
@@ -297,8 +369,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   );
 
   const dependencies = useMemo(
-    () => toGanttDeps(actions.constraints),
-    [actions.constraints],
+    () => toGanttDeps(constraints),
+    [constraints],
   );
 
   const links = useMemo(
@@ -370,15 +442,15 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
   const handleCreatedOperation = useCallback(
     async (_result: OperationCreatedResult) => {
       // allSettled：任一刷新失败/挂起都不应拖垮其余刷新（审计 DYN-B2）。
+      // loadResourceEditorData 同时刷新约束图（actions.refreshAll 现已收敛到它）。
       await Promise.allSettled([
         ganttData.refreshData(),
-        actions.refreshAll(),
         shareService.refresh(),
         resourceView.refreshBindings(),
         loadResourceEditorData(),
       ]);
     },
-    [actions, ganttData, loadResourceEditorData, resourceView, shareService],
+    [ganttData, loadResourceEditorData, resourceView, shareService],
   );
 
   // Create the first / next stage. Restores the stage-management entry that
@@ -421,9 +493,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       setNewStageStartDay('0');
       setNewStageDesc('');
       // allSettled: 任一刷新挂起/失败都不拖死提交(参考审计 DYN-B2 卡死)
+      // loadResourceEditorData 同时刷新约束图(actions.refreshAll 现已收敛到它)。
       await Promise.allSettled([
         ganttData.refreshData(),
-        actions.refreshAll(),
         loadResourceEditorData(),
       ]);
     } catch (error: any) {
@@ -431,7 +503,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     } finally {
       setStageSubmitting(false);
     }
-  }, [newStageName, newStageStartDay, newStageDesc, editingStageId, resourceEditorData, templateId, ganttData, actions, loadResourceEditorData]);
+  }, [newStageName, newStageStartDay, newStageDesc, editingStageId, resourceEditorData, templateId, ganttData, loadResourceEditorData]);
 
   // 打开"新增阶段"：起始天默认接续上一阶段（无阶段则首日 0）。
   const openCreateStage = useCallback(() => {
@@ -468,9 +540,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       await processTemplateV2Api.deleteStage(deleteStageTarget.id);
       wxbToast.success('阶段已删除');
       setDeleteStageTarget(null);
+      // loadResourceEditorData 同时刷新约束图(actions.refreshAll 现已收敛到它)。
       await Promise.allSettled([
         ganttData.refreshData(),
-        actions.refreshAll(),
         loadResourceEditorData(),
       ]);
     } catch (error: any) {
@@ -478,7 +550,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     } finally {
       setDeleteStageSubmitting(false);
     }
-  }, [deleteStageTarget, ganttData, actions, loadResourceEditorData]);
+  }, [deleteStageTarget, ganttData, loadResourceEditorData]);
 
   const backgroundMenuItems = useMemo<ContextMenuItem[]>(
     () =>
@@ -612,7 +684,8 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       }
 
       await ganttData.refreshData();
-      await actions.refreshAll();
+      // 重拉 resource-editor 聚合，同步约束图(actions.refreshAll 现已收敛到它)。
+      await loadResourceEditorData();
       await resourceView.refreshBindings();
       setDeleteTargets([]);
     } catch (err: any) {
@@ -620,7 +693,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     } finally {
       setDeleteSubmitting(false);
     }
-  }, [deleteTargets, ganttData, actions, resourceView]);
+  }, [deleteTargets, ganttData, loadResourceEditorData, resourceView]);
 
   const handleContextAction = useCallback(
     async (action: string, task: GanttTask | null, context: GanttContextActionContext) => {
@@ -847,6 +920,47 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     }
   }, [newEquipName, newEquipSystemType, newEquipClass, newEquipModel, pendingBindTask, resourceView, refreshEquipmentNodes]);
 
+  // ---- Selection-panel extra actions (batch bind / unbind / create equip) ----
+  // Stable reference so GanttSelectionPanel's React.memo isn't defeated by a
+  // fresh inline function on every editor render (A16). setState setters are
+  // identity-stable, so only the three handlers/options drive the deps.
+  const renderSelectionPanelExtraActions = useCallback(
+    (selectedTaskIds: string[]) => (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+        <WxbSelect
+          placeholder={`绑定 ${selectedTaskIds.length} 个操作到设备`}
+          showSearch
+          optionFilterProp="label"
+          value={undefined}
+          onChange={(val) => {
+            if (val != null) void handleBatchBind(selectedTaskIds, val as number);
+          }}
+          options={equipmentBindingOptions}
+          style={{ width: '100%' }}
+        />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <WxbButton
+            variant="ghost"
+            size="sm"
+            style={{ flex: 1 }}
+            onClick={() => void handleBatchUnbind(selectedTaskIds)}
+          >
+            解除绑定
+          </WxbButton>
+          <WxbButton
+            variant="ghost"
+            size="sm"
+            style={{ flex: 1 }}
+            onClick={() => { setShowCreateEquipModal(true); setPendingBindTask(null); }}
+          >
+            + 新建设备
+          </WxbButton>
+        </div>
+      </div>
+    ),
+    [handleBatchBind, handleBatchUnbind, equipmentBindingOptions],
+  );
+
   // ---- Loading / error states ----
   if (templateLoading) {
     return (
@@ -915,39 +1029,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onContextAction={handleContextAction}
           showSelectionPanel
           onCreateShareGroup={handleQuickLink}
-          selectionPanelExtraActions={(selectedTaskIds: string[]) => (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-              <WxbSelect
-                placeholder={`绑定 ${selectedTaskIds.length} 个操作到设备`}
-                showSearch
-                optionFilterProp="label"
-                value={undefined}
-                onChange={(val) => {
-                  if (val != null) void handleBatchBind(selectedTaskIds, val as number);
-                }}
-                options={equipmentBindingOptions}
-                style={{ width: '100%' }}
-              />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <WxbButton
-                  variant="ghost"
-                  size="sm"
-                  style={{ flex: 1 }}
-                  onClick={() => void handleBatchUnbind(selectedTaskIds)}
-                >
-                  解除绑定
-                </WxbButton>
-                <WxbButton
-                  variant="ghost"
-                  size="sm"
-                  style={{ flex: 1 }}
-                  onClick={() => { setShowCreateEquipModal(true); setPendingBindTask(null); }}
-                >
-                  + 新建设备
-                </WxbButton>
-              </div>
-            </div>
-          )}
+          selectionPanelExtraActions={renderSelectionPanelExtraActions}
           collapseEmptyNightShifts
           enableFullscreen
           style={{ width: '100%', height: '100%' }}
@@ -1007,9 +1089,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           onUpdated={async () => {
             setEditOperationModalOpen(false);
             setEditOperationTarget(null);
+            // loadResourceEditorData 同时刷新约束图(actions.refreshAll 现已收敛到它)。
             await Promise.all([
               ganttData.refreshData(),
-              actions.refreshAll(),
               shareService.refresh(),
               resourceView.refreshBindings(),
               loadResourceEditorData(),

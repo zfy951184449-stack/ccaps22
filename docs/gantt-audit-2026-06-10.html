@@ -108,8 +108,8 @@
 </div>
 
 <div class="fixnote" style="margin-bottom:20px">
-  <b>修复进展：</b>第一轮（2026-06-10）A1–A6、B13、B14；第二轮（2026-06-11）A7、A8、A9、B1、B2。共 11 项已修复并通过验证
-  （前端 tsc 零错误 + 9 套件 43 用例、后端构建通过 + 24 用例全绿，含 useGanttStore / stageOperationFromCanvas / batchGanttOperationsBatch 三个新测试文件）。详见各条目绿色「已修复」标记。
+  <b>修复进展：</b>第一轮（2026-06-10）A1–A6、B13、B14；第二轮（2026-06-11）A7、A8、A9、B1、B2；第三轮（2026-06-11）A12–A17 全部 P2 性能项 + 追加项 F1（全屏浮层）。
+  共 18 项已修复并通过验证（前端 tsc 零错误 + 全量 18 套件 87 用例、后端构建 + 测试全绿）。第三轮实现经 3 路对抗式核查（性能正确性 / 全屏完整性 / 全量门禁）+ 补漏后落地。详见各条目绿色「已修复」标记。
 </div>
 
 <div class="summary">
@@ -237,33 +237,39 @@
 <h3>P2 · 性能</h3>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A12 · resource-editor 聚合接口挂载时被打两遍</span></div>
-  <div class="f-body"><p><span class="path">useV3EditorActions.ts:146</span> 与 <span class="path">ProcessTemplateV3Editor.tsx:227</span> 各自在挂载时请求同一最重接口；且前者取回的 shareGroups 从未被使用。→ 复用一份数据源。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A12 · resource-editor 聚合接口挂载时被打两遍</span></div>
+  <div class="f-body"><p><span class="path">useV3EditorActions.ts:146</span> 与 <span class="path">ProcessTemplateV3Editor.tsx:227</span> 各自在挂载时请求同一最重接口；且前者取回的 shareGroups 从未被使用。→ 复用一份数据源。</p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>useV3EditorActions 删除聚合请求与 constraints/shareGroups 状态，编辑器成为 resource-editor 唯一数据源；hook 经新增 onResourceRefresh 回调在增删约束/自动排程等路径触发重拉。挂载只发一次聚合请求。配套修正测试 mock（改挂 wxb-ui barrel）。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A13 · share-hover 回调在全量 tasks 里线性 find，O(P×N)</span></div>
-  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttCanvas.tsx:504</span> 对 peers 每个成员做全量扫描。→ 维护 <code>taskById: Map</code> 查表。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A13 · share-hover 回调在全量 tasks 里线性 find，O(P×N)</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttCanvas.tsx:504</span> 对 peers 每个成员做全量扫描。→ 维护 <code>taskById: Map</code> 查表。</p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>GanttCanvas 新增 taskById（useMemo Map + ref），share-hover 面板与 tooltip 避让矩形两条热路径全部改 O(1) 查表。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A14 · 设备冲突检测 O(n²) 双重循环</span></div>
-  <div class="f-body"><p><span class="path">ProcessTemplateV3/useResourceView.ts:108-121</span>，每个设备组都调用。→ 扫描线 O(n log n)，或直接复用 splitIntoLayers 结果（layer&gt;1 即重叠）。<span class="note">核实置信 medium：常规规模（单设备十几条操作）未必可感知。</span></p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A14 · 设备冲突检测 O(n²) 双重循环</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3/useResourceView.ts:108-121</span>，每个设备组都调用。→ 扫描线 O(n log n)，或直接复用 splitIntoLayers 结果（layer&gt;1 即重叠）。<span class="note">核实置信 medium：常规规模（单设备十几条操作）未必可感知。</span></p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>findOverlappingTaskIds 重写为排序+活动集扫描线 O(n log n)；对抗式核查推演了相邻 end===start、零长任务、同 start 三类边界与原实现的等价性（函数注释含论证与数据层不变量说明），新增 4 个边界守护用例（套件 3→7 用例）。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A15 · zoomRange 默认数组每次渲染新引用，wheel 监听反复重绑</span></div>
-  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttChart.tsx:199</span> 默认参数数组 + <span class="path">GanttCanvas.tsx:405</span> useEffect 依赖它，每渲染解绑/重绑一轮。→ 模块级常量或 useMemo。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A15 · zoomRange 默认数组每次渲染新引用，wheel 监听反复重绑</span></div>
+  <div class="f-body"><p><span class="path">wxb-ui/GanttChart/GanttChart.tsx:199</span> 默认参数数组 + <span class="path">GanttCanvas.tsx:405</span> useEffect 依赖它，每渲染解绑/重绑一轮。→ 模块级常量或 useMemo。</p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>默认值提升为模块常量 DEFAULT_ZOOM_RANGE；全仓核实无其他调用方传新数组字面量，wheel effect 其余依赖均稳定，不再每渲染重绑。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A16 · selectionPanelExtraActions 内联函数令选中面板 memo 失效</span></div>
-  <div class="f-body"><p><span class="path">ProcessTemplateV3Editor.tsx:913</span> JSX 内联渲染函数，GanttSelectionPanel 虽是 React.memo 但 prop 每次新引用。→ useCallback / useMemo 固定。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A16 · selectionPanelExtraActions 内联函数令选中面板 memo 失效</span></div>
+  <div class="f-body"><p><span class="path">ProcessTemplateV3Editor.tsx:913</span> JSX 内联渲染函数，GanttSelectionPanel 虽是 React.memo 但 prop 每次新引用。→ useCallback / useMemo 固定。</p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>提取为 renderSelectionPanelExtraActions（useCallback），对抗式核查确认依赖数组完整（handleBatchBind/handleBatchUnbind/equipmentBindingOptions 及其上游依赖链），无读旧状态风险，memo 真正生效。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="f-title">A17 · buildShareColorMap 每次重算都走 getComputedStyle</span></div>
-  <div class="f-body"><p><span class="path">GanttChart.tsx:46-49</span>，tasks/links 变化即触发 CSSOM 读取。→ 挂载时读一次缓存。<span class="note">核实置信 medium：每次调用数 = 颜色组数，量级小。</span></p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">perf</span><span class="chip fixed">已修复</span><span class="f-title">A17 · buildShareColorMap 每次重算都走 getComputedStyle</span></div>
+  <div class="f-body"><p><span class="path">GanttChart.tsx:46-49</span>，tasks/links 变化即触发 CSSOM 读取。→ 挂载时读一次缓存。<span class="note">核实置信 medium：每次调用数 = 颜色组数，量级小。</span></p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>新增模块级 wxbTokenCache，每个 token 只读一次 getComputedStyle；核查确认全仓无运行时 --wx-* 变量改写、无主题切换（白色单主题），缓存永不失效是安全前提。</p></div>
 </div>
 
 <h3>P2 · 规范</h3>
@@ -424,6 +430,17 @@
   <tr><td>C11</td><td><span class="path">wxb-ui/MiniGantt</span> 无业务接入</td><td>仅 /ui-kit 演示页引用。有规划场景就接入，没有就标注 demo-only。</td></tr>
 </table>
 
+<h3>追加项（审计后新发现）</h3>
+
+<div class="finding p1">
+  <div class="f-head"><span class="chip p1">P1</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">F1 ·（追加）全屏模式下弹窗/浮层被压在全屏元素之下</span></div>
+  <div class="f-body">
+    <p><span class="lbl">现象：</span>甘特图进入原生全屏（requestFullscreen）后，打开任何弹窗（编辑操作、新建操作、共享组）或出现 toast/下拉/气泡时全部不可见——它们 portal 到 document.body，被浏览器 top layer 里的全屏元素整体遮挡。</p>
+    <p><span class="lbl">根因：</span>全屏宿主在 <span class="path">wxb-ui/GanttChart/GanttChart.tsx</span>；wxb-ui 各浮层组件的默认挂载容器均为 document.body，不感知 document.fullscreenElement。</p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>新增 <span class="path">wxb-ui/_internal/portalContainer.ts</span>（resolvePortalContainer / resolvePopupContainer：全屏时返回全屏元素，否则 body，与 antd5 默认一致、非全屏零漂移，带 jsdom 测试）；14 个浮层组件接线为默认容器（Modal/Drawer/Select/Cascader/DatePicker/RangePicker/TimePicker/TreeSelect/Tooltip/Popover/Popconfirm/Dropdown 等，显式传入的 getContainer 仍优先）；Toast 经 setupFullscreenToast 随 fullscreenchange 切换全局容器；编辑器监听退全屏关闭业务弹窗（antd 容器只在挂载时求值的局限，通用方案记 PD-12）。对抗式核查逐组件确认：甘特内部浮层（右键菜单/Tooltip/选择面板等）渲染在全屏容器内天然可见；已知 latent 边界（多甘特实例 toast 单例竞态、WxbDataTable 筛选浮层未接线、ESC 先退全屏的浏览器固有语义）当前业务均不可触发，已记录。</p>
+  </div>
+</div>
+
 <!-- ============================ 否决 ============================ -->
 <h2 id="rejected">四、被否决的 13 条误报（核查质量记录）</h2>
 <p>每条 finding 均由独立核查 agent 反驳式复核，以下为被否决的代表性误报及理由：</p>
@@ -440,7 +457,7 @@
 
 <!-- ============================ 顺序 ============================ -->
 <h2 id="order">五、建议修复顺序</h2>
-<p class="fixnote"><b>进度：</b>第一轮（06-10）A1–A6、B13、B14 ✓；第二轮（06-11）A7、A8、A9、B1、B2 ✓，共 11 项完成。下一批建议：死代码大扫除（C1/C2/C3/C5/C6，C9 解耦先行）→ B3（共享组刷新）/B10（段控件）→ B4/B7（共享组补全）。</p>
+<p class="fixnote"><b>进度：</b>第一轮（06-10）A1–A6、B13、B14 ✓；第二轮（06-11）A7、A8、A9、B1、B2 ✓；第三轮（06-11）A12–A17 全部 P2 性能项 + F1 全屏浮层 ✓，共 18 项完成（链A 余 A10 冲突标记、A11 边缘自动滚动、A18–A20 规范项）。下一批建议：死代码大扫除（C1/C2/C3/C5/C6，C9 解耦先行）→ B3（共享组刷新）/B10（段控件）→ B4/B7（共享组补全）→ B6/B8/B9/B12。</p>
 <ol class="fixorder">
   <li><b>数据正确性四件套：</b>A1（组拖拽假成功，已修复 ✓）→ B1（planned_duration 脱节）→ B2（半截落库）→ A2/A3（时间窗覆盖、start_day=0，均已修复 ✓）。</li>
   <li><b>死代码大扫除</b>（C1/C2/C3/C5/C6，<b>C9 解耦先行</b>）：约 8000+ 行；删完后「半成品观感」与误改风险大幅下降，给后续重构腾出清晰边界。</li>

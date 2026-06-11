@@ -104,19 +104,67 @@ function splitIntoLayers(tasks: GanttTask[]): GanttTask[][] {
   return layers.map(l => l.tasks);
 }
 
-/** Return the task IDs whose time range overlaps at least one sibling task. */
+/**
+ * Return the task IDs whose time range overlaps at least one sibling task.
+ *
+ * O(n log n) sweep-line implementation:
+ * Sort by start, then walk forward maintaining a list of active (not-yet-ended)
+ * tasks.  Whenever a new task arrives and there are still active tasks, both
+ * the new task and every active task are marked as overlapping.
+ *
+ * Correctness: two tasks A and B overlap iff A.start < B.end && B.start < A.end.
+ * After sorting by start (A.start ≤ B.start), the condition simplifies to
+ * A.end > B.start.  The active set contains exactly the tasks whose end is
+ * greater than the current task's start, so any non-empty active set at
+ * arrival time means the current task overlaps all active tasks — identical
+ * to the O(n²) double-loop result.
+ *
+ * Edge cases (all match the strict-inequality double loop):
+ *  - Adjacent tasks (A.end === B.start): trim drops A before B is checked
+ *    (active[k].end > task.start is false), so they are NOT marked — correct,
+ *    touching-but-not-overlapping is not a conflict.
+ *  - Zero-length task T (start === end) sharing a start with a normal task P
+ *    (P.start === T.start, P.end > T.start): the secondary sort key a.end-b.end
+ *    orders T (end === start) before P, and when P arrives T has already been
+ *    trimmed (T.end === T.start ≤ P.start), so neither is marked — correct,
+ *    since P.start < T.end is false in the double loop.
+ *  - Zero-length task strictly inside another (P.start < T < P.end): P is still
+ *    active when T arrives, so both are marked — correct.
+ *  NOTE invariant: operation tasks reaching this function are never zero-length —
+ *  ProcessTemplateGantt/utils.ts coerces any standard_time ≤ 0 to a 4h default
+ *  before a GanttTask is built, so duration_hours > 0 always. The zero-length
+ *  reasoning above is a defensive guarantee, not a live code path; the edge-case
+ *  tests pin the behaviour should that invariant ever change upstream.
+ */
 function findOverlappingTaskIds(tasks: GanttTask[]): Set<string> {
+  if (tasks.length <= 1) return new Set<string>();
+
   const overlappingIds = new Set<string>();
-  for (let i = 0; i < tasks.length; i++) {
-    for (let j = i + 1; j < tasks.length; j++) {
-      const a = tasks[i];
-      const b = tasks[j];
-      if (a.start < b.end && b.start < a.end) {
-        overlappingIds.add(a.id);
-        overlappingIds.add(b.id);
+  const sorted = [...tasks].sort((a, b) => a.start - b.start || a.end - b.end);
+
+  // active: tasks whose end > current task's start (still "alive")
+  // kept as an array sorted by end for cheap trimming
+  const active: GanttTask[] = [];
+
+  for (const task of sorted) {
+    // Remove tasks that have already ended (end <= task.start means no overlap)
+    let writeIdx = 0;
+    for (let k = 0; k < active.length; k++) {
+      if (active[k].end > task.start) {
+        active[writeIdx++] = active[k];
       }
     }
+    active.length = writeIdx;
+
+    if (active.length > 0) {
+      // Current task overlaps every still-active task
+      overlappingIds.add(task.id);
+      for (const a of active) overlappingIds.add(a.id);
+    }
+
+    active.push(task);
   }
+
   return overlappingIds;
 }
 

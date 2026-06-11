@@ -68,6 +68,11 @@
 - **缺口**：界面上的「当天 N 人可选 / 无人可选」是**前端代理诊断**（当天有班次 ∩ 资质合格）；「求解器为什么没排上」的真实根因（资质不足 / 工时上限 / 夜班间隔 / 约束冲突等）solver 不返回，排班员只能猜。
 - **若做**：需 solver_v4 在 solve 结果中输出 per-operation 未分配归因（infeasibility 原因），涉及 `solver_v4/contracts/`（response 契约）+ `core/solver.py`/`callback.py`，backend 透传、前端在空缺操作详情展示。成本不小，待有真实「排不满且看不懂」的场景再立项。
 
+### PD-12 原生全屏下浮层 getContainer 不重算 — 🟢 已定待执行（已加宿主兜底）
+- **背景**：甘特进入浏览器原生全屏（top layer）后，portal 到 document.body 的浮层会被全屏元素遮挡，故 wxb-ui 用 `_internal/portalContainer.ts` 的 `resolvePortalContainer`/`resolvePopupContainer` 在全屏时改挂全屏元素。但 antd 只在浮层**挂载那一刻**求值 `getContainer`，**已打开**的 Modal/Drawer 在用户退全屏（ESC / 工具栏）后容器不会重算，可能错位或残留在已折叠的旧子树里。
+- **已加兜底（宿主侧，无 wxb-ui 公共 API 改动）**：`ProcessTemplateV3Editor` 监听 `fullscreenchange`，**退全屏时**主动关闭其作为甘特同级渲染的业务弹窗（QuickCreate/编辑、ShareGroup、建设备、加阶段、删阶段、删操作）；`GanttChart` 本身已在同一事件里关掉右键菜单等瞬态浮层。只在「退出」时关、不动「全屏中打开」的常规流程。
+- **未做（更通用方案，待需要再议）**：把全屏态经 `onFullscreenChange` 回调/context 上抬给 `WxbGanttChart` 的所有消费者，让任意父级在退全屏后强制重渲染相关浮层；属设计系统公共 API 扩展，超出本次最小改动范围。其它会在全屏甘特上叠业务弹窗的页面若出现，应照此宿主兜底模式各自处理。
+
 ---
 
 ## 三、已清理

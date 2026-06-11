@@ -2,15 +2,16 @@
  * useV3EditorActions — V3 编辑器操作 Hook
  *
  * 从旧版 useGanttInteraction 提取的纯 API 调用逻辑。
- * 负责：拖拽更新、约束加载、自动排程、删除等 CRUD 操作。
+ * 负责：拖拽更新、自动排程、删除等 CRUD 操作。CRUD 完成后通过
+ * onResourceRefresh 触发编辑器重拉 resource-editor 聚合（约束/共享组等），
+ * 该聚合的唯一数据源在编辑器侧，避免本 hook 重复发起聚合查询。
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback } from 'react';
 import axios from 'axios';
-import { message } from 'antd';
+import { wxbToast } from '../wxb-ui';
 import { processTemplateV2Api } from '../../services';
-import type { GanttConstraint, ShareGroup, GanttNode, StageOperation } from '../ProcessTemplateGantt/types';
-import type { TemplateConstraintLink, TemplateShareGroupSummary } from '../ProcessTemplateV2/types';
+import type { GanttNode, StageOperation } from '../ProcessTemplateGantt/types';
 import { buildDraggedOperationTimingUpdate } from './dragTiming';
 
 const API = '/api';
@@ -23,15 +24,15 @@ export interface UseV3EditorActionsOptions {
   templateId: number;
   ganttNodes: GanttNode[];
   refreshData: () => Promise<void>;
+  /**
+   * Re-pull the resource-editor aggregate (constraints/share-groups/stages/…).
+   * The editor owns that fetch as the single source of truth; this hook only
+   * triggers it after CRUD operations so the constraint graph stays in sync.
+   */
+  onResourceRefresh?: () => Promise<unknown>;
 }
 
 export interface UseV3EditorActionsReturn {
-  /** Loaded constraint list */
-  constraints: GanttConstraint[];
-  /** Loaded share groups */
-  shareGroups: ShareGroup[];
-  /** Schedule ID → conflict reason map */
-  conflictMap: Record<number, string>;
   /** Loading state */
   loading: boolean;
   /** Handle drag end on a task bar */
@@ -46,7 +47,7 @@ export interface UseV3EditorActionsReturn {
   handleDeleteTask: (taskId: string) => Promise<void>;
   /** Trigger auto-schedule for the template */
   handleAutoSchedule: () => Promise<void>;
-  /** Reload constraints and share groups */
+  /** Re-pull the resource-editor aggregate (constraints / share groups / …) */
   refreshAll: () => Promise<void>;
 }
 
@@ -82,53 +83,6 @@ const findOperationNode = (nodes: GanttNode[], scheduleId: number): GanttNode | 
   return null;
 };
 
-/**
- * Map TemplateConstraintLink (V2 API response) → GanttConstraint (legacy renderer type).
- */
-const mapConstraint = (c: TemplateConstraintLink): GanttConstraint => ({
-  constraint_id: c.constraintId,
-  from_schedule_id: c.fromScheduleId,
-  from_operation_id: c.fromOperationId,
-  from_operation_name: c.fromOperationName,
-  from_operation_code: c.fromOperationCode,
-  to_schedule_id: c.toScheduleId,
-  to_operation_id: c.toOperationId,
-  to_operation_name: c.toOperationName,
-  to_operation_code: c.toOperationCode,
-  constraint_type: c.constraintType,
-  lag_time: c.lagTime,
-  share_mode: c.shareMode ?? undefined,
-  constraint_level: c.constraintLevel ?? undefined,
-  constraint_name: c.constraintName ?? undefined,
-  from_stage_name: c.fromStageName,
-  to_stage_name: c.toStageName,
-  from_operation_day: c.fromOperationDay,
-  from_recommended_time: c.fromRecommendedTime,
-  to_operation_day: c.toOperationDay,
-  to_recommended_time: c.toRecommendedTime,
-  from_stage_start_day: c.fromStageStartDay,
-  to_stage_start_day: c.toStageStartDay,
-});
-
-/**
- * Map TemplateShareGroupSummary → ShareGroup (legacy renderer type).
- */
-const mapShareGroup = (g: TemplateShareGroupSummary): ShareGroup => ({
-  id: g.id,
-  template_id: g.templateId,
-  group_code: g.groupCode,
-  group_name: g.groupName,
-  share_mode: g.shareMode,
-  operation_count: g.memberCount,
-  members: (g.members ?? []).map((m) => ({
-    id: m.id,
-    schedule_id: m.scheduleId,
-    operation_name: m.operationName,
-    required_people: m.requiredPeople,
-    stage_name: m.stageName,
-  })),
-});
-
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -137,37 +91,16 @@ export function useV3EditorActions({
   templateId,
   ganttNodes,
   refreshData,
+  onResourceRefresh,
 }: UseV3EditorActionsOptions): UseV3EditorActionsReturn {
-  const [constraints, setConstraints] = useState<GanttConstraint[]>([]);
-  const [shareGroups, setShareGroups] = useState<ShareGroup[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // ---- Load constraints + share groups from resource-editor endpoint ----
-  const loadAll = useCallback(async () => {
-    if (!templateId) return;
-    try {
-      setLoading(true);
-      const data = await processTemplateV2Api.getResourceEditor(templateId);
-      setConstraints((data.constraints ?? []).map(mapConstraint));
-      setShareGroups((data.shareGroups ?? []).map(mapShareGroup));
-    } catch (err) {
-      console.error('[useV3EditorActions] Failed to load editor data:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [templateId]);
-
-  useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
-
-  // ---- Conflict map: scheduleId → reason ----
-  const conflictMap = useMemo(() => {
-    const map: Record<number, string> = {};
-    // Simple heuristic: detect constraint conflicts from loaded data
-    // This can be enriched once validation endpoint is integrated
-    return map;
-  }, []);
+  // ---- Re-pull the resource-editor aggregate (single source of truth lives
+  //      in the editor; this just forwards the request after CRUD). ----
+  const refreshResource = useCallback(async () => {
+    if (!onResourceRefresh) return;
+    await onResourceRefresh();
+  }, [onResourceRefresh]);
 
   // ---- Persist a single operation's new timing (no refresh) ----
   // Returns true on success, false when the task can't be resolved or the PUT fails.
@@ -213,7 +146,7 @@ export function useV3EditorActions({
         await refreshData();
         return true;
       } catch (err: any) {
-        message.error(err?.response?.data?.error || '更新操作时间失败');
+        wxbToast.error(err?.response?.data?.error || '更新操作时间失败');
         return false;
       }
     },
@@ -271,7 +204,7 @@ export function useV3EditorActions({
       await refreshData();
 
       if (failed > 0) {
-        message.error(`${updates.length} 条中 ${failed} 条更新失败，已回到服务端最新状态`);
+        wxbToast.error(`${updates.length} 条中 ${failed} 条更新失败，已回到服务端最新状态`);
         return false;
       }
       return true;
@@ -313,14 +246,14 @@ export function useV3EditorActions({
 
       try {
         await processTemplateV2Api.deleteStageOperation(scheduleId);
-        message.success('操作已删除');
+        wxbToast.success('操作已删除');
         await refreshData();
-        await loadAll();
+        await refreshResource();
       } catch (err: any) {
-        message.error(err?.response?.data?.error || '删除操作失败');
+        wxbToast.error(err?.response?.data?.error || '删除操作失败');
       }
     },
-    [refreshData, loadAll],
+    [refreshData, refreshResource],
   );
 
   // ---- Auto-schedule ----
@@ -328,25 +261,22 @@ export function useV3EditorActions({
     try {
       setLoading(true);
       await axios.post(`${API}/process-templates/${templateId}/auto-schedule`);
-      message.success('自动排程完成');
+      wxbToast.success('自动排程完成');
       await refreshData();
-      await loadAll();
+      await refreshResource();
     } catch (err: any) {
-      message.error(err?.response?.data?.error || '自动排程失败');
+      wxbToast.error(err?.response?.data?.error || '自动排程失败');
     } finally {
       setLoading(false);
     }
-  }, [templateId, refreshData, loadAll]);
+  }, [templateId, refreshData, refreshResource]);
 
   // ---- Refresh all ----
   const refreshAll = useCallback(async () => {
-    await loadAll();
-  }, [loadAll]);
+    await refreshResource();
+  }, [refreshResource]);
 
   return {
-    constraints,
-    shareGroups,
-    conflictMap,
     loading,
     handleDragEnd,
     handleResizeEnd,
