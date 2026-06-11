@@ -467,16 +467,20 @@ export const getShareGroupsByBatchOperationId = async (req: Request, res: Respon
         // 获取每个共享组的所有成员
         for (const group of groups) {
             const [members] = await pool.execute<RowDataPacket[]>(`
-                SELECT 
+                SELECT
                     bsgm.id,
                     bsgm.batch_operation_plan_id as operation_plan_id,
                     o.operation_name,
                     o.operation_code,
                     bop.required_people,
-                    ps.stage_name
+                    ps.stage_name,
+                    bop.batch_plan_id,
+                    pbp.batch_code,
+                    pbp.batch_name
                 FROM batch_share_group_members bsgm
                 JOIN batch_operation_plans bop ON bsgm.batch_operation_plan_id = bop.id
                 JOIN operations o ON bop.operation_id = o.id
+                LEFT JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
                 LEFT JOIN stage_operation_schedules sos ON bop.template_schedule_id = sos.id
                 LEFT JOIN process_stages ps ON sos.stage_id = ps.id
                 WHERE bsgm.group_id = ?

@@ -13,6 +13,7 @@
 .wxb-gantt-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 6px 12px;
   background: var(--wx-surface-2, #F5F8FB);
@@ -25,6 +26,21 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Consumer-injected controls folded into the toolbar row. */
+.wxb-gantt-toolbar-extra {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Pushes the built-in view/zoom/fullscreen groups to the right edge. */
+.wxb-gantt-toolbar-spacer {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .wxb-gantt-toolbar-btn {

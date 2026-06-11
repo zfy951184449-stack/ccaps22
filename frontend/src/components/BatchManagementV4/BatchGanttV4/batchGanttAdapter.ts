@@ -114,7 +114,6 @@ export function buildBatchGanttModel(
             });
 
             stage.operations
-                .filter((operation) => !operation.isOffScreen)
                 .forEach((operation) => {
                     const taskId = toOperationTaskId(operation.id);
                     const start = toHourOffset(origin, operation.startDate);

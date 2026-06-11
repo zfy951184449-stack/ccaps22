@@ -69,27 +69,6 @@
     color: var(--wx-fg-4);
 }
 
-.batch-stat-card__icon {
-    width: 40px;
-    height: 40px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--wx-radius-8);
-    background: var(--wx-blue-50);
-    color: var(--wx-blue-700);
-}
-
-.batch-stat-card--neutral .batch-stat-card__icon {
-    background: var(--wx-surface-2);
-    color: var(--wx-fg-3);
-}
-
-.batch-stat-card--success .batch-stat-card__icon {
-    background: var(--wx-green-50);
-    color: var(--wx-green-700);
-}
-
 .batch-filter-v4__controls {
     display: inline-grid;
     grid-template-columns: minmax(160px, 1fr) minmax(190px, 1.15fr) minmax(220px, 1.25fr);

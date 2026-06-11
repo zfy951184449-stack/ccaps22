@@ -14,6 +14,10 @@ interface GanttToolbarProps {
   isFullscreen?: boolean;
   onFullscreenToggle?: () => void;
   onViewModeChange?: (mode: ViewMode) => void;
+  /** Consumer-provided controls rendered inline at the start of the toolbar row.
+   *  A flex spacer keeps the built-in view/zoom/fullscreen controls right-aligned.
+   *  When omitted, the toolbar renders exactly as before. */
+  extraContent?: React.ReactNode;
 }
 
 const VIEW_MODES: { key: ViewMode; label: string }[] = [
@@ -24,7 +28,7 @@ const VIEW_MODES: { key: ViewMode; label: string }[] = [
 ];
 
 const GanttToolbar: React.FC<GanttToolbarProps> = ({
-  dayWidth, viewMode, dispatch, enableFullscreen, isFullscreen, onFullscreenToggle, onViewModeChange,
+  dayWidth, viewMode, dispatch, enableFullscreen, isFullscreen, onFullscreenToggle, onViewModeChange, extraContent,
 }) => {
   const handleViewChange = useCallback((mode: ViewMode) => {
     dispatch({ type: 'SET_VIEW', mode });
@@ -43,6 +47,15 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
 
   return (
     <div className="wxb-gantt-toolbar">
+      {/* Consumer-injected controls (folded into the toolbar row). A spacer pushes
+          the built-in view/zoom/fullscreen controls to the right edge. */}
+      {extraContent != null && (
+        <>
+          <div className="wxb-gantt-toolbar-extra">{extraContent}</div>
+          <div className="wxb-gantt-toolbar-spacer" />
+        </>
+      )}
+
       {/* View mode buttons */}
       <div className="wxb-gantt-toolbar-group">
         {VIEW_MODES.map(vm => (

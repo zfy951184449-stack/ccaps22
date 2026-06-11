@@ -565,83 +565,71 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
 
     const hasData = model.tasks.length > 0;
 
+    const toolbarExtraContent = (
+        <div className="batch-gantt-wxb__toolbar-extra">
+            <WxbSegmented
+                size="sm"
+                defaultValue="autoFit"
+                options={DATE_PRESET_OPTIONS}
+                onChange={handlePresetChange}
+            />
+            <WxbRangePicker
+                className="batch-gantt-wxb__range"
+                value={[startDate, endDate]}
+                allowClear={false}
+                onChange={handleRangeChange as any}
+            />
+            <div className="batch-gantt-wxb__summary">
+                <WxbTag color="blue">{selectedRangeLabel}</WxbTag>
+                <span><strong>{batches.length}</strong> 批次</span>
+                <span><strong>{model.stageCount}</strong> 阶段</span>
+                <span><strong>{model.operationCount}</strong> 操作</span>
+            </div>
+            <div className="batch-gantt-wxb__separator" />
+            <WxbSegmented
+                size="sm"
+                value={yAxisMode}
+                options={Y_AXIS_OPTIONS}
+                onChange={(value) => setYAxisMode(value as YAxisMode)}
+            />
+            <div className="batch-gantt-wxb__separator" />
+            <div className="batch-gantt-wxb__switch">
+                <span>时间窗口</span>
+                <WxbSwitch
+                    size="sm"
+                    checked={showTimeWindows}
+                    onChange={setShowTimeWindows}
+                />
+            </div>
+            <div className="batch-gantt-wxb__separator" />
+            <WxbTooltip title="真实批次的人员自动排班由 V4 自动排班求解器执行">
+                <span className="batch-gantt-wxb__tooltip-anchor">
+                    <WxbButton
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="batch-gantt-wxb__action"
+                        onClick={handleAutoSchedule}
+                    >
+                        自动排程
+                    </WxbButton>
+                </span>
+            </WxbTooltip>
+            <WxbButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="batch-gantt-wxb__action"
+                onClick={requestReload}
+            >
+                <WxbIcon name="capa" size={14} />
+                刷新
+            </WxbButton>
+        </div>
+    );
+
     return (
         <div className="batch-gantt-wxb">
-            <div className="batch-gantt-wxb__toolbar">
-                <div className="batch-gantt-wxb__toolbar-left">
-                    <WxbSegmented
-                        size="sm"
-                        defaultValue="autoFit"
-                        options={DATE_PRESET_OPTIONS}
-                        onChange={handlePresetChange}
-                    />
-                    <WxbRangePicker
-                        className="batch-gantt-wxb__range"
-                        value={[startDate, endDate]}
-                        allowClear={false}
-                        onChange={handleRangeChange as any}
-                    />
-                    <div className="batch-gantt-wxb__summary">
-                        <WxbTag color="blue">{selectedRangeLabel}</WxbTag>
-                        <span><strong>{batches.length}</strong> 批次</span>
-                        <span><strong>{model.stageCount}</strong> 阶段</span>
-                        <span><strong>{model.operationCount}</strong> 操作</span>
-                    </div>
-                </div>
-
-                <div className="batch-gantt-wxb__toolbar-right">
-                    <WxbSegmented
-                        size="sm"
-                        value={yAxisMode}
-                        options={Y_AXIS_OPTIONS}
-                        onChange={(value) => setYAxisMode(value as YAxisMode)}
-                    />
-                    <div className="batch-gantt-wxb__separator" />
-                    <div className="batch-gantt-wxb__switch">
-                        <span>时间窗口</span>
-                        <WxbSwitch
-                            size="sm"
-                            checked={showTimeWindows}
-                            onChange={setShowTimeWindows}
-                        />
-                    </div>
-                    <div className="batch-gantt-wxb__separator" />
-                    <WxbTooltip title="真实批次的人员自动排班由 V4 自动排班求解器执行">
-                        <span className="batch-gantt-wxb__tooltip-anchor">
-                            <WxbButton
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                className="batch-gantt-wxb__action"
-                                onClick={handleAutoSchedule}
-                            >
-                                自动排程
-                            </WxbButton>
-                        </span>
-                    </WxbTooltip>
-                    <WxbButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="batch-gantt-wxb__action"
-                        onClick={requestReload}
-                    >
-                        <WxbIcon name="capa" size={14} />
-                        刷新
-                    </WxbButton>
-                    <WxbButton
-                        type="button"
-                        variant="primary"
-                        size="sm"
-                        className="batch-gantt-wxb__action"
-                        onClick={onCreateBatch}
-                    >
-                        <WxbIcon name="batch-record" size={14} />
-                        新建批次
-                    </WxbButton>
-                </div>
-            </div>
-
             <div className="batch-gantt-wxb__body">
                 {hasData ? (
                     <WxbGanttChart
@@ -667,17 +655,25 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                         collapseEmptyNightShifts
                         enableFullscreen
                         showSelectionPanel
+                        toolbarExtraContent={toolbarExtraContent}
                     />
                 ) : (
-                    <div className="batch-gantt-wxb__empty">
-                        <WxbEmpty
-                            description={hasExplicitBatchFilter ? '没有匹配的批次排程' : '暂无批次排程数据'}
-                            action={(
-                                <WxbButton type="button" size="sm" onClick={onCreateBatch}>
-                                    新建批次
-                                </WxbButton>
-                            )}
-                        />
+                    <div className="batch-gantt-wxb__empty-wrap">
+                        {/* No chart toolbar to host the controls in the empty state, so
+                            surface them in a standalone bar to keep date navigation usable. */}
+                        <div className="batch-gantt-wxb__empty-toolbar">
+                            {toolbarExtraContent}
+                        </div>
+                        <div className="batch-gantt-wxb__empty">
+                            <WxbEmpty
+                                description={hasExplicitBatchFilter ? '没有匹配的批次排程' : '暂无批次排程数据'}
+                                action={(
+                                    <WxbButton type="button" size="sm" onClick={onCreateBatch}>
+                                        新建批次
+                                    </WxbButton>
+                                )}
+                            />
+                        </div>
                     </div>
                 )}
 

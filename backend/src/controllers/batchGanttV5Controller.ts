@@ -25,9 +25,6 @@ interface GanttOperation {
     resourceNodeClass?: string | null;
     resourceSystemType?: string | null;
     resourceEquipmentClass?: string | null;
-    // Off-screen metadata for connection lines
-    isOffScreen?: boolean;
-    offScreenDirection?: 'left' | 'right';
 }
 
 interface GanttPersonnelAssignment {
@@ -319,128 +316,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
             return dayjs(a.startDate).valueOf() - dayjs(b.startDate).valueOf();
         });
 
-        // 3. Fetch Off-Screen Operations (V2 - separate from batch hierarchy)
-        // These are operations that have constraints with visible operations but are outside the date range
-        interface OffScreenOp {
-            id: number;
-            direction: 'left' | 'right';
-            linkedToOpId: number;
-        }
-        const offScreenOperations: OffScreenOp[] = [];
-
-        const visibleOpIds = rows.map(r => r.operation_id);
-        if (visibleOpIds.length > 0) {
-            // Query for operations linked via constraints but not in current view
-            const offScreenQuery = `
-                SELECT DISTINCT
-                    bop.id AS operation_id,
-                    bop.planned_start_datetime,
-                    bop.planned_end_datetime,
-                    CASE 
-                        WHEN boc.predecessor_batch_operation_plan_id = bop.id 
-                        THEN boc.batch_operation_plan_id 
-                        ELSE boc.predecessor_batch_operation_plan_id 
-                    END AS linked_op_id
-                FROM batch_operation_constraints boc
-                JOIN batch_operation_plans bop ON 
-                    (boc.predecessor_batch_operation_plan_id = bop.id OR boc.batch_operation_plan_id = bop.id)
-                JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
-                WHERE 
-                    (boc.predecessor_batch_operation_plan_id IN (${visibleOpIds.join(',')}) 
-                     OR boc.batch_operation_plan_id IN (${visibleOpIds.join(',')}))
-                    AND bop.id NOT IN (${visibleOpIds.join(',')})
-                    AND pbp.plan_status IN (${statuses.map(() => '?').join(',')})
-                    ${batchIds.length > 0 ? `AND pbp.id IN (${batchIds.map(() => '?').join(',')})` : ''}
-            `;
-
-            try {
-                const [offScreenRows] = await pool.execute<RowDataPacket[]>(
-                    offScreenQuery,
-                    batchIds.length > 0 ? [...statuses, ...batchIds] : statuses
-                );
-
-                offScreenRows.forEach(row => {
-                    const opStart = dayjs(row.planned_start_datetime);
-                    const opEnd = dayjs(row.planned_end_datetime);
-                    const viewStart = dayjs(String(start_date));
-                    const viewEnd = dayjs(String(end_date));
-
-                    let direction: 'left' | 'right' = 'left';
-                    if (opEnd.isBefore(viewStart)) {
-                        direction = 'left';
-                    } else if (opStart.isAfter(viewEnd)) {
-                        direction = 'right';
-                    }
-
-                    // Only add if linkedOpId is in visible operations
-                    if (visibleOpIds.includes(row.linked_op_id)) {
-                        offScreenOperations.push({
-                            id: row.operation_id,
-                            direction,
-                            linkedToOpId: row.linked_op_id
-                        });
-                    }
-                });
-            } catch (offScreenError) {
-                console.error('Error fetching off-screen constraint operations:', offScreenError);
-            }
-
-            // 3b. Also fetch off-screen operations from share groups
-            // Find share group members that are off-screen but have at least one member in view
-            const shareGroupQuery = `
-                SELECT DISTINCT
-                    bop_offscreen.id AS operation_id,
-                    bop_offscreen.planned_start_datetime,
-                    bop_offscreen.planned_end_datetime,
-                    bop_visible.id AS linked_op_id
-                FROM batch_share_groups bsg
-                JOIN batch_share_group_members bsgm_offscreen ON bsg.id = bsgm_offscreen.group_id
-                JOIN batch_share_group_members bsgm_visible ON bsg.id = bsgm_visible.group_id
-                JOIN batch_operation_plans bop_offscreen ON bsgm_offscreen.batch_operation_plan_id = bop_offscreen.id
-                JOIN batch_operation_plans bop_visible ON bsgm_visible.batch_operation_plan_id = bop_visible.id
-                WHERE 
-                    bop_visible.id IN (${visibleOpIds.join(',')})
-                    AND bop_offscreen.id NOT IN (${visibleOpIds.join(',')})
-                    ${batchIds.length > 0 ? `AND bop_offscreen.batch_plan_id IN (${batchIds.map(() => '?').join(',')})` : ''}
-            `;
-
-            try {
-                const [shareGroupRows] = await pool.execute<RowDataPacket[]>(
-                    shareGroupQuery,
-                    batchIds
-                );
-
-                shareGroupRows.forEach(row => {
-                    // Skip if already added from constraint query
-                    if (offScreenOperations.some(o => o.id === row.operation_id)) return;
-
-                    const opStart = dayjs(row.planned_start_datetime);
-                    const opEnd = dayjs(row.planned_end_datetime);
-                    const viewStart = dayjs(String(start_date));
-                    const viewEnd = dayjs(String(end_date));
-
-                    let direction: 'left' | 'right' = 'left';
-                    if (opEnd.isBefore(viewStart)) {
-                        direction = 'left';
-                    } else if (opStart.isAfter(viewEnd)) {
-                        direction = 'right';
-                    }
-
-                    offScreenOperations.push({
-                        id: row.operation_id,
-                        direction,
-                        linkedToOpId: row.linked_op_id
-                    });
-                });
-            } catch (shareGroupError) {
-                console.error('Error fetching off-screen share group operations:', shareGroupError);
-            }
-        }
-
-        res.json({
-            batches,
-            offScreenOperations
-        });
+        res.json({ batches });
     } catch (error) {
         console.error('Error fetching Gantt hierarchy:', error);
         res.status(500).json({ error: 'Failed to fetch Gantt data' });

@@ -108,8 +108,8 @@
 </div>
 
 <div class="fixnote" style="margin-bottom:20px">
-  <b>修复进展：</b>第一轮（2026-06-10）A1–A6、B13、B14；第二轮（2026-06-11）A7、A8、A9、B1、B2；第三轮（2026-06-11）A12–A17 全部 P2 性能项 + 追加项 F1（全屏浮层）。
-  共 18 项已修复并通过验证（前端 tsc 零错误 + 全量 18 套件 87 用例、后端构建 + 测试全绿）。第三轮实现经 3 路对抗式核查（性能正确性 / 全屏完整性 / 全量门禁）+ 补漏后落地。详见各条目绿色「已修复」标记。
+  <b>修复进展：</b>第一轮（2026-06-10）A1–A6、B13、B14；第二轮（2026-06-11）A7–A9、B1、B2；第三轮（2026-06-11）A12–A17 + F1（全屏浮层）；第四轮（2026-06-11）B8、B9、B11 + F2（批次界面布局精简）。
+  共 21 项已处理并通过验证（前端 tsc 零错误 + 全量 88 用例、后端构建 + 26 用例全绿）。详见各条目绿色「已修复」标记。
 </div>
 
 <div class="summary">
@@ -353,13 +353,15 @@
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="f-title">B8 · 无组时用假成员「当前」占位</span></div>
-  <div class="f-body"><p><span class="path">ShareGroupMembersTab.tsx:82-89</span> members 为空时注入伪造的「自己」成员，stage_name 写死「当前」（注释自承 mock），误导已有组。→ 空态展示「暂无共享组」。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">quality</span><span class="chip fixed">已修复</span><span class="f-title">B8 · 无组时用假成员「当前」占位</span></div>
+  <div class="f-body"><p><span class="path">ShareGroupMembersTab.tsx:82-89</span> members 为空时注入伪造的「自己」成员，stage_name 写死「当前」（注释自承 mock），误导已有组。→ 空态展示「暂无共享组」。</p>
+    <p class="fixnote"><b>已修复（2026-06-11）：</b>删除 mock 注入，无组时显示真实空态（WxbEmpty「暂无共享组，添加操作后将自动创建」），添加入口保留。同时按需求核verified<b>跨批次共享组</b>全链路可用：选择器批次下拉含全部批次、后端 merge/bulk 端点无同批次限制、甘特连线按 operationId 全局匹配（均给出 file:line 证据）；补充成员查询 JOIN 批次表，跨批次成员显示批次标签；新增后端跨批次用例 ×2 + 前端跨批次连线用例 ×1。</p></div>
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="f-title">B9 · 后端算好的 offScreenOperations 前端整体丢弃</span></div>
-  <div class="f-body"><p>后端 <span class="path">batchGanttV5Controller.ts:329-443</span> 专门查询返回屏幕外关联操作；<span class="path">index.tsx:234</span> fetchHierarchy 只取 batches。跨窗约束/共享关系在图上凭空消失，后端查询白做。→ 消费它生成屏幕外指示桩，或删掉后端这段查询。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">half-finished</span><span class="chip fixed">已修复</span><span class="f-title">B9 · 后端算好的 offScreenOperations 前端整体丢弃</span></div>
+  <div class="f-body"><p>后端 <span class="path">batchGanttV5Controller.ts:329-443</span> 专门查询返回屏幕外关联操作；<span class="path">index.tsx:234</span> fetchHierarchy 只取 batches。跨窗约束/共享关系在图上凭空消失，后端查询白做。→ 消费它生成屏幕外指示桩，或删掉后端这段查询。</p>
+    <p class="fixnote"><b>已处理（2026-06-11，按决策移除）：</b>屏幕外指示确认不需要——删除后端 offScreen 查询块与响应字段（响应简化为 {batches}），移除前端 adapter 的空操作过滤 filter(!isOffScreen) 与 offScreenDirection 字段。types 里两个残留字段因死 DOM 文件仍引用暂保留，待死代码大扫除一并清理。</p></div>
 </div>
 
 <div class="finding p2">
@@ -368,8 +370,9 @@
 </div>
 
 <div class="finding p2">
-  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="f-title">B11 · 替换操作后弹窗「工时」文本不刷新</span></div>
-  <div class="f-body"><p><span class="path">EditOperationModal.tsx:303</span> 直接 <code>form.getFieldValue('duration')</code> 渲染（非响应式），替换操作改了 duration 后提示已更新、结束时间也变了，工时文本却还是旧值。→ <code>Form.useWatch('duration')</code>。</p></div>
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">bug</span><span class="chip fixed">已修复</span><span class="f-title">B11 · 替换操作后弹窗「工时」文本不刷新</span></div>
+  <div class="f-body"><p><span class="path">EditOperationModal.tsx:303</span> 直接 <code>form.getFieldValue('duration')</code> 渲染（非响应式），替换操作改了 duration 后提示已更新、结束时间也变了，工时文本却还是旧值。→ <code>Form.useWatch('duration')</code>。</p>
+    <p class="fixnote"><b>已消除（2026-06-11，随 B13 迁移）：</b>弹窗迁移 wxb-ui 后表单改用 useState，工时显示、预计结束时间、保存提交三条路径均读同一响应式 state（核查给出逐行证据），原非响应式读取的根因已不存在，无需改动。</p></div>
 </div>
 
 <div class="finding p2">
@@ -441,6 +444,14 @@
   </div>
 </div>
 
+<div class="finding p2">
+  <div class="f-head"><span class="chip p2">P2</span><span class="chip kind">ux</span><span class="chip fixed">已完成</span><span class="f-title">F2 ·（追加）批次管理界面布局精简</span></div>
+  <div class="f-body">
+    <p><span class="lbl">需求：</span>移除页面上方三张统计卡片（总批次/草稿/已激活）；甘特上方独立工具栏（日期快捷段/范围选择/Y 轴切换/自动排程）并入甘特图自带工具栏（全屏按钮所在行）；移除与页头重复的小「新建批次」按钮。</p>
+    <p class="fixnote"><b>已完成（2026-06-11）：</b>三张 StatsCardV4 连同组件文件、stats 状态与统计请求一并清理；wxb-ui GanttChart 新增可选 <code>toolbarExtraContent</code> 插槽（不传时与现状完全一致，模版甘特零影响），批次侧控件并入工具栏一行（flex-wrap 处理窄屏），原独立工具栏行删除；重复小「新建批次」按钮移除（空态 CTA 保留），空态下用独立栏渲染同一份控件保持日期导航可用。所有控件状态/回调逻辑不变。</p>
+  </div>
+</div>
+
 <!-- ============================ 否决 ============================ -->
 <h2 id="rejected">四、被否决的 13 条误报（核查质量记录）</h2>
 <p>每条 finding 均由独立核查 agent 反驳式复核，以下为被否决的代表性误报及理由：</p>
@@ -457,7 +468,7 @@
 
 <!-- ============================ 顺序 ============================ -->
 <h2 id="order">五、建议修复顺序</h2>
-<p class="fixnote"><b>进度：</b>第一轮（06-10）A1–A6、B13、B14 ✓；第二轮（06-11）A7、A8、A9、B1、B2 ✓；第三轮（06-11）A12–A17 全部 P2 性能项 + F1 全屏浮层 ✓，共 18 项完成（链A 余 A10 冲突标记、A11 边缘自动滚动、A18–A20 规范项）。下一批建议：死代码大扫除（C1/C2/C3/C5/C6，C9 解耦先行）→ B3（共享组刷新）/B10（段控件）→ B4/B7（共享组补全）→ B6/B8/B9/B12。</p>
+<p class="fixnote"><b>进度：</b>第一轮（06-10）A1–A6、B13、B14 ✓；第二轮（06-11）A7–A9、B1、B2 ✓；第三轮（06-11）A12–A17 + F1 全屏浮层 ✓；第四轮（06-11）B8、B9、B11 + F2 布局精简 ✓，共 21 项完成（链A 余 A10 冲突标记、A11 边缘自动滚动、A18–A20 规范项）。下一批建议：死代码大扫除（C1/C2/C3/C5/C6，C9 解耦先行）→ B3（共享组刷新）/B10（段控件）→ B4/B7（共享组补全）→ B6/B12。</p>
 <ol class="fixorder">
   <li><b>数据正确性四件套：</b>A1（组拖拽假成功，已修复 ✓）→ B1（planned_duration 脱节）→ B2（半截落库）→ A2/A3（时间窗覆盖、start_day=0，均已修复 ✓）。</li>
   <li><b>死代码大扫除</b>（C1/C2/C3/C5/C6，<b>C9 解耦先行</b>）：约 8000+ 行；删完后「半成品观感」与误改风险大幅下降，给后续重构腾出清晰边界。</li>

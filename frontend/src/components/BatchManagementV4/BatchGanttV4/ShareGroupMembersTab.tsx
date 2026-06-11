@@ -106,21 +106,21 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
         }
     };
 
-    // 若无共享组，显示当前操作自身作为唯一成员，使界面意图清晰
-    const displayMembers = members.length > 0 ? members : [
-        {
-            operation_plan_id: operation.id,
-            operation_name: operation.name,
-            stage_name: '当前', // 自身标记
-            isSelf: true
-        }
-    ];
-
-    // 在真实列表中标记自身
-    const processedMembers = displayMembers.map((m: any) => ({
-        ...m,
-        isSelf: m.operation_plan_id === operation.id
-    }));
+    // 仅渲染后端返回的真实成员；无共享组时走真实空态，不再注入伪造的「自己」条目。
+    // 同时标记本操作自身，并识别跨批次成员（成员批次 ≠ 当前操作批次）。
+    const currentBatchId = operation.batch_id ?? operation.batch_plan_id;
+    const processedMembers = members.map((m: any) => {
+        const memberBatchId = m.batch_plan_id ?? m.batch_id;
+        return {
+            ...m,
+            isSelf: m.operation_plan_id === operation.id,
+            // 跨批次成员：批次信息齐全且与当前操作不同批次时，列表上标注其批次
+            isCrossBatch:
+                memberBatchId != null &&
+                currentBatchId != null &&
+                memberBatchId !== currentBatchId,
+        };
+    });
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -184,11 +184,18 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
                                                         </span>
                                                     )}
                                                 </div>
-                                                {item.stage_name && (
-                                                    <WxbTag color="neutral" style={{ marginTop: 2 }}>
-                                                        {item.stage_name}
-                                                    </WxbTag>
-                                                )}
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                                                    {item.isCrossBatch && (item.batch_code || item.batch_name) && (
+                                                        <WxbTag color="blue">
+                                                            {[item.batch_code, item.batch_name].filter(Boolean).join(' ')}
+                                                        </WxbTag>
+                                                    )}
+                                                    {item.stage_name && (
+                                                        <WxbTag color="neutral">
+                                                            {item.stage_name}
+                                                        </WxbTag>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 
@@ -216,7 +223,7 @@ const ShareGroupMembersTab: React.FC<ShareGroupMembersTabProps> = ({ operation, 
                                 )}
                             />
                         ) : (
-                            <WxbEmpty description="暂无共享成员" />
+                            <WxbEmpty description="暂无共享组，添加操作后将自动创建" />
                         )}
                     </div>
                 )}

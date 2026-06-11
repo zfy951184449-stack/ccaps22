@@ -207,6 +207,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
   showMinimap = false,
   collapseEmptyNightShifts = false,
   enableFullscreen = false,
+  toolbarExtraContent,
   readOnly = false,
   clampDragToWindow = true,
   initialDayWidth = DEFAULT_DAY_WIDTH,
@@ -582,6 +583,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         isFullscreen={isFullscreen}
         onFullscreenToggle={handleFullscreenToggle}
         onViewModeChange={onViewModeChange}
+        extraContent={toolbarExtraContent}
       />
 
       {/* Body: Sidebar + Canvas */}

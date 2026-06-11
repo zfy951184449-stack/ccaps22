@@ -38,9 +38,8 @@ export interface GanttOperation {
     resourceNodeClass?: string | null;
     resourceSystemType?: string | null;
     resourceEquipmentClass?: string | null;
-    // Off-screen metadata for connection lines
+    // isOffScreen is kept for rowUtils lane-layout logic (dead DOM layer)
     isOffScreen?: boolean;
-    offScreenDirection?: 'left' | 'right';
     batch_id?: number; // Added for context lookup
 }
 
@@ -80,7 +79,8 @@ export interface GanttShareGroup {
     member_operation_ids: number[];
 }
 
-// V2: Separate off-screen operation data for cross-day connection lines
+// OffScreenOperation is used by the legacy DOM Gantt (GanttTimeline.tsx) only.
+// The WxbGanttChart path does not consume this type.
 export interface OffScreenOperation {
     id: number;
     direction: 'left' | 'right';

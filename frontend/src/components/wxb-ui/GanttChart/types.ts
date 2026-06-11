@@ -174,6 +174,11 @@ export interface WxbGanttChartProps {
   collapseEmptyNightShifts?: boolean;
   /** Enable fullscreen button (default: false) */
   enableFullscreen?: boolean;
+  /** Extra content rendered inline on the toolbar row (right side, before the built-in
+   *  view/zoom/fullscreen controls). Lets a consumer fold its own controls into the
+   *  Gantt toolbar instead of stacking a separate bar above the chart.
+   *  When omitted, the toolbar renders exactly as before (backward compatible). */
+  toolbarExtraContent?: React.ReactNode;
   /** Read-only mode (default: false) */
   readOnly?: boolean;
   /** Clamp single-task drag to each task's [windowStart, windowEnd] (default: true).

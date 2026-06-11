@@ -5,7 +5,6 @@ import {
     WxbEmpty,
     WxbIcon,
     WxbModal,
-    WxbPageGrid,
     WxbPageHeader,
     WxbPageSection,
     WxbPageShell,
@@ -13,13 +12,12 @@ import {
     WxbSpinner,
     wxbToast,
 } from '../wxb-ui';
-import StatsCardV4 from './StatsCardV4';
 import BatchListV4 from './BatchListV4';
 import BatchFilterBar from './BatchFilterBar';
 import CreateBatchModalV4 from './CreateBatchModalV4';
 import BulkCreateModalV4 from './BulkCreateModalV4';
 import { batchPlanApi, mfgTemplatePackageApi, processTemplateApi } from '../../services/api';
-import type { BatchStatistics, BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary, ProcessTemplate } from '../../types';
+import type { BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary, ProcessTemplate } from '../../types';
 import './BatchManagementV4.css';
 
 const BatchGanttV4 = React.lazy(() => import('./BatchGanttV4/index'));
@@ -35,11 +33,6 @@ const getInitialViewMode = (): 'list' | 'gantt' => {
 
 const BatchManagementV4: React.FC = () => {
     const [viewMode, setViewMode] = React.useState<'list' | 'gantt'>(getInitialViewMode);
-    const [stats, setStats] = React.useState<BatchStatistics>({
-        total_batches: 0,
-        draft_count: 0,
-        activated_count: 0,
-    });
     const [batches, setBatches] = React.useState<BatchPlan[]>([]);
     const [templates, setTemplates] = React.useState<ProcessTemplate[]>([]);
     const [mfgPackages, setMfgPackages] = React.useState<MfgTemplatePackageSummary[]>([]);
@@ -59,13 +52,11 @@ const BatchManagementV4: React.FC = () => {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [statsData, batchesData, templatesData, packageData] = await Promise.all([
-                batchPlanApi.getStatistics(),
+            const [batchesData, templatesData, packageData] = await Promise.all([
                 batchPlanApi.list(),
                 processTemplateApi.getAll().then((res) => res.data),
                 mfgTemplatePackageApi.list().catch(() => [] as MfgTemplatePackageSummary[]),
             ]);
-            setStats(statsData);
             setBatches(batchesData);
             setTemplates(templatesData);
             setMfgPackages(packageData);
@@ -319,12 +310,6 @@ const BatchManagementV4: React.FC = () => {
                     </div>
                 )}
             />
-
-            <WxbPageGrid minItemWidth="240px" gap="md">
-                <StatsCardV4 title="总批次" value={stats.total_batches} iconName="kanban" tone="blue" />
-                <StatsCardV4 title="草稿" value={stats.draft_count} iconName="batch-record" tone="neutral" />
-                <StatsCardV4 title="已激活" value={stats.activated_count} iconName="release" tone="success" />
-            </WxbPageGrid>
 
             <BatchFilterBar
                 batches={batches}

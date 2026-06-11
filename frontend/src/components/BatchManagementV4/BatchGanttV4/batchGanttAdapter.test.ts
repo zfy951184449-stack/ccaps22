@@ -104,6 +104,67 @@ describe('batchGanttAdapter', () => {
         expect(firstTask.data).toEqual(expect.objectContaining({ batchCode: 'BAT-A' }));
     });
 
+    it('links share-group members that span two different batches into one cross-batch link', () => {
+        // 跨批次共享组：成员 100 属于批次 1，成员 200 属于批次 2，仍应生成一条连线。
+        const crossBatchBatches: GanttBatch[] = [
+            ...batches,
+            {
+                id: 2,
+                name: 'Batch B',
+                code: 'BAT-B',
+                startDate: '2026-01-03 08:00:00',
+                endDate: '2026-01-03 18:00:00',
+                status: 'DRAFT',
+                color: '',
+                stages: [
+                    {
+                        id: 20,
+                        batch_id: 2,
+                        name: 'DSP',
+                        startDate: '2026-01-03 08:00:00',
+                        endDate: '2026-01-03 18:00:00',
+                        progress: 0,
+                        operations: [
+                            {
+                                id: 200,
+                                stage_id: 20,
+                                name: 'Harvest',
+                                startDate: '2026-01-03 08:00:00',
+                                endDate: '2026-01-03 12:00:00',
+                                status: 'PENDING',
+                                color: '',
+                                progress: 0,
+                                duration: 4,
+                                requiredPeople: 2,
+                                assignedPeople: 0,
+                                templateScheduleId: 2000,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ];
+
+        const shareGroups: GanttShareGroup[] = [
+            { id: 9, group_name: '跨批次组', share_mode: 'SAME_TEAM', member_operation_ids: [100, 200] },
+        ];
+
+        const model = buildBatchGanttModel(
+            crossBatchBatches,
+            [],
+            shareGroups,
+            dayjs('2026-01-01 00:00:00'),
+        );
+
+        expect(model.links).toEqual([
+            expect.objectContaining({
+                id: 'batch-share-9',
+                taskIds: ['batch-operation-100', 'batch-operation-200'],
+                shareMode: 'SAME_TEAM',
+            }),
+        ]);
+    });
+
     it('builds batch resource views and can hide time windows', () => {
         const model = buildBatchGanttModel(
             batches,

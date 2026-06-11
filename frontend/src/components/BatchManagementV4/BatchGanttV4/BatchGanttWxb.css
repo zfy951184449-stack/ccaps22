@@ -10,31 +10,17 @@
     border-radius: 8px;
 }
 
-.batch-gantt-wxb__toolbar {
+/* Controls folded into the chart's own toolbar row (toolbarExtraContent). */
+.batch-gantt-wxb__toolbar-extra {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--wx-border);
-    background: var(--wx-surface-1);
-    flex-shrink: 0;
-}
-
-.batch-gantt-wxb__toolbar-left,
-.batch-gantt-wxb__toolbar-right {
-    display: flex;
-    align-items: center;
+    flex-wrap: wrap;
     gap: 10px;
     min-width: 0;
 }
 
-.batch-gantt-wxb__toolbar-right {
-    flex: 0 0 auto;
-}
-
-.batch-gantt-wxb__toolbar-right .wxb-segmented,
-.batch-gantt-wxb__toolbar-right .wxb-btn {
+.batch-gantt-wxb__toolbar-extra .wxb-segmented,
+.batch-gantt-wxb__toolbar-extra .wxb-btn {
     flex: 0 0 auto;
 }
 
@@ -107,23 +93,32 @@
     z-index: 5;
 }
 
+/* Empty state hosts the controls in a standalone bar (no chart toolbar to fold into). */
+.batch-gantt-wxb__empty-wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--wx-bg);
+}
+
+.batch-gantt-wxb__empty-toolbar {
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--wx-border);
+    background: var(--wx-surface-2);
+}
+
 .batch-gantt-wxb__empty {
     position: static;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    height: auto;
     background: var(--wx-bg);
 }
 
 @media (max-width: 960px) {
-    .batch-gantt-wxb__toolbar {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .batch-gantt-wxb__toolbar-left,
-    .batch-gantt-wxb__toolbar-right {
-        flex-wrap: wrap;
-    }
-
     .batch-gantt-wxb__range {
         width: min(100%, 320px);
     }
