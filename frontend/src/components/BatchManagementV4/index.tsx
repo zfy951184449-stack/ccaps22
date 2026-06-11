@@ -1,11 +1,9 @@
 import React, { Suspense, useCallback, useMemo } from 'react';
 import {
-    WxbBadge,
     WxbButton,
     WxbEmpty,
     WxbIcon,
     WxbModal,
-    WxbPageHeader,
     WxbPageSection,
     WxbPageShell,
     WxbSegmented,
@@ -278,15 +276,21 @@ const BatchManagementV4: React.FC = () => {
 
     return (
         <WxbPageShell className="batch-management-v4" size="full" gap="sm" minHeight="100%">
-            <WxbPageHeader
-                eyebrow="生产计划"
-                title="批次管理"
-                description="管理生产批次、计划日期、激活状态与排程甘特视图。"
-                meta={<WxbBadge status="info" variant="outline" code="BATCH" label={`${filteredBatches.length} / ${batches.length}`} />}
-                actions={(
-                    <div className="batch-management-v4__header-actions">
+            <BatchFilterBar
+                className="batch-management-v4__topbar"
+                batches={batches}
+                templates={templates}
+                selectedBatchIds={selectedBatchIds}
+                selectedTemplateIds={selectedTemplateIds}
+                selectedTeamCodes={selectedTeamCodes}
+                onBatchChange={setSelectedBatchIds}
+                onTemplateChange={setSelectedTemplateIds}
+                onTeamChange={setSelectedTeamCodes}
+                onClear={handleClearFilters}
+                extraActions={(
+                    <div className="batch-management-v4__topbar-actions">
                         <WxbSegmented
-                            size="md"
+                            size="sm"
                             value={viewMode}
                             onChange={(value) => setViewMode(value as 'list' | 'gantt')}
                             options={[
@@ -297,30 +301,18 @@ const BatchManagementV4: React.FC = () => {
                         <WxbButton
                             type="button"
                             variant="secondary"
-                            size="lg"
+                            size="sm"
                             onClick={() => setBulkModalVisible(true)}
                         >
                             <WxbIcon name="receipt" size={16} />
                             批量创建
                         </WxbButton>
-                        <WxbButton type="button" variant="primary" size="lg" onClick={handleCreate}>
+                        <WxbButton type="button" variant="primary" size="sm" onClick={handleCreate}>
                             <WxbIcon name="batch-record" size={16} />
                             新建批次
                         </WxbButton>
                     </div>
                 )}
-            />
-
-            <BatchFilterBar
-                batches={batches}
-                templates={templates}
-                selectedBatchIds={selectedBatchIds}
-                selectedTemplateIds={selectedTemplateIds}
-                selectedTeamCodes={selectedTeamCodes}
-                onBatchChange={setSelectedBatchIds}
-                onTemplateChange={setSelectedTemplateIds}
-                onTeamChange={setSelectedTeamCodes}
-                onClear={handleClearFilters}
             />
 
             <WxbPageSection className="batch-management-v4__content" variant="framed" density="compact">

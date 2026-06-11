@@ -13,6 +13,8 @@ interface BatchFilterBarProps {
     selectedBatchIds: number[];
     selectedTemplateIds: number[];
     selectedTeamCodes: string[];
+    className?: string;
+    extraActions?: React.ReactNode;
     onBatchChange: (ids: number[]) => void;
     onTemplateChange: (ids: number[]) => void;
     onTeamChange: (codes: string[]) => void;
@@ -25,6 +27,8 @@ const BatchFilterBar: React.FC<BatchFilterBarProps> = ({
     selectedBatchIds,
     selectedTemplateIds,
     selectedTeamCodes,
+    className = '',
+    extraActions,
     onBatchChange,
     onTemplateChange,
     onTeamChange,
@@ -84,7 +88,7 @@ const BatchFilterBar: React.FC<BatchFilterBarProps> = ({
 
     return (
         <WxbFilterBar
-            className="batch-filter-v4"
+            className={`batch-filter-v4 ${className}`}
             leading={(
                 <span className="batch-filter-v4__label">
                     <WxbIcon name="inspect" size={15} />
@@ -145,16 +149,19 @@ const BatchFilterBar: React.FC<BatchFilterBarProps> = ({
                 </div>
             )}
             actions={(
-                <WxbButton
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={!hasFilters}
-                    onClick={onClear}
-                >
-                    <WxbIcon name="rejected" size={14} />
-                    清除
-                </WxbButton>
+                <div className="batch-filter-v4__actions">
+                    <WxbButton
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={!hasFilters}
+                        onClick={onClear}
+                    >
+                        <WxbIcon name="rejected" size={14} />
+                        清除
+                    </WxbButton>
+                    {extraActions}
+                </div>
             )}
         />
     );

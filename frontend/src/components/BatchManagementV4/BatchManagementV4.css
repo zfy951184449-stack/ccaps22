@@ -16,9 +16,11 @@
     box-sizing: border-box;
 }
 
-.batch-management-v4__header-actions,
+.batch-management-v4__topbar,
+.batch-management-v4__topbar-actions,
 .batch-management-v4__content,
 .batch-management-v4__empty,
+.batch-filter-v4__actions,
 .batch-filter-v4__controls,
 .batch-list-v4__identity,
 .batch-list-v4__date,
@@ -33,12 +35,41 @@
     min-width: 0;
 }
 
-.batch-management-v4__header-actions {
+.batch-management-v4__topbar.wxb-filter-bar {
+    min-height: 44px;
+    padding: var(--wx-space-8) var(--wx-space-10);
+    gap: var(--wx-space-8);
+    align-items: center;
+    flex-wrap: nowrap;
+    flex-direction: row;
+    align-content: flex-start;
+}
+
+.batch-management-v4__topbar .wxb-page-toolbar-left {
+    flex: 1 1 500px;
+    width: auto;
+    align-content: flex-start;
+}
+
+.batch-management-v4__topbar .wxb-page-toolbar-right {
+    flex: 0 0 auto;
+    width: auto;
+    align-content: flex-start;
+}
+
+.batch-management-v4__topbar .wxb-page-toolbar-filters {
+    flex-wrap: nowrap;
+    align-content: flex-start;
+}
+
+.batch-management-v4__topbar-actions,
+.batch-filter-v4__actions {
     display: inline-flex;
     align-items: center;
     justify-content: flex-end;
     gap: var(--wx-space-8);
     flex-wrap: wrap;
+    align-content: flex-start;
 }
 
 .batch-management-v4__content {
@@ -71,7 +102,8 @@
 
 .batch-filter-v4__controls {
     display: inline-grid;
-    grid-template-columns: minmax(160px, 1fr) minmax(190px, 1.15fr) minmax(220px, 1.25fr);
+    width: min(100%, 480px);
+    grid-template-columns: minmax(116px, 0.8fr) minmax(148px, 1fr) minmax(148px, 1fr);
     gap: var(--wx-space-8);
     align-items: end;
 }
@@ -280,9 +312,16 @@
 }
 
 @media (max-width: 1100px) {
-    .batch-filter-v4__controls,
+    .batch-management-v4__topbar.wxb-filter-bar {
+        flex-wrap: wrap;
+    }
+
     .batch-modal-v4__bulk-layout {
         grid-template-columns: 1fr;
+    }
+
+    .batch-management-v4__topbar .wxb-page-toolbar-filters {
+        flex-wrap: wrap;
     }
 
     .batch-modal-v4__bulk-config {
@@ -292,7 +331,6 @@
 }
 
 @media (max-width: 768px) {
-    .batch-management-v4__header-actions,
     .batch-modal-v4__grid,
     .batch-modal-v4__actions {
         align-items: stretch;
@@ -301,5 +339,19 @@
 
     .batch-modal-v4__grid {
         display: flex;
+    }
+}
+
+@media (max-width: 640px) {
+    .batch-filter-v4__controls {
+        width: 100%;
+        grid-template-columns: 1fr;
+    }
+
+    .batch-management-v4__topbar-actions,
+    .batch-filter-v4__actions {
+        width: 100%;
+        align-items: stretch;
+        flex-direction: column;
     }
 }
