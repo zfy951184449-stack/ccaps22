@@ -1,6 +1,9 @@
 .personnel-scheduling-page {
-  height: 100%;
+  /* 锁定为视口内的确定高度，让表格容器内部滚动（而非整页滚动），
+     使日历表头的 sticky 生效。144px = 顶部导航 + Content 外边距/内边距。 */
+  height: calc(100vh - 144px);
   min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: var(--wx-space-16);

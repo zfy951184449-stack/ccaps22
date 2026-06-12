@@ -66,7 +66,7 @@
 .personnel-schedule-table-shell .wxb-table thead th {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 8;
   height: 48px;
   text-align: center;
   text-transform: none;
@@ -76,9 +76,50 @@
 
 .personnel-schedule-employee-header {
   left: 0;
-  z-index: 5;
+  z-index: 10;
+  vertical-align: middle;
   color: var(--wx-fg-3);
   font: 600 var(--wx-fs-12)/1.2 var(--wx-font-sans);
+}
+
+/* flex 布局放在内层 div —— th 必须保持 table-cell，否则 sticky 会错乱 */
+.personnel-schedule-employee-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--wx-space-6);
+  padding: 0 var(--wx-space-8) 0 var(--wx-space-12);
+}
+
+.personnel-schedule-employee-header-label {
+  flex: 0 0 auto;
+}
+
+/* 角落「取消全部置顶」按钮 */
+.personnel-schedule-unpin-all.wxb-btn {
+  flex: 0 0 auto;
+  height: 22px;
+  min-width: 0;
+  padding: 0 var(--wx-space-6);
+  gap: 3px;
+  border-radius: var(--wx-radius-4);
+  color: var(--wx-blue-600);
+  background: var(--wx-blue-50);
+  font: 600 11px/1 var(--wx-font-sans);
+}
+
+.personnel-schedule-unpin-all.wxb-btn:hover:not(:disabled) {
+  background: var(--wx-blue-100);
+}
+
+.personnel-schedule-unpin-all .personnel-schedule-pin-icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.personnel-schedule-unpin-all-count {
+  line-height: 1;
 }
 
 .personnel-schedule-day-header.is-weekend,
@@ -130,8 +171,22 @@
 }
 
 .personnel-schedule-employee-cell {
-  padding: 0 var(--wx-space-12) !important;
+  padding: 0 !important;
   text-align: left;
+  vertical-align: middle;
+}
+
+/* flex 布局放在内层 div —— th 必须保持 table-cell，否则 sticky 会错乱 */
+.personnel-schedule-employee-cell-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--wx-space-6);
+  padding: 0 var(--wx-space-8) 0 var(--wx-space-12);
+}
+
+.personnel-schedule-employee-info {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .personnel-schedule-employee-name,
@@ -140,6 +195,74 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* 行内「置顶」开关：默认隐藏，悬停整行 / 已置顶 / 键盘聚焦时显现 */
+.personnel-schedule-pin-btn.wxb-btn {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  min-width: 0;
+  padding: 0;
+  border-radius: var(--wx-radius-4);
+  color: var(--wx-fg-4);
+  opacity: 0;
+  transition: opacity 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.personnel-schedule-table-shell .wxb-table tbody tr:hover .personnel-schedule-pin-btn,
+.personnel-schedule-pin-btn.is-pinned,
+.personnel-schedule-pin-btn:focus-visible {
+  opacity: 1;
+}
+
+.personnel-schedule-pin-btn.is-pinned {
+  color: var(--wx-blue-600);
+}
+
+.personnel-schedule-pin-icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.personnel-schedule-pin-btn.is-pinned .personnel-schedule-pin-icon {
+  fill: currentColor;
+}
+
+/* 置顶行：sticky 吸附在表头下方，叠放于普通行之上（top 偏移由内联样式按行高计算） */
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned th,
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned td {
+  position: sticky;
+  background: var(--wx-blue-50);
+}
+
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned td {
+  z-index: 4;
+}
+
+/* 置顶行的员工列同时左、上双向吸附，需高于本行日期格 */
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned th {
+  z-index: 6;
+}
+
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned th.personnel-schedule-employee-cell {
+  box-shadow: inset 2px 0 0 var(--wx-blue-500);
+}
+
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned:hover th,
+.personnel-schedule-table-shell .wxb-table tbody tr.is-pinned:hover td {
+  background: var(--wx-blue-100);
+}
+
+/* 置顶区与普通区之间的分隔线 */
+.personnel-schedule-table-shell .wxb-table tbody tr.is-last-pinned th,
+.personnel-schedule-table-shell .wxb-table tbody tr.is-last-pinned td {
+  border-bottom: 2px solid var(--wx-blue-200);
 }
 
 .personnel-schedule-employee-name {

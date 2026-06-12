@@ -1,15 +1,29 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import { ScheduleV2GridEmployee, ShiftStyleV2, ScheduleV2GridShift } from '../types';
 import {
     WxbBadge,
+    WxbButton,
     WxbEmpty,
     WxbSpinner,
     WxbTableWrapper,
     WxbTooltip
 } from '../../../components/wxb-ui';
+import { usePinnedEmployees } from '../hooks/usePinnedEmployees';
 import './PersonnelScheduleTable.css';
+
+/** 表头高度，与 CSS 中 thead th 的 height 保持一致（置顶行 sticky 偏移的基准） */
+const HEADER_HEIGHT = 48;
+/** 数据行高度，与 CSS 中 tbody th/td 的 height 保持一致 */
+const ROW_HEIGHT = 34;
+
+const PinIcon = () => (
+    <svg className="personnel-schedule-pin-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <line x1="12" y1="17" x2="12" y2="22" />
+        <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z" />
+    </svg>
+);
 
 interface PersonnelScheduleTableProps {
     currentMonth: Dayjs;
@@ -43,6 +57,23 @@ const PersonnelScheduleTable: React.FC<PersonnelScheduleTableProps> = ({
     const daysInMonth = currentMonth.daysInMonth();
     const daysArray = Array.from({ length: daysInMonth }, (_, i) => currentMonth.date(i + 1));
     const today = dayjs().format('YYYY-MM-DD');
+
+    const { pinnedSet, togglePin, clearPins } = usePinnedEmployees();
+
+    // 置顶员工排到最前（保持各自原有相对顺序），其余员工在后。
+    const orderedEmployees = useMemo(() => {
+        if (pinnedSet.size === 0) return employees;
+        const pinned: ScheduleV2GridEmployee[] = [];
+        const rest: ScheduleV2GridEmployee[] = [];
+        employees.forEach(emp => (pinnedSet.has(emp.id) ? pinned : rest).push(emp));
+        return [...pinned, ...rest];
+    }, [employees, pinnedSet]);
+
+    // 当前筛选结果中实际可见的置顶员工数（被搜索过滤掉的不计入）——置顶行恰好是前 N 行。
+    const pinnedVisibleCount = useMemo(
+        () => employees.reduce((acc, emp) => (pinnedSet.has(emp.id) ? acc + 1 : acc), 0),
+        [employees, pinnedSet]
+    );
 
     const getShiftDisplay = (shift: ScheduleV2GridShift | undefined): ShiftDisplay | null => {
         if (!shift) return null;
@@ -153,7 +184,24 @@ const PersonnelScheduleTable: React.FC<PersonnelScheduleTableProps> = ({
             <thead>
                 <tr>
                     <th scope="col" className="personnel-schedule-employee-header">
-                        员工
+                        <div className="personnel-schedule-employee-header-inner">
+                            <span className="personnel-schedule-employee-header-label">员工</span>
+                            {pinnedVisibleCount > 0 && (
+                                <WxbTooltip title="取消全部置顶">
+                                    <WxbButton
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="personnel-schedule-unpin-all"
+                                        onClick={clearPins}
+                                        aria-label={`取消全部置顶，当前 ${pinnedVisibleCount} 人`}
+                                    >
+                                        <PinIcon />
+                                        <span className="personnel-schedule-unpin-all-count">{pinnedVisibleCount}</span>
+                                    </WxbButton>
+                                </WxbTooltip>
+                            )}
+                        </div>
                     </th>
                     {daysArray.map((day, index) => {
                         const isToday = day.format('YYYY-MM-DD') === today;
@@ -180,52 +228,83 @@ const PersonnelScheduleTable: React.FC<PersonnelScheduleTableProps> = ({
                 </tr>
             </thead>
             <tbody>
-                {employees.map((emp) => (
-                    <tr key={emp.id}>
-                        <th scope="row" className="personnel-schedule-employee-cell">
-                            <span className="personnel-schedule-employee-name" title={emp.name}>
-                                {emp.name}
-                            </span>
-                            <span className="personnel-schedule-employee-team" title={emp.teamName || emp.code}>
-                                {emp.teamName || emp.code}
-                            </span>
-                        </th>
-                        {daysArray.map((day) => {
-                            const dateStr = day.format('YYYY-MM-DD');
-                            const shift = emp.shifts[dateStr];
-                            const isWeekend = day.day() === 0 || day.day() === 6;
-                            const shiftDisplay = getShiftDisplay(shift);
-                            const specialCoverageTitle = (shift?.specialCoverageCodes || []).join(', ');
+                {orderedEmployees.map((emp, rowIndex) => {
+                    const pinned = pinnedSet.has(emp.id);
+                    // 置顶行恰好是前 pinnedVisibleCount 行，故 rowIndex 即其在置顶栈中的层级。
+                    const stickyTop = pinned ? HEADER_HEIGHT + rowIndex * ROW_HEIGHT : undefined;
+                    const isLastPinned = pinned && rowIndex === pinnedVisibleCount - 1;
+                    const cellStyle = stickyTop !== undefined ? { top: stickyTop } : undefined;
+                    const rowClassName = [
+                        'personnel-schedule-row',
+                        pinned ? 'is-pinned' : '',
+                        isLastPinned ? 'is-last-pinned' : ''
+                    ].filter(Boolean).join(' ');
 
-                            return (
-                                <td
-                                    key={`${emp.id}-${dateStr}`}
-                                    className={`personnel-schedule-cell ${isWeekend ? 'is-weekend' : ''}`}
-                                >
-                                    {shiftDisplay && (
-                                        <span className="personnel-schedule-shift-wrap">
-                                            <WxbBadge
-                                                variant="outline"
-                                                status={shiftDisplay.status}
-                                                label={shiftDisplay.label}
-                                                className={`personnel-schedule-shift ${shiftDisplay.modifier}`}
-                                                title={shiftDisplay.title}
-                                            />
-                                            {(shift?.specialCoverageCount || 0) > 0 && (
-                                                <WxbTooltip title={specialCoverageTitle || '特殊覆盖'}>
-                                                    <span
-                                                        className="personnel-schedule-special-dot"
-                                                        aria-label="特殊覆盖"
-                                                    />
-                                                </WxbTooltip>
-                                            )}
+                    return (
+                        <tr key={emp.id} className={rowClassName}>
+                            <th scope="row" className="personnel-schedule-employee-cell" style={cellStyle}>
+                                <div className="personnel-schedule-employee-cell-inner">
+                                    <span className="personnel-schedule-employee-info">
+                                        <span className="personnel-schedule-employee-name" title={emp.name}>
+                                            {emp.name}
                                         </span>
-                                    )}
-                                </td>
-                            );
-                        })}
-                    </tr>
-                ))}
+                                        <span className="personnel-schedule-employee-team" title={emp.teamName || emp.code}>
+                                            {emp.teamName || emp.code}
+                                        </span>
+                                    </span>
+                                    <WxbTooltip title={pinned ? '取消置顶' : '置顶'}>
+                                        <WxbButton
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className={`personnel-schedule-pin-btn ${pinned ? 'is-pinned' : ''}`}
+                                            onClick={() => togglePin(emp.id)}
+                                            aria-label={pinned ? `取消置顶 ${emp.name}` : `置顶 ${emp.name}`}
+                                            aria-pressed={pinned}
+                                        >
+                                            <PinIcon />
+                                        </WxbButton>
+                                    </WxbTooltip>
+                                </div>
+                            </th>
+                            {daysArray.map((day) => {
+                                const dateStr = day.format('YYYY-MM-DD');
+                                const shift = emp.shifts[dateStr];
+                                const isWeekend = day.day() === 0 || day.day() === 6;
+                                const shiftDisplay = getShiftDisplay(shift);
+                                const specialCoverageTitle = (shift?.specialCoverageCodes || []).join(', ');
+
+                                return (
+                                    <td
+                                        key={`${emp.id}-${dateStr}`}
+                                        className={`personnel-schedule-cell ${isWeekend ? 'is-weekend' : ''}`}
+                                        style={cellStyle}
+                                    >
+                                        {shiftDisplay && (
+                                            <span className="personnel-schedule-shift-wrap">
+                                                <WxbBadge
+                                                    variant="outline"
+                                                    status={shiftDisplay.status}
+                                                    label={shiftDisplay.label}
+                                                    className={`personnel-schedule-shift ${shiftDisplay.modifier}`}
+                                                    title={shiftDisplay.title}
+                                                />
+                                                {(shift?.specialCoverageCount || 0) > 0 && (
+                                                    <WxbTooltip title={specialCoverageTitle || '特殊覆盖'}>
+                                                        <span
+                                                            className="personnel-schedule-special-dot"
+                                                            aria-label="特殊覆盖"
+                                                        />
+                                                    </WxbTooltip>
+                                                )}
+                                            </span>
+                                        )}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    );
+                })}
             </tbody>
         </WxbTableWrapper>
     );
