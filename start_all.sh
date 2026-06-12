@@ -124,6 +124,16 @@ fi
 
 # 5. 求解器V5启动
 echo "🧠 启动V5求解器服务 (端口${SOLVER_V5_PORT})..."
+if [[ ! -d "solver_v5/.venv" ]]; then
+  echo "  ⚙️ 未检测到 V5 虚拟环境，正在初始化..."
+  cd solver_v5
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install --quiet -r requirements.txt
+  deactivate 2>/dev/null || true
+  cd "${SCRIPT_DIR}"
+  echo "  ✅ V5 虚拟环境初始化完成"
+fi
 if [[ -d "solver_v5/.venv" ]]; then
   cd solver_v5
   source .venv/bin/activate
