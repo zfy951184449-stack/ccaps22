@@ -18,6 +18,7 @@ PX_PORT="${PX_PORT:-3128}"
 # 求解器:只绑环回,仅 backend 内部 HTTP 调用,浏览器不直连
 SOLVER_HOST="${SOLVER_HOST:-127.0.0.1}"
 SOLVER_PORT="${SOLVER_PORT:-5005}"
+SOLVER_V5_PORT="${SOLVER_V5_PORT:-5006}"
 # gunicorn web 并发 worker 数(≠ CP-SAT 求解线程;后者在 solver.py 按核数自适应)
 GUNICORN_WORKERS="${GUNICORN_WORKERS:-2}"
 SOLVER_TIMEOUT="${SOLVER_TIMEOUT:-600}"
@@ -33,9 +34,11 @@ LOG_DIR="${HOME}/Library/Logs/MFG8APS"
 # 关键可执行(必须绝对路径 —— launchd 最小环境没有登录 shell 的 PATH)
 NODE_BIN="${NODE_BIN:-${BREW_PREFIX}/bin/node}"
 GUNICORN_BIN="${GUNICORN_BIN:-${PROJECT_ROOT}/solver_v4/.venv/bin/gunicorn}"
+GUNICORN_V5_BIN="${GUNICORN_V5_BIN:-${PROJECT_ROOT}/solver_v5/.venv/bin/gunicorn}"
 CAFFEINATE_BIN="/usr/bin/caffeinate"
 
-# 三个服务的 launchd Label
+# 四个服务的 launchd Label
 BACKEND_LABEL="${LABEL_PREFIX}.backend"
 SOLVER_LABEL="${LABEL_PREFIX}.solver"
+SOLVER_V5_LABEL="${LABEL_PREFIX}.solver_v5"
 CAFFEINATE_LABEL="${LABEL_PREFIX}.caffeinate"

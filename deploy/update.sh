@@ -63,17 +63,27 @@ else
 fi
 
 if has "^solver_v4/"; then
-  log_info "求解器有改动…"
+  log_info "求解器 V4 有改动…"
   # ⚠️ set -e 陷阱: 不能写 `( cd solver_v4; has requirements && pip install )` ——
   # 当 solver 有改动但 requirements.txt 没变时(纯 .py 改动的常态),has 返回非0,而它是
   # subshell 的最后一条命令 → subshell 退出码=1 → set -euo pipefail 中断 update.sh →
   # auto-update 误判失败并回滚(回滚还把本脚本退回旧版,形成死循环)。用 if 包裹规避。
-  if has "requirements"; then
+  if has "solver_v4/requirements"; then
     ( cd solver_v4 && ./.venv/bin/pip install -r requirements.txt )
   fi
-  log_pass "求解器已更新(代码随 gunicorn 重启热加载)"
+  log_pass "求解器 V4 已更新(代码随 gunicorn 重启热加载)"
 else
-  log_info "求解器无改动,跳过"
+  log_info "求解器 V4 无改动,跳过"
+fi
+
+if has "^solver_v5/"; then
+  log_info "求解器 V5 有改动…"
+  if has "solver_v5/requirements"; then
+    ( cd solver_v5 && ./.venv/bin/pip install -r requirements.txt )
+  fi
+  log_pass "求解器 V5 已更新(代码随 gunicorn 重启热加载)"
+else
+  log_info "求解器 V5 无改动,跳过"
 fi
 
 # 5) 数据库 migration 只提示、不自动跑 ──────────────────────────
@@ -102,13 +112,17 @@ fi
 log_step "5/6 重启服务"
 launchctl kickstart -k "gui/${UID_}/${BACKEND_LABEL}" >/dev/null 2>&1 && log_pass "后端已重启(顺带加载新前端)"
 if has "^solver_v4/"; then
-  launchctl kickstart -k "gui/${UID_}/${SOLVER_LABEL}" >/dev/null 2>&1 && log_pass "求解器已重启"
+  launchctl kickstart -k "gui/${UID_}/${SOLVER_LABEL}" >/dev/null 2>&1 && log_pass "求解器 V4 已重启"
+fi
+if has "^solver_v5/"; then
+  launchctl kickstart -k "gui/${UID_}/${SOLVER_V5_LABEL}" >/dev/null 2>&1 && log_pass "求解器 V5 已重启"
 fi
 
 log_step "6/6 健康自检"
 sleep 3
-wait_for_url "http://127.0.0.1:${SOLVER_PORT}/api/v4/health" "求解器" 20 || true
-wait_for_url "http://127.0.0.1:${BACKEND_PORT}/api/health"   "后端"   30 || true
+wait_for_url "http://127.0.0.1:${SOLVER_PORT}/api/v4/health"    "求解器 V4" 20 || true
+wait_for_url "http://127.0.0.1:${SOLVER_V5_PORT}/api/v5/health" "求解器 V5" 20 || true
+wait_for_url "http://127.0.0.1:${BACKEND_PORT}/api/health"      "后端"      30 || true
 
 echo
 echo "════════ 更新完成: ${OLD} → ${NEW} ════════"
