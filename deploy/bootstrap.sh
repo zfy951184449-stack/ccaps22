@@ -78,6 +78,10 @@ log_step "3/6 安装依赖 + 构建(首次几分钟)"
     && { [ -d .venv ] || python3 -m venv .venv; } \
     && ./.venv/bin/pip install -q --upgrade pip \
     && ./.venv/bin/pip install -q -r requirements.txt )
+( cd "${PROJECT_ROOT}/solver_v5" \
+    && { [ -d .venv ] || python3 -m venv .venv; } \
+    && ./.venv/bin/pip install -q --upgrade pip \
+    && ./.venv/bin/pip install -q -r requirements.txt )
 log_pass "依赖与构建完成"
 
 # 4) backend/.env ────────────────────────────────────────────────

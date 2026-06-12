@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# 停止并卸载 MFG8APS 的三个 LaunchAgent(用户级,无需 sudo)。
+# 停止并卸载 MFG8APS 的四个 LaunchAgent(用户级,无需 sudo)。
 # 只动这三个 Agent;不碰 MySQL(brew)、不删日志、不删构建产物。
 # ──────────────────────────────────────────────────────────────
 set -uo pipefail
@@ -11,7 +11,7 @@ DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${DEPLOY_DIR}/lib.sh"
 
 log_step "停止并卸载 MFG8APS 服务"
-for L in "${BACKEND_LABEL}" "${SOLVER_LABEL}" "${CAFFEINATE_LABEL}"; do
+for L in "${BACKEND_LABEL}" "${SOLVER_LABEL}" "${SOLVER_V5_LABEL}" "${CAFFEINATE_LABEL}"; do
   unload_agent "${LAUNCH_AGENTS_DIR}/${L}.plist" "${L}"
   rm -f "${LAUNCH_AGENTS_DIR}/${L}.plist"
   log_pass "已卸载并删除 ${L}.plist"

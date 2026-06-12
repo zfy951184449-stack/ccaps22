@@ -63,7 +63,8 @@ logts "⚠️ 更新或自检失败,回滚到 ${OLD}"
 git reset --hard "${OLD}" >>"${LOG}" 2>&1 || true
 ( cd backend  && npm run build )          >>"${LOG}" 2>&1 || true
 ( cd frontend && CI=false npm run build )  >>"${LOG}" 2>&1 || true
-launchctl kickstart -k "gui/${UID_}/${BACKEND_LABEL}" >/dev/null 2>&1 || true
-launchctl kickstart -k "gui/${UID_}/${SOLVER_LABEL}"  >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/${UID_}/${BACKEND_LABEL}"   >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/${UID_}/${SOLVER_LABEL}"    >/dev/null 2>&1 || true
+launchctl kickstart -k "gui/${UID_}/${SOLVER_V5_LABEL}" >/dev/null 2>&1 || true
 logts "已回滚到 ${OLD}"
 notify "自动更新失败,已回滚到 ${OLD}。详见 ${LOG}"

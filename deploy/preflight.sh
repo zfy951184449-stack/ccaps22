@@ -16,7 +16,7 @@ SUM_MDM=?; SUM_FV=?; SUM_AL=?; SUM_FW=?; SUM_PROXY=?; SUM_PORTS=ok; SUM_ART=?
 
 echo "════════ MFG8APS 部署环境自检 (preflight) ════════"
 echo "项目: ${PROJECT_ROOT}"
-echo "对外: http://${BIND_HOST}:${BACKEND_PORT}   求解器: ${SOLVER_HOST}:${SOLVER_PORT}"
+echo "对外: http://${BIND_HOST}:${BACKEND_PORT}   求解器V4: ${SOLVER_HOST}:${SOLVER_PORT}   求解器V5: ${SOLVER_HOST}:${SOLVER_V5_PORT}"
 
 # 1) MDM 托管状态 ───────────────────────────────────────────────
 log_step "1/12 MDM 托管状态"
@@ -71,7 +71,7 @@ fi
 
 # 5) 目标端口可绑 ───────────────────────────────────────────────
 log_step "5/12 端口可绑定"
-for P in "${BACKEND_PORT}" "${SOLVER_PORT}"; do
+for P in "${BACKEND_PORT}" "${SOLVER_PORT}" "${SOLVER_V5_PORT}"; do
   R="$("${NODE_BIN}" -e 'const n=require("net").createServer();n.once("error",e=>{console.log("FAIL:"+e.code);process.exit(0)});n.listen(+process.argv[1],"0.0.0.0",()=>{console.log("OK");n.close();process.exit(0)})' "$P" 2>/dev/null || echo "FAIL:NO_NODE")"
   if [ "$R" = "OK" ]; then
     log_pass "端口 ${P} 可绑定。"
@@ -103,7 +103,7 @@ fi
 # 8) 关键二进制 quarantine ──────────────────────────────────────
 log_step "8/12 关键二进制 quarantine"
 QN=0
-for b in "${NODE_BIN}" "${GUNICORN_BIN}"; do
+for b in "${NODE_BIN}" "${GUNICORN_BIN}" "${GUNICORN_V5_BIN}"; do
   [ -e "$b" ] || continue
   if xattr "$b" 2>/dev/null | grep -q quarantine; then
     QN=1; log_warn "$b 带 quarantine,可能被 Gatekeeper 拦。可无 sudo 执行:xattr -d com.apple.quarantine \"$b\""
@@ -130,7 +130,8 @@ log_step "11/12 构建产物"
 SUM_ART=ok
 [ -f "${PROJECT_ROOT}/backend/dist/server.js" ]    && log_pass "backend/dist 就绪。"          || { SUM_ART=miss; log_block "缺 backend/dist —— cd backend && npm run build(或 install.sh --build)。"; }
 [ -f "${PROJECT_ROOT}/frontend/build/index.html" ] && log_pass "frontend/build 就绪。"         || { SUM_ART=miss; log_block "缺 frontend/build —— cd frontend && CI=false npm run build(或 install.sh --build)。"; }
-[ -x "${GUNICORN_BIN}" ]                           && log_pass "solver .venv/gunicorn 就绪。"  || { SUM_ART=miss; log_block "缺 solver venv —— cd solver_v4 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt。"; }
+[ -x "${GUNICORN_BIN}" ]                            && log_pass "solver V4 .venv/gunicorn 就绪。" || { SUM_ART=miss; log_block "缺 solver V4 venv —— cd solver_v4 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt。"; }
+[ -x "${GUNICORN_V5_BIN}" ]                         && log_pass "solver V5 .venv/gunicorn 就绪。" || { SUM_ART=miss; log_block "缺 solver V5 venv —— cd solver_v5 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt。"; }
 
 # 12) .env 数据库指向本地 + 回调密钥 ────────────────────────────
 log_step "12/12 .env 关键项"

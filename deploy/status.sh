@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
-# 查看 MFG8APS 三个服务的运行状态与健康(只读,无需 sudo)。
+# 查看 MFG8APS 四个服务的运行状态与健康(只读,无需 sudo)。
 # ──────────────────────────────────────────────────────────────
 set -uo pipefail
 DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,7 +11,7 @@ DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "════════ MFG8APS 服务状态 ════════"
 printf '%-12s %-10s %s\n' "服务" "launchd" "Label"
-for pair in "backend:${BACKEND_LABEL}" "solver:${SOLVER_LABEL}" "caffeinate:${CAFFEINATE_LABEL}"; do
+for pair in "backend:${BACKEND_LABEL}" "solver_v4:${SOLVER_LABEL}" "solver_v5:${SOLVER_V5_LABEL}" "caffeinate:${CAFFEINATE_LABEL}"; do
   name="${pair%%:*}"; label="${pair#*:}"
   st="$(agent_state "$label")"
   printf '%-12s %-10s %s\n' "$name" "${st:-未加载}" "$label"
@@ -29,7 +29,12 @@ if curl -fsS --max-time 2 "http://127.0.0.1:${SOLVER_PORT}/api/v4/health" >/dev/
 else
   echo "  求解器 V4  不可达"
 fi
+if curl -fsS --max-time 2 "http://127.0.0.1:${SOLVER_V5_PORT}/api/v5/health" >/dev/null 2>&1; then
+  echo "  求解器 V5  OK   (127.0.0.1:${SOLVER_V5_PORT})"
+else
+  echo "  求解器 V5  不可达"
+fi
 
 echo
 echo "访问: http://$(lan_ip):${BACKEND_PORT}    日志: ${LOG_DIR}"
-echo "看日志: tail -f ${LOG_DIR}/backend.err.log   ${LOG_DIR}/solver.err.log"
+echo "看日志: tail -f ${LOG_DIR}/backend.err.log   ${LOG_DIR}/solver.err.log   ${LOG_DIR}/solver_v5.err.log"
