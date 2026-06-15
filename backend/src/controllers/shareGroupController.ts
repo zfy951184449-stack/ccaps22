@@ -1,6 +1,64 @@
 import { Request, Response } from 'express';
-import { RowDataPacket } from 'mysql2';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import pool from '../config/database';
+import { SqlExecutor } from '../services/operationResourceBindingService';
+
+/**
+ * 复制模版人员共享组。
+ *
+ * 在复制工艺模版时调用：把源模版的人员共享组(personnel_share_groups)及其成员
+ * (personnel_share_group_members)复制到新模版。新组挂到 newTemplateId 下(group_code
+ * 唯一性是按 template_id 隔离的，故可沿用原编码)，成员的 schedule_id 按 scheduleIdMap
+ * 重映射；映射缺失的成员跳过。需在与模版复制相同的事务里调用。
+ */
+export const copyTemplateShareGroups = async (
+  executor: SqlExecutor,
+  sourceTemplateId: number,
+  newTemplateId: number,
+  scheduleIdMap: Map<number, number>,
+): Promise<void> => {
+  const [groups] = await executor.execute<RowDataPacket[]>(
+    `SELECT id, group_code, group_name, share_mode, description, color
+     FROM personnel_share_groups
+     WHERE template_id = ?`,
+    [sourceTemplateId],
+  );
+
+  for (const group of groups) {
+    const [groupResult] = await executor.execute<ResultSetHeader>(
+      `INSERT INTO personnel_share_groups
+        (template_id, group_code, group_name, share_mode, description, color)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        newTemplateId,
+        group.group_code,
+        group.group_name,
+        group.share_mode,
+        group.description ?? null,
+        group.color ?? null,
+      ],
+    );
+
+    const newGroupId = groupResult.insertId;
+
+    const [members] = await executor.execute<RowDataPacket[]>(
+      `SELECT schedule_id FROM personnel_share_group_members WHERE group_id = ?`,
+      [group.id],
+    );
+
+    for (const member of members) {
+      const newScheduleId = scheduleIdMap.get(Number(member.schedule_id));
+      if (!newScheduleId) {
+        continue;
+      }
+      await executor.execute(
+        `INSERT INTO personnel_share_group_members (group_id, schedule_id)
+         VALUES (?, ?)`,
+        [newGroupId, newScheduleId],
+      );
+    }
+  }
+};
 
 /**
  * 获取模板的所有共享组

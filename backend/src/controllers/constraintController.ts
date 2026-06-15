@@ -2,6 +2,65 @@ import { Request, Response } from 'express';
 import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import { runConstraintValidation } from '../services/constraintValidationService';
+import { SqlExecutor } from '../services/operationResourceBindingService';
+
+/**
+ * 复制模版约束关系。
+ *
+ * 在复制工艺模版时调用：把源模版工序间的前后置约束(operation_constraints)按
+ * scheduleIdMap 重映射 schedule_id / predecessor_schedule_id 后写入新模版。
+ * 仅当约束两端的工序都在 scheduleIdMap 中(即都属于被复制的模版)时才复制，
+ * 避免写入指向旧模版工序的悬空引用。需在与模版复制相同的事务里调用。
+ */
+export const copyTemplateConstraints = async (
+  executor: SqlExecutor,
+  scheduleIdMap: Map<number, number>,
+): Promise<void> => {
+  const sourceScheduleIds = Array.from(scheduleIdMap.keys());
+  if (!sourceScheduleIds.length) {
+    return;
+  }
+
+  const placeholders = sourceScheduleIds.map(() => '?').join(', ');
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `SELECT schedule_id, predecessor_schedule_id, constraint_type, time_lag,
+            lag_type, lag_min, lag_max, constraint_level, share_personnel,
+            share_mode, constraint_name, description
+     FROM operation_constraints
+     WHERE schedule_id IN (${placeholders})`,
+    sourceScheduleIds,
+  );
+
+  for (const row of rows) {
+    const newScheduleId = scheduleIdMap.get(Number(row.schedule_id));
+    const newPredecessorId = scheduleIdMap.get(Number(row.predecessor_schedule_id));
+    if (!newScheduleId || !newPredecessorId) {
+      continue;
+    }
+
+    await executor.execute(
+      `INSERT INTO operation_constraints (
+        schedule_id, predecessor_schedule_id, constraint_type, time_lag,
+        lag_type, lag_min, lag_max, constraint_level, share_personnel,
+        share_mode, constraint_name, description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        newScheduleId,
+        newPredecessorId,
+        row.constraint_type,
+        row.time_lag,
+        row.lag_type,
+        row.lag_min,
+        row.lag_max,
+        row.constraint_level,
+        row.share_personnel,
+        row.share_mode,
+        row.constraint_name ?? null,
+        row.description ?? null,
+      ],
+    );
+  }
+};
 
 // 获取模板的所有约束
 export const getTemplateConstraints = async (req: Request, res: Response) => {

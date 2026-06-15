@@ -10,6 +10,8 @@ import {
 } from '../services/templateResourceRuleService';
 import { isTemplateResourceRulesEnabled } from '../utils/featureFlags';
 import { copyTemplateScheduleBindings } from '../services/resourceNodeService';
+import { copyTemplateConstraints } from './constraintController';
+import { copyTemplateShareGroups } from './shareGroupController';
 
 // 生成下一个模版编码
 // 仅考虑符合 PT-数字 规范的编码，按数值（而非字典序）取最大值，避免被
@@ -398,6 +400,12 @@ export const copyTemplate = async (req: Request, res: Response) => {
     }
 
     await copyTemplateScheduleBindings(connection, scheduleIdMap);
+
+    // 复制工序间约束关系（按 scheduleIdMap 重映射前后置 schedule_id）
+    await copyTemplateConstraints(connection, scheduleIdMap);
+
+    // 复制人员共享组及其成员
+    await copyTemplateShareGroups(connection, Number(id), newTemplateId, scheduleIdMap);
 
     // 复制完成后，重新计算新模版的总天数
     await updateTemplateTotalDays(newTemplateId, connection);
