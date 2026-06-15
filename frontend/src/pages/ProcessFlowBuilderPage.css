@@ -1,0 +1,258 @@
+.pfb-page .pfb-meta {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.pfb-banner {
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.pfb-view-label {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin-bottom: 8px;
+}
+
+.pfb-gantt {
+  height: 34vh;
+  min-height: 280px;
+}
+
+.pfb-split {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── 左:语义构建 ── */
+.pfb-builder {
+  max-height: calc(100vh - 200px);
+  overflow: auto;
+}
+
+.pfb-stage {
+  margin-bottom: 14px;
+}
+
+.pfb-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--wx-blue-100);
+  margin-bottom: 6px;
+}
+
+.pfb-phase {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+}
+
+.pfb-phase-dsp {
+  color: var(--wx-green-700);
+  background: var(--wx-green-100);
+}
+
+.pfb-add {
+  margin-left: auto;
+}
+
+.pfb-op {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  font: inherit;
+}
+
+.pfb-op:hover {
+  border-color: var(--wx-blue-300);
+  background: var(--wx-blue-100);
+}
+
+.pfb-op.selected {
+  border-color: var(--wx-primary, var(--wx-blue-600));
+  box-shadow: 0 0 0 2px var(--wx-blue-200);
+}
+
+.pfb-op-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pfb-kind {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.pfb-kind.anchor {
+  color: var(--wx-blue-100);
+  background: var(--wx-blue-600);
+}
+
+.pfb-kind.spring {
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-200);
+}
+
+.pfb-code {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-family: ui-monospace, monospace;
+}
+
+.pfb-dur {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.pfb-flag {
+  font-size: 11px;
+  color: var(--wx-amber-700);
+  background: var(--wx-amber-100);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.pfb-io {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.pfb-chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  line-height: 1.5;
+}
+
+.pfb-chip.demand {
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.pfb-chip.effect {
+  color: var(--wx-green-700);
+  background: var(--wx-green-100);
+  border: 1px solid var(--wx-green-300);
+}
+
+/* ── 右:检视 ── */
+.pfb-inspector {
+  position: sticky;
+  top: 12px;
+}
+
+.pfb-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.pfb-dl {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 6px 12px;
+  font-size: 12px;
+  margin: 0;
+}
+
+.pfb-dl dt {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-weight: 600;
+}
+
+.pfb-dl dd {
+  margin: 0;
+}
+
+.pfb-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pfb-list li {
+  font-size: 12px;
+}
+
+.pfb-derive-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--wx-amber-100);
+  border: 1px solid var(--wx-amber-500);
+}
+
+.pfb-empty {
+  font-size: 13px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  padding: 24px 0;
+  text-align: center;
+}
+
+.pfb-hooks-label {
+  margin-top: 18px;
+}
+
+.pfb-hooks {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pfb-hooks li {
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--wx-amber-100);
+}
+
+.pfb-hook-type {
+  font-size: 11px;
+  color: var(--wx-amber-700);
+  font-weight: 600;
+}
+
+.pfb-hook-note {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}

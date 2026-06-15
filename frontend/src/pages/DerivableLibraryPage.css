@@ -1,0 +1,332 @@
+.dl-page .dl-meta {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.dl-banner {
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.dl-view-label {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin-bottom: 8px;
+}
+
+/* ── 类别图例 ── */
+.dl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.dl-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dl-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+/* ── 主分栏:左库 + 右检视 ── */
+.dl-split {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.dl-list-col {
+  max-height: calc(100vh - 240px);
+  overflow: auto;
+}
+
+/* 库内左右两小栏:派生操作 / 复用包 */
+.dl-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .dl-two {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dl-group {
+  margin-bottom: 6px;
+}
+
+.dl-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--wx-blue-100);
+  margin-bottom: 6px;
+}
+
+.dl-cat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.dl-count {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-weight: 400;
+}
+
+/* ── 可点选的卡片(操作 / 包)── */
+.dl-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  font: inherit;
+}
+
+.dl-card:hover {
+  border-color: var(--wx-blue-300);
+  background: var(--wx-blue-100);
+}
+
+.dl-card.selected {
+  border-color: var(--wx-primary, var(--wx-blue-600));
+  box-shadow: 0 0 0 2px var(--wx-blue-200);
+}
+
+.dl-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dl-cat-tag {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--wx-white, #fff);
+}
+
+.dl-code {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-family: ui-monospace, monospace;
+}
+
+.dl-card-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 产出目标态(强标识:effect 即索引) */
+.dl-effect-line {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--wx-green-700);
+}
+
+.dl-io {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.dl-chip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  line-height: 1.5;
+}
+
+.dl-chip.demand {
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.dl-chip.effect {
+  color: var(--wx-green-700);
+  background: var(--wx-green-100);
+  border: 1px solid var(--wx-green-300);
+}
+
+.dl-chip.more {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  background: transparent;
+}
+
+/* 包:内含操作序列 chip */
+.dl-seq {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+}
+
+.dl-seq-step {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+  color: var(--wx-blue-700);
+}
+
+.dl-seq-arrow {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+/* ── 右:检视 ── */
+.dl-inspector {
+  position: sticky;
+  top: 12px;
+}
+
+.dl-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.dl-trigger {
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+  margin-bottom: 12px;
+}
+
+.dl-dl {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 6px 12px;
+  font-size: 12px;
+  margin: 0;
+}
+
+.dl-dl dt {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-weight: 600;
+}
+
+.dl-dl dd {
+  margin: 0;
+}
+
+.dl-detail-list {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dl-detail-list li {
+  font-size: 12px;
+}
+
+.dl-recursive-hint {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--wx-amber-100);
+  border: 1px solid var(--wx-amber-500);
+}
+
+.dl-priority-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--wx-green-100);
+  border: 1px solid var(--wx-green-300);
+}
+
+.dl-empty {
+  font-size: 13px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* 包详情:展开的操作串 */
+.dl-pkg-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.dl-pkg-step-idx {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wx-white, #fff);
+  background: var(--wx-blue-600);
+}
+
+.dl-pkg-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.dl-pkg-step-name {
+  font-weight: 600;
+}
+
+.dl-pkg-step-effect {
+  color: var(--wx-green-700);
+}

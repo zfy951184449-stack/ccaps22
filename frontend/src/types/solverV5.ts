@@ -73,6 +73,9 @@ export interface SolverConfigV4Base {
   leader_ops_policy_group_leader: LeaderOpsPolicy;
   leader_ops_policy_team_leader: LeaderOpsPolicy;
   leader_ops_policy_dept_manager: LeaderOpsPolicy;
+  leader_weekend_policy_group_leader: LeaderOpsPolicy;
+  leader_weekend_policy_team_leader: LeaderOpsPolicy;
+  leader_weekend_policy_dept_manager: LeaderOpsPolicy;
   objective_weight_leader_nonworkday: number;
   objective_weight_leader_workday_rest: number;
   objective_weight_leader_ops: number;
@@ -160,6 +163,9 @@ export const DEFAULT_SOLVER_CONFIG_V5: SolverConfig = {
   leader_ops_policy_group_leader: 'soft',
   leader_ops_policy_team_leader: 'ban',
   leader_ops_policy_dept_manager: 'ban',
+  leader_weekend_policy_group_leader: 'soft',
+  leader_weekend_policy_team_leader: 'ban',
+  leader_weekend_policy_dept_manager: 'soft',
   objective_weight_leader_nonworkday: 20,
   objective_weight_leader_workday_rest: 10,
   objective_weight_leader_ops: 30,

@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
+    WxbBadge,
     WxbButton,
-    WxbDivider,
     WxbIcon,
     WxbInputNumber,
     WxbModal,
+    WxbPopconfirm,
+    WxbSearchInput,
     WxbSegmented,
     WxbSelect,
     WxbSwitch,
@@ -15,17 +17,16 @@ import { SolverConfig, DEFAULT_SOLVER_CONFIG_V5 } from '../../types/solverV5';
 
 export type { SolverConfig };
 
-// 管理职级中文名（班组长 SHIFT_LEADER 不视为领导，不在此列）
-const LEADER_ROLE_LABELS: Record<string, string> = {
-    GROUP_LEADER: '组长',
-    TEAM_LEADER: '主管',
-    DEPT_MANAGER: '经理',
-};
-
 const LEADER_OPS_POLICY_OPTIONS = [
     { label: '允许参与', value: 'allow' },
     { label: '软性减少', value: 'soft' },
     { label: '禁止参与', value: 'ban' },
+];
+
+const LEADER_WEEKEND_POLICY_OPTIONS = [
+    { label: '允许排班', value: 'allow' },
+    { label: '软性减少', value: 'soft' },
+    { label: '禁止排班', value: 'ban' },
 ];
 
 interface SolverConfigurationModalV5Props {
@@ -43,6 +44,20 @@ interface Team {
     teamCode: string;
 }
 
+type ViewMode = 'all' | 'changed' | 'affected';
+
+/** 每个分类声明它「拥有」哪些 config 键 —— 用于 diff 计数、深链定位、搜索过滤、硬约束统计 */
+interface CategoryMeta {
+    key: string;
+    label: string;
+    /** 该分类下所有可见 config 键（含子面板键），用于逐键 diff 计数与命中判定 */
+    configKeys: string[];
+    /** 该分类下属于「硬约束」的键（被关闭时计入 danger 提示条）*/
+    hardConstraintKeys?: string[];
+    /** 左栏分类导航图标（复用已有领域图标）*/
+    icon: React.ReactNode;
+}
+
 const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
     visible,
     config,
@@ -52,6 +67,11 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
 }) => {
     const [teams, setTeams] = useState<Team[]>([]);
     const [loadingTeams, setLoadingTeams] = useState(false);
+
+    const [activeCategoryKey, setActiveCategoryKey] = useState<string>('scope');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [viewMode, setViewMode] = useState<ViewMode>('all');
+    const bodyRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (visible) {
@@ -101,7 +121,28 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
         onConfigChange({ ...DEFAULT_SOLVER_CONFIG_V5 });
     };
 
+    /** 单项撤销：把某个键回到 DEFAULT，照常即时 onConfigChange 写回父级 */
+    const handleResetKey = (key: keyof SolverConfig) => {
+        onConfigChange({
+            ...config,
+            [key]: DEFAULT_SOLVER_CONFIG_V5[key],
+        } as SolverConfig);
+    };
+
     const isHighlighted = (key: string) => !!(highlightKeys && highlightKeys.includes(key));
+
+    /** 行级是否偏离默认（浅比较；team_ids 数组按内容比较）*/
+    const isDirtyKey = useCallback((key: string): boolean => {
+        const cur = (config as unknown as Record<string, unknown>)[key];
+        const def = (DEFAULT_SOLVER_CONFIG_V5 as unknown as Record<string, unknown>)[key];
+        if (Array.isArray(cur) || Array.isArray(def)) {
+            const a = (Array.isArray(cur) ? cur : []) as unknown[];
+            const b = (Array.isArray(def) ? def : []) as unknown[];
+            if (a.length !== b.length) return true;
+            return a.some((v, i) => v !== b[i]);
+        }
+        return cur !== def;
+    }, [config]);
 
     const constraints = [
         { key: 'enable_share_group', title: '共享组约束', description: '同一共享组内人员的排班互斥/共存规则' },
@@ -113,7 +154,7 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
         { key: 'enable_shift_assignment', title: '班次分配规则', description: '根据任务需求自动关联班次' },
         { key: 'enable_standard_hours', title: '标准工时合规', description: '确保排班符合法定工时要求' },
         { key: 'enable_prefer_standard_shift', title: '优先标准班次', description: '无操作需求时优先安排标准班（白班）' },
-        { key: 'enable_leadership_coverage', title: '领导层排班约束', description: '生产日必须有管理岗在岗；主管/经理不参与操作；管理人员优先工作日出勤' },
+        { key: 'enable_leadership_coverage', title: '领导层排班约束', description: '生产日必须有管理岗在岗；TEAM_LEADER/DEPT_MANAGER 不参与操作；TEAM_LEADER 周末禁排、GROUP_LEADER 周末少排（可在下方按职级调整）' },
         { key: 'enable_leader_production_coverage', title: '└ 生产日需领导在岗', description: '每个有生产操作的日期至少 1 名管理岗上班（硬约束）。领导太少、覆盖不过来导致无解时可关闭', indent: true },
     ];
 
@@ -183,26 +224,51 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
         handleWeightChange(key, typeof value === 'number' ? value : value === null ? null : Number(value));
     };
 
+    /** 行级偏离默认的小圆点 +「↺ 恢复此项」按钮（disabled 行不显，避免误改不可改键） */
+    const renderRowResetAffordance = (key: string, disabled?: boolean) => {
+        if (disabled || !isDirtyKey(key)) return null;
+        return (
+            <div className="solver-v5-config-row-reset">
+                <span className="solver-v5-config-dirty-dot" aria-hidden="true" />
+                <button
+                    type="button"
+                    className="solver-v5-config-reset-btn"
+                    onClick={() => handleResetKey(key as keyof SolverConfig)}
+                >
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                        <path d="M3.5 8a4.5 4.5 0 1 1 1.32 3.18" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                        <path d="M3.5 5.2V8h2.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    </svg>
+                    恢复此项
+                </button>
+            </div>
+        );
+    };
+
     const renderToggleRows = (items: { key: string; title: string; description: string; indent?: boolean }[]) => (
         <div className="solver-v5-config-list">
             {items.map((item) => {
                 const key = item.key as keyof SolverConfig;
                 const highlighted = isHighlighted(item.key);
+                const disabled = isToggleDisabled(key);
                 return (
                     <div
                         key={item.key}
                         data-config-key={item.key}
-                        className={`solver-v5-config-row ${item.indent ? 'solver-v5-config-row-indent' : ''} ${highlighted ? 'solver-v5-config-row-highlight' : ''}`}
+                        className={`solver-v5-config-row ${item.indent ? 'solver-v5-config-row-indent' : ''} ${highlighted ? 'solver-v5-config-row-highlight' : ''} ${isDirtyKey(item.key) ? 'solver-v5-config-row-dirty' : ''}`}
                     >
                         <div className="solver-v5-config-copy">
                             <strong>{item.title}</strong>
                             <span>{item.description}</span>
                         </div>
-                        <WxbSwitch
-                            checked={config[key] as boolean}
-                            onChange={() => handleToggle(key)}
-                            disabled={isToggleDisabled(key)}
-                        />
+                        <div className="solver-v5-config-row-tail">
+                            {renderRowResetAffordance(item.key, disabled)}
+                            <WxbSwitch
+                                checked={config[key] as boolean}
+                                onChange={() => handleToggle(key)}
+                                disabled={disabled}
+                            />
+                        </div>
                     </div>
                 );
             })}
@@ -215,7 +281,10 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
         options?: { min?: number; max?: number; step?: number; addonAfter?: string; disabled?: boolean },
     ) => (
         <label className={`solver-v5-number-field ${isHighlighted(key as string) ? 'solver-v5-config-row-highlight' : ''}`} data-config-key={key}>
-            <span>{label}</span>
+            <span className="solver-v5-number-field-label">
+                {label}
+                {renderRowResetAffordance(key as string, options?.disabled)}
+            </span>
             <WxbInputNumber
                 size="small"
                 min={options?.min}
@@ -229,226 +298,384 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
         </label>
     );
 
-    const renderLeaderOpsPolicyRow = (key: keyof SolverConfig, roleCode: string, hint: string) => (
-        <div className="solver-v5-config-row">
+    const renderLeaderPolicyRow = (
+        key: keyof SolverConfig,
+        roleCode: string,
+        hint: string,
+        options = LEADER_OPS_POLICY_OPTIONS,
+    ) => (
+        <div
+            className={`solver-v5-config-row ${isHighlighted(key as string) ? 'solver-v5-config-row-highlight' : ''} ${isDirtyKey(key as string) ? 'solver-v5-config-row-dirty' : ''}`}
+            data-config-key={key}
+        >
             <div className="solver-v5-config-copy">
-                <strong>{LEADER_ROLE_LABELS[roleCode] || roleCode}</strong>
+                {/* 职级保持英文字段码，严禁翻译 */}
+                <strong>{roleCode}</strong>
                 <span>{hint}</span>
             </div>
-            <WxbSegmented
-                size="sm"
-                options={LEADER_OPS_POLICY_OPTIONS}
-                value={config[key] as string}
-                onChange={(v) => onConfigChange({ ...config, [key]: v as 'allow' | 'soft' | 'ban' })}
-            />
+            <div className="solver-v5-config-row-tail">
+                {renderRowResetAffordance(key as string)}
+                <WxbSegmented
+                    size="sm"
+                    options={options}
+                    value={config[key] as string}
+                    onChange={(v) => onConfigChange({ ...config, [key]: v as 'allow' | 'soft' | 'ban' })}
+                />
+            </div>
         </div>
     );
 
-    // ── V5 增强分区渲染 ──────────────────────────────────────────────────────────
-
-    const renderV5EnhancementSection = () => (
-        <section className="solver-v5-config-panel solver-v5-enhancement-panel">
-            <div className="solver-v5-config-panel-title">
-                {/* 内联 SVG 图标：火箭/增强 */}
-                <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                    aria-hidden="true"
-                    style={{ flexShrink: 0 }}
-                >
-                    <path
-                        d="M8 1.5C8 1.5 11.5 3 11.5 7C11.5 9.5 10 11.5 8 12.5C6 11.5 4.5 9.5 4.5 7C4.5 3 8 1.5 8 1.5Z"
-                        stroke="var(--wx-blue-600)"
-                        strokeWidth="1.2"
-                        fill="var(--wx-blue-50)"
-                    />
-                    <circle cx="8" cy="7" r="1.5" fill="var(--wx-blue-600)" />
-                    <path
-                        d="M6.5 12L5.5 14.5M9.5 12L10.5 14.5"
-                        stroke="var(--wx-blue-400)"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                    />
-                </svg>
-                <strong>V5 求解增强</strong>
+    /** 条件子面板包装：紧贴触发开关就地下挂，用 max-height+opacity 过渡平滑展开 */
+    const renderConditionalSubpanel = (open: boolean, children: React.ReactNode, key: string) => (
+        <div
+            key={key}
+            className={`solver-v5-config-subpanel-collapse ${open ? 'is-open' : ''}`}
+            aria-hidden={!open}
+        >
+            <div className="solver-v5-config-subpanel-inner">
+                <section className="solver-v5-config-subpanel">{children}</section>
             </div>
-            <p className="solver-v5-enhancement-desc">
-                以下选项为 V5 新增能力，默认值已保证与 V4 等价；调整前请阅读各项说明。
-            </p>
+        </div>
+    );
 
-            <div className="solver-v5-config-list">
-                {/* enable_solution_hint */}
-                <div
-                    className={`solver-v5-config-row ${isHighlighted('enable_solution_hint') ? 'solver-v5-config-row-highlight' : ''}`}
-                    data-config-key="enable_solution_hint"
-                >
-                    <div className="solver-v5-config-copy">
-                        <strong>解加速提示（Hint）</strong>
-                        <span>用上一次解加速收敛（不影响最优结果）</span>
-                    </div>
-                    <WxbSwitch
-                        checked={config.enable_solution_hint}
-                        onChange={() => handleToggle('enable_solution_hint')}
-                    />
-                </div>
+    // ── 分类元数据 ───────────────────────────────────────────────────────────────
+    const teamScopeIcon = <WxbIcon name="upstream-suite" size={16} />;
+    const hardConstraintIcon = <WxbIcon name="released" size={16} />;
+    const consecutiveIcon = <WxbIcon name="hold-time" size={16} />;
+    const nightIcon = <WxbIcon name="thermo-probe" size={16} />;
+    const standaloneIcon = <WxbIcon name="kanban" size={16} />;
+    const objectiveIcon = <WxbIcon name="review-ok" size={16} />;
+    const enhancementIcon = <WxbIcon name="flow-divert" size={16} />;
 
-                {/* enable_objective_breakdown */}
-                <div
-                    className={`solver-v5-config-row ${isHighlighted('enable_objective_breakdown') ? 'solver-v5-config-row-highlight' : ''}`}
-                    data-config-key="enable_objective_breakdown"
-                >
-                    <div className="solver-v5-config-copy">
-                        <strong>目标分量可视化</strong>
-                        <span>上报各目标分量数据供监视器图表展示（不影响求解方向）</span>
-                    </div>
-                    <WxbSwitch
-                        checked={config.enable_objective_breakdown}
-                        onChange={() => handleToggle('enable_objective_breakdown')}
-                    />
-                </div>
+    const categories: CategoryMeta[] = useMemo(() => [
+        {
+            key: 'scope',
+            label: '求解范围与参数',
+            icon: teamScopeIcon,
+            configKeys: ['team_ids', 'max_time_seconds', 'stagnation_limit'],
+        },
+        {
+            key: 'hard',
+            label: '硬约束',
+            icon: hardConstraintIcon,
+            configKeys: [
+                ...constraints.map((c) => c.key),
+                'leader_ops_policy_dept_manager',
+                'leader_ops_policy_team_leader',
+                'leader_ops_policy_group_leader',
+                'leader_weekend_policy_dept_manager',
+                'leader_weekend_policy_team_leader',
+                'leader_weekend_policy_group_leader',
+                'objective_weight_leader_nonworkday',
+                'objective_weight_leader_workday_rest',
+                'objective_weight_leader_ops',
+                'objective_weight_leader_special',
+            ],
+            // 硬约束开关键（关闭即计入 danger 提示）。子开关 strict_locked_shifts 是模式细化，不计。
+            hardConstraintKeys: [
+                'enable_share_group',
+                'enable_unique_employee',
+                'enable_one_position',
+                'enable_locked_operations',
+                'enable_locked_shifts',
+                'enable_shift_assignment',
+                'enable_standard_hours',
+                'enable_leadership_coverage',
+                'enable_leader_production_coverage',
+            ],
+        },
+        {
+            key: 'consecutive',
+            label: '连续天数约束',
+            icon: consecutiveIcon,
+            configKeys: [
+                ...consecutiveDaysConstraints.map((c) => c.key),
+                'min_consecutive_work_days_pattern',
+                'max_consecutive_work_days_pattern',
+                'min_consecutive_rest_days_pattern',
+                'max_consecutive_rest_days_pattern',
+            ],
+        },
+        {
+            key: 'night',
+            label: '夜班约束',
+            icon: nightIcon,
+            configKeys: [
+                ...nightShiftConstraints.map((c) => c.key),
+                'min_night_shift_interval',
+                'preferred_night_rest_days',
+                'objective_weight_night_rest_extend',
+            ],
+        },
+        {
+            key: 'standalone',
+            label: '独立任务',
+            icon: standaloneIcon,
+            configKeys: ['enable_standalone_tasks', 'allow_standalone_vacancy', 'objective_weight_standalone_vacancy'],
+        },
+        {
+            key: 'objective',
+            label: '优化目标',
+            icon: objectiveIcon,
+            configKeys: objectiveControls.flatMap((o) => [o.key, o.weightKey]),
+        },
+        {
+            key: 'enhancement',
+            label: '高级增强',
+            icon: enhancementIcon,
+            configKeys: ['enable_solution_hint', 'enable_objective_breakdown', 'enable_lexicographic_l4'],
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    ], []);
 
-                {/* enable_lexicographic_l4 */}
-                <div
-                    className={`solver-v5-config-row ${isHighlighted('enable_lexicographic_l4') ? 'solver-v5-config-row-highlight' : ''}`}
-                    data-config-key="enable_lexicographic_l4"
-                >
-                    <div className="solver-v5-config-copy">
-                        <div className="solver-v5-lex-title">
-                            <strong>字典序 L4 优化</strong>
-                            {config.enable_lexicographic_l4 && (
-                                <WxbTooltip title="仅在等价最优解中挑分量更优者，不劣于 V4">
-                                    <WxbTag color="amber" style={{ cursor: 'default', marginLeft: 6 }}>
-                                        实验
-                                    </WxbTag>
+    // ── 全局 / 每类 diff 计数 ─────────────────────────────────────────────────────
+    const globalDirtyCount = useMemo(() => {
+        const allKeys = new Set<string>();
+        categories.forEach((cat) => cat.configKeys.forEach((k) => allKeys.add(k)));
+        let n = 0;
+        allKeys.forEach((k) => {
+            if (isDirtyKey(k)) n += 1;
+        });
+        return n;
+    }, [categories, isDirtyKey]);
+
+    const categoryDirtyCount = useCallback(
+        (cat: CategoryMeta) => cat.configKeys.reduce((acc, k) => acc + (isDirtyKey(k) ? 1 : 0), 0),
+        [isDirtyKey],
+    );
+
+    const categoryHasHighlight = useCallback(
+        (cat: CategoryMeta) => cat.configKeys.some((k) => isHighlighted(k)),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [highlightKeys],
+    );
+
+    const hasAnyHighlight = !!(highlightKeys && highlightKeys.length > 0);
+
+    // ── 深链：highlightKeys 变化时跳到对应分类并滚动到该控件 ─────────────────────
+    useEffect(() => {
+        if (!visible) return;
+        if (!highlightKeys || highlightKeys.length === 0) return;
+        const firstKey = highlightKeys[0];
+        const targetCat = categories.find((cat) => cat.configKeys.includes(firstKey));
+        if (targetCat) {
+            setActiveCategoryKey(targetCat.key);
+        }
+        setViewMode('affected');
+        const timer = setTimeout(() => {
+            const root = bodyRef.current;
+            if (!root) return;
+            const el = root.querySelector(`[data-config-key="${firstKey}"]`);
+            (el as HTMLElement | null)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 120);
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [highlightKeys, visible]);
+
+    // ── 搜索过滤：title/description/别名 ──────────────────────────────────────────
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    /** 行别名表（中文术语 → 工程键/同义词），让搜索能命中口语化关键词 */
+    const ROW_ALIASES: Record<string, string> = {
+        team_ids: '团队 范围 团队范围',
+        max_time_seconds: '时间 求解时间 timeout',
+        stagnation_limit: '停滞 超时 提前停止 无改进',
+        enable_leadership_coverage: '领导 管理岗 leader',
+        enable_night_shift_interval: '夜班 间隔',
+        allow_position_vacancy: '空缺 vacancy',
+        enable_lexicographic_l4: '字典序 lexicographic L4 实验',
+        enable_solution_hint: 'hint 提示 加速',
+        enable_objective_breakdown: '可视化 分量 breakdown',
+    };
+
+    const rowMatchesQuery = useCallback(
+        (configKey: string, title?: string, description?: string) => {
+            if (!normalizedQuery) return true;
+            const haystack = [
+                configKey,
+                title || '',
+                description || '',
+                ROW_ALIASES[configKey] || '',
+            ]
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(normalizedQuery);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [normalizedQuery],
+    );
+
+    /** 视图过滤 + 搜索：一行是否应渲染 */
+    const shouldRenderRow = useCallback(
+        (configKey: string, title?: string, description?: string) => {
+            if (!rowMatchesQuery(configKey, title, description)) return false;
+            if (viewMode === 'changed' && !isDirtyKey(configKey)) return false;
+            if (viewMode === 'affected' && !isHighlighted(configKey)) return false;
+            return true;
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [rowMatchesQuery, viewMode, isDirtyKey, highlightKeys],
+    );
+
+    /** 过滤后的 toggle 列表 */
+    const filterToggleItems = (items: { key: string; title: string; description: string; indent?: boolean }[]) =>
+        items.filter((i) => shouldRenderRow(i.key, i.title, i.description));
+
+    /** 当前搜索下，哪些分类应显示在左栏（搜索时只留有命中行的分类）*/
+    const categoryVisibleInSearch = useCallback(
+        (cat: CategoryMeta) => {
+            if (!normalizedQuery) return true;
+            return cat.configKeys.some((k) => rowMatchesQuery(k, undefined, undefined)) ||
+                cat.label.toLowerCase().includes(normalizedQuery) ||
+                // 也允许通过行 title/description 命中：用各分类已知行做近似匹配
+                rowTitleHit(cat, normalizedQuery);
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [normalizedQuery, rowMatchesQuery],
+    );
+
+    /** 用各分类静态行 title/description 做命中（搜索导航过滤）*/
+    function rowTitleHit(cat: CategoryMeta, q: string): boolean {
+        const pools: { key: string; title: string; description: string }[] = [];
+        if (cat.key === 'hard') pools.push(...constraints);
+        if (cat.key === 'consecutive') pools.push(...consecutiveDaysConstraints);
+        if (cat.key === 'night') pools.push(...nightShiftConstraints);
+        if (cat.key === 'objective') pools.push(...objectiveControls.map((o) => ({ key: o.key, title: o.title, description: o.description })));
+        return pools.some((r) => `${r.title} ${r.description}`.toLowerCase().includes(q));
+    }
+
+    // ── 右栏各分类渲染 ────────────────────────────────────────────────────────────
+
+    const renderScopePanel = () => {
+        const showTeam = shouldRenderRow('team_ids', '团队范围', '限定求解范围至指定团队');
+        const showMaxTime = shouldRenderRow('max_time_seconds', '最大求解时间', '时间越长结果越优');
+        const showStagnation = shouldRenderRow('stagnation_limit', '停滞超时', '无改进则提前停止');
+        return (
+            <>
+                {showTeam && (
+                    <section className="solver-v5-config-panel">
+                        <div className="solver-v5-config-panel-title">
+                            {teamScopeIcon}
+                            <strong>团队范围</strong>
+                        </div>
+                        <p>限定求解范围至指定团队。留空则包含所有员工。</p>
+                        <div data-config-key="team_ids" className={isDirtyKey('team_ids') ? 'solver-v5-config-field-dirty' : ''}>
+                            <WxbSelect
+                                mode="multiple"
+                                placeholder="选择团队（默认：全部）"
+                                value={config.team_ids}
+                                onChange={(values) => handleTeamChange(values as number[])}
+                                loading={loadingTeams}
+                                optionFilterProp="label"
+                                allowClear
+                                options={teams.map(team => ({
+                                    value: team.id,
+                                    label: `${team.teamName} (${team.teamCode})`,
+                                }))}
+                            />
+                            {renderRowResetAffordance('team_ids')}
+                        </div>
+                    </section>
+                )}
+
+                {(showMaxTime || showStagnation) && (
+                    <section className="solver-v5-config-panel solver-v5-config-panel-info">
+                        <div className="solver-v5-config-panel-title">
+                            <WxbIcon name="hold-time" size={16} />
+                            <strong>求解参数</strong>
+                        </div>
+                        <p>时间越长结果越优，但响应更慢。建议范围 60 到 600 秒。</p>
+                        <div className="solver-v5-config-grid">
+                            {showMaxTime && renderNumberField('max_time_seconds', '最大求解时间', { min: 30, max: 3600, step: 30, addonAfter: '秒' })}
+                            {showStagnation && (
+                                <WxbTooltip title="求解一段时间内目标无改进则提前停止，节省时间">
+                                    <div className="solver-v5-field-with-hint">
+                                        {renderNumberField('stagnation_limit', '停滞超时', { min: 30, max: 3600, step: 30, addonAfter: '秒' })}
+                                        <span className="solver-v5-field-subhint">无改进则提前停止</span>
+                                    </div>
                                 </WxbTooltip>
                             )}
                         </div>
-                        <span>
-                            开启后在 L0–L3 目标相等的前提下进行第二阶段优化（L4），优先改善目标分量分布。
-                            {!config.enable_lexicographic_l4 && (
-                                <span className="solver-v5-lex-hint"> 关闭时与 V4 逐字节等价。</span>
-                            )}
-                        </span>
-                    </div>
-                    <WxbSwitch
-                        checked={config.enable_lexicographic_l4}
-                        onChange={() => handleToggle('enable_lexicographic_l4')}
-                    />
-                </div>
-            </div>
-        </section>
-    );
+                    </section>
+                )}
+            </>
+        );
+    };
 
-    return (
-        <WxbModal
-            title="求解器配置"
-            open={visible}
-            onCancel={onClose}
-            footer={(
-                <div className="solver-v5-modal-footer">
-                    <WxbButton type="button" variant="ghost" onClick={handleReset}>
-                        <WxbIcon name="flow-divert" size={15} />
-                        恢复默认
-                    </WxbButton>
-                    <WxbButton type="button" variant="primary" onClick={onClose}>
-                        <WxbIcon name="released" size={15} />
-                        保存配置
-                    </WxbButton>
-                </div>
-            )}
-            width={640}
-            className="solver-v5-config-modal"
-        >
-            <div className="solver-v5-config-body">
-                {/* ── V5 增强分区（放最前面，突出新能力）── */}
-                {renderV5EnhancementSection()}
+    const renderHardConstraintPanel = () => {
+        const visibleConstraints = filterToggleItems(constraints);
+        const leaderRows = [
+            { key: 'leader_ops_policy_dept_manager', title: 'DEPT_MANAGER 操作策略', desc: '默认：禁止参与生产' },
+            { key: 'leader_ops_policy_team_leader', title: 'TEAM_LEADER 操作策略', desc: '默认：禁止参与生产' },
+            { key: 'leader_ops_policy_group_leader', title: 'GROUP_LEADER 操作策略', desc: '默认：软性减少' },
+            { key: 'leader_weekend_policy_dept_manager', title: 'DEPT_MANAGER 周末策略', desc: '默认：软性减少' },
+            { key: 'leader_weekend_policy_team_leader', title: 'TEAM_LEADER 周末策略', desc: '默认：禁止排班' },
+            { key: 'leader_weekend_policy_group_leader', title: 'GROUP_LEADER 周末策略', desc: '默认：软性减少' },
+            { key: 'objective_weight_leader_nonworkday', title: '非工作日出勤惩罚', desc: '权重' },
+            { key: 'objective_weight_leader_workday_rest', title: '工作日休息惩罚', desc: '权重' },
+            { key: 'objective_weight_leader_ops', title: '操作分配惩罚', desc: '权重' },
+            { key: 'objective_weight_leader_special', title: '特殊班次惩罚', desc: '权重' },
+        ];
+        const leaderVisible = config.enable_leadership_coverage &&
+            leaderRows.some((r) => shouldRenderRow(r.key, r.title, r.desc));
 
-                <section className="solver-v5-config-panel">
-                    <div className="solver-v5-config-panel-title">
-                        <WxbIcon name="upstream-suite" size={16} />
-                        <strong>团队范围</strong>
-                    </div>
-                    <p>限定求解范围至指定团队。留空则包含所有员工。</p>
-                    <WxbSelect
-                        mode="multiple"
-                        placeholder="选择团队（默认：全部）"
-                        value={config.team_ids}
-                        onChange={(values) => handleTeamChange(values as number[])}
-                        loading={loadingTeams}
-                        optionFilterProp="label"
-                        allowClear
-                        options={teams.map(team => ({
-                            value: team.id,
-                            label: `${team.teamName} (${team.teamCode})`,
-                        }))}
-                    />
-                </section>
+        return (
+            <>
+                {visibleConstraints.length > 0 && renderToggleRows(visibleConstraints)}
 
-                <section className="solver-v5-config-panel solver-v5-config-panel-info">
-                    <div className="solver-v5-config-panel-title">
-                        <WxbIcon name="hold-time" size={16} />
-                        <strong>求解参数</strong>
-                    </div>
-                    <p>时间越长结果越优，但响应更慢。建议范围 60 到 600 秒。</p>
-                    <div className="solver-v5-config-grid">
-                        {renderNumberField('max_time_seconds', '最大求解时间', { min: 30, max: 3600, step: 30, addonAfter: '秒' })}
-                        {renderNumberField('stagnation_limit', '停滞超时', { min: 30, max: 3600, step: 30, addonAfter: '秒' })}
-                    </div>
-                </section>
-
-                <WxbDivider label="硬约束" />
-                {renderToggleRows(constraints)}
-
-                {config.enable_leadership_coverage && (
+                {leaderVisible && (
                     <section className="solver-v5-config-subpanel">
-                        <p>各管理职级参与生产操作的策略（班组长视为一线，不在此列）。</p>
+                        <p>各管理职级参与生产操作的策略（SHIFT_LEADER 视为一线，不在此列）。</p>
                         <div className="solver-v5-config-list">
-                            {renderLeaderOpsPolicyRow('leader_ops_policy_dept_manager', 'DEPT_MANAGER', '默认：禁止参与生产')}
-                            {renderLeaderOpsPolicyRow('leader_ops_policy_team_leader', 'TEAM_LEADER', '默认：禁止参与生产')}
-                            {renderLeaderOpsPolicyRow('leader_ops_policy_group_leader', 'GROUP_LEADER', '默认：软性减少')}
+                            {shouldRenderRow('leader_ops_policy_dept_manager', 'DEPT_MANAGER 操作策略', '默认：禁止参与生产') &&
+                                renderLeaderPolicyRow('leader_ops_policy_dept_manager', 'DEPT_MANAGER', '默认：禁止参与生产')}
+                            {shouldRenderRow('leader_ops_policy_team_leader', 'TEAM_LEADER 操作策略', '默认：禁止参与生产') &&
+                                renderLeaderPolicyRow('leader_ops_policy_team_leader', 'TEAM_LEADER', '默认：禁止参与生产')}
+                            {shouldRenderRow('leader_ops_policy_group_leader', 'GROUP_LEADER 操作策略', '默认：软性减少') &&
+                                renderLeaderPolicyRow('leader_ops_policy_group_leader', 'GROUP_LEADER', '默认：软性减少')}
+                        </div>
+                        <p>各管理职级在周末/非工作日的排班策略（按排班日历判定为非工作日（周末/节假日），含节假日）。</p>
+                        <div className="solver-v5-config-list">
+                            {shouldRenderRow('leader_weekend_policy_dept_manager', 'DEPT_MANAGER 周末策略', '默认：软性减少') &&
+                                renderLeaderPolicyRow('leader_weekend_policy_dept_manager', 'DEPT_MANAGER', '默认：软性减少', LEADER_WEEKEND_POLICY_OPTIONS)}
+                            {shouldRenderRow('leader_weekend_policy_team_leader', 'TEAM_LEADER 周末策略', '默认：禁止排班') &&
+                                renderLeaderPolicyRow('leader_weekend_policy_team_leader', 'TEAM_LEADER', '默认：禁止排班', LEADER_WEEKEND_POLICY_OPTIONS)}
+                            {shouldRenderRow('leader_weekend_policy_group_leader', 'GROUP_LEADER 周末策略', '默认：软性减少') &&
+                                renderLeaderPolicyRow('leader_weekend_policy_group_leader', 'GROUP_LEADER', '默认：软性减少', LEADER_WEEKEND_POLICY_OPTIONS)}
                         </div>
                         <p>管理岗偏好权重配置。数值越大，优化压力越高。</p>
                         <div className="solver-v5-config-grid">
-                            {renderNumberField('objective_weight_leader_nonworkday', '非工作日出勤惩罚', { min: 0, max: 1000 })}
-                            {renderNumberField('objective_weight_leader_workday_rest', '工作日休息惩罚', { min: 0, max: 1000 })}
-                            {renderNumberField('objective_weight_leader_ops', '操作分配惩罚', { min: 0, max: 1000 })}
-                            {renderNumberField('objective_weight_leader_special', '特殊班次惩罚', { min: 0, max: 1000 })}
+                            {shouldRenderRow('objective_weight_leader_nonworkday', '非工作日出勤惩罚', '权重') &&
+                                renderNumberField('objective_weight_leader_nonworkday', '非工作日出勤惩罚', { min: 0, max: 1000 })}
+                            {shouldRenderRow('objective_weight_leader_workday_rest', '工作日休息惩罚', '权重') &&
+                                renderNumberField('objective_weight_leader_workday_rest', '工作日休息惩罚', { min: 0, max: 1000 })}
+                            {shouldRenderRow('objective_weight_leader_ops', '操作分配惩罚', '权重') &&
+                                renderNumberField('objective_weight_leader_ops', '操作分配惩罚', { min: 0, max: 1000 })}
+                            {shouldRenderRow('objective_weight_leader_special', '特殊班次惩罚', '权重') &&
+                                renderNumberField('objective_weight_leader_special', '特殊班次惩罚', { min: 0, max: 1000 })}
                         </div>
                     </section>
                 )}
+            </>
+        );
+    };
 
-                <WxbDivider label="连续天数约束" />
-                {renderToggleRows(consecutiveDaysConstraints)}
-
-                <WxbDivider label="夜班约束" />
-                {renderToggleRows(nightShiftConstraints)}
-
-                {config.enable_night_shift_interval && (
-                    <section className="solver-v5-config-subpanel">
-                        {renderNumberField('min_night_shift_interval', '夜班最小间隔天数', { min: 2, max: 30, addonAfter: '天' })}
-                        <p>
-                            当前设置：两次夜班之间至少间隔 {(config.min_night_shift_interval || 7) - 1} 天
-                        </p>
-                    </section>
-                )}
-
-                {config.enable_prefer_extended_night_rest && config.enable_night_rest && (
-                    <section className="solver-v5-config-subpanel">
-                        <div className="solver-v5-config-grid">
-                            {renderNumberField('preferred_night_rest_days', '期望休息天数', { min: 2, max: 4, addonAfter: '天' })}
-                            {renderNumberField('objective_weight_night_rest_extend', '惩罚权重', { min: 0, max: 500 })}
-                        </div>
-                        <p>
-                            强制休息 1 天 + 尽量多休 {(config.preferred_night_rest_days || 2) - 1} 天
-                        </p>
-                    </section>
-                )}
-
-                {config.enable_consecutive_work_rest_pattern && (
-                    <section className="solver-v5-config-subpanel">
+    const renderConsecutivePanel = () => {
+        const visible = filterToggleItems(consecutiveDaysConstraints);
+        const patternRows = [
+            { key: 'min_consecutive_work_days_pattern', title: '最少连续上班' },
+            { key: 'max_consecutive_work_days_pattern', title: '最多连续上班' },
+            { key: 'min_consecutive_rest_days_pattern', title: '最少连续休息' },
+            { key: 'max_consecutive_rest_days_pattern', title: '最多连续休息' },
+        ];
+        const patternVisible = config.enable_consecutive_work_rest_pattern &&
+            patternRows.some((r) => shouldRenderRow(r.key, r.title, '上班/休息节奏'));
+        return (
+            <>
+                {visible.length > 0 && renderToggleRows(visible)}
+                {renderConditionalSubpanel(
+                    patternVisible,
+                    <>
                         <p>启用后若存在锁定班次，请确认不与该约束冲突。</p>
                         <div className="solver-v5-config-grid">
                             {renderNumberField('min_consecutive_work_days_pattern', '最少连续上班', { min: 1, max: config.max_consecutive_work_days_pattern, addonAfter: '天' })}
@@ -456,62 +683,393 @@ const SolverConfigurationModalV5: React.FC<SolverConfigurationModalV5Props> = ({
                             {renderNumberField('min_consecutive_rest_days_pattern', '最少连续休息', { min: 1, max: config.max_consecutive_rest_days_pattern, addonAfter: '天' })}
                             {renderNumberField('max_consecutive_rest_days_pattern', '最多连续休息', { min: config.min_consecutive_rest_days_pattern, max: 7, addonAfter: '天' })}
                         </div>
-                    </section>
+                    </>,
+                    'consecutive-pattern',
                 )}
+            </>
+        );
+    };
 
-                <WxbDivider label="独立任务" />
-                <section className="solver-v5-config-panel">
-                    <div className="solver-v5-config-panel-title">
-                        <WxbIcon name="kanban" size={16} />
-                        <strong>独立任务配置</strong>
-                    </div>
-                    <p>控制值班任务（周期/弹性/临时）是否参与自动排班及其空缺策略。</p>
-                    <div className="solver-v5-config-list">
-                        <div className="solver-v5-config-row">
+    const renderNightPanel = () => {
+        const visible = filterToggleItems(nightShiftConstraints);
+        const intervalVisible = config.enable_night_shift_interval &&
+            shouldRenderRow('min_night_shift_interval', '夜班最小间隔天数', '夜班间隔');
+        const extendVisible = config.enable_prefer_extended_night_rest && config.enable_night_rest &&
+            (shouldRenderRow('preferred_night_rest_days', '期望休息天数', '延长休息') ||
+                shouldRenderRow('objective_weight_night_rest_extend', '惩罚权重', '延长休息'));
+        return (
+            <>
+                {visible.length > 0 && renderToggleRows(visible)}
+                {renderConditionalSubpanel(
+                    intervalVisible,
+                    <>
+                        {renderNumberField('min_night_shift_interval', '夜班最小间隔天数', { min: 2, max: 30, addonAfter: '天' })}
+                        <p>
+                            当前设置：两次夜班之间至少间隔 {(config.min_night_shift_interval || 7) - 1} 天
+                        </p>
+                    </>,
+                    'night-interval',
+                )}
+                {renderConditionalSubpanel(
+                    extendVisible,
+                    <>
+                        <div className="solver-v5-config-grid">
+                            {renderNumberField('preferred_night_rest_days', '期望休息天数', { min: 2, max: 4, addonAfter: '天' })}
+                            {renderNumberField('objective_weight_night_rest_extend', '惩罚权重', { min: 0, max: 500 })}
+                        </div>
+                        <p>
+                            强制休息 1 天 + 尽量多休 {(config.preferred_night_rest_days || 2) - 1} 天
+                        </p>
+                    </>,
+                    'night-extend',
+                )}
+            </>
+        );
+    };
+
+    const renderStandalonePanel = () => {
+        const showMain = shouldRenderRow('enable_standalone_tasks', '纳入独立任务', '启用后当月有效的独立任务将参与自动排班');
+        const showVacancy = config.enable_standalone_tasks &&
+            shouldRenderRow('allow_standalone_vacancy', '允许独立任务空缺', '无合适候选人时允许岗位留空');
+        const showWeight = config.enable_standalone_tasks && config.allow_standalone_vacancy &&
+            shouldRenderRow('objective_weight_standalone_vacancy', '空缺惩罚权重', '独立任务');
+        if (!showMain && !showVacancy && !showWeight) return null;
+        return (
+            <section className="solver-v5-config-panel">
+                <div className="solver-v5-config-panel-title">
+                    {standaloneIcon}
+                    <strong>独立任务配置</strong>
+                </div>
+                <p>控制值班任务（周期/弹性/临时）是否参与自动排班及其空缺策略。</p>
+                <div className="solver-v5-config-list">
+                    {showMain && (
+                        <div
+                            className={`solver-v5-config-row ${isDirtyKey('enable_standalone_tasks') ? 'solver-v5-config-row-dirty' : ''}`}
+                            data-config-key="enable_standalone_tasks"
+                        >
                             <div className="solver-v5-config-copy">
                                 <strong>纳入独立任务</strong>
                                 <span>启用后，当月有效的独立任务将参与自动排班</span>
                             </div>
-                            <WxbSwitch checked={config.enable_standalone_tasks} onChange={() => handleToggle('enable_standalone_tasks')} />
+                            <div className="solver-v5-config-row-tail">
+                                {renderRowResetAffordance('enable_standalone_tasks')}
+                                <WxbSwitch checked={config.enable_standalone_tasks} onChange={() => handleToggle('enable_standalone_tasks')} />
+                            </div>
                         </div>
-                        {config.enable_standalone_tasks && (
-                            <div className="solver-v5-config-row solver-v5-config-row-indent">
-                                <div className="solver-v5-config-copy">
-                                    <strong>允许独立任务空缺</strong>
-                                    <span>无合适候选人时允许岗位留空</span>
-                                </div>
+                    )}
+                    {showVacancy && (
+                        <div
+                            className={`solver-v5-config-row solver-v5-config-row-indent ${isDirtyKey('allow_standalone_vacancy') ? 'solver-v5-config-row-dirty' : ''}`}
+                            data-config-key="allow_standalone_vacancy"
+                        >
+                            <div className="solver-v5-config-copy">
+                                <strong>允许独立任务空缺</strong>
+                                <span>无合适候选人时允许岗位留空</span>
+                            </div>
+                            <div className="solver-v5-config-row-tail">
+                                {renderRowResetAffordance('allow_standalone_vacancy')}
                                 <WxbSwitch checked={config.allow_standalone_vacancy} onChange={() => handleToggle('allow_standalone_vacancy')} />
                             </div>
-                        )}
-                        {config.enable_standalone_tasks && config.allow_standalone_vacancy && (
-                            <div className="solver-v5-config-row solver-v5-config-row-indent">
-                                {renderNumberField('objective_weight_standalone_vacancy', '空缺惩罚权重', { min: 100, max: 100000, step: 1000 })}
-                            </div>
-                        )}
-                    </div>
-                </section>
+                        </div>
+                    )}
+                    {showWeight && (
+                        <div className="solver-v5-config-row solver-v5-config-row-indent">
+                            {renderNumberField('objective_weight_standalone_vacancy', '空缺惩罚权重', { min: 100, max: 100000, step: 1000 })}
+                        </div>
+                    )}
+                </div>
+            </section>
+        );
+    };
 
-                <WxbDivider label="优化目标" />
-                <div className="solver-v5-config-list">
-                    {objectiveControls.map((item) => {
-                        const key = item.key as keyof SolverConfig;
-                        const weightKey = item.weightKey as keyof SolverConfig;
-                        return (
-                            <div key={item.key} className="solver-v5-config-row solver-v5-config-row-objective">
-                                <div className="solver-v5-config-copy">
-                                    <strong>{item.title}</strong>
-                                    <span>{item.description}</span>
-                                </div>
-                                <div className="solver-v5-objective-controls">
-                                    {renderNumberField(weightKey, '权重', { min: 0, disabled: !(config[key] as boolean) })}
-                                    <WxbSwitch
-                                        checked={config[key] as boolean}
-                                        onChange={() => handleToggle(key)}
-                                    />
-                                </div>
+    const renderObjectivePanel = () => {
+        const visible = objectiveControls.filter((item) => shouldRenderRow(item.key, item.title, item.description));
+        if (visible.length === 0) return null;
+        return (
+            <div className="solver-v5-config-list">
+                {visible.map((item) => {
+                    const key = item.key as keyof SolverConfig;
+                    const weightKey = item.weightKey as keyof SolverConfig;
+                    return (
+                        <div
+                            key={item.key}
+                            className={`solver-v5-config-row solver-v5-config-row-objective ${isDirtyKey(item.key) || isDirtyKey(item.weightKey) ? 'solver-v5-config-row-dirty' : ''}`}
+                            data-config-key={item.key}
+                        >
+                            <div className="solver-v5-config-copy">
+                                <strong>{item.title}</strong>
+                                <span>{item.description}</span>
+                                {/* 6 个优化目标统一方向说明 */}
+                                <span className="solver-v5-objective-direction">数值越大，越强地避免此情况</span>
                             </div>
-                        );
-                    })}
+                            <div className="solver-v5-objective-controls">
+                                {renderNumberField(weightKey, '权重', { min: 0, disabled: !(config[key] as boolean) })}
+                                <WxbSwitch
+                                    checked={config[key] as boolean}
+                                    onChange={() => handleToggle(key)}
+                                />
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    const renderEnhancementPanel = () => {
+        const showHint = shouldRenderRow('enable_solution_hint', '解加速提示（Hint）', '用上一次解加速收敛');
+        const showBreakdown = shouldRenderRow('enable_objective_breakdown', '目标分量可视化', '上报各目标分量数据');
+        const showLex = shouldRenderRow('enable_lexicographic_l4', '字典序 L4 优化', '第二阶段优化 实验');
+        if (!showHint && !showBreakdown && !showLex) return null;
+        return (
+            <section className="solver-v5-config-panel solver-v5-enhancement-panel">
+                <div className="solver-v5-config-panel-title">
+                    {/* 内联 SVG 图标：火箭/增强 */}
+                    <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true"
+                        style={{ flexShrink: 0 }}
+                    >
+                        <path
+                            d="M8 1.5C8 1.5 11.5 3 11.5 7C11.5 9.5 10 11.5 8 12.5C6 11.5 4.5 9.5 4.5 7C4.5 3 8 1.5 8 1.5Z"
+                            stroke="var(--wx-blue-600)"
+                            strokeWidth="1.2"
+                            fill="var(--wx-blue-50)"
+                        />
+                        <circle cx="8" cy="7" r="1.5" fill="var(--wx-blue-600)" />
+                        <path
+                            d="M6.5 12L5.5 14.5M9.5 12L10.5 14.5"
+                            stroke="var(--wx-blue-400)"
+                            strokeWidth="1.2"
+                            strokeLinecap="round"
+                        />
+                    </svg>
+                    <strong>V5 求解增强</strong>
+                </div>
+                <p className="solver-v5-enhancement-desc">
+                    以下选项为 V5 新增能力，默认值已保证与 V4 等价；调整前请阅读各项说明。
+                </p>
+
+                <div className="solver-v5-config-list">
+                    {showHint && (
+                        <div
+                            className={`solver-v5-config-row ${isHighlighted('enable_solution_hint') ? 'solver-v5-config-row-highlight' : ''} ${isDirtyKey('enable_solution_hint') ? 'solver-v5-config-row-dirty' : ''}`}
+                            data-config-key="enable_solution_hint"
+                        >
+                            <div className="solver-v5-config-copy">
+                                <strong>解加速提示（Hint）</strong>
+                                <span>用上一次解加速收敛（不影响最优结果）</span>
+                            </div>
+                            <div className="solver-v5-config-row-tail">
+                                {renderRowResetAffordance('enable_solution_hint')}
+                                <WxbSwitch
+                                    checked={config.enable_solution_hint}
+                                    onChange={() => handleToggle('enable_solution_hint')}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {showBreakdown && (
+                        <div
+                            className={`solver-v5-config-row ${isHighlighted('enable_objective_breakdown') ? 'solver-v5-config-row-highlight' : ''} ${isDirtyKey('enable_objective_breakdown') ? 'solver-v5-config-row-dirty' : ''}`}
+                            data-config-key="enable_objective_breakdown"
+                        >
+                            <div className="solver-v5-config-copy">
+                                <strong>目标分量可视化</strong>
+                                <span>上报各目标分量数据供监视器图表展示（不影响求解方向）</span>
+                            </div>
+                            <div className="solver-v5-config-row-tail">
+                                {renderRowResetAffordance('enable_objective_breakdown')}
+                                <WxbSwitch
+                                    checked={config.enable_objective_breakdown}
+                                    onChange={() => handleToggle('enable_objective_breakdown')}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {showLex && (
+                        <div
+                            className={`solver-v5-config-row ${isHighlighted('enable_lexicographic_l4') ? 'solver-v5-config-row-highlight' : ''} ${isDirtyKey('enable_lexicographic_l4') ? 'solver-v5-config-row-dirty' : ''}`}
+                            data-config-key="enable_lexicographic_l4"
+                        >
+                            <div className="solver-v5-config-copy">
+                                <div className="solver-v5-lex-title">
+                                    <strong>字典序 L4 优化</strong>
+                                    <WxbTooltip title="字典序 L4：在 L0–L3 目标全部相等的等价最优解中，再挑分量分布更优者，结果不劣于 V4">
+                                        <span className="solver-v5-lex-help" aria-label="字典序 L4 说明">?</span>
+                                    </WxbTooltip>
+                                    {config.enable_lexicographic_l4 && (
+                                        <WxbTooltip title="仅在等价最优解中挑分量更优者，不劣于 V4">
+                                            <WxbTag color="amber" style={{ cursor: 'default', marginLeft: 6 }}>
+                                                实验
+                                            </WxbTag>
+                                        </WxbTooltip>
+                                    )}
+                                </div>
+                                <span>
+                                    开启后在 L0–L3 目标相等的前提下进行第二阶段优化（L4），优先改善目标分量分布。
+                                    {!config.enable_lexicographic_l4 && (
+                                        <span className="solver-v5-lex-hint"> 关闭时与 V4 逐字节等价。</span>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="solver-v5-config-row-tail">
+                                {renderRowResetAffordance('enable_lexicographic_l4')}
+                                <WxbSwitch
+                                    checked={config.enable_lexicographic_l4}
+                                    onChange={() => handleToggle('enable_lexicographic_l4')}
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </section>
+        );
+    };
+
+    const renderActivePanel = () => {
+        switch (activeCategoryKey) {
+            case 'scope':
+                return renderScopePanel();
+            case 'hard':
+                return renderHardConstraintPanel();
+            case 'consecutive':
+                return renderConsecutivePanel();
+            case 'night':
+                return renderNightPanel();
+            case 'standalone':
+                return renderStandalonePanel();
+            case 'objective':
+                return renderObjectivePanel();
+            case 'enhancement':
+                return renderEnhancementPanel();
+            default:
+                return null;
+        }
+    };
+
+    const activeCategory = categories.find((c) => c.key === activeCategoryKey) || categories[0];
+    const activeDirty = categoryDirtyCount(activeCategory);
+    const activeKeyCount = activeCategory.configKeys.length;
+
+    /** 当前分类下被关闭的硬约束数（用于 danger 提示条）*/
+    const activeDisabledHardCount = (activeCategory.hardConstraintKeys || []).reduce(
+        (acc, k) => acc + ((config as unknown as Record<string, unknown>)[k] === false ? 1 : 0),
+        0,
+    );
+
+    return (
+        <WxbModal
+            open={visible}
+            onCancel={onClose}
+            footer={(
+                <div className="solver-v5-modal-footer">
+                    <WxbPopconfirm
+                        title="将重置全部为默认，确定？"
+                        okText="重置"
+                        cancelText="取消"
+                        onConfirm={handleReset}
+                    >
+                        <WxbButton type="button" variant="ghost">
+                            <WxbIcon name="flow-divert" size={15} />
+                            恢复默认
+                        </WxbButton>
+                    </WxbPopconfirm>
+                    <div className="solver-v5-modal-footer-right">
+                        <WxbButton type="button" variant="ghost" onClick={onClose}>
+                            取消
+                        </WxbButton>
+                        <WxbButton type="button" variant="primary" onClick={onClose}>
+                            <WxbIcon name="released" size={15} />
+                            应用配置{globalDirtyCount > 0 ? ` · ${globalDirtyCount}` : ''}
+                        </WxbButton>
+                    </div>
+                </div>
+            )}
+            width={920}
+            className="solver-v5-config-modal solver-v5-config-modal-split"
+        >
+            <div className="solver-v5-config-topbar">
+                <span className="solver-v5-config-topbar-title">求解器配置</span>
+                {globalDirtyCount > 0 && (
+                    <WxbBadge status="info" label={`已改 ${globalDirtyCount} 项`} />
+                )}
+                <div className="solver-v5-config-title-spacer" />
+                <WxbSegmented
+                    size="sm"
+                    options={[
+                        { label: '全部', value: 'all' },
+                        { label: `仅已改动 ${globalDirtyCount}`, value: 'changed' },
+                        { label: '仅受影响', value: 'affected', disabled: !hasAnyHighlight },
+                    ]}
+                    value={viewMode}
+                    onChange={(v) => setViewMode(v as ViewMode)}
+                />
+            </div>
+            <div className="solver-v5-config-split">
+                {/* ── 左栏：搜索 + 分类导航 ── */}
+                <aside className="solver-v5-config-nav">
+                    <div className="solver-v5-config-nav-search">
+                        <WxbSearchInput
+                            placeholder="搜配置项 / 术语"
+                            value={searchQuery}
+                            onChange={(v) => setSearchQuery(v)}
+                        />
+                    </div>
+                    <nav className="solver-v5-config-nav-list">
+                        {categories.map((cat) => {
+                            if (!categoryVisibleInSearch(cat)) return null;
+                            const dirty = categoryDirtyCount(cat);
+                            const hit = categoryHasHighlight(cat);
+                            const isActive = cat.key === activeCategoryKey;
+                            return (
+                                <button
+                                    type="button"
+                                    key={cat.key}
+                                    className={`solver-v5-config-nav-item ${isActive ? 'is-active' : ''}`}
+                                    onClick={() => setActiveCategoryKey(cat.key)}
+                                >
+                                    <span className="solver-v5-config-nav-icon">{cat.icon}</span>
+                                    <span className="solver-v5-config-nav-label">{cat.label}</span>
+                                    {hit && <span className="solver-v5-config-nav-amber-dot" aria-label="含受影响项" />}
+                                    {dirty > 0 && (
+                                        <WxbBadge status="info" label={String(dirty)} className="solver-v5-config-nav-badge" />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </nav>
+                </aside>
+
+                {/* ── 右栏：当前分类控件 ── */}
+                <div className="solver-v5-config-detail" ref={bodyRef}>
+                    <div className="solver-v5-config-detail-head">
+                        <h3 className="solver-v5-config-detail-title">{activeCategory.label}</h3>
+                        <span className="solver-v5-config-detail-meta">
+                            {activeKeyCount} 项 · 已改 {activeDirty}
+                        </span>
+                    </div>
+
+                    {activeDisabledHardCount > 0 && (
+                        <div className="solver-v5-config-danger-bar">
+                            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M8 1.8L14.5 13.2H1.5L8 1.8Z" stroke="var(--wx-red-700)" strokeWidth="1.3" strokeLinejoin="round" fill="none" />
+                                <path d="M8 6V9" stroke="var(--wx-red-700)" strokeWidth="1.3" strokeLinecap="round" />
+                                <circle cx="8" cy="11" r="0.8" fill="var(--wx-red-700)" />
+                            </svg>
+                            <span>已关闭 {activeDisabledHardCount} 项硬约束，发起求解前请确认。</span>
+                        </div>
+                    )}
+
+                    <div className="solver-v5-config-detail-body">
+                        {renderActivePanel()}
+                    </div>
                 </div>
             </div>
         </WxbModal>

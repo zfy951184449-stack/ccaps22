@@ -1,0 +1,258 @@
+/* 工艺模板列表(新)—— 排产 · 模板层目录 / 版本视图。颜色只用 CSS 变量。 */
+
+.tpl-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 24px 32px;
+}
+
+/* ── 页头 ── */
+.tpl-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tpl-header-main {
+  min-width: 0;
+}
+
+.tpl-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin-bottom: 4px;
+}
+
+.tpl-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: var(--wx-blue-900);
+}
+
+.tpl-description {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin: 0 0 6px;
+  max-width: 820px;
+}
+
+.tpl-meta {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.tpl-header-actions {
+  flex-shrink: 0;
+}
+
+/* ── KPI 卡片行 ── */
+.tpl-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.tpl-kpi {
+  padding: 14px 16px;
+}
+
+.tpl-kpi-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--wx-blue-700);
+}
+
+.tpl-kpi-active {
+  color: var(--wx-green-600);
+}
+
+.tpl-kpi-draft {
+  color: var(--wx-amber-700);
+}
+
+.tpl-kpi-label {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+/* ── 列表区块 ── */
+.tpl-section {
+  background: var(--wx-bg);
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 12px;
+  padding: 14px 16px 8px;
+}
+
+.tpl-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tpl-search {
+  width: 280px;
+  max-width: 100%;
+}
+
+/* ── 表格单元 ── */
+.tpl-code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wx-blue-700);
+}
+
+.tpl-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tpl-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wx-blue-900);
+}
+
+.tpl-name-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.tpl-num {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tpl-num-unit {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.tpl-num-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.tpl-version {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 6px;
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-100);
+}
+
+.tpl-status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tpl-current-flag {
+  font-size: 10px;
+  color: var(--wx-green-700);
+  background: var(--wx-green-100);
+  border: 1px solid var(--wx-green-300);
+  border-radius: 4px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+
+.tpl-updated-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+}
+
+.tpl-owner {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+/* ── 明细抽屉 ── */
+.tpl-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tpl-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tpl-detail-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--wx-blue-900);
+}
+
+.tpl-detail-dl {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 10px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.tpl-detail-dl dt {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-weight: 600;
+}
+
+.tpl-detail-dl dd {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.tpl-detail-hint {
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--wx-amber-100);
+  border: 1px solid var(--wx-amber-500);
+  color: var(--wx-amber-700);
+}
+
+.tpl-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tpl-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
+/* ── 响应式收窄 ── */
+@media (max-width: 980px) {
+  .tpl-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

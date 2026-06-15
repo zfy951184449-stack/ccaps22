@@ -37,9 +37,11 @@ const BATCH_COLORS = [
 interface WorkHoursCurveCardProps {
     date: Dayjs;
     orgPath: number[];
+    /** 隐藏顶部 KPI 数字卡片，只保留曲线。默认关闭（保持调度中心原样）。 */
+    hideKpis?: boolean;
 }
 
-const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }) => {
+const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath, hideKpis = false }) => {
     const [loading, setLoading] = useState(false);
     const [granularity, setGranularity] = useState<'day' | 'month'>('day');
     const [data, setData] = useState<WorkHoursData | null>(null);
@@ -306,6 +308,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                 {/* 日视图 */}
                 {granularity === 'day' && dayViewData && wxbChartPoints.length > 0 && (
                     <>
+                        {!hideKpis && (
                         <div className="dashboard-kpi-grid">
                             <WxbKpiCard
                                 title="月度总工时"
@@ -329,6 +332,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                                 unit="个"
                             />
                         </div>
+                        )}
 
                         {/* 图例联动行（日视图专属，wxb-cs-legend 风格） */}
                         {batchOptions.length > 0 && (
@@ -389,6 +393,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                 {/* 月视图 */}
                 {granularity === 'month' && monthViewData && monthHasData && (
                     <>
+                        {!hideKpis && (
                         <div className="dashboard-kpi-grid" style={{ gridTemplateColumns: '1fr' }}>
                             <WxbKpiCard
                                 title="月人均操作工时 (均値)"
@@ -396,6 +401,7 @@ const WorkHoursCurveCard: React.FC<WorkHoursCurveCardProps> = ({ date, orgPath }
                                 unit={`h (共${monthViewData.summary.total_employees}人)`}
                             />
                         </div>
+                        )}
 
                         {/* 月视图图例 */}
                         <div className="wxb-cs-legend" style={{ marginTop: 8 }}>

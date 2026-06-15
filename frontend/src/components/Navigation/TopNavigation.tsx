@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   ApartmentOutlined,
+  AreaChartOutlined,
   BellOutlined,
   ClockCircleOutlined,
   DashboardOutlined,
@@ -54,12 +55,20 @@ const navGroups: NavGroup[] = [
     requiredPermission: 'SYSTEM_DASHBOARD_READ',
   },
   {
+    key: 'operations-overview',
+    label: '运营总览',
+    subtitle: 'Ops Overview',
+    path: '/operations-overview',
+    icon: <AreaChartOutlined />,
+    requiredPermission: 'SYSTEM_DASHBOARD_READ',
+  },
+  {
     key: 'my-schedule',
     label: '我的排班',
     subtitle: 'My Shifts',
     path: '/my-schedule',
     icon: <ClockCircleOutlined />,
-    requiredPermission: 'ROSTER_SELF_READ',
+    requiredPermission: 'ROSTER_SCHEDULE_READ',
   },
   {
     key: 'base-data',
@@ -83,6 +92,12 @@ const navGroups: NavGroup[] = [
       { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates', requiredPermission: 'APS_TEMPLATE_READ' },
       { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4', requiredPermission: 'APS_BATCH_READ' },
       { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2', requiredPermission: 'APS_BATCH_READ' },
+      { key: 'process-flow-builder', icon: <ProjectOutlined />, label: '主工艺构建(新)', path: '/process-flow-builder', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'production-scheduling', icon: <ProjectOutlined />, label: '排产结果(新)', path: '/production-scheduling', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'process-flow-templates', icon: <ProjectOutlined />, label: '工艺模板列表(新)', path: '/process-flow-templates', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'equipment-state-machine', icon: <ProjectOutlined />, label: '设备状态机(新)', path: '/equipment-state-machine', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'derivable-library', icon: <ProjectOutlined />, label: '派生库(新)', path: '/derivable-library', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'ps-resource-master', icon: <ProjectOutlined />, label: '排产资源(新)', path: '/ps-resource-master', requiredPermission: 'APS_TEMPLATE_READ' },
     ],
   },
   {

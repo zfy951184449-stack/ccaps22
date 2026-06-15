@@ -29,6 +29,10 @@ interface ManpowerCurveCardProps {
     date: Dayjs;
     orgPath: number[];
     shiftId?: number;
+    /** 在「需求 > 供给」的日期上叠加红色缺口阴影。默认关闭（保持调度中心原样）。 */
+    showGapShading?: boolean;
+    /** 隐藏顶部 KPI 数字卡片，只保留曲线。默认关闭（保持调度中心原样）。 */
+    hideKpis?: boolean;
 }
 
 // 班次颜色配置
@@ -64,7 +68,9 @@ const getCategoryWeight = (category: string): number => {
 const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
     date,
     orgPath,
-    shiftId
+    shiftId,
+    showGapShading = false,
+    hideKpis = false
 }) => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<ManpowerCurveData | null>(null);
@@ -232,6 +238,21 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
             }
         });
 
+        // 缺口阴影：需求 > 供给的日期叠加红色区域（仅在 showGapShading 开启时）
+        if (showGapShading) {
+            dailyData.forEach((d, i) => {
+                if (d.gap > 0) {
+                    anns.push({
+                        type: 'region',
+                        xStart: i,
+                        xEnd: i,
+                        color: '#ff4d4f',
+                        opacity: 0.14,
+                    });
+                }
+            });
+        }
+
         // 总人数参考线
         if (data?.total_headcount) {
             anns.push({
@@ -244,7 +265,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
         }
 
         return anns;
-    }, [dailyData, data?.total_headcount]);
+    }, [dailyData, data?.total_headcount, showGapShading]);
 
     return (
         <WxbChartShell
@@ -264,6 +285,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                 {data && dailyData.length > 0 ? (
                     <>
                         {/* KPI 统计块 */}
+                        {!hideKpis && (
                         <div className="dashboard-kpi-grid">
                             <WxbKpiCard
                                 title="团队总人数"
@@ -289,6 +311,7 @@ const ManpowerCurveCard: React.FC<ManpowerCurveCardProps> = ({
                                 trend={summary.max_gap > 0 ? 'down' : 'up'}
                             />
                         </div>
+                        )}
 
                         {/* 图例 */}
                         <div className="wxb-cs-legend" style={{ marginTop: 8 }}>

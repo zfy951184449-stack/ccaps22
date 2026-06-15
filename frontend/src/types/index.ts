@@ -813,3 +813,9 @@ export interface SchedulingSettings {
   solverImprovementTimeoutSeconds?: number;
   shiftMatchingTolerance?: number;
 }
+
+// 排产(production scheduling)契约
+export * from './productionScheduling';
+export * from './equipmentStateMachine';
+export * from './derivableLibrary';
+export * from './psResource';

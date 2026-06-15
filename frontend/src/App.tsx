@@ -6,6 +6,7 @@ import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
 import TopNavigation from './components/Navigation/TopNavigation';
 import Dashboard from './components/Dashboard';
+import OperationsOverviewPage from './pages/OperationsOverviewPage';
 import OrganizationWorkbenchPage from './pages/OrganizationWorkbenchPage';
 import QualificationsPage from './pages/QualificationsPage';
 import QualificationMatrixPage from './pages/QualificationMatrixPage';
@@ -20,6 +21,12 @@ import ShiftDefinitionsPage from './pages/ShiftDefinitionsPage';
 import EmployeeSchedulePage from './pages/employee-schedule/EmployeeSchedulePage';
 import UiKitShowcasePage from './pages/UiKitShowcasePage';
 import ProcessTemplatesV3Page from './pages/ProcessTemplatesV3Page';
+import ProductionSchedulingPage from './pages/ProductionSchedulingPage';
+import ProcessFlowBuilderPage from './pages/ProcessFlowBuilderPage';
+import TemplateListPage from './pages/TemplateListPage';
+import EquipmentStateMachinePage from './pages/EquipmentStateMachinePage';
+import DerivableLibraryPage from './pages/DerivableLibraryPage';
+import PsResourceMasterPage from './pages/PsResourceMasterPage';
 import EquipmentManagementPage from './pages/EquipmentManagementPage';
 import RosterLeadershipCockpitPage from './pages/roster/RosterLeadershipCockpitPage';
 import RosterExceptionRepairPage from './pages/roster/RosterExceptionRepairPage';
@@ -112,9 +119,17 @@ const AppLayout: React.FC = () => (
             }
           />
           <Route
+            path="/operations-overview"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="SYSTEM_DASHBOARD_READ">
+                <OperationsOverviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/my-schedule"
             element={
-              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_SELF_READ">
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_SCHEDULE_READ">
                 <EmployeeSchedulePage />
               </ProtectedRoute>
             }
@@ -172,6 +187,54 @@ const AppLayout: React.FC = () => (
             element={
               <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
                 <ProcessTemplatesV3Page />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/production-scheduling"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <ProductionSchedulingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/process-flow-builder"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <ProcessFlowBuilderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/process-flow-templates"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <TemplateListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/equipment-state-machine"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <EquipmentStateMachinePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/derivable-library"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <DerivableLibraryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ps-resource-master"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <PsResourceMasterPage />
               </ProtectedRoute>
             }
           />

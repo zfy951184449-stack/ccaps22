@@ -1,0 +1,307 @@
+.esm-page .esm-meta {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.esm-view-label {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin-bottom: 8px;
+}
+
+/* ── 图例 ── */
+.esm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.esm-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.esm-legend-clock {
+  font-size: 11px;
+  color: var(--wx-amber-700);
+  background: var(--wx-amber-100);
+  border: 1px solid var(--wx-amber-500);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+/* ── 两栏布局 ── */
+.esm-split {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── 左:设备类列表 ── */
+.esm-classlist {
+  position: sticky;
+  top: 12px;
+}
+
+.esm-class {
+  display: block;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font: inherit;
+}
+
+.esm-class:hover {
+  border-color: var(--wx-blue-300);
+  background: var(--wx-blue-100);
+}
+
+.esm-class.selected {
+  border-color: var(--wx-primary, var(--wx-blue-600));
+  box-shadow: 0 0 0 2px var(--wx-blue-200);
+  background: var(--wx-blue-100);
+}
+
+.esm-class-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.esm-class-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.esm-class-code {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-family: ui-monospace, monospace;
+}
+
+.esm-class-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0;
+}
+
+.esm-class-attrcount {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.esm-class-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+/* ── 右:详情 ── */
+.esm-detail-head {
+  border-bottom: 1px solid var(--wx-blue-100);
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+}
+
+.esm-detail-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.esm-detail-ready {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--wx-green-700);
+  background: var(--wx-green-100);
+  border: 1px solid var(--wx-green-300);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-family: ui-monospace, monospace;
+}
+
+.esm-detail-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.esm-attrs {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── 单条属性面板 ── */
+.esm-attr {
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--wx-blue-100);
+}
+
+.esm-attr-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.esm-attr-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.esm-attr-ready {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-family: ui-monospace, monospace;
+}
+
+/* 计数条 */
+.esm-counter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.esm-counter-bar {
+  position: relative;
+  display: inline-block;
+  width: 140px;
+  height: 8px;
+  border-radius: 6px;
+  background: var(--wx-green-100);
+  border: 1px solid var(--wx-green-300);
+  overflow: hidden;
+}
+
+.esm-counter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--wx-green-500);
+}
+
+.esm-counter-text {
+  font-size: 11px;
+  color: var(--wx-green-700);
+}
+
+/* SVG 状态机 */
+.esm-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--wx-blue-100, transparent);
+}
+
+.esm-node-label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.esm-node-tag {
+  font-size: 9px;
+  opacity: 0.85;
+}
+
+.esm-edge-op {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.esm-edge-clock {
+  font-size: 10px;
+}
+
+.esm-edge:hover .esm-edge-op {
+  text-decoration: underline;
+}
+
+.esm-attr-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+/* ── 转移边检视 ── */
+.esm-edge-inspector {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.esm-edge-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.esm-dl {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 6px 12px;
+  font-size: 12px;
+  margin: 0;
+}
+
+.esm-dl dt {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  font-weight: 600;
+}
+
+.esm-dl dd {
+  margin: 0;
+}
+
+/* ── 派生提示 ── */
+.esm-derive-hint {
+  margin-top: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--wx-amber-100);
+  border: 1px solid var(--wx-amber-500);
+}
+
+.esm-todo {
+  display: block;
+  margin-top: 6px;
+  color: var(--wx-amber-700);
+  font-weight: 600;
+}
+
+.esm-empty {
+  font-size: 13px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  padding: 40px 0;
+  text-align: center;
+}

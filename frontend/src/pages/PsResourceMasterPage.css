@@ -1,0 +1,388 @@
+.psrm-page .psrm-meta {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-banner {
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.psrm-banner .psrm-todo {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--wx-amber-700);
+}
+
+.psrm-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.psrm-view-label {
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin-bottom: 8px;
+}
+
+.psrm-mt {
+  margin-top: 18px;
+}
+
+.psrm-muted {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-code {
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  color: var(--wx-blue-700);
+}
+
+.psrm-room-name {
+  display: block;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-shelf-val {
+  font-weight: 600;
+  color: var(--wx-blue-700);
+}
+
+/* ── Tabs label ── */
+.psrm-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.psrm-tab-count {
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--wx-blue-100);
+  color: var(--wx-blue-700);
+}
+
+.psrm-pane {
+  padding-top: 6px;
+}
+
+/* ── CIP 拓扑 ── */
+.psrm-topo {
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: var(--wx-bg, #ffffff);
+  overflow-x: auto;
+}
+
+.psrm-topo-cols {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  max-width: 880px;
+  padding: 0 4px 8px;
+}
+
+.psrm-topo-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-topo-leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.psrm-topo-hint {
+  margin-left: auto;
+  color: var(--wx-blue-600);
+}
+
+/* ── CIP 链路解读条 ── */
+.psrm-topo-read {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  border-radius: 8px;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.psrm-topo-read.empty {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  background: var(--wx-bg, #ffffff);
+  border-style: dashed;
+}
+
+.psrm-read-tag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 4px;
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-200);
+}
+
+.psrm-read-tag.locked {
+  color: #ffffff;
+  background: var(--wx-primary, var(--wx-blue-600));
+}
+
+.psrm-read-body {
+  flex: 1;
+}
+
+.psrm-read-lead {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--wx-blue-700);
+}
+
+.psrm-read-primary {
+  color: var(--wx-primary, var(--wx-blue-600));
+}
+
+.psrm-read-backup {
+  color: var(--wx-amber-700);
+}
+
+/* ── 占用语义示意(C11)── */
+.psrm-occ {
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 10px;
+  padding: 12px 16px 10px;
+  background: var(--wx-bg, #ffffff);
+  overflow-x: auto;
+}
+
+.psrm-occ-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wx-blue-700);
+  margin-bottom: 4px;
+}
+
+/* ── 物料效期可视化长条 ── */
+.psrm-shelf-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.psrm-shelf-bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wx-blue-100);
+  overflow: hidden;
+}
+
+.psrm-shelf-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.psrm-shelf-val.crit,
+.psrm-shelf-fill.crit {
+  color: var(--wx-red-700);
+}
+.psrm-shelf-fill.crit {
+  background: var(--wx-red-500);
+}
+
+.psrm-shelf-val.warn,
+.psrm-shelf-fill.warn {
+  color: var(--wx-amber-700);
+}
+.psrm-shelf-fill.warn {
+  background: var(--wx-amber-500);
+}
+
+.psrm-shelf-val.mid {
+  color: var(--wx-blue-700);
+}
+.psrm-shelf-fill.mid {
+  background: var(--wx-blue-600, var(--wx-primary));
+}
+
+.psrm-shelf-val.ok {
+  color: var(--wx-green-700);
+}
+.psrm-shelf-fill.ok {
+  background: var(--wx-green-500);
+}
+
+/* ── CIP 站卡片 ── */
+.psrm-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.psrm-res-card {
+  border: 1px solid var(--wx-green-300);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--wx-green-100);
+}
+
+.psrm-res-card.emergency {
+  border-color: var(--wx-amber-500);
+  background: var(--wx-amber-100);
+}
+
+.psrm-res-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.psrm-cap {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-res-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.psrm-res-sub {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-res-note {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ── 管线 → 主备站映射 ── */
+.psrm-pipe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.psrm-pipe-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 8px;
+}
+
+.psrm-pipe-code {
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  color: var(--wx-blue-700);
+  background: var(--wx-blue-200);
+  padding: 1px 8px;
+  border-radius: 4px;
+}
+
+.psrm-pipe-name {
+  font-weight: 500;
+}
+
+.psrm-pipe-arrow {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-pipe-equips {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+/* ── suite 卡片 ── */
+.psrm-suite-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.psrm-suite-card {
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.psrm-suite-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.psrm-suite-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.psrm-suite-note {
+  font-size: 11px;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.psrm-suite-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.psrm-suite-room {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  color: var(--wx-blue-700);
+  padding: 3px 8px;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 6px;
+}
