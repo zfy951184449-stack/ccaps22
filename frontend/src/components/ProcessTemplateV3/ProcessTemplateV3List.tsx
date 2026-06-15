@@ -103,6 +103,14 @@ const ProcessTemplateV3List: React.FC = () => {
   const [createNameError, setCreateNameError] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // ---- Edit-info modal (改名 / 归属部门 / 描述，不进甘特图) ----
+  const [editTarget, setEditTarget] = useState<TemplateSummary | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editTeamId, setEditTeamId] = useState<number | null>(null);
+  const [editDesc, setEditDesc] = useState('');
+  const [editNameError, setEditNameError] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   // ---- Import / Export ----
   const [importOpen, setImportOpen] = useState(false);
   const [exportingWb, setExportingWb] = useState(false);
@@ -205,6 +213,48 @@ const ProcessTemplateV3List: React.FC = () => {
       wxbToast.error(err?.response?.data?.error || '复制模版失败');
     }
   }, [navigate]);
+
+  // 打开「编辑信息」弹窗：改名称 / 归属部门 / 描述。进甘特图请点击整行。
+  const handleEdit = useCallback((t: TemplateSummary, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setEditTarget(t);
+    setEditName(t.template_name);
+    setEditTeamId(t.team_id);
+    setEditDesc(t.description ?? '');
+    setEditNameError(false);
+  }, []);
+
+  const closeEdit = useCallback(() => {
+    setEditTarget(null);
+    setEditName('');
+    setEditTeamId(null);
+    setEditDesc('');
+    setEditNameError(false);
+  }, []);
+
+  const handleUpdate = useCallback(async () => {
+    if (!editTarget) return;
+    if (!editName.trim()) {
+      setEditNameError(true);
+      wxbToast.warning('请输入模板名称');
+      return;
+    }
+    try {
+      setSaving(true);
+      await processTemplateV2Api.updateTemplate(editTarget.id, {
+        templateName: editName.trim(),
+        teamId: editTeamId,
+        description: editDesc,
+      });
+      closeEdit();
+      wxbToast.success('模版信息已更新');
+      void loadTemplates(activeTeamId);
+    } catch (err: any) {
+      wxbToast.error(err?.response?.data?.error || '更新模版信息失败');
+    } finally {
+      setSaving(false);
+    }
+  }, [editTarget, editName, editTeamId, editDesc, closeEdit, loadTemplates, activeTeamId]);
 
   const handleCreate = useCallback(async () => {
     if (!createName.trim()) {
@@ -316,7 +366,7 @@ const ProcessTemplateV3List: React.FC = () => {
           {hasRisk(t) ? riskBadges(t) : <WxbTag color="neutral">正常</WxbTag>}
         </div>
         <div className="v3-template-cell v3-template-cell-actions" role="cell">
-          <WxbButton size="sm" onClick={(e) => { e.stopPropagation(); goEditor(t); }}>编辑</WxbButton>
+          <WxbButton size="sm" onClick={(e) => handleEdit(t, e)}>编辑</WxbButton>
           <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>复制</WxbButton>
         </div>
       </div>
@@ -512,6 +562,45 @@ const ProcessTemplateV3List: React.FC = () => {
             placeholder="可选描述"
             value={createDesc}
             onChange={(e) => setCreateDesc(e.target.value)}
+            rows={3}
+          />
+        </div>
+      </WxbModal>
+
+      {/* Edit-info Modal (改名 / 归属部门 / 描述) */}
+      <WxbModal
+        open={editTarget !== null}
+        title={editTarget ? `编辑模版信息 · ${editTarget.template_code}` : '编辑模版信息'}
+        okText="保存"
+        confirmLoading={saving}
+        onOk={handleUpdate}
+        onCancel={closeEdit}
+      >
+        <div className="v3-create-form">
+          <WxbInput
+            label="模板名称"
+            placeholder="输入模板名称"
+            value={editName}
+            error={editNameError ? '请输入模板名称' : undefined}
+            onChange={(e) => {
+              setEditName(e.target.value);
+              if (editNameError) setEditNameError(false);
+            }}
+          />
+          <WxbFormField label="所属团队">
+            <WxbSelect
+              value={editTeamId ?? undefined}
+              onChange={(v) => setEditTeamId(v as number | null)}
+              placeholder="选择团队（可选）"
+              allowClear
+              options={teams.map((t) => ({ value: t.id, label: t.unit_name }))}
+            />
+          </WxbFormField>
+          <WxbTextarea
+            label="描述"
+            placeholder="可选描述"
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
             rows={3}
           />
         </div>
