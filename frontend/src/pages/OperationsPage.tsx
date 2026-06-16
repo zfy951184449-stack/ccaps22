@@ -23,9 +23,10 @@ import { WxbTag } from '../components/wxb-ui/Tag/Tag';
 import { WxbTextarea } from '../components/wxb-ui/Textarea/Textarea';
 import { WxbTooltip } from '../components/wxb-ui/Tooltip/Tooltip';
 import { wxbToast } from '../components/wxb-ui/Toast/Toast';
+import OperationQualificationModal from '../components/OperationQualificationModal';
 import './OperationsPage.css';
 
-type OperationIconName = 'plus' | 'refresh' | 'edit' | 'delete' | 'clock' | 'people';
+type OperationIconName = 'plus' | 'refresh' | 'edit' | 'delete' | 'clock' | 'people' | 'shield';
 
 interface Operation {
     id: number;
@@ -153,6 +154,12 @@ const OperationIcon: React.FC<{ name: OperationIconName }> = ({ name }) => {
                 <path d="M15.5 5.2a3 3 0 0 1 0 5.6" />
             </>
         ),
+        shield: (
+            <>
+                <path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
+                <path d="M9 12l2 2 4-4" />
+            </>
+        ),
     };
 
     return (
@@ -179,6 +186,7 @@ const OperationsPage: React.FC = () => {
     const [formErrors, setFormErrors] = useState<FormErrors>({});
     const [nextCode, setNextCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [qualificationOperation, setQualificationOperation] = useState<Operation | null>(null);
 
     const operationTypeById = useMemo(() => {
         const map = new Map<number, OperationType>();
@@ -330,6 +338,14 @@ const OperationsPage: React.FC = () => {
         setEditingOperation(null);
         setFormErrors({});
     }, [submitting]);
+
+    const openQualificationModal = useCallback((operation: Operation) => {
+        setQualificationOperation(operation);
+    }, []);
+
+    const closeQualificationModal = useCallback(() => {
+        setQualificationOperation(null);
+    }, []);
 
     const handleSubmit = useCallback(async () => {
         const nextErrors = validateForm(formState);
@@ -490,7 +506,7 @@ const OperationsPage: React.FC = () => {
         },
         {
             title: '操作',
-            width: 100,
+            width: 140,
             render: (_value, record) => {
                 const deleteDisabled = toFiniteNumber(record.qualification_count) > 0;
                 const deleteButton = (
@@ -518,6 +534,17 @@ const OperationsPage: React.FC = () => {
                                 <OperationIcon name="edit" />
                             </WxbButton>
                         </WxbTooltip>
+                        <WxbTooltip title="编辑资质要求">
+                            <WxbButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`编辑 ${record.operation_name} 的资质要求`}
+                                onClick={() => openQualificationModal(record)}
+                            >
+                                <OperationIcon name="shield" />
+                            </WxbButton>
+                        </WxbTooltip>
                         {deleteDisabled ? (
                             <WxbTooltip title="已有资质要求，不能直接删除">
                                 <span>{deleteButton}</span>
@@ -537,7 +564,7 @@ const OperationsPage: React.FC = () => {
                 );
             },
         },
-    ], [handleDelete, openEditModal, operationTypeById, operationTypes, qualifiedPersonnelMap]);
+    ], [handleDelete, openEditModal, openQualificationModal, operationTypeById, operationTypes, qualifiedPersonnelMap]);
 
     return (
         <WxbPageShell size="full" gap="lg" className="operations-page">
@@ -614,7 +641,7 @@ const OperationsPage: React.FC = () => {
                         description: '请检查后端服务或稍后重试。',
                         action: <WxbButton type="button" variant="secondary" onClick={fetchData}>重新加载</WxbButton>,
                     } : undefined}
-                    scroll={{ x: 1120 }}
+                    scroll={{ x: 1160 }}
                     pagination={{
                         pageSize: 20,
                         showSizeChanger: true,
@@ -708,6 +735,14 @@ const OperationsPage: React.FC = () => {
                     />
                 </form>
             </WxbModal>
+
+            <OperationQualificationModal
+                visible={qualificationOperation !== null}
+                operationId={qualificationOperation?.id ?? null}
+                operationName={qualificationOperation?.operation_name ?? ''}
+                onClose={closeQualificationModal}
+                onUpdate={fetchData}
+            />
         </WxbPageShell>
     );
 };
