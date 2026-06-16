@@ -28,6 +28,7 @@ import {
   WxbInput,
   WxbTextarea,
   WxbCheckbox,
+  WxbPopconfirm,
   WxbPageShell,
   WxbPageHeader,
   WxbPageSection,
@@ -214,6 +215,18 @@ const ProcessTemplateV3List: React.FC = () => {
     }
   }, [navigate]);
 
+  // 删除模版（硬删除，连带阶段/操作/约束）。后端会先做引用保护：被批次计划/总包/配方版本引用时返回 409。
+  const handleDelete = useCallback(async (t: TemplateSummary) => {
+    try {
+      await processTemplateV2Api.deleteTemplate(t.id);
+      setSelectedId((cur) => (cur === t.id ? null : cur));
+      wxbToast.success(`已删除模版 ${t.template_code}`);
+      void loadTemplates(activeTeamId);
+    } catch (err: any) {
+      wxbToast.error(err?.response?.data?.error || '删除模版失败');
+    }
+  }, [loadTemplates, activeTeamId]);
+
   // 打开「编辑信息」弹窗：改名称 / 归属部门 / 描述。进甘特图请点击整行。
   const handleEdit = useCallback((t: TemplateSummary, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -368,6 +381,16 @@ const ProcessTemplateV3List: React.FC = () => {
         <div className="v3-template-cell v3-template-cell-actions" role="cell">
           <WxbButton size="sm" onClick={(e) => handleEdit(t, e)}>编辑</WxbButton>
           <WxbButton variant="ghost" size="sm" onClick={(e) => handleCopy(t, e)}>复制</WxbButton>
+          <WxbPopconfirm
+            title="删除工艺模版"
+            description={`确认删除「${t.template_code}」?将一并删除其阶段 / 操作 / 约束，且不可恢复。`}
+            okText="删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(t)}
+          >
+            <WxbButton variant="danger" size="sm" onClick={(e) => e.stopPropagation()}>删除</WxbButton>
+          </WxbPopconfirm>
         </div>
       </div>
     </WxbCard>

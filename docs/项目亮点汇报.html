@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MFG8APS · 智能排产排班系统 — 项目亮点汇报</title>
+<style>
+  :root{
+    --bg0:#050b1c; --bg1:#0a1733; --bg2:#102a5c;
+    --ink:#eef4ff; --ink2:#aec4e8; --ink3:#7088b2;
+    --brand:#2f81f7; --brand2:#54a3ff; --cyan:#34d8ee; --green:#34d39a;
+    --amber:#fbbf24; --violet:#9a8bf2; --rose:#f47ca6;
+    --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.18);
+    --card:rgba(255,255,255,.045); --card2:rgba(255,255,255,.07);
+    --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  svg{fill:none}
+  html,body{height:100%}
+  body{
+    font-family:var(--font); color:var(--ink); overflow:hidden;
+    background:
+      radial-gradient(1200px 800px at 78% -8%, rgba(47,129,247,.28), transparent 60%),
+      radial-gradient(1000px 700px at 6% 108%, rgba(52,216,238,.16), transparent 60%),
+      radial-gradient(900px 700px at 50% 50%, rgba(154,139,242,.08), transparent 70%),
+      linear-gradient(160deg, var(--bg0), var(--bg1) 55%, #07122b 100%);
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheen{position:fixed; inset:-20%; z-index:0; pointer-events:none; opacity:.7;
+    background:
+      radial-gradient(38vmax 38vmax at 80% 8%, rgba(40,112,228,.34), transparent 60%),
+      radial-gradient(34vmax 34vmax at 12% 92%, rgba(28,168,200,.26), transparent 60%),
+      radial-gradient(26vmax 26vmax at 55% 50%, rgba(120,100,230,.16), transparent 62%);
+    animation:sheenmove 26s ease-in-out infinite}
+  @keyframes sheenmove{0%,100%{transform:translate(0,0)}33%{transform:translate(2.5%,3%)}66%{transform:translate(-2.5%,-2%)}}
+
+  .stage{position:fixed; inset:0; z-index:2}
+  .slide{
+    position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center;
+    padding:clamp(88px,11vh,118px) clamp(28px,6vw,92px) clamp(78px,9vh,104px);
+    opacity:0; transform:translateX(70px) scale(.985); pointer-events:none;
+    transition:opacity .55s ease, transform .6s cubic-bezier(.22,.61,.36,1);
+  }
+  .slide.before{transform:translateX(-70px) scale(.985)}
+  .slide.is-active{opacity:1; transform:none; pointer-events:auto}
+
+  .eyebrow{display:inline-flex; align-items:center; gap:10px; font-size:clamp(12px,1.2vw,15px); letter-spacing:.22em; text-transform:uppercase; color:var(--cyan); font-weight:600}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan); box-shadow:0 0 14px var(--cyan)}
+  h1{font-size:clamp(34px,6.6vw,86px); line-height:1.04; font-weight:800; letter-spacing:-.01em}
+  h2{font-size:clamp(26px,4vw,52px); line-height:1.1; font-weight:800; letter-spacing:-.01em}
+  .lead{font-size:clamp(16px,1.9vw,26px); color:var(--ink2); line-height:1.6; max-width:50ch}
+  .muted{color:var(--ink3)}
+  .grad{background:linear-gradient(100deg,var(--brand2),var(--cyan) 60%,#8fe3ff); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .grad-g{background:linear-gradient(100deg,#5be0b6,var(--cyan)); -webkit-background-clip:text; background-clip:text; color:transparent}
+
+  /* reveal stagger */
+  .reveal{opacity:0}
+  .is-active .reveal{animation:rise .72s cubic-bezier(.2,.7,.2,1) both; animation-delay:calc(var(--i,0)*.085s + .12s)}
+  @keyframes rise{from{opacity:0; transform:translateY(26px)}to{opacity:1; transform:translateY(0)}}
+  .is-active .pop{animation:pop .6s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*.07s + .15s)}
+  @keyframes pop{from{opacity:0; transform:scale(.9)}to{opacity:1; transform:scale(1)}}
+
+  /* cover */
+  .cover-meta{display:flex; gap:30px; flex-wrap:wrap; margin-top:34px}
+  .cover-meta div{font-size:clamp(13px,1.3vw,16px); color:var(--ink2)}
+  .cover-meta b{display:block; font-size:clamp(20px,2.4vw,32px); color:var(--ink); font-weight:800}
+
+  /* generic grid of cards */
+  .grid{display:grid; gap:clamp(14px,1.6vw,22px); margin-top:clamp(20px,3.2vh,40px)}
+  .g2{grid-template-columns:repeat(2,1fr)} .g3{grid-template-columns:repeat(3,1fr)} .g4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:clamp(16px,1.8vw,26px); backdrop-filter:blur(6px)}
+  .card.accent{background:linear-gradient(180deg,rgba(47,129,247,.16),rgba(47,129,247,.04)); border-color:rgba(84,163,255,.34)}
+  .card h3{font-size:clamp(17px,1.8vw,23px); font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:12px}
+  .card p{font-size:clamp(13px,1.35vw,17px); color:var(--ink2); line-height:1.6}
+  .ic{flex:0 0 auto; width:clamp(34px,3.4vw,46px); height:clamp(34px,3.4vw,46px); border-radius:13px; display:grid; place-items:center; background:rgba(255,255,255,.07); border:1px solid var(--line2)}
+  .ic svg{width:58%; height:58%; stroke:var(--brand2); stroke-width:1.7; fill:none; stroke-linecap:round; stroke-linejoin:round}
+  .ic.cy svg{stroke:var(--cyan)} .ic.gr svg{stroke:var(--green)} .ic.am svg{stroke:var(--amber)} .ic.vi svg{stroke:var(--violet)} .ic.ro svg{stroke:var(--rose)}
+
+  .tag{display:inline-block; font-size:clamp(11px,1.1vw,13px); padding:5px 12px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid var(--line); color:var(--ink2); margin:6px 8px 0 0}
+
+  /* before / after */
+  .ba{display:grid; grid-template-columns:1fr auto 1fr; gap:clamp(16px,2vw,34px); align-items:center; margin-top:clamp(18px,3vh,38px)}
+  .col h4{font-size:clamp(15px,1.6vw,20px); font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:10px}
+  .col h4 svg{flex:0 0 auto; width:clamp(18px,1.7vw,22px); height:clamp(18px,1.7vw,22px); stroke:currentColor; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round}
+  .col.old h4{color:var(--ink3)} .col.now h4{color:var(--green)}
+  .row{display:flex; align-items:flex-start; gap:11px; font-size:clamp(13px,1.4vw,18px); padding:9px 0; border-bottom:1px dashed var(--line); color:var(--ink2)}
+  .col.old .row{color:var(--ink3)}
+  .row svg{flex:0 0 auto; width:20px;height:20px; margin-top:2px; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round}
+  .col.old .row svg{stroke:#7a6a6a} .col.now .row svg{stroke:var(--green)}
+  .arrow{display:grid;place-items:center; width:clamp(42px,4vw,64px); height:clamp(42px,4vw,64px); border-radius:50%; background:linear-gradient(135deg,var(--brand),var(--cyan)); box-shadow:0 10px 40px rgba(47,129,247,.4)}
+  .arrow svg{width:50%;height:50%;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+
+  /* pipeline */
+  .pipe{display:flex; align-items:stretch; gap:0; margin-top:clamp(20px,3.4vh,44px); flex-wrap:wrap}
+  .step{flex:1 1 0; min-width:140px; position:relative; padding:clamp(14px,1.6vw,22px); text-align:center}
+  .step .n{width:46px;height:46px;margin:0 auto 12px; border-radius:14px; display:grid;place-items:center; background:rgba(255,255,255,.06); border:1px solid var(--line2)}
+  .step .n svg{width:24px;height:24px;stroke:var(--cyan);stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .step b{display:block; font-size:clamp(15px,1.6vw,20px); font-weight:700}
+  .step span{font-size:clamp(12px,1.2vw,15px); color:var(--ink3)}
+  .step:not(:last-child)::after{content:""; position:absolute; top:36px; right:-6px; width:12px;height:12px; border-top:2px solid var(--line2); border-right:2px solid var(--line2); transform:rotate(45deg)}
+
+  /* stat cards */
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:clamp(14px,1.6vw,22px); margin-top:clamp(20px,3vh,40px)}
+  .stat{background:var(--card); border:1px solid var(--line); border-radius:18px; padding:clamp(16px,2vw,30px); text-align:center; backdrop-filter:blur(6px)}
+  .stat-num{font-size:clamp(30px,4.6vw,62px); font-weight:800; line-height:1; letter-spacing:-.02em}
+  .stat-num .pfx,.stat-num .sfx{font-size:.5em; font-weight:700; color:var(--ink2)}
+  .stat-num .n{background:linear-gradient(180deg,#fff,#bcd8ff); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .stat-lbl{margin-top:12px; font-size:clamp(12px,1.25vw,16px); color:var(--ink2)}
+
+  /* roadmap */
+  .road{display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(16px,1.8vw,26px); margin-top:clamp(22px,3.4vh,44px)}
+  .lane{border-radius:20px; padding:clamp(18px,2vw,28px); border:1px solid var(--line); background:var(--card)}
+  .lane.l1{border-color:rgba(52,211,154,.34); background:linear-gradient(180deg,rgba(52,211,154,.12),transparent)}
+  .lane.l2{border-color:rgba(84,163,255,.34); background:linear-gradient(180deg,rgba(47,129,247,.13),transparent)}
+  .lane.l3{border-color:rgba(154,139,242,.34); background:linear-gradient(180deg,rgba(154,139,242,.13),transparent)}
+  .lane .st{font-size:clamp(11px,1.1vw,13px); font-weight:700; letter-spacing:.12em; text-transform:uppercase}
+  .lane.l1 .st{color:var(--green)} .lane.l2 .st{color:var(--brand2)} .lane.l3 .st{color:var(--violet)}
+  .lane h3{font-size:clamp(18px,1.9vw,25px); font-weight:800; margin:8px 0 12px}
+  .lane p{font-size:clamp(13px,1.3vw,16px); color:var(--ink2); line-height:1.6}
+
+  .kicker{font-size:clamp(13px,1.4vw,18px); color:var(--cyan); font-weight:600; margin-bottom:14px}
+  .big-quote{font-size:clamp(24px,3.4vw,46px); font-weight:800; line-height:1.25; max-width:24ch}
+
+  /* chrome */
+  .progress{position:fixed; top:0; left:0; height:3px; background:linear-gradient(90deg,var(--brand),var(--cyan)); width:0; z-index:20; transition:width .5s ease; box-shadow:0 0 12px rgba(52,216,238,.6)}
+  .brandmark{position:fixed; top:clamp(18px,3vh,30px); left:clamp(22px,4vw,54px); z-index:15; display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:.02em; font-size:clamp(14px,1.4vw,18px)}
+  .brandmark .m{width:30px;height:30px;border-radius:9px; background:linear-gradient(135deg,var(--brand),var(--cyan)); display:grid;place-items:center; box-shadow:0 6px 22px rgba(47,129,247,.45)}
+  .brandmark .m svg{width:60%;height:60%;stroke:#fff;stroke-width:2;fill:none}
+  .nav{position:fixed; bottom:clamp(16px,3vh,28px); right:clamp(22px,4vw,54px); z-index:15; display:flex; align-items:center; gap:14px}
+  .counter{font-size:clamp(13px,1.3vw,16px); color:var(--ink2); font-variant-numeric:tabular-nums}
+  .counter b{color:#fff; font-weight:800}
+  .btn{width:clamp(38px,4vw,48px); height:clamp(38px,4vw,48px); border-radius:50%; border:1px solid var(--line2); background:var(--card2); color:#fff; cursor:pointer; display:grid;place-items:center; transition:.2s; backdrop-filter:blur(6px)}
+  .btn:hover{background:rgba(47,129,247,.3); border-color:var(--brand2); transform:translateY(-2px)}
+  .btn:disabled{opacity:.3; cursor:default; transform:none; background:var(--card2); border-color:var(--line)}
+  .btn svg{width:42%;height:42%;stroke:#fff;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .dots{position:fixed; bottom:clamp(16px,3vh,28px); left:50%; transform:translateX(-50%); z-index:15; display:flex; gap:9px}
+  .dots i{width:8px;height:8px;border-radius:50%; background:rgba(255,255,255,.22); cursor:pointer; transition:.25s}
+  .dots i.on{width:26px; border-radius:4px; background:linear-gradient(90deg,var(--brand2),var(--cyan))}
+  .hint{position:fixed; bottom:clamp(16px,3vh,28px); left:clamp(22px,4vw,54px); z-index:15; font-size:clamp(11px,1.1vw,13px); color:var(--ink3)}
+  kbd{font-family:var(--font); background:rgba(255,255,255,.08); border:1px solid var(--line2); border-radius:6px; padding:2px 7px; font-size:.92em; color:var(--ink2)}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  @media (max-width:820px){
+    .g3,.g4,.stats,.road{grid-template-columns:repeat(2,1fr)} .ba{grid-template-columns:1fr; } .arrow{transform:rotate(90deg); margin:6px auto}
+  }
+</style>
+</head>
+<body>
+<h2 class="sr-only">MFG8APS 生物制药智能排产排班系统项目亮点汇报幻灯片</h2>
+<div class="sheen"></div>
+<div class="progress" id="progress"></div>
+
+<div class="brandmark"><span class="m"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/></svg></span>MFG8APS</div>
+
+<div class="stage" id="stage">
+
+  <!-- 1 封面 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>生物制药智能制造 · APS 高级排产</div>
+    <h1 class="reveal" style="--i:1; margin-top:22px">把工厂的<span class="grad">排产与排班</span><br/>从人工经验，<br/>升级为系统级<span class="grad-g">最优决策</span></h1>
+    <p class="lead reveal" style="--i:3; margin-top:26px">MFG8APS · 面向生物制药 CMO 工厂的一体化智能调度系统</p>
+    <div class="cover-meta">
+      <div class="reveal" style="--i:4"><b>8 个月</b>持续研发投入</div>
+      <div class="reveal" style="--i:5"><b>3 个</b>独立服务协同</div>
+      <div class="reveal" style="--i:6"><b>约 18 万行</b>自研代码</div>
+    </div>
+  </section>
+
+  <!-- 2 一句话看懂 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>一句话看懂</div>
+    <h2 class="reveal" style="--i:1; margin-top:18px">这是一套给生物制药工厂用的<span class="grad">"智能调度大脑"</span></h2>
+    <p class="lead reveal" style="--i:2; margin-top:18px">"做什么药、分几批、谁来上班、用哪些设备、什么时候洗罐"——这些原本靠人脑和 Excel 拼出来的事，现在交给系统自动算出一份最优方案。</p>
+    <div class="grid g3">
+      <div class="card reveal" style="--i:4"><h3><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-4 4 4 4 0 0 0-1 7.5V18a3 3 0 0 0 6 0M12 3a4 4 0 0 1 4 4 4 4 0 0 1 1 7.5V18a3 3 0 0 1-6 0"/></svg></span>像老排班师傅</h3><p>把工厂几十年攒下来的"行规"全装进系统，不会排出违规、不合理的班。</p></div>
+      <div class="card reveal" style="--i:5"><h3><span class="ic cy"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h.01M15 9h.01M8 15h8"/></svg></span>像下棋的 AI</h3><p>在海量可能的排法里，快速挑出"最省人力、最满足规则"的那一手。</p></div>
+      <div class="card reveal" style="--i:6"><h3><span class="ic gr"><svg viewBox="0 0 24 24"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>像导航软件</h3><p>不只给答案，还告诉你"为什么这么排、堵在哪、怎么绕开"。</p></div>
+    </div>
+  </section>
+
+  <!-- 3 痛点 before/after -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>解决的痛点</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">从"靠人扛"到"系统算"</h2>
+    <div class="ba">
+      <div class="col old reveal" style="--i:2">
+        <h4><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg>过去的做法</h4>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>Excel 手工排，靠老师傅经验</div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>改一处，牵一发动全身</div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>排错了难追溯，说不清原因</div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>加班与人力成本看不清</div>
+      </div>
+      <div class="arrow reveal pop" style="--i:3"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
+      <div class="col now reveal" style="--i:4">
+        <h4><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>现在的系统</h4>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>一键自动排出最优班表</div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>规则写进系统，自动权衡取舍</div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>每个决定全程留痕、可追溯</div>
+        <div class="row"><svg viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg>成本作为优化目标，可量化</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 能力全景 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>能力全景</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">不是单点工具，<span class="grad">而是一条完整流水线</span></h2>
+    <p class="lead reveal" style="--i:2; margin-top:14px; max-width:60ch">从"计划"到"落地"，五大环节连成一个闭环——数据一处录入，全链路打通。</p>
+    <div class="pipe">
+      <div class="step reveal" style="--i:3"><div class="n"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h10v6H4z"/></svg></div><b>工艺模版</b><span>标准化生产配方</span></div>
+      <div class="step reveal" style="--i:4"><div class="n"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 4v16M4 9h5"/></svg></div><b>批次计划</b><span>排哪些、排几批</span></div>
+      <div class="step reveal" style="--i:5"><div class="n"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/></svg></div><b>智能排班</b><span>谁、哪天、上什么班</span></div>
+      <div class="step reveal" style="--i:6"><div class="n"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 7V4h8v3"/></svg></div><b>资源 / 设备</b><span>设备、房间、公用</span></div>
+      <div class="step reveal" style="--i:7"><div class="n"><svg viewBox="0 0 24 24"><path d="M4 18l5-6 4 4 7-9"/></svg></div><b>运行监控</b><span>进度与风险一目了然</span></div>
+    </div>
+  </section>
+
+  <!-- 5 亮点① 智能引擎 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ①　智能排班引擎</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">一键算出满足<span class="grad">几十条规章制度</span>的最优班表</h2>
+    <div class="grid g2" style="margin-top:24px">
+      <div class="card accent reveal" style="--i:2">
+        <h3><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-4 4 4 4 0 0 0-1 7.5V18a3 3 0 0 0 6 0M12 3a4 4 0 0 1 4 4 4 4 0 0 1 1 7.5V18a3 3 0 0 1-6 0"/></svg></span>"既要又要还要"，它同时满足</h3>
+        <p>夜班后必须休满 2 天、连续上班不超过上限、关键岗位必须有人、领导要在岗……这些互相打架的规矩，系统一次性全部摆平，并自动找出最省人力的方案。</p>
+        <div style="margin-top:10px">
+          <span class="tag">夜班休息</span><span class="tag">连续工作上限</span><span class="tag">关键岗位覆盖</span><span class="tag">资质匹配</span><span class="tag">工时均衡</span><span class="tag">加班/三倍薪成本</span>
+        </div>
+      </div>
+      <div class="card reveal" style="--i:3">
+        <h3><span class="ic cy"><svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/></svg></span>顶级求解技术，傻瓜式体验</h3>
+        <p>底层用的是世界级的智能优化引擎（Google OR-Tools），但对用户来说，只是"点一下"。复杂留给系统，简单留给人。</p>
+        <div class="grid g2" style="margin-top:16px; gap:12px">
+          <div style="text-align:center"><div style="font-size:clamp(28px,3.6vw,46px);font-weight:800" class="grad">21</div><div class="muted" style="font-size:14px">条排班约束</div></div>
+          <div style="text-align:center"><div style="font-size:clamp(28px,3.6vw,46px);font-weight:800" class="grad-g">9</div><div class="muted" style="font-size:14px">个优化目标</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 亮点② 真懂生物制药 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ②　行业深度</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">不是通用软件套壳，<span class="grad">它真懂生物制药</span></h2>
+    <p class="lead reveal" style="--i:2; margin-top:12px; max-width:64ch">通用排产软件直接搬过来，会漏掉一大半生物制药的"行规"。我们把这些行规翻译成了系统能算的规则：</p>
+    <div class="grid g3">
+      <div class="card reveal" style="--i:3"><h3><span class="ic gr"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5l-5 9a3 3 0 0 0 3 4h8a3 3 0 0 0 3-4l-5-9V3"/></svg></span>不可中断</h3><p>细胞培养十几天不能停，系统当成一个"整块"来排，不会被切开。</p></div>
+      <div class="card reveal" style="--i:4"><h3><span class="ic cy"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>零等待 / 倒计时</h3><p>中间产物会降解、设备洗完有"洁净有效期"——系统按倒计时安排，过期前必须接上下一步。</p></div>
+      <div class="card reveal" style="--i:5"><h3><span class="ic am"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></span>资质与防污染</h3><p>上岗要资质、跨区要换无菌服、不同区域要防交叉污染，全部纳入约束。</p></div>
+      <div class="card reveal" style="--i:6"><h3><span class="ic vi"><svg viewBox="0 0 24 24"><path d="M5 7h14v13H5zM9 7V4h6v3M9 12h6M9 16h4"/></svg></span>GMP 可追溯</h3><p>每一步都留痕，满足制药行业的合规与审计要求。</p></div>
+      <div class="card reveal" style="--i:7"><h3><span class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg></span>人力削峰</h3><p>识别清洗、配液等辅助工作的高峰，把人力曲线尽量拉平。</p></div>
+      <div class="card reveal" style="--i:8"><h3><span class="ic ro"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 12h9l-2-3M4 12h9l-2 3M20 5v14"/></svg></span>上下游衔接</h3><p>USP 上游培养与 DSP 下游纯化的交接关系，被精确建模。</p></div>
+    </div>
+  </section>
+
+  <!-- 7 亮点③ 透明 + 自愈 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ③　透明可解释</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">不是黑箱：<span class="grad">看得懂，还能自己"治病"</span></h2>
+    <div class="grid g2" style="margin-top:24px">
+      <div class="card reveal" style="--i:2">
+        <h3><span class="ic cy"><svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span>全程透明，权衡看得见</h3>
+        <p>新一代引擎实时显示它在"权衡什么"——是宁可多一点空缺，还是宁可多一点加班。方案怎么来的，一清二楚。对需要审批的生产场景，"知其所以然"才好拍板。</p>
+      </div>
+      <div class="card accent reveal" style="--i:3">
+        <h3><span class="ic gr"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9M12 8v4l3 2M16 4l4 1-1 4"/></svg></span>排不出来时，它自己诊断</h3>
+        <p>遇到"无解"，系统会自动指出：卡在哪条规则、涉及哪个班、哪一天，并给出"松一松这里就能排"的建议，一键重算。</p>
+        <p class="muted" style="margin-top:10px; font-size:15px">→ 计划员不用再打电话找 IT 翻日志。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 亮点④ 可追溯/合规 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ④　全程可追溯</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">像飞机黑匣子：<span class="grad">每个决定都查得到来龙去脉</span></h2>
+    <div class="grid g3">
+      <div class="card reveal" style="--i:3"><h3><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l8-4 8 4M9 20v-6h6v6"/></svg></span>批次快照冻结</h3><p>每个批次都"拍快照"，把当时的工艺、资源、人员配置整体冻结存档。</p></div>
+      <div class="card reveal" style="--i:4"><h3><span class="ic cy"><svg viewBox="0 0 24 24"><path d="M12 8v5l3 2M21 12a9 9 0 1 1-9-9"/><path d="M21 4v4h-4"/></svg></span>完整审计链</h3><p>谁、什么时候、改了什么——全部自动记录，前后对照可查。</p></div>
+      <div class="card reveal" style="--i:5"><h3><span class="ic gr"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>满足合规</h3><p>对齐制药行业 GMP 与 FDA 21 CFR Part 11 的可追溯要求。</p></div>
+    </div>
+    <p class="lead reveal" style="--i:6; margin-top:22px; max-width:62ch">数据"真源"被写进系统底层规则——前端、后端、求解器三方对同一份数据的理解永远一致，从根上杜绝"算错了还查不出"。</p>
+  </section>
+
+  <!-- 9 亮点⑤ 自研界面 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ⑤　自研界面</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">像乐高积木：<span class="grad">好用、统一、迭代快</span></h2>
+    <div class="grid g2" style="margin-top:22px">
+      <div class="card accent reveal" style="--i:2">
+        <h3><span class="ic"><svg viewBox="0 0 24 24"><path d="M4 8V5h6v3M14 8V5h6v3M4 8h6v6H4zM14 8h6v6h-6zM9 14v3h6v-3"/></svg></span>61 个自研界面组件</h3>
+        <p>团队自建了一套统一的界面"积木库"，所有页面都用同一套积木拼。看起来统一专业、改起来快，不会东一个样、西一个样。</p>
+        <div style="margin-top:10px"><span class="tag">统一视觉规范</span><span class="tag">纯白主题</span><span class="tag">颜色集中管理</span></div>
+      </div>
+      <div class="card reveal" style="--i:3">
+        <h3><span class="ic cy"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v16"/></svg></span>排班表的细节打磨</h3>
+        <p>滚动时表头和员工名固定不动、关键员工可"置顶"吸附、班次用颜色一眼区分。把每天都要盯着看的表，做到顺手。</p>
+        <div style="margin-top:10px"><span class="tag">表头固定</span><span class="tag">员工置顶</span><span class="tag">班次配色</span><span class="tag">甘特可视化</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 亮点⑥ 部署运维 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ⑥　交付与运维</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">装好基本<span class="grad">不用人管</span></h2>
+    <div class="grid g4">
+      <div class="card reveal" style="--i:2"><h3 style="font-size:18px"><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>一键启动</h3><p>一条命令，5 分钟拉起整套系统，自动初始化、自动体检。</p></div>
+      <div class="card reveal" style="--i:3"><h3 style="font-size:18px"><span class="ic cy"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.5 0 4.8 1 6.4 2.6M21 4v4h-4"/></svg></span>自动更新</h3><p>像手机 App，后台悄悄升级，改完自动重启。</p></div>
+      <div class="card reveal" style="--i:4"><h3 style="font-size:18px"><span class="ic gr"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></span>故障自愈</h3><p>升级出问题自动回滚到上一个好版本，保证可用。</p></div>
+      <div class="card reveal" style="--i:5"><h3 style="font-size:18px"><span class="ic am"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4zM4 12h16M8 21h8"/></svg></span>适配企业环境</h3><p>电脑被管控、有防火墙/代理也能稳定部署运行。</p></div>
+    </div>
+    <p class="lead reveal" style="--i:6; margin-top:22px; max-width:62ch">从"开发能跑"做到了"现场无人值守自维护"——交付到工厂后，省下持续的运维人力。</p>
+  </section>
+
+  <!-- 11 亮点⑦ 工程质量 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>亮点 ⑦　工程质量</div>
+    <h2 class="reveal" style="--i:1; margin-top:16px">不是"能跑就行"，<span class="grad">是按高标准在造</span></h2>
+    <div class="grid g3">
+      <div class="card reveal" style="--i:2"><h3><span class="ic gr"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>64 个自动化测试</h3><p>加上两道"质量闸门"，每次改动都自动体检，防止越改越坏。</p></div>
+      <div class="card reveal" style="--i:3"><h3><span class="ic cy"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M5 5l14 14"/></svg></span>逐字节回归护栏</h3><p>升级新引擎前，严格保证新结果与老结果完全一致，不让用户承担风险。</p></div>
+      <div class="card reveal" style="--i:4"><h3><span class="ic"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM9 4v4h6"/></svg></span>55 篇设计文档</h3><p>设计、规范、决策都成体系沉淀，知识不靠"问某个人"。</p></div>
+    </div>
+    <p class="lead reveal" style="--i:6; margin-top:22px; max-width:62ch">分层架构 + 模块化设计，让新功能"插得进、不碰核心"——这是系统能持续长大的底气。</p>
+  </section>
+
+  <!-- 12 数字看分量 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>数字看分量</div>
+    <h2 class="reveal" style="--i:1; margin-top:14px">8 个月，沉淀出一个<span class="grad">扎实的平台</span></h2>
+    <div class="stats" id="statsGrid">
+      <div class="stat reveal pop" style="--i:0"><div class="stat-num"><span class="n" data-target="8">0</span><span class="sfx">个月</span></div><div class="stat-lbl">持续研发投入</div></div>
+      <div class="stat reveal pop" style="--i:1"><div class="stat-num"><span class="n" data-target="182">0</span></div><div class="stat-lbl">次代码提交</div></div>
+      <div class="stat reveal pop" style="--i:2"><div class="stat-num"><span class="pfx">约</span><span class="n" data-target="18">0</span><span class="sfx">万</span></div><div class="stat-lbl">行自研代码</div></div>
+      <div class="stat reveal pop" style="--i:3"><div class="stat-num"><span class="n" data-target="3">0</span><span class="sfx">个</span></div><div class="stat-lbl">独立服务协同</div></div>
+      <div class="stat reveal pop" style="--i:4"><div class="stat-num"><span class="n" data-target="30">0</span><span class="sfx">+</span></div><div class="stat-lbl">排班约束 / 优化目标</div></div>
+      <div class="stat reveal pop" style="--i:5"><div class="stat-num"><span class="n" data-target="61">0</span></div><div class="stat-lbl">自研界面组件</div></div>
+      <div class="stat reveal pop" style="--i:6"><div class="stat-num"><span class="n" data-target="64">0</span></div><div class="stat-lbl">自动化测试文件</div></div>
+      <div class="stat reveal pop" style="--i:7"><div class="stat-num"><span class="n" data-target="55">0</span><span class="sfx">篇</span></div><div class="stat-lbl">设计规范文档</div></div>
+    </div>
+  </section>
+
+  <!-- 13 持续演进 -->
+  <section class="slide">
+    <div class="eyebrow reveal" style="--i:0"><span class="dot"></span>持续演进 · 未来方向</div>
+    <h2 class="reveal" style="--i:1; margin-top:14px">不是做完了，<span class="grad">而是一个会持续长大的平台</span></h2>
+    <div class="road">
+      <div class="lane l1 reveal" style="--i:2"><div class="st">已在运行</div><h3>稳定主力引擎</h3><p>当前的智能排班引擎，已稳定承担日常排产排班的核心计算。</p></div>
+      <div class="lane l2 reveal" style="--i:3"><div class="st">正在升级</div><h3>新一代引擎</h3><p>更透明、更会自我诊断；配置方案可保存、可复用，每月排班从"重复调参"变成"一键加载"。</p></div>
+      <div class="lane l3 reveal" style="--i:4"><div class="st">正在设计</div><h3>声明式排产模型</h3><p>你只画主工艺，系统自动补全清洗、配液等所有辅助工序——"像看懂菜谱，自动配料"。</p></div>
+    </div>
+  </section>
+
+  <!-- 14 结尾 -->
+  <section class="slide">
+    <div class="kicker reveal" style="--i:0">一句话总结</div>
+    <div class="big-quote reveal" style="--i:1">把生物制药最复杂的<span class="grad">排产排班</span>，<br/>做成一个<span class="grad-g">懂行业、算得准、说得清、管得住</span>，<br/>还能自己长大的系统。</div>
+    <p class="lead reveal" style="--i:3; margin-top:30px">MFG8APS · 生物制药智能排产排班系统</p>
+    <div class="cover-meta reveal" style="--i:4">
+      <div><b>谢谢观看</b><span class="muted" style="font-size:14px">欢迎提问与指正</span></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="hint">用 <kbd>←</kbd> <kbd>→</kbd> 翻页 · <kbd>F</kbd> 全屏</div>
+<div class="dots" id="dots"></div>
+<nav class="nav">
+  <span class="counter"><b id="cur">1</b> / <span id="total">14</span></span>
+  <button class="btn" id="prev" aria-label="上一页"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+  <button class="btn" id="next" aria-label="下一页"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+</nav>
+
+<script>
+(function(){
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length, cur = 0, statsDone = false;
+  var elCur = document.getElementById('cur'), elTotal = document.getElementById('total');
+  var prev = document.getElementById('prev'), next = document.getElementById('next');
+  var progress = document.getElementById('progress'), dotsWrap = document.getElementById('dots');
+  elTotal.textContent = total;
+
+  for(var i=0;i<total;i++){
+    var d = document.createElement('i');
+    d.dataset.idx = i;
+    d.addEventListener('click', function(e){ go(parseInt(e.target.dataset.idx)); });
+    dotsWrap.appendChild(d);
+  }
+  var dots = Array.prototype.slice.call(dotsWrap.children);
+
+  function render(){
+    for(var i=0;i<total;i++){
+      slides[i].classList.remove('is-active','before');
+      if(i===cur) slides[i].classList.add('is-active');
+      else if(i<cur) slides[i].classList.add('before');
+      dots[i].classList.toggle('on', i===cur);
+    }
+    elCur.textContent = cur+1;
+    progress.style.width = (total<2?100:(cur/(total-1))*100)+'%';
+    prev.disabled = cur===0; next.disabled = cur===total-1;
+    if(slides[cur].querySelector('#statsGrid') && !statsDone){ statsDone=true; setTimeout(runStats, 320); }
+  }
+  function go(n){ n=Math.max(0,Math.min(total-1,n)); if(n===cur)return; cur=n; render(); }
+
+  function runStats(){
+    var nums = document.querySelectorAll('#statsGrid .n');
+    nums.forEach(function(el){
+      var target = parseFloat(el.dataset.target)||0, dur=1150, t0=null;
+      function step(ts){
+        if(!t0) t0=ts;
+        var p = Math.min(1,(ts-t0)/dur), e=1-Math.pow(1-p,3);
+        el.textContent = Math.round(target*e).toLocaleString('en-US');
+        if(p<1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  prev.addEventListener('click', function(){ go(cur-1); });
+  next.addEventListener('click', function(){ go(cur+1); });
+  document.addEventListener('keydown', function(e){
+    if(['ArrowRight','PageDown',' ','Enter'].indexOf(e.key)>=0){ e.preventDefault(); go(cur+1); }
+    else if(['ArrowLeft','PageUp'].indexOf(e.key)>=0){ e.preventDefault(); go(cur-1); }
+    else if(e.key==='Home'){ go(0); }
+    else if(e.key==='End'){ go(total-1); }
+    else if(e.key==='f'||e.key==='F'){ if(!document.fullscreenElement){ document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen(); } else { document.exitFullscreen&&document.exitFullscreen(); } }
+  });
+  // 触屏 / 滑动
+  var sx=0;
+  document.addEventListener('touchstart', function(e){ sx=e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', function(e){ var dx=e.changedTouches[0].clientX-sx; if(Math.abs(dx)>50){ go(cur + (dx<0?1:-1)); } }, {passive:true});
+
+  render();
+})();
+</script>
+</body>
+</html>

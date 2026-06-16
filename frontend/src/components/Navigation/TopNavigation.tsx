@@ -92,12 +92,6 @@ const navGroups: NavGroup[] = [
       { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates', requiredPermission: 'APS_TEMPLATE_READ' },
       { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4', requiredPermission: 'APS_BATCH_READ' },
       { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2', requiredPermission: 'APS_BATCH_READ' },
-      { key: 'process-flow-builder', icon: <ProjectOutlined />, label: '主工艺构建(新)', path: '/process-flow-builder', requiredPermission: 'APS_TEMPLATE_READ' },
-      { key: 'production-scheduling', icon: <ProjectOutlined />, label: '排产结果(新)', path: '/production-scheduling', requiredPermission: 'APS_TEMPLATE_READ' },
-      { key: 'process-flow-templates', icon: <ProjectOutlined />, label: '工艺模板列表(新)', path: '/process-flow-templates', requiredPermission: 'APS_TEMPLATE_READ' },
-      { key: 'equipment-state-machine', icon: <ProjectOutlined />, label: '设备状态机(新)', path: '/equipment-state-machine', requiredPermission: 'APS_TEMPLATE_READ' },
-      { key: 'derivable-library', icon: <ProjectOutlined />, label: '派生库(新)', path: '/derivable-library', requiredPermission: 'APS_TEMPLATE_READ' },
-      { key: 'ps-resource-master', icon: <ProjectOutlined />, label: '排产资源(新)', path: '/ps-resource-master', requiredPermission: 'APS_TEMPLATE_READ' },
     ],
   },
   {
@@ -130,8 +124,18 @@ const navGroups: NavGroup[] = [
     key: 'ui-kit',
     label: 'UI 组件库',
     subtitle: 'Design System',
-    path: '/ui-kit',
     icon: <RocketOutlined />,
+    children: [
+      { key: 'ui-kit-home', icon: <RocketOutlined />, label: 'wxb-ui 组件库', path: '/ui-kit' },
+      // ↓ 排产新系统「原型 / Mock」——尚未接后端、仅 mock 数据,放此处供 UI 评审,
+      //   明确与「生产计划」下的上线功能区隔,避免测试用户误判为可用功能。
+      { key: 'process-flow-builder', icon: <ExperimentOutlined />, label: '排产原型 · 主工艺构建', path: '/process-flow-builder', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'production-scheduling', icon: <ExperimentOutlined />, label: '排产原型 · 排产结果', path: '/production-scheduling', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'process-flow-templates', icon: <ExperimentOutlined />, label: '排产原型 · 工艺模板列表', path: '/process-flow-templates', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'equipment-state-machine', icon: <ExperimentOutlined />, label: '排产原型 · 设备状态机', path: '/equipment-state-machine', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'derivable-library', icon: <ExperimentOutlined />, label: '排产原型 · 派生库', path: '/derivable-library', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'ps-resource-master', icon: <ExperimentOutlined />, label: '排产原型 · 资源主数据', path: '/ps-resource-master', requiredPermission: 'APS_TEMPLATE_READ' },
+    ],
   },
 ];
 

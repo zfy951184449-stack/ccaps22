@@ -275,6 +275,42 @@ export const deleteTemplate = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
+    // 删除前的引用保护:批次计划 / 总包模块 / 配方版本 通过外键(无 ON DELETE CASCADE)引用本模板时,
+    // 数据库会直接拒删并抛出晦涩的外键错误,前端只会看到笼统的「删除失败」。这里先做一次可读的引用检查,
+    // 被引用则返回 409 + 明确原因。
+    // 注意:本仓库各环境的迁移是手工逐张执行的,这几张表未必都存在——故先查 information_schema,
+    // 只对实际存在的表做计数,缺表视为 0,避免在未建表的环境里误报删除失败。
+    const referenceSpecs: { table: string; column: string; label: string }[] = [
+      { table: 'production_batch_plans', column: 'template_id', label: '批次计划' },
+      { table: 'mfg_package_modules', column: 'template_id', label: '总包模块' },
+      { table: 'recipe_versions', column: 'source_template_id', label: '配方版本' },
+    ];
+
+    const [existingTableRows] = await connection.execute(
+      `SELECT TABLE_NAME AS name FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (?, ?, ?)`,
+      referenceSpecs.map((s) => s.table)
+    ) as any;
+    const existingTables = new Set((existingTableRows as any[]).map((r: any) => String(r.name)));
+
+    const blockers: string[] = [];
+    for (const spec of referenceSpecs) {
+      if (!existingTables.has(spec.table)) continue;
+      // 表/列名来自上面的白名单常量(非用户输入),可安全内插。
+      const [countRows] = await connection.execute(
+        `SELECT COUNT(*) AS c FROM \`${spec.table}\` WHERE \`${spec.column}\` = ?`,
+        [id]
+      ) as any;
+      const count = Number(countRows?.[0]?.c ?? 0);
+      if (count > 0) blockers.push(`${count} 个${spec.label}`);
+    }
+
+    if (blockers.length > 0) {
+      return res.status(409).json({
+        error: `无法删除:该模板已被 ${blockers.join('、')} 引用，请先解除引用后再删除。`,
+      });
+    }
+
     await connection.beginTransaction();
 
     // 删除所有相关的操作安排

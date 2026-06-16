@@ -13,8 +13,11 @@ Implements four leadership scheduling rules:
                  any operation (assignment vars forced to 0). They can still be
                  assigned working shifts (on-duty without ops).
 
-  Rule 3 (Soft): Leaders should prefer working on workdays and resting on
-                 non-workdays. Penalty vars added to ctx.leadership_penalty_vars.
+  Rule 3 (Soft + per-role weekend policy): Leaders prefer working on workdays
+                 (soft). On non-workdays each leader's weekend policy applies:
+                 'ban' → hard-forbidden from working shifts; 'soft' → penalized
+                 (previous behavior); 'allow' → unrestricted. Penalty vars added
+                 to ctx.leadership_penalty_vars.
 
   Rule 4 (Soft): Leaders whose policy is 'soft' should minimize operation
                  assignments; all leaders should minimize SPECIAL shift usage.
@@ -26,6 +29,14 @@ Per-role operation policy (config keys; defaults preserve prior behavior):
   leader_ops_policy_dept_manager  (default 'ban')
   Each value ∈ {'allow', 'soft', 'ban'}.
   NOTE: SHIFT_LEADER (班组长) is intentionally NOT treated as a leader.
+
+Per-role weekend (non-workday) policy (config keys; defaults preserve prior behavior):
+  leader_weekend_policy_group_leader  (default 'soft')
+  leader_weekend_policy_team_leader   (default 'soft')
+  leader_weekend_policy_dept_manager  (default 'soft')
+  Each value ∈ {'allow', 'soft', 'ban'}. 'ban' forbids any WORKING shift on
+  non-workdays (is_workday=False). All-'soft' defaults are byte-for-byte equal to
+  the previous Rule-3 non-workday penalty.
 
 Config toggles:
   enable_leadership_coverage         (default True)  — master switch for this module
@@ -61,6 +72,25 @@ DEFAULT_OPS_POLICY = {
     "DEPT_MANAGER": "ban",
 }
 
+# Config key mapping each leader role to its weekend (non-workday) shift policy.
+ROLE_WEEKEND_POLICY_KEYS = {
+    "GROUP_LEADER": "leader_weekend_policy_group_leader",
+    "TEAM_LEADER": "leader_weekend_policy_team_leader",
+    "DEPT_MANAGER": "leader_weekend_policy_dept_manager",
+}
+
+# Per-role weekend policy on non-workdays (is_workday=False):
+#   'ban'   → hard-forbidden from any WORKING shift on non-workdays (Rule 3, hard)
+#   'soft'  → allowed but penalized (weight objective_weight_leader_nonworkday)
+#   'allow' → no restriction, no penalty
+# Defaults are all 'soft' to preserve the previous Rule-3 non-workday penalty
+# (byte-for-byte equivalent when the config keys are absent).
+DEFAULT_WEEKEND_POLICY = {
+    "GROUP_LEADER": "soft",
+    "TEAM_LEADER": "soft",
+    "DEPT_MANAGER": "soft",
+}
+
 
 class LeadershipCoverageConstraint(BaseConstraint):
     """Leadership scheduling rules: coverage, role ban, and soft preferences."""
@@ -87,10 +117,17 @@ class LeadershipCoverageConstraint(BaseConstraint):
             for role, key in ROLE_OPS_POLICY_KEYS.items()
         }
 
+        # ── Resolve per-role weekend (non-workday) policy (config overrides defaults) ──
+        weekend_policy = {
+            role: str(config.get(key, DEFAULT_WEEKEND_POLICY[role])).lower()
+            for role, key in ROLE_WEEKEND_POLICY_KEYS.items()
+        }
+
         # ── Classify employees by role + policy ──
         leader_emp_ids: Set[int] = set()      # all leaders (GROUP_LEADER, TEAM_LEADER, DEPT_MANAGER)
         ops_banned_emp_ids: Set[int] = set()  # policy 'ban'  → hard-forbidden from operations (Rule 2)
         ops_soft_emp_ids: Set[int] = set()    # policy 'soft' → penalized in operations (Rule 4a)
+        weekend_policy_by_emp: Dict[int, str] = {}  # emp_id → weekend policy ('allow'/'soft'/'ban')
 
         for ep in data.employee_profiles:
             role = getattr(ep, "org_role", "FRONTLINE")
@@ -102,6 +139,7 @@ class LeadershipCoverageConstraint(BaseConstraint):
                 ops_banned_emp_ids.add(ep.employee_id)
             elif policy == "soft":
                 ops_soft_emp_ids.add(ep.employee_id)
+            weekend_policy_by_emp[ep.employee_id] = weekend_policy.get(role, "soft")
 
         if not leader_emp_ids:
             self.log("No leader employees found. Skipping.")
@@ -204,6 +242,7 @@ class LeadershipCoverageConstraint(BaseConstraint):
         w_workday_rest = int(config.get("objective_weight_leader_workday_rest", 10))
 
         rule3_count = 0
+        weekend_ban_count = 0
         for date_str in window_dates:
             is_workday = calendar_map.get(date_str, True)
 
@@ -218,17 +257,31 @@ class LeadershipCoverageConstraint(BaseConstraint):
                             )
                             rule3_count += 1
                 else:
-                    # Non-workday: penalize WORKING shifts (encourage rest)
+                    # Non-workday: apply this leader's weekend policy.
+                    #   'ban'   → hard-forbid any working shift (force var to 0)
+                    #   'soft'  → penalize working shifts (previous behavior)
+                    #   'allow' → no restriction
+                    wpol = weekend_policy_by_emp.get(emp_id, "soft")
+                    if wpol == "allow":
+                        continue
                     for shift_id in working_shift_ids:
                         key = (emp_id, date_str, shift_id)
-                        if key in shift_assignments:
+                        if key not in shift_assignments:
+                            continue
+                        if wpol == "ban":
+                            model.Add(shift_assignments[key] == 0)
+                            weekend_ban_count += 1
+                            constraints_added += 1
+                        else:
                             ctx.leadership_penalty_vars.append(
                                 (shift_assignments[key], w_nonworkday)
                             )
                             rule3_count += 1
 
         self.log(f"Rule 3: Added {rule3_count} workday/rest preference penalty vars "
-                 f"(weights: nonworkday={w_nonworkday}, workday_rest={w_workday_rest}).")
+                 f"+ {weekend_ban_count} weekend-ban hard constraints "
+                 f"(weights: nonworkday={w_nonworkday}, workday_rest={w_workday_rest}; "
+                 f"weekend_policy={weekend_policy}).")
 
         # ══════════════════════════════════════════════
         # Rule 4: GL+ minimize ops & special shifts (SOFT)
@@ -262,7 +315,7 @@ class LeadershipCoverageConstraint(BaseConstraint):
         self.log(f"Rule 4: Added {rule4_ops_count} ops penalty vars (weight={w_ops}) + "
                  f"{rule4_special_count} special shift penalty vars (weight={w_special}).")
 
-        total = rule1_count + rule2_count
+        total = rule1_count + rule2_count + weekend_ban_count
         total_soft = rule3_count + rule4_ops_count + rule4_special_count
         self.log(f"Total: {total} hard constraints + {total_soft} soft penalty vars.")
 

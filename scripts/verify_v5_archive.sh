@@ -123,8 +123,10 @@ else
     echo "       Hint: ./start_all.sh"
   else
     # 抽取前 5 个请求做快速 smoke（全量用 --limit 0 或不加 --limit）
-    COMPARE_OUT="$(python3 "$COMPARE_SCRIPT" --mode all-off --limit 5 2>&1)"
-    COMPARE_EXIT=$?
+    # 注意：脚本开启 set -e，必须用 ||true 吞掉非零退出码，
+    # 否则下方的 transport-only SKIP 判定永远没机会执行（命令替换赋值行会直接终止脚本）。
+    COMPARE_EXIT=0
+    COMPARE_OUT="$(python3 "$COMPARE_SCRIPT" --mode all-off --limit 5 2>&1)" || COMPARE_EXIT=$?
     echo "$COMPARE_OUT"
     # 如果全部失败原因均为 transport（Connection refused / request_error），
     # 则判定为基础设施问题，跳过而非 FAIL（避免环境抖动触发误报）。

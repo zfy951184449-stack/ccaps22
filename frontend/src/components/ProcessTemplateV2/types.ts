@@ -490,6 +490,8 @@ export interface CreateStageOperationPayload {
 }
 
 export interface UpdateStageOperationPayload {
+  /** 操作替换：仅在把该排程行换成另一个操作时传，原地改 operation_id。 */
+  operationId?: number;
   operationDay?: number;
   recommendedTime?: number;
   recommendedDayOffset?: number;

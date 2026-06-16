@@ -18,6 +18,23 @@ Wiring: the frontend dev server proxies `/api` → `backend:3001` (`frontend/src
 
 **Read before non-trivial work:** `AGENTS.md` (hard invariants + frontend design-system rules) and `docs/ARCHITECTURE.md` (cross-layer read-order map). For DB/scheduling semantics: `docs/LLM_DB_GUIDELINES.md`, `docs/db-consistency-rules.md`, `docs/scheduling_principles.md`.
 
+## Production scheduling (排产) — NEW system, design complete, entering build
+
+**Don't confuse the two "scheduling" systems.** 排班 (personnel **rostering**) = solver_v4/v5, mature. 排产 (production **scheduling** — sequencing batches/operations onto equipment & time) = the NEW system being built. They are different; 排产 is *upstream* of 排班 (its output feeds the roster solver's `operation_demands`).
+
+**Authoritative design docs — read these before touching 排产 code** (`docs/production_scheduling/`):
+- `50_end_to_end_flow.md` — **start here**: the end-to-end spine (template → batch → derive → material-order gate → STN → placement → dispatch gate → feed roster) + §5.1 pre-build verification checklist.
+- `10_process_flow_model_spec.md` — model layer (declarative ops = demands+effects, 钉子+弹簧/STN, equipment state machines, generation hooks). Decision log **D1–D24**.
+- `40_scheduling_layer_spec.md` — scheduling layer (placement, CIP routing+priority, 攒批 campaign, two-gate dispatch). Decision log **C1–C16**.
+- `00_design_brief.md` is **superseded** (banner says so); `20_/30_` are a walkthrough + HTML visual.
+
+**Load-bearing invariants (violating these contradicts the design):**
+- **Independent new model + its own DB.** NOT based on the V3 bioprocess subsystem, NOT coupled to solver_v4/v5. New independent Python/Flask microservice (mirror solver_v4/v5 shape, own port), own DataAssembler. **Never touch V4.**
+- **v1 = pure propagation, NO solver.** STN shortest-path (incremental, deltastn-style) for time windows + time-table for shared-resource (CIP/配液罐/房间) capacity + deterministic priority-ordered placement (+ bounded-swap repair) → 报增援 when infeasible. CP-SAT is a deferred v2/optional fallback only (D19/C9). STNU+DC is v2 (D23); v1 models contingent edges in schema but runs plain STN on nominal durations.
+- **Main chain is a wall.** Process-step 钉子 + Day0 are rigid — the engine never auto-moves them (resolve by swapping resources / adjusting within windows / 报增援). Derived auxiliary ops (CIP/SIP/配液/房间放行) fill the gaps. Main-process CIP > 配液 CIP in priority; last-resort micro-adjust of main CIP is *within its own DHT/CHT window only* (D21/C16).
+- **Two-gate staged dispatch.** Gate 1 = material requirement order (what/how-much/pooling → human review → confirm-freeze + version check). Gate 2 = task dispatch (STN+placement → human review → feed roster) (C15).
+- **Frontend rules still apply:** build on `wxb-ui` (reuse `WxbGanttChart` for the gantt, D17), centralize API in `services/`, relative `/api` paths, no hardcoded hosts/hex/emoji.
+
 ## Commands
 
 Run everything (kills stale ports, starts MySQL via brew, then backend → solver → frontend):

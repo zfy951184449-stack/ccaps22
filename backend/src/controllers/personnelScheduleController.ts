@@ -63,6 +63,17 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
       params.push(employee_id);
     }
 
+    // 多选员工：employee_ids=逗号分隔 → IN (...)。不传则行为与单选/无过滤保持一致（向后兼容）。
+    const employeeIdsRaw = (req.query.employee_ids as string) || '';
+    const employeeIds = employeeIdsRaw
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (employeeIds.length > 0) {
+      filters.push(`esp.employee_id IN (${employeeIds.map(() => '?').join(',')})`);
+      params.push(...employeeIds);
+    }
+
     // Refactored Filter Logic using unit_id
     if (department_id) {
       // Find employees where unit_id matches dept or parent matches dept
@@ -158,6 +169,58 @@ export const getShiftCalendarOverview = async (req: Request, res: Response) => {
     res.json(rows);
   } catch (error) {
     console.error('Error getting shift calendar overview:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * 同任务同伴反查：给定一批 batch_operation_plan_id，返回每个任务计划的全部参与员工。
+ * 用于「我的排班」选人查看时展示「同伴是谁」（含未被选中的员工，名单完整）。
+ * 入参 operation_plan_ids=逗号分隔；出参 { [operationPlanId]: [{ employeeId, employeeCode, employeeName }] }。
+ */
+export const getOperationPlanPartners = async (req: Request, res: Response) => {
+  try {
+    const raw = (req.query.operation_plan_ids as string) || '';
+    const ids = raw
+      .split(',')
+      .map((value) => Number(value.trim()))
+      .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (ids.length === 0) {
+      return res.json({});
+    }
+
+    const placeholders = ids.map(() => '?').join(',');
+    const [rows] = await pool.execute<any[]>(
+      `SELECT
+         bpa.batch_operation_plan_id AS operation_plan_id,
+         e.id AS employee_id,
+         e.employee_code,
+         e.employee_name
+       FROM batch_personnel_assignments bpa
+       JOIN employees e ON e.id = bpa.employee_id
+       WHERE bpa.batch_operation_plan_id IN (${placeholders})
+         AND bpa.assignment_status <> 'CANCELLED'
+       ORDER BY bpa.batch_operation_plan_id, e.employee_code`,
+      ids,
+    );
+
+    const map: Record<number, Array<{ employeeId: number; employeeCode: string; employeeName: string }>> = {};
+    rows.forEach((row) => {
+      const opId = Number(row.operation_plan_id);
+      if (!map[opId]) {
+        map[opId] = [];
+      }
+      map[opId].push({
+        employeeId: Number(row.employee_id),
+        employeeCode: row.employee_code,
+        employeeName: row.employee_name,
+      });
+    });
+
+    res.json(map);
+  } catch (error) {
+    console.error('Error getting operation plan partners:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

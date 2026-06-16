@@ -7,6 +7,7 @@ import {
   deletePersonnelSchedule,
   getAvailableEmployees,
   getShiftCalendarOverview,
+  getOperationPlanPartners,
   getEmployeeMetrics,
   deleteMonthlySchedule
 } from '../controllers/personnelScheduleController';
@@ -36,6 +37,7 @@ router.get('/', requirePermission('ROSTER_SCHEDULE_READ'), getPersonnelSchedules
 router.get('/available-employees', requirePermission('ROSTER_SCHEDULE_READ'), getAvailableEmployees);
 router.get('/overview', requirePermission('ROSTER_SCHEDULE_READ'), getShiftCalendarOverview);
 router.get('/shift-plans', requirePermission('ROSTER_SCHEDULE_READ'), getShiftCalendarOverview);
+router.get('/partners', requirePermission('ROSTER_SCHEDULE_READ'), getOperationPlanPartners);
 router.get('/metrics', requirePermission('ROSTER_SCHEDULE_READ'), getEmployeeMetrics);
 router.get('/:id(\\d+)', requirePermission('ROSTER_SCHEDULE_READ'), getPersonnelScheduleById);
 router.post('/', requirePermission('ROSTER_SCHEDULE_WRITE'), requireScope(scheduleByBodyEmployee), createPersonnelSchedule);

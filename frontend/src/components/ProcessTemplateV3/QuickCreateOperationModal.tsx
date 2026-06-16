@@ -434,6 +434,8 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [savingStep, setSavingStep] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
+  // 编辑模式下「替换操作」：展开操作库列表，选另一个操作原地替换本排程。
+  const [replaceMode, setReplaceMode] = useState(false);
 
   const allNodes = useMemo(() => flattenNodes(resourceNodes), [resourceNodes]);
   const leafNodes = useMemo(
@@ -488,6 +490,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       setApiError(null);
       setSavingStep('');
       setEditInitialResourceNodeId(null);
+      setReplaceMode(false);
       return;
     }
 
@@ -793,6 +796,42 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
 
   const canSave = Boolean(draft) && validationIssues.length === 0 && !saving && !referenceLoading;
 
+  // 编辑模式下，摘要展示「当前指向的操作」(可能已被替换)，并标记是否已替换。
+  const isReplaced =
+    Boolean(editTarget) && Number(draft?.operationId) !== Number(editTarget?.operationId);
+  const currentOperationName = selectedOperation?.operation_name ?? editTarget?.operationName ?? '';
+  const currentOperationCode = selectedOperation?.operation_code ?? editTarget?.operationCode ?? '';
+
+  // 选中替换操作：同步工时/人数，并切到自动时间窗按新工时重算，保证保存校验通过。
+  const applyReplacementSelection = (item: OperationLibraryItem) => {
+    updateDraft((current) => ({
+      ...current,
+      operationId: Number(item.id),
+      durationHours: Number(item.standard_time ?? current.durationHours),
+      requiredPeople: Number(item.required_people ?? current.requiredPeople),
+      operationTypeId: item.operation_type_id ?? null,
+      windowMode: 'auto',
+    }));
+  };
+
+  // 取消替换：还原为原操作及其原始时间窗 (用户对位置/时间的编辑保留)。
+  const handleCancelReplace = () => {
+    setReplaceMode(false);
+    if (!editTarget) return;
+    updateDraft((current) => ({
+      ...current,
+      operationId: editTarget.operationId,
+      durationHours: Number(editTarget.durationHours ?? current.durationHours),
+      requiredPeople: Number(editTarget.requiredPeople ?? current.requiredPeople),
+      windowMode: 'manual',
+      windowStartTime: Number(editTarget.windowStartTime ?? current.windowStartTime),
+      windowStartDayOffset: Number(editTarget.windowStartDayOffset ?? current.windowStartDayOffset),
+      windowEndTime: Number(editTarget.windowEndTime ?? current.windowEndTime),
+      windowEndDayOffset: Number(editTarget.windowEndDayOffset ?? current.windowEndDayOffset),
+      searchValue: '',
+    }));
+  };
+
   const handleCreate = async (options?: { openAdvanced?: boolean; initialAdvancedTab?: OperationCreatedResult['initialAdvancedTab'] }) => {
     if (!draft || !selectedStage) return;
     if (!canSave) {
@@ -906,8 +945,10 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     try {
       setSaving(true);
       setApiError(null);
-      setSavingStep('保存排程参数');
+      const replaced = Number(draft.operationId) !== Number(editTarget.operationId);
+      setSavingStep(replaced ? '替换操作' : '保存排程参数');
       await processTemplateV2Api.updateStageOperation(editTarget.scheduleId, {
+        operationId: replaced ? Number(draft.operationId) : undefined,
         operationDay: Number(draft.operationDay ?? 0),
         recommendedTime: Number(draft.recommendedTime ?? 0),
         recommendedDayOffset: Number(draft.recommendedDayOffset ?? 0),
@@ -923,7 +964,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         await processTemplateV2Api.batchUpdateBindings([editTarget.scheduleId], nextResourceNodeId, 'PRIMARY');
       }
       await onUpdated?.({ scheduleId: editTarget.scheduleId, stageId: Number(draft.stageId) });
-      message.success('操作已更新');
+      message.success(replaced ? '操作已替换' : '操作已更新');
       onCancel();
     } catch (error: any) {
       const detail = error?.response?.data?.error || error?.message || '更新操作失败';
@@ -946,7 +987,12 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         className={`qcom-operation-card ${selected ? 'is-selected' : ''}`}
         data-testid={`quick-operation-item-${item.id}`}
         aria-pressed={selected}
-        onClick={() =>
+        onClick={() => {
+          if (mode === 'edit') {
+            applyReplacementSelection(item);
+            setReplaceMode(false);
+            return;
+          }
           updateDraft((current) => ({
             ...current,
             sourceMode: 'existing',
@@ -954,8 +1000,8 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
             durationHours: Number(item.standard_time ?? current.durationHours),
             requiredPeople: Number(item.required_people ?? current.requiredPeople),
             operationTypeId: item.operation_type_id ?? null,
-          }))
-        }
+          }));
+        }}
       >
         <span className="qcom-operation-main">
           <span className="qcom-operation-name">{item.operation_name}</span>
@@ -1034,8 +1080,20 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
               <section className="qcom-section qcom-section-source" aria-labelledby="qcom-source-title">
                 <div className="qcom-section-header">
                   <div>
-                    <h3 id="qcom-source-title">{mode === 'edit' ? '操作' : '选择操作'}</h3>
+                    <h3 id="qcom-source-title">
+                      {mode === 'edit' ? (replaceMode ? '替换操作' : '操作') : '选择操作'}
+                    </h3>
                   </div>
+                  {mode === 'edit' &&
+                    (replaceMode ? (
+                      <WxbButton variant="ghost" size="sm" onClick={handleCancelReplace}>
+                        取消替换
+                      </WxbButton>
+                    ) : (
+                      <WxbButton variant="secondary" size="sm" onClick={() => setReplaceMode(true)}>
+                        替换操作
+                      </WxbButton>
+                    ))}
                   {mode !== 'edit' && (
                     <WxbSegmented
                       size="sm"
@@ -1061,21 +1119,66 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                 </div>
 
                 {mode === 'edit' ? (
-                  <div className="qcom-source-existing">
-                    <div className="qcom-master-summary">
-                      <div className="qcom-master-identity">
-                        <span className="qcom-master-label">
-                          名称 / 人数 / 资格属于操作库（跨模板共享），此处仅调整本排程的时间安排
-                        </span>
-                        <span className="qcom-master-code">{editTarget?.operationName}</span>
+                  replaceMode ? (
+                    <div className="qcom-source-existing">
+                      <div className="qcom-muted">
+                        选择要替换成的操作；当前排程的位置、时间窗、约束、共享组、设备绑定保持不变。
                       </div>
-                      <div className="qcom-master-tags">
-                        <WxbTag color="neutral">{editTarget?.operationCode}</WxbTag>
-                        <WxbTag color="neutral">{Number(editTarget?.durationHours ?? 0)}h</WxbTag>
-                        <WxbTag color="neutral">{Number(editTarget?.requiredPeople ?? 1)}人</WxbTag>
+                      <div className="qcom-source-tools">
+                        <WxbSelect
+                          className="qcom-team-filter"
+                          label="操作团队"
+                          value={teamFilterValue}
+                          options={teamOptions}
+                          onChange={(value) => setTeamFilterValue(String(value ?? ALL_TEAMS_VALUE))}
+                        />
+                        <WxbSearchInput
+                          className="qcom-search"
+                          value={draft.searchValue}
+                          placeholder="搜索操作名称或编码"
+                          onChange={(value) =>
+                            updateDraft((current) => ({
+                              ...current,
+                              searchValue: value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div className="qcom-operation-list">
+                        {visibleOperations.length ? (
+                          <WxbList
+                            bordered={false}
+                            dataSource={visibleOperations}
+                            renderItem={renderOperationItem}
+                          />
+                        ) : (
+                          <WxbEmpty description={draft.searchValue.trim() ? '未找到匹配操作' : `${selectedTeamLabel}暂无操作`} />
+                        )}
+                      </div>
+                      {hiddenOperationCount > 0 ? (
+                        <div className="qcom-muted">已显示前 {MAX_VISIBLE_OPERATIONS} 条，另有 {hiddenOperationCount} 条。</div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="qcom-source-existing">
+                      <div className="qcom-master-summary">
+                        <div className="qcom-master-identity">
+                          <span className="qcom-master-label">
+                            名称 / 人数 / 资格属于操作库（跨模板共享），此处仅调整本排程的时间安排
+                          </span>
+                          <span className="qcom-master-code">{currentOperationName}</span>
+                        </div>
+                        <div className="qcom-master-tags">
+                          <WxbTag color="neutral">{currentOperationCode}</WxbTag>
+                          <WxbTag color="neutral">{Number(draft.durationHours ?? 0)}h</WxbTag>
+                          <WxbTag color="neutral">{Number(draft.requiredPeople ?? 1)}人</WxbTag>
+                          {isReplaced ? (
+                            <WxbTag color="amber">已替换（原 {editTarget?.operationName}）</WxbTag>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )
                 ) : draft.sourceMode === 'existing' ? (
                   <div className="qcom-source-existing">
                     <div className="qcom-source-tools">

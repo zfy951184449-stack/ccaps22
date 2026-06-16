@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>排产系统 · 原理一页通</title>
+<style>
+  :root{
+    --ink:#1a2233; --ink2:#4a5568; --muted:#8a96a8;
+    --blue:#2563eb; --blue-d:#1d4ed8; --blue-t:#eaf1ff;
+    --green:#10b981; --green-t:#e7f8f1;
+    --amber:#f59e0b; --amber-t:#fff5e6;
+    --gray:#94a3b8; --gray-t:#f1f4f8;
+    --line:#e6ebf2; --bg:#f7f9fc; --card:#ffffff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+       color:var(--ink);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:40px 28px 64px}
+  header{text-align:center;margin-bottom:8px}
+  .kicker{color:var(--blue);font-weight:700;letter-spacing:2px;font-size:13px}
+  h1{font-size:34px;font-weight:800;margin:10px 0 6px;letter-spacing:-.5px}
+  .lead{font-size:18px;color:var(--ink2);max-width:760px;margin:0 auto}
+  .lead b{color:var(--blue-d)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px 30px;margin-top:22px;
+        box-shadow:0 1px 2px rgba(20,40,80,.04),0 8px 24px rgba(20,40,80,.04)}
+  .card h2{font-size:13px;color:var(--muted);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:14px}
+  .card h3{font-size:22px;font-weight:800;margin-bottom:6px}
+  .sub{color:var(--ink2);font-size:15px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .col{border-radius:12px;padding:20px}
+  .col .tag{font-weight:800;font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .col.before{background:var(--gray-t)} .col.before .tag{color:#64748b}
+  .col.after{background:var(--green-t)} .col.after .tag{color:#0f9d6f}
+  .col ul{list-style:none;display:flex;flex-direction:column;gap:9px}
+  .col li{font-size:14.5px;color:var(--ink2);padding-left:22px;position:relative}
+  .col.before li::before{content:"✕";position:absolute;left:0;color:#cbd5e1;font-weight:700}
+  .col.after li::before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:800}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .figcap{color:var(--muted);font-size:13.5px;margin-top:12px;text-align:center}
+  .recipe{display:flex;flex-direction:column;gap:14px;align-items:center;margin-top:6px}
+  .step{border-radius:12px;padding:14px 18px;width:100%;max-width:560px}
+  .step.user{background:var(--blue-t);border:1px solid #cfe0ff}
+  .step .lbl{font-size:12px;font-weight:800;letter-spacing:1px}
+  .step.user .lbl{color:var(--blue-d)}
+  .step .big{font-size:17px;font-weight:800;color:var(--ink)}
+  .step .note{font-size:13.5px;color:var(--ink2);margin-top:2px}
+  .arrow{color:var(--muted);font-size:13px;font-weight:700}
+  .derived{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:620px}
+  .chip{background:var(--green-t);border:1px dashed var(--green);color:#0f8a62;
+        border-radius:999px;padding:7px 14px;font-size:13.5px;font-weight:700}
+  .chip .auto{color:var(--green);font-size:11px;display:block;font-weight:800;letter-spacing:.5px}
+  .bars{display:flex;align-items:flex-end;gap:9px;height:200px;padding:8px 4px 0}
+  .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%}
+  .bar .b{width:100%;border-radius:6px 6px 0 0;background:#cdd9ee}
+  .bar.peak .b{background:var(--amber)}
+  .bar .v{font-size:12px;font-weight:800;color:var(--ink2)}
+  .bar.peak .v{color:#b8770a}
+  .bar .d{font-size:11px;color:var(--muted)}
+  .callout{background:linear-gradient(180deg,#f0f6ff,#ffffff);border:1px solid #cfe0ff;border-radius:16px;
+           padding:26px 30px;margin-top:22px;display:flex;gap:20px;align-items:center}
+  .callout .mark{font-size:40px;line-height:1}
+  .callout h3{font-size:21px;font-weight:800;margin-bottom:6px}
+  .callout p{color:var(--ink2);font-size:15px}
+  .callout b{color:var(--blue-d)}
+  .foot{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+  .foot .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px}
+  .foot .box .t{font-weight:800;font-size:15px;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .foot .box p{color:var(--ink2);font-size:14px}
+  .pill{display:inline-block;background:var(--blue-t);color:var(--blue-d);font-size:12px;font-weight:800;
+        padding:3px 10px;border-radius:999px}
+  .end{text-align:center;color:var(--muted);font-size:12.5px;margin-top:34px}
+  @media(max-width:720px){.grid2,.foot{grid-template-columns:1fr}h1{font-size:26px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">生产排程系统 · 原理</div>
+    <h1>让系统替你排产</h1>
+    <p class="lead">从「<b>人工排 + 现场救火</b>」升级为「<b>系统自动排出计划、提前发现冲突、并能说清为什么</b>」。</p>
+  </header>
+
+  <!-- 今天 vs 以后 -->
+  <div class="card">
+    <h2>今天 → 以后</h2>
+    <div class="grid2">
+      <div class="col before">
+        <div class="tag"><span class="dot" style="background:#cbd5e1"></span>今天:靠人</div>
+        <ul>
+          <li>计划员手工填每个批次的开始日期</li>
+          <li>系统只按固定模板把时间"盖"出来</li>
+          <li>设备/清洗/物料/人手 — 都不检查</li>
+          <li>冲突往往到车间现场才暴露,临时救火</li>
+          <li>很多还停留在白板拍照、Excel、老师傅脑子里</li>
+        </ul>
+      </div>
+      <div class="col after">
+        <div class="tag"><span class="dot" style="background:var(--green)"></span>以后:系统帮你</div>
+        <ul>
+          <li>计划员只排<b>主干工序</b>,钉几个关键日期</li>
+          <li>清洗、配液、装袋等支持工作<b>系统自动补全</b></li>
+          <li>设备、物料(在有效期内)、人手 — 自动核对</li>
+          <li>冲突<b>提前</b>标红、说清原因</li>
+          <li>实在排不下 → 提示"<b>这里要加设备/班次</b>"</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 钉子 + 弹簧 -->
+  <div class="card">
+    <h2>核心想法 ①</h2>
+    <h3>钉子 + 弹簧:计划是有弹性的</h3>
+    <p class="sub">关键日期像"钉子"钉死,中间的工序像"弹簧"能伸缩;系统据此把活儿灵活地塞进真实空档。</p>
+    <svg viewBox="0 0 900 170" style="width:100%;height:auto;margin-top:14px" xmlns="http://www.w3.org/2000/svg">
+      <line x1="60" y1="110" x2="840" y2="110" stroke="#dbe3ee" stroke-width="3"/>
+      <!-- spring coils -->
+      <path d="M150 110 q15 -22 30 0 q15 22 30 0 q15 -22 30 0 q15 22 30 0 q15 -22 30 0 q15 22 30 0"
+            fill="none" stroke="#94b6f5" stroke-width="3"/>
+      <path d="M510 110 q15 -22 30 0 q15 22 30 0 q15 -22 30 0 q15 22 30 0"
+            fill="none" stroke="#94b6f5" stroke-width="3"/>
+      <!-- nails -->
+      <g>
+        <circle cx="120" cy="110" r="12" fill="#2563eb"/><path d="M120 110 L120 150" stroke="#2563eb" stroke-width="3"/>
+        <text x="120" y="78" text-anchor="middle" font-size="15" font-weight="800" fill="#1a2233">Day0</text>
+        <text x="120" y="62" text-anchor="middle" font-size="12.5" fill="#4a5568">培养基灌注</text>
+      </g>
+      <g>
+        <circle cx="480" cy="110" r="12" fill="#2563eb"/><path d="M480 110 L480 150" stroke="#2563eb" stroke-width="3"/>
+        <text x="480" y="78" text-anchor="middle" font-size="15" font-weight="800" fill="#1a2233">收获</text>
+        <text x="480" y="62" text-anchor="middle" font-size="12.5" fill="#4a5568">~Day10</text>
+      </g>
+      <g>
+        <circle cx="780" cy="110" r="12" fill="#2563eb"/><path d="M780 110 L780 150" stroke="#2563eb" stroke-width="3"/>
+        <text x="780" y="78" text-anchor="middle" font-size="15" font-weight="800" fill="#1a2233">交付</text>
+        <text x="780" y="62" text-anchor="middle" font-size="12.5" fill="#4a5568">交期</text>
+      </g>
+      <text x="330" y="142" text-anchor="middle" font-size="12.5" fill="#8a96a8">细胞培养(弹簧:能伸缩)</text>
+      <text x="630" y="142" text-anchor="middle" font-size="12.5" fill="#8a96a8">下游纯化(弹簧)</text>
+    </svg>
+    <p class="figcap">同一个产品,9 天周期 / 11 天周期,系统自动调整中间安排 — 而不是死板的固定模板。</p>
+  </div>
+
+  <!-- 自动补全 -->
+  <div class="card">
+    <h2>核心想法 ②</h2>
+    <h3>像菜谱一样,自动补全支持工作</h3>
+    <p class="sub">你只描述每步"需要什么、产出什么";系统像看懂菜谱一样,自动想到该洗锅、该配料,并排进计划。</p>
+    <div class="recipe">
+      <div class="step user">
+        <span class="lbl">你只写</span>
+        <div class="big">主工序:培养基灌注</div>
+        <div class="note">需要:一台<b>干净的反应器</b> + <b>新鲜的培养基</b></div>
+      </div>
+      <div class="arrow">↓ 系统自动推断并补上 ↓</div>
+      <div class="derived">
+        <div class="chip"><span class="auto">系统自动补</span>装反应袋</div>
+        <div class="chip"><span class="auto">系统自动补</span>配制培养基</div>
+        <div class="chip"><span class="auto">系统自动补</span>设备清洗 (CIP)</div>
+        <div class="chip"><span class="auto">系统自动补</span>消毒灭菌 (SIP)</div>
+      </div>
+    </div>
+    <p class="figcap">料过期了会重配、设备脏了会先洗 — 这些"想当然"的步骤,不用人一条条填。</p>
+  </div>
+
+  <!-- 隐形瓶颈 -->
+  <div class="card">
+    <h2>核心想法 ③</h2>
+    <h3>隐形瓶颈,被提前看见</h3>
+    <p class="sub">真实排产板的数据:下游纯化中段,清洗动作成簇爆发 — 都在抢同一批清洗站。</p>
+    <div class="bars">
+      <div class="bar"><span class="v">1</span><div class="b" style="height:6%"></div><span class="d">D0</span></div>
+      <div class="bar"><span class="v">1</span><div class="b" style="height:6%"></div><span class="d">D1</span></div>
+      <div class="bar"><span class="v">0</span><div class="b" style="height:2%"></div><span class="d">D2</span></div>
+      <div class="bar"><span class="v">11</span><div class="b" style="height:69%"></div><span class="d">D3</span></div>
+      <div class="bar"><span class="v">7</span><div class="b" style="height:44%"></div><span class="d">D4</span></div>
+      <div class="bar peak"><span class="v">16</span><div class="b" style="height:100%"></div><span class="d">D5</span></div>
+      <div class="bar"><span class="v">7</span><div class="b" style="height:44%"></div><span class="d">D6</span></div>
+      <div class="bar"><span class="v">7</span><div class="b" style="height:44%"></div><span class="d">D7</span></div>
+      <div class="bar"><span class="v">1</span><div class="b" style="height:6%"></div><span class="d">D8</span></div>
+      <div class="bar"><span class="v">0</span><div class="b" style="height:2%"></div><span class="d">D9</span></div>
+      <div class="bar"><span class="v">2</span><div class="b" style="height:12%"></div><span class="d">D11</span></div>
+    </div>
+    <p class="figcap"><b style="color:#b8770a">第 5 天:一天挤了 16 次清洗。</b> 清洗站这种"隐形瓶颈",系统提前看见、提前消解,不再现场救火。</p>
+  </div>
+
+  <!-- 差异化 -->
+  <div class="callout">
+    <div class="mark">🏆</div>
+    <div>
+      <h3>一个真正的领先点</h3>
+      <p>"自动补全清洗/配液"这件事,<b>连国际主流排程软件(SuperPro / SchedulePro)都还做不到</b> — 它们仍要计划员手工挂。这是<b>"记录工具"和"决策工具"的区别</b>,也是我们的技术壁垒。</p>
+    </div>
+  </div>
+
+  <!-- 合规 + 现状 -->
+  <div class="foot">
+    <div class="box">
+      <div class="t">🛡️ 合规优先,可追溯</div>
+      <p>对不能拖的关键步骤,系统绝不偷偷顺延;有冲突就提示"加资源"。每一步"为什么这么排"都能解释 — 符合 GMP / 审计要求。</p>
+    </div>
+    <div class="box">
+      <div class="t">📍 现状与下一步 <span class="pill">设计阶段</span></div>
+      <p>方向已明确、细节在打磨中(已有详细设计文档)。基于业界成熟方法 + 现有技术底座,且是独立新模块、不动现有系统,推进低风险,分阶段落地。</p>
+    </div>
+  </div>
+
+  <p class="end">生产排程系统 · 原理概览(非技术版) · 技术设计详见工艺流模型规格</p>
+
+</div>
+</body>
+</html>

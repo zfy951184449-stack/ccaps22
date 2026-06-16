@@ -150,6 +150,7 @@ export const updateStageOperation = async (req: Request, res: Response) => {
   try {
     const { scheduleId } = req.params;
     const {
+      operation_id,
       operation_day,
       recommended_time,
       recommended_day_offset,
@@ -159,11 +160,28 @@ export const updateStageOperation = async (req: Request, res: Response) => {
       window_end_day_offset,
       operation_order,
     } = req.body;
-    
+
     console.log('updateStageOperation called with:');
     console.log('- scheduleId:', scheduleId);
     console.log('- req.body:', req.body);
-    
+
+    // 操作替换：若带了 operation_id，则把该排程行指向另一个操作（原地替换，
+    // 排程行 id 不变，故约束/共享组/设备绑定全部保留）。先校验目标操作存在。
+    let parsedOperationId: number | undefined;
+    if (operation_id !== undefined) {
+      parsedOperationId = Number(operation_id);
+      if (!Number.isInteger(parsedOperationId) || parsedOperationId <= 0) {
+        return res.status(400).json({ error: 'operation_id 必须是有效的操作编号' });
+      }
+      const [opRows] = await pool.execute<RowDataPacket[]>(
+        'SELECT id FROM operations WHERE id = ?',
+        [parsedOperationId],
+      );
+      if (opRows.length === 0) {
+        return res.status(400).json({ error: '指定的替换操作不存在' });
+      }
+    }
+
     // 验证时间范围
     const parsedRecommendedTime = recommended_time !== undefined ? Number(recommended_time) : undefined;
     if (parsedRecommendedTime !== undefined) {
@@ -199,7 +217,11 @@ export const updateStageOperation = async (req: Request, res: Response) => {
     // 构建动态更新语句，只更新提供的字段
     const updates = [];
     const params = [];
-    
+
+    if (parsedOperationId !== undefined) {
+      updates.push('operation_id = ?');
+      params.push(parsedOperationId);
+    }
     if (operation_day !== undefined) {
       updates.push('operation_day = ?');
       params.push(Number(operation_day));

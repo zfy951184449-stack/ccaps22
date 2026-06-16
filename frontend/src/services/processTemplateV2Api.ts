@@ -582,6 +582,7 @@ export const processTemplateV2Api = {
   },
   updateStageOperation: async (scheduleId: number, payload: UpdateStageOperationPayload) => {
     await client.put(`/stage-operations/${scheduleId}`, {
+      operation_id: payload.operationId,
       operation_day: payload.operationDay,
       recommended_time: payload.recommendedTime,
       recommended_day_offset: payload.recommendedDayOffset,
