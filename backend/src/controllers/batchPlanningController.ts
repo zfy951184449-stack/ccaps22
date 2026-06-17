@@ -560,6 +560,10 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
   } catch (error: any) {
     await connection.rollback();
     console.error('Error updating batch plan:', error);
+    // 明确打出 DB 错误码,远程定位用:一行即可看出是外键(1451)/非空(1048)/重复(1062)/还是别的
+    console.error(
+      `[batch-update-fail] id=${req.params?.id} code=${error?.code} errno=${error?.errno} sqlState=${error?.sqlState} sqlMessage=${error?.sqlMessage}`,
+    );
 
     if (error instanceof InvalidDay0DateError) {
       res.status(400).json({ error: error.message });
@@ -570,7 +574,18 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       // 体检漏网(如缺表跳过)或并发新增引用时的兜底,转成可读 409 而非裸 500。
       res.status(409).json({ error: '该批次已被排班/加班/冲突记录引用,更换模板或调整开工日期前请先撤销相关排班。' });
     } else {
-      res.status(500).json({ error: 'Failed to update batch plan' });
+      // 临时诊断:把真实错误(错误码 + 失败的表/列/约束)直接拼进 error 文案,
+      // 这样前端红色 toast 会原样显示,无需开 DevTools。定位到根因后移除本分支的诊断拼接。
+      const diag = [error?.code, error?.errno, error?.sqlMessage ?? error?.message]
+        .filter((x) => x !== undefined && x !== null && x !== '')
+        .join(' | ');
+      res.status(500).json({
+        error: `更新批次失败【诊断: ${diag || '未知错误'}】`,
+        code: error?.code ?? null,
+        errno: error?.errno ?? null,
+        sqlMessage: error?.sqlMessage ?? null,
+        detail: error?.message ?? null,
+      });
     }
   } finally {
     connection.release();
