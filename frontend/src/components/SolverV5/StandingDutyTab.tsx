@@ -683,6 +683,7 @@ const StandingDutyTab: React.FC = () => {
             window_days: 0,
             allowed_employee_ids: [],
             qualification_ids: [],
+            qualification_min_level: 1,
         });
         setModalVisible(true);
     };
@@ -704,6 +705,7 @@ const StandingDutyTab: React.FC = () => {
             preferred_shift_ids: undefined,
             allowed_employee_ids: [],
             qualification_ids: [],
+            qualification_min_level: 1,
             team_id: selectedTeamId ?? undefined,
         });
         setModalVisible(true);
@@ -730,6 +732,8 @@ const StandingDutyTab: React.FC = () => {
         const qualificationIds = Array.from(new Set((taskDetail.qualifications || [])
             .map(item => Number(item.qualification_id))
             .filter(Number.isFinite)));
+        const qualificationMinLevel = Math.max(1, ...(taskDetail.qualifications || [])
+            .map(item => Number(item.min_level) || 1));
         form.setFieldsValue({
             task_name: taskDetail.task_name,
             task_type: taskDetail.task_type,
@@ -738,6 +742,7 @@ const StandingDutyTab: React.FC = () => {
             preferred_shift_ids: taskDetail.task_type === 'AD_HOC' ? preferredShiftIds[0] : preferredShiftIds,
             allowed_employee_ids: parseJsonNumberList(taskDetail.allowed_employee_ids),
             qualification_ids: qualificationIds,
+            qualification_min_level: qualificationMinLevel,
             team_id: taskDetail.team_id,
             freq: rule.freq || 'DAILY',
             interval: rule.interval || 1,
@@ -777,11 +782,12 @@ const StandingDutyTab: React.FC = () => {
             };
 
             if (qualificationIds.length > 0) {
+                const qualificationMinLevel = Number(values.qualification_min_level) || 1;
                 payload.qualifications = Array.from({ length: finalRequiredPeople }, (_, index) => index + 1)
                     .flatMap(positionNumber => qualificationIds.map(qualificationId => ({
                         position_number: positionNumber,
                         qualification_id: qualificationId,
-                        min_level: 1,
+                        min_level: qualificationMinLevel,
                         is_mandatory: true,
                     })));
             } else if (editingTask) {
@@ -1270,18 +1276,23 @@ const StandingDutyTab: React.FC = () => {
                         />
                     </Form.Item>
 
-                    <Form.Item name="qualification_ids" label="资质要求">
-                        <WxbSelect
-                            mode="multiple"
-                            placeholder="选择必需资质（不选则不限制资质）"
-                            allowClear
-                            optionFilterProp="label"
-                            options={qualifications.map(qualification => ({
-                                label: qualification.qualification_name,
-                                value: qualification.id,
-                            }))}
-                        />
-                    </Form.Item>
+                    <div style={{ display: 'flex', gap: 'var(--wx-space-12)', alignItems: 'flex-start' }}>
+                        <Form.Item name="qualification_ids" label="资质要求" style={{ flex: 1, marginBottom: 0 }}>
+                            <WxbSelect
+                                mode="multiple"
+                                placeholder="选择必需资质（不选则不限制资质）"
+                                allowClear
+                                optionFilterProp="label"
+                                options={qualifications.map(qualification => ({
+                                    label: qualification.qualification_name,
+                                    value: qualification.id,
+                                }))}
+                            />
+                        </Form.Item>
+                        <Form.Item name="qualification_min_level" label="最低等级" style={{ marginBottom: 0 }}>
+                            <WxbInputNumber min={1} max={5} addonAfter="级" className="solver-v5-duty-number-sm" />
+                        </Form.Item>
+                    </div>
                 </div>
 
                 <div className="solver-v5-duty-form-row solver-v5-duty-form-row-wide">
