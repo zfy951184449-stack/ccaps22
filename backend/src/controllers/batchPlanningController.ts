@@ -283,6 +283,10 @@ export const createBatchPlan = async (req: Request, res: Response) => {
   } catch (error: any) {
     await connection.rollback();
     console.error('Error creating batch plan:', error);
+    // 明确打出 DB 错误码,远程定位用:一行即可看出是外键(1451)/非空(1048)/溢出(1264)/重复(1062)/还是别的
+    console.error(
+      `[batch-create-fail] template_id=${req.body?.template_id} code=${error?.code} errno=${error?.errno} sqlState=${error?.sqlState} sqlMessage=${error?.sqlMessage}`,
+    );
 
     if (error instanceof InvalidDay0DateError) {
       res.status(400).json({ error: error.message });
@@ -291,7 +295,18 @@ export const createBatchPlan = async (req: Request, res: Response) => {
     } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
       res.status(400).json({ error: 'Invalid template ID' });
     } else {
-      res.status(500).json({ error: 'Failed to create batch plan' });
+      // 临时诊断:把真实错误(错误码 + 失败的表/列/约束)直接拼进 error 文案,
+      // 这样前端红色 toast 会原样显示,无需开 DevTools。定位到根因后移除本分支的诊断拼接。
+      const diag = [error?.code, error?.errno, error?.sqlMessage ?? error?.message]
+        .filter((x) => x !== undefined && x !== null && x !== '')
+        .join(' | ');
+      res.status(500).json({
+        error: `新建批次失败【诊断: ${diag || '未知错误'}】`,
+        code: error?.code ?? null,
+        errno: error?.errno ?? null,
+        sqlMessage: error?.sqlMessage ?? null,
+        detail: error?.message ?? null,
+      });
     }
   } finally {
     connection.release();
@@ -344,7 +359,20 @@ export const createBatchPlanFromMfgPackage = async (req: Request, res: Response)
       return res.status(400).json({ error: 'Batch code already exists' });
     }
 
-    res.status(500).json({ error: 'Failed to create batch plan from MFG package' });
+    // 临时诊断:总包建批次同样可能在 generate_batch_operation_plans 处抛 DB 错,把真实错误码露出。
+    console.error(
+      `[batch-mfg-create-fail] mfg_package_id=${req.body?.mfg_package_id} code=${error?.code} errno=${error?.errno} sqlState=${error?.sqlState} sqlMessage=${error?.sqlMessage}`,
+    );
+    const diag = [error?.code, error?.errno, error?.sqlMessage ?? error?.message]
+      .filter((x) => x !== undefined && x !== null && x !== '')
+      .join(' | ');
+    res.status(500).json({
+      error: `总包生成批次失败【诊断: ${diag || '未知错误'}】`,
+      code: error?.code ?? null,
+      errno: error?.errno ?? null,
+      sqlMessage: error?.sqlMessage ?? null,
+      detail: error?.message ?? null,
+    });
   }
 };
 
@@ -413,7 +441,20 @@ export const createBatchPlansFromMfgPackageInBulk = async (req: Request, res: Re
       return res.status(400).json({ error: '批次编码已存在' });
     }
 
-    res.status(500).json({ error: 'Failed to bulk create batch plans from MFG package' });
+    // 临时诊断:把真实错误码/表/列露出,前端 toast 原样显示。定位根因后移除。
+    console.error(
+      `[batch-mfg-bulk-create-fail] mfg_package_id=${req.body?.mfg_package_id} code=${error?.code} errno=${error?.errno} sqlState=${error?.sqlState} sqlMessage=${error?.sqlMessage}`,
+    );
+    const diag = [error?.code, error?.errno, error?.sqlMessage ?? error?.message]
+      .filter((x) => x !== undefined && x !== null && x !== '')
+      .join(' | ');
+    res.status(500).json({
+      error: `总包批量生成批次失败【诊断: ${diag || '未知错误'}】`,
+      code: error?.code ?? null,
+      errno: error?.errno ?? null,
+      sqlMessage: error?.sqlMessage ?? null,
+      detail: error?.message ?? null,
+    });
   }
 };
 
@@ -845,13 +886,26 @@ export const createBatchPlansInBulk = async (req: Request, res: Response) => {
   } catch (error: any) {
     await connection.rollback();
     console.error('Error creating batch plans in bulk:', error);
+    console.error(
+      `[batch-bulk-create-fail] template_id=${req.body?.template_id} code=${error?.code} errno=${error?.errno} sqlState=${error?.sqlState} sqlMessage=${error?.sqlMessage}`,
+    );
 
     if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: '批次编码已存在' });
     } else if (error.code === 'ER_NO_REFERENCED_ROW_2') {
       res.status(400).json({ error: '无效的模版ID' });
     } else {
-      res.status(500).json({ error: '批量创建批次失败' });
+      // 临时诊断:把真实错误码/表/列拼进文案,前端 toast 原样显示。定位根因后移除。
+      const diag = [error?.code, error?.errno, error?.sqlMessage ?? error?.message]
+        .filter((x) => x !== undefined && x !== null && x !== '')
+        .join(' | ');
+      res.status(500).json({
+        error: `批量创建批次失败【诊断: ${diag || '未知错误'}】`,
+        code: error?.code ?? null,
+        errno: error?.errno ?? null,
+        sqlMessage: error?.sqlMessage ?? null,
+        detail: error?.message ?? null,
+      });
     }
   } finally {
     connection.release();
