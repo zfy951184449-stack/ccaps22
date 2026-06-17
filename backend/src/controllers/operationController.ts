@@ -118,23 +118,43 @@ export const createOperation = async (req: Request, res: Response) => {
 
 // 更新操作
 export const updateOperation = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
   try {
     const { id } = req.params;
     const { operation_name, standard_time, required_people, description, operation_type_id } = req.body;
 
-    const [result] = await pool.execute(
+    const nextRequiredPeople = required_people || 1;
+
+    await connection.beginTransaction();
+
+    const [result] = await connection.execute(
       'UPDATE operations SET operation_name = ?, standard_time = ?, required_people = ?, description = ?, operation_type_id = ? WHERE id = ?',
-      [operation_name, standard_time, required_people || 1, description || null, operation_type_id || null, id]
+      [operation_name, standard_time, nextRequiredPeople, description || null, operation_type_id || null, id]
     ) as any;
 
     if (result.affectedRows === 0) {
+      await connection.rollback();
       return res.status(404).json({ error: 'Operation not found' });
     }
 
+    // 收口高位资质需求：所需人数缩减后，删除 position_number 超出新人数的孤儿资质行。
+    // 读取侧(getOperationQualifications)与 V4 消费侧(DataAssemblerV4)都只遍历 1..required_people，
+    // 残留的高位行会被静默忽略、长期堆积，且日后人数再调大会复用到旧资质。
+    // 该 DELETE 幂等——人数未变/增大时无 position_number 越界行可删，命中 0 行。
+    await connection.execute(
+      'DELETE FROM operation_qualification_requirements WHERE operation_id = ? AND position_number > ?',
+      [id, nextRequiredPeople]
+    );
+
+    await connection.commit();
     res.json({ message: 'Operation updated successfully' });
   } catch (error) {
+    await connection.rollback();
     console.error('Error updating operation:', error);
     res.status(500).json({ error: 'Failed to update operation' });
+  } finally {
+    connection.release();
   }
 };
 

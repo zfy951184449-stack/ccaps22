@@ -483,8 +483,18 @@ const OperationsPage: React.FC = () => {
             title: '合格人数',
             width: 130,
             render: (_value, record) => {
-                const counts = qualifiedPersonnelMap[record.id] || [];
-                if (counts.length === 0) return <span className="operations-muted">-</span>;
+                // 合格人数只反映 1..所需人数 的有效位置。qualified-personnel 接口按 oqr 里出现的
+                // 最大 position_number 返回数组，可能含超出所需人数的残留位置（历史孤儿数据：所需
+                // 人数曾被调小，旧资质行未随之清理）。有效位置正常展示；残留位置不混入计数，而是
+                // 单独用告警徽标显式标出，提示该操作存在脏数据、重新编辑保存即可由后端自动收口。
+                const requiredPeople = toFiniteNumber(record.required_people, 1);
+                const allCounts = qualifiedPersonnelMap[record.id] || [];
+                const counts = allCounts.slice(0, requiredPeople);
+                const orphanCount = Math.max(0, allCounts.length - requiredPeople);
+
+                if (counts.length === 0 && orphanCount === 0) {
+                    return <span className="operations-muted">-</span>;
+                }
 
                 return (
                     <span className="operations-position-list">
@@ -500,6 +510,20 @@ const OperationsPage: React.FC = () => {
                                 </span>
                             </WxbTooltip>
                         ))}
+                        {orphanCount > 0 && (
+                            <WxbTooltip
+                                title={`存在超出所需人数（${requiredPeople} 人）的残留资质要求，最高至位置 ${allCounts.length}。这是历史遗留的脏数据，重新编辑并保存该操作即可自动清理。`}
+                            >
+                                <span>
+                                    <WxbBadge
+                                        status="warning"
+                                        variant="outline"
+                                        code="残留"
+                                        label={String(orphanCount)}
+                                    />
+                                </span>
+                            </WxbTooltip>
+                        )}
                     </span>
                 );
             },
