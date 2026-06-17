@@ -1444,7 +1444,7 @@ export class RosterLeadershipCockpitService {
               oqr.position_number,
               oqr.qualification_id,
               q.qualification_name,
-              COALESCE(oqr.required_level, oqr.min_level, 1) AS required_level,
+              COALESCE(oqr.min_level, 1) AS required_level,
               COALESCE(oqr.required_count, 1) AS required_count,
               IFNULL(oqr.is_mandatory, 1) AS is_mandatory
        FROM operation_qualification_requirements oqr

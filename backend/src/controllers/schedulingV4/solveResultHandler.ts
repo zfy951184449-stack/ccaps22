@@ -349,8 +349,9 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
         if (defOperationIds.length > 0) {
             const ph = defOperationIds.map(() => '?').join(',');
             const [reqRows] = await pool.execute<RowDataPacket[]>(`
+                -- 资质门槛取 min_level(操作管理界面唯一真相源);required_level 为兼容旧逻辑死列
                 SELECT oqr.operation_id, oqr.position_number, oqr.qualification_id,
-                       oqr.required_level, oqr.is_mandatory, q.qualification_name
+                       oqr.min_level AS required_level, oqr.is_mandatory, q.qualification_name
                 FROM operation_qualification_requirements oqr
                 LEFT JOIN qualifications q ON q.id = oqr.qualification_id
                 WHERE oqr.operation_id IN (${ph})

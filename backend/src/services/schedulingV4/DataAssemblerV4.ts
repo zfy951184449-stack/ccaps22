@@ -804,8 +804,9 @@ export class DataAssemblerV4 {
         if (operationIds.length === 0) return map;
 
         const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT operation_id, position_number, qualification_id, required_level, is_mandatory 
-            FROM operation_qualification_requirements 
+            -- 资质门槛以操作管理界面写入的 min_level 为准;required_level 是兼容旧逻辑的死列(恒=1),不要再读它
+            SELECT operation_id, position_number, qualification_id, min_level AS required_level, is_mandatory
+            FROM operation_qualification_requirements
             WHERE operation_id IN (${operationIds.join(',')})
         `);
 

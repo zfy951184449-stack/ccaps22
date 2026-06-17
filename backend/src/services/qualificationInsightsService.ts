@@ -846,7 +846,7 @@ async function fetchQualificationDemandRows(options?: {
         bop.planned_start_datetime,
         bop.planned_end_datetime,
         COALESCE(oqr.required_count, 1) AS required_count,
-        COALESCE(oqr.required_level, oqr.min_level, 1) AS required_level
+        COALESCE(oqr.min_level, 1) AS required_level
       FROM operation_qualification_requirements oqr
       JOIN qualifications q ON q.id = oqr.qualification_id
       JOIN batch_operation_plans bop ON bop.operation_id = oqr.operation_id

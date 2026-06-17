@@ -332,7 +332,7 @@ const loadBatchOperations = async (batchId: number) => {
         positionNumber: Number(row.position_number ?? 1),
         qualificationId: Number(row.qualification_id),
         qualificationName: row.qualification_name ?? `Qualification ${row.qualification_id}`,
-        requiredLevel: Number(row.required_level ?? row.min_level ?? 1),
+        requiredLevel: Number(row.min_level ?? row.required_level ?? 1),
         requiredCount: Number(row.required_count ?? 1),
         isMandatory: Boolean(row.is_mandatory),
       });

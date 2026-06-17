@@ -372,7 +372,7 @@ export const getBatchOperations = async (req: Request, res: Response) => {
                 oqr.position_number,
                 oqr.qualification_id,
                 q.qualification_name,
-                oqr.required_level,
+                oqr.min_level AS required_level,
                 oqr.is_mandatory
             FROM operation_qualification_requirements oqr
             JOIN qualifications q ON oqr.qualification_id = q.id
@@ -418,7 +418,7 @@ export const getBatchOperations = async (req: Request, res: Response) => {
                           FROM employee_qualifications eq
                           WHERE eq.employee_id = e.id
                             AND eq.qualification_id = oqr.qualification_id
-                            AND eq.qualification_level >= oqr.required_level
+                            AND eq.qualification_level >= oqr.min_level
                       )
                 )
             `;
@@ -740,8 +740,8 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
         -- 计算资质匹配分数
         MAX(
           CASE 
-            WHEN eq.qualification_level >= oqr.required_level 
-            THEN (eq.qualification_level - oqr.required_level + 5) * 10
+            WHEN eq.qualification_level >= oqr.min_level 
+            THEN (eq.qualification_level - oqr.min_level + 5) * 10
             ELSE 0
           END
         ) as match_score,
@@ -774,7 +774,7 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
       JOIN qualifications q ON eq.qualification_id = q.id
       WHERE oqr.operation_id = ?
         ${positionFilterClause}
-        AND eq.qualification_level >= oqr.required_level
+        AND eq.qualification_level >= oqr.min_level
         -- STRICTLY EXCLUDE employees who miss ANY mandatory qualification for this operation/position
         AND NOT EXISTS (
             SELECT 1
@@ -787,7 +787,7 @@ export const getRecommendedPersonnel = async (req: Request, res: Response) => {
                   FROM employee_qualifications eq_check
                   WHERE eq_check.employee_id = e.id
                     AND eq_check.qualification_id = oqr_check.qualification_id
-                    AND eq_check.qualification_level >= oqr_check.required_level
+                    AND eq_check.qualification_level >= oqr_check.min_level
               )
         )
       GROUP BY e.id
@@ -1098,7 +1098,7 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
         JOIN employee_qualifications eq ON e.id = eq.employee_id
         JOIN operation_qualification_requirements oqr ON eq.qualification_id = oqr.qualification_id
         WHERE oqr.operation_id = ?
-          AND eq.qualification_level >= oqr.required_level
+          AND eq.qualification_level >= oqr.min_level
           AND e.id NOT IN (
             SELECT employee_id 
             FROM batch_personnel_assignments 
@@ -1355,7 +1355,7 @@ export const getAvailableEmployees = async (req: Request, res: Response) => {
               SELECT 1 FROM employee_qualifications eq
               WHERE eq.employee_id = e.id
                 AND eq.qualification_id = oqr.qualification_id
-                AND eq.qualification_level >= oqr.required_level
+                AND eq.qualification_level >= oqr.min_level
             )
         ) as missing_qualifications
       FROM employees e
