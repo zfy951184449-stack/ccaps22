@@ -10,6 +10,7 @@ import {
     wxbToast,
 } from '../wxb-ui';
 import { batchPlanApi } from '../../services/api';
+import type { BatchPlanPayload } from '../../services/api';
 import type { BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary } from '../../types';
 
 interface CreateBatchModalV4Props {
@@ -63,6 +64,13 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
     const [values, setValues] = useState<CreateBatchFormValues>(createDefaultValues);
     const [errors, setErrors] = useState<CreateBatchErrors>({});
     const [day0Offset, setDay0Offset] = useState<{ offset: number; has_pre_day0: boolean; pre_day0_count: number } | null>(null);
+    // 换模板/改开工日命中已排班批次时，后端返回 requiresConfirmation；此处暂存待确认重建的上下文
+    const [rebuildConfirm, setRebuildConfirm] = useState<{
+        id: number;
+        payload: BatchPlanPayload;
+        blocking: Array<{ label: string; count: number }>;
+    } | null>(null);
+    const [rebuildLoading, setRebuildLoading] = useState(false);
 
     // day0Offset 仅驱动「提前投料」提示横幅，不参与提交换算；
     // 序号守卫防止快速切换模板时旧响应晚到覆盖新模板的提示
@@ -210,7 +218,21 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
             };
 
             if (initialValues) {
-                await batchPlanApi.update(initialValues.id, payload);
+                try {
+                    await batchPlanApi.update(initialValues.id, payload);
+                } catch (error: any) {
+                    const data = error?.response?.data;
+                    if (error?.response?.status === 409 && data?.requiresConfirmation) {
+                        // 批次已排班：弹二次确认框，确认后清空排班并强制重建（此处不当作错误提示）
+                        setRebuildConfirm({
+                            id: initialValues.id,
+                            payload,
+                            blocking: Array.isArray(data?.details?.blocking) ? data.details.blocking : [],
+                        });
+                        return;
+                    }
+                    throw error;
+                }
                 wxbToast.success('批次已更新');
             } else {
                 await batchPlanApi.create(payload);
@@ -225,7 +247,27 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
         }
     }, [initialValues, onSuccess, validate, values]);
 
+    // 二次确认后强制重建：清空原排班/加班/冲突数据并按新模板重新生成操作计划
+    const handleConfirmRebuild = useCallback(async () => {
+        if (!rebuildConfirm) {
+            return;
+        }
+        setRebuildLoading(true);
+        try {
+            await batchPlanApi.update(rebuildConfirm.id, { ...rebuildConfirm.payload, force_rebuild: true });
+            wxbToast.success('批次已更新，原排班数据已清空并按新模板重建');
+            setRebuildConfirm(null);
+            onSuccess();
+        } catch (error) {
+            console.error('Failed to rebuild batch', error);
+            wxbToast.error(getApiErrorMessage(error, '重建批次失败'));
+        } finally {
+            setRebuildLoading(false);
+        }
+    }, [rebuildConfirm, onSuccess]);
+
     return (
+        <>
         <WxbModal
             open={visible}
             className="batch-modal-v4__modal"
@@ -359,6 +401,34 @@ const CreateBatchModalV4: React.FC<CreateBatchModalV4Props> = ({
                 </div>
             </div>
         </WxbModal>
+
+        <WxbModal
+            open={!!rebuildConfirm}
+            className="batch-modal-v4__rebuild-modal"
+            title="更换模板将清空现有排班"
+            okText="确认重建"
+            cancelText="取消"
+            okVariant="danger"
+            confirmLoading={rebuildLoading}
+            onOk={handleConfirmRebuild}
+            onCancel={() => setRebuildConfirm(null)}
+            width={460}
+            centered
+        >
+            <div className="batch-modal-v4__rebuild-confirm">
+                <p>
+                    该批次已存在下游排班数据
+                    {rebuildConfirm && rebuildConfirm.blocking.length > 0
+                        ? `（${rebuildConfirm.blocking.map((b) => `${b.label} ${b.count} 条`).join('、')}）`
+                        : ''}
+                    。
+                </p>
+                <p>
+                    继续将<strong>清空这些排班 / 加班 / 冲突数据</strong>，并按新模板重新生成操作计划。该操作不可撤销，确认继续？
+                </p>
+            </div>
+        </WxbModal>
+        </>
     );
 };
 

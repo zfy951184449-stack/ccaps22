@@ -41,6 +41,40 @@ const resolvePlannedStartDate = async (
   return null;
 };
 
+// 换模板 / 改开工日会触发存储过程「删旧建新」批次操作计划(DELETE FROM batch_operation_plans)。
+// 以下三张表用「无 ON DELETE」的硬外键回引 batch_operation_plans(id)(默认 RESTRICT),
+// 一旦该批次已被排班/加班/冲突记录引用,DELETE 会抛 ER_ROW_IS_REFERENCED_2(1451) → 整事务回滚为 500。
+// 换模板前先体检,给出可读拦截而非裸 500。各环境为手动迁移、可能缺表,缺表则跳过(由 catch 中的 1451 分支兜底)。
+const BATCH_OP_PLAN_REFERENCERS: ReadonlyArray<{ table: string; column: string; label: string }> = [
+  { table: 'employee_shift_plans', column: 'batch_operation_plan_id', label: '排班' },
+  { table: 'overtime_records', column: 'related_operation_plan_id', label: '加班记录' },
+  { table: 'aps_constraint_conflicts', column: 'batch_operation_plan_id', label: '约束冲突' },
+];
+
+const findBlockingReferences = async (
+  executor: { execute: typeof pool.execute },
+  batchPlanId: number,
+): Promise<Array<{ label: string; count: number }>> => {
+  const blocking: Array<{ label: string; count: number }> = [];
+  for (const ref of BATCH_OP_PLAN_REFERENCERS) {
+    try {
+      const [rows] = await executor.execute<RowDataPacket[]>(
+        `SELECT COUNT(*) AS cnt
+           FROM \`${ref.table}\` r
+           JOIN batch_operation_plans bop ON r.\`${ref.column}\` = bop.id
+          WHERE bop.batch_plan_id = ?`,
+        [batchPlanId],
+      );
+      const count = Number(rows[0]?.cnt ?? 0);
+      if (count > 0) blocking.push({ label: ref.label, count });
+    } catch (err: any) {
+      // 该环境未建此表(手动迁移可能缺表)时跳过;真正的 FK 阻塞仍由 catch 中的 1451 分支兜底。
+      if (err?.code !== 'ER_NO_SUCH_TABLE') throw err;
+    }
+  }
+  return blocking;
+};
+
 interface BatchPlan {
   id: number;
   batch_code: string;
@@ -401,6 +435,8 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       description,
       notes
     } = req.body;
+    // 前端二次确认后回传：允许在清空下游排班数据后强制按新模板重建。
+    const forceRebuild = req.body?.force_rebuild === true || req.body?.force_rebuild === 'true';
 
     const [existingRows] = await connection.execute<RowDataPacket[]>(
       `SELECT id, template_id, DATE_FORMAT(planned_start_date, '%Y-%m-%d') AS planned_start_date, plan_status
@@ -451,6 +487,25 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
 
     const templateChanged = Number(existingPlan.template_id) !== Number(nextTemplateId);
     const plannedStartChanged = String(existingPlan.planned_start_date) !== String(nextPlannedStartDate);
+
+    // 换模板 / 改开工日会让存储过程「删旧建新」批次操作计划。若该批次已被排班/加班/冲突记录等
+    // 下游硬外键(无 ON DELETE = RESTRICT)引用,删除会抛 1451。先体检:未确认则要求前端二次确认,
+    // 已确认(force_rebuild)则像「撤销激活」一样清空这些下游数据,使随后的重建不被外键阻塞。
+    if (templateChanged || plannedStartChanged) {
+      const blocking = await findBlockingReferences(connection, Number(id));
+      if (blocking.length > 0) {
+        if (!forceRebuild) {
+          await connection.rollback();
+          const detail = blocking.map((b) => `${b.label} ${b.count} 条`).join('、');
+          return res.status(409).json({
+            error: `该批次已存在排班/加班/冲突等下游数据(${detail})。更换模板或调整开工日期会清空这些数据并按新模板重建,请确认。`,
+            requiresConfirmation: true,
+            details: { blocking },
+          });
+        }
+        await BatchLifecycleService.clearSchedulingArtifactsForRebuild(connection, Number(id));
+      }
+    }
 
     const updateQuery = `
       UPDATE production_batch_plans
@@ -510,6 +565,10 @@ export const updateBatchPlan = async (req: Request, res: Response) => {
       res.status(400).json({ error: error.message });
     } else if (error.code === 'ER_DUP_ENTRY') {
       res.status(400).json({ error: 'Batch code already exists' });
+    } else if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+      // 重建批次操作计划时,旧行被排班/加班/冲突记录等硬外键引用,DELETE 被拒。
+      // 体检漏网(如缺表跳过)或并发新增引用时的兜底,转成可读 409 而非裸 500。
+      res.status(409).json({ error: '该批次已被排班/加班/冲突记录引用,更换模板或调整开工日期前请先撤销相关排班。' });
     } else {
       res.status(500).json({ error: 'Failed to update batch plan' });
     }

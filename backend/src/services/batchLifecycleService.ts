@@ -186,6 +186,39 @@ export class BatchLifecycleService {
     }
   }
 
+  /**
+   * 为「更换模板 / 调整开工日并强制重建」清理该批次的下游自动排班数据。
+   * 复用 deactivate 同款级联清理（批次人员指派 → 班次变更日志 → 加班(按班次) → 排班 →
+   * 班次计划 → 加班(按操作)），再额外清理较新的 aps_constraint_conflicts（不在
+   * cleanupAutoSchedulingData 覆盖范围内），使随后的 generate_batch_operation_plans 在删除
+   * 旧 batch_operation_plans 时不再被这些 RESTRICT 外键阻塞（否则会抛 1451 → 500）。
+   * 必须在调用方已开启的事务中执行（传入同一 connection），失败时由调用方统一回滚。
+   */
+  static async clearSchedulingArtifactsForRebuild(
+    connection: PoolConnection,
+    batchId: number,
+  ): Promise<Record<string, number>> {
+    const residuals = await BatchLifecycleService.detectResidualSchedulingData(connection, batchId);
+    await BatchLifecycleService.cleanupAutoSchedulingData(connection, batchId, residuals);
+
+    if (residuals.operationIds.length) {
+      const opPlaceholders = residuals.operationIds.map(() => '?').join(',');
+      try {
+        await connection.execute(
+          `DELETE FROM aps_constraint_conflicts WHERE batch_operation_plan_id IN (${opPlaceholders})`,
+          residuals.operationIds,
+        );
+      } catch (error) {
+        // 该环境未建此表（手动迁移可能缺表）时忽略；其余错误上抛由调用方回滚。
+        if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    return residuals.summary;
+  }
+
   private static async loadBatchForUpdate(connection: PoolConnection, batchId: number): Promise<BatchRow | null> {
     const [rows] = await connection.execute<BatchRow[]>(
       `SELECT id, batch_code, plan_status, activated_at, activated_by, batch_color, template_id

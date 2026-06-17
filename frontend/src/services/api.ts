@@ -204,7 +204,7 @@ export const operationConstraintApi = {
   validateTemplate: (templateId: number) => api.get<ConstraintValidationResult>(`/constraints/template/${templateId}/validate`)
 };
 
-type BatchPlanPayload = {
+export type BatchPlanPayload = {
   batch_code: string;
   batch_name: string;
   template_id: number;
@@ -214,6 +214,8 @@ type BatchPlanPayload = {
   plan_status?: BatchPlan['plan_status'];
   description?: string | null;
   notes?: string | null;
+  // 二次确认后回传：清空下游排班/加班/冲突数据并按新模板强制重建（仅 update 使用）
+  force_rebuild?: boolean;
 };
 
 export type MfgTemplatePackagePayload = {
