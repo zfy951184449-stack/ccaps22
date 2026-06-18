@@ -108,6 +108,8 @@ async function triggerSolveAsync(
                     employee_ids: employeeIdsSnapshot,
                     standalone_task_ids: standaloneTaskIdsSnapshot,
                 },
+                // 记录本次是否启用独立任务,供结果读回路在全域 fallback 时判断(团队范围已由 standalone_task_ids 快照精确表达)
+                standalone_enabled: config?.enable_standalone_tasks !== false,
                 ...buildSpecialShiftRunSummary(
                     normalizeSpecialShiftRequirements(solverRequest.special_shift_requirements || []),
                 ),

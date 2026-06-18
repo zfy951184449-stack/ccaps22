@@ -24,7 +24,8 @@ export const runPrecheckV4 = async (req: Request, res: Response) => {
 
         // 1. Assemble solver request data (same as solve flow)
         const teamIds = config?.team_ids || [];
-        const solverRequest = await DataAssemblerV4.assemble(start_date, end_date, batch_ids, teamIds);
+        // 预检与求解口径一致:把 config 传给 assemble(否则 enable_standalone_tasks 等开关被忽略,预检恒按默认值)
+        const solverRequest = await DataAssemblerV4.assemble(start_date, end_date, batch_ids, teamIds, undefined, config);
 
         console.log(`[SchedulingV4] Precheck data assembled: ${solverRequest.operation_demands.length} ops, ${solverRequest.employee_profiles.length} employees`);
 

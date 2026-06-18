@@ -1311,7 +1311,7 @@ const StandingDutyTab: React.FC = () => {
                         />
                     </Form.Item>
 
-                    <Form.Item name="team_id" label="所属部门">
+                    <Form.Item name="team_id" label="所属部门" extra="留空=全局任务,任何部门排班都会纳入;选定部门后,该任务只会出现在该部门(及其子部门)的排班求解里">
                         <WxbSelect
                             placeholder="选择部门"
                             allowClear

@@ -130,6 +130,34 @@ export const getSolveResultV5 = async (req: Request, res: Response) => {
             });
         }
 
+        // [独立任务可见性] 把本次求解"考虑过"的独立任务也并入,使其即便最终空缺(没排上)也作为
+        // UNASSIGNED 出现,而不是整条消失(求解器纯空缺不写身份,看起来像"没纳入求解")。
+        // 团队范围求解:scope.standalone_task_ids 已快照实际喂给求解器的任务 id(精确,含 enable 开关口径);
+        // 全域求解:scope.standalone_task_ids 为 null,按与 DataAssemblerV4 全域装配同口径重查窗口内 PENDING/SCHEDULED。
+        const scopeStandaloneIds = runSummary?.scope?.standalone_task_ids;
+        if (Array.isArray(scopeStandaloneIds)) {
+            scopeStandaloneIds.forEach((id: any) => {
+                const n = Number(id);
+                if (Number.isFinite(n) && n > 0) standaloneTaskIds.add(n);
+            });
+        } else if (windowStart && windowEnd && runSummary?.standalone_enabled !== false) {
+            const toDateStr = (v: any): string => {
+                if (v instanceof Date) {
+                    const y = v.getFullYear();
+                    const m = String(v.getMonth() + 1).padStart(2, '0');
+                    const d = String(v.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                }
+                return String(v).split('T')[0].split(' ')[0];
+            };
+            const [scopeRows] = await pool.execute<RowDataPacket[]>(`
+                SELECT id FROM standalone_tasks
+                WHERE status IN ('PENDING', 'SCHEDULED')
+                  AND earliest_start <= ? AND deadline >= ?
+            `, [`${toDateStr(windowEnd)} 23:59:59`, `${toDateStr(windowStart)} 00:00:00`]);
+            scopeRows.forEach((r) => standaloneTaskIds.add(Number(r.id)));
+        }
+
         if (standaloneTaskIds.size > 0) {
             const taskIds = Array.from(standaloneTaskIds);
             const placeholders = taskIds.map(() => '?').join(',');
