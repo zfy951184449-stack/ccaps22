@@ -152,7 +152,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         bop.window_start_datetime, -- NEW
         bop.window_end_datetime,   -- NEW
         bop.planned_duration,
-        bop.required_people,
+        COALESCE(o.required_people, bop.required_people) AS required_people,
         MAX(tsb.resource_node_id) AS resource_node_id,
         MAX(rn.node_name) AS resource_name,
         MAX(rn.node_class) AS resource_node_class,

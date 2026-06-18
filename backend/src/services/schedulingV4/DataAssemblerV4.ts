@@ -661,7 +661,7 @@ export class DataAssemblerV4 {
                 bop.planned_start_datetime as planned_start,
                 bop.planned_end_datetime as planned_end,
                 TIMESTAMPDIFF(MINUTE, bop.planned_start_datetime, bop.planned_end_datetime) as planned_duration_minutes,
-                bop.required_people
+                COALESCE(o.required_people, bop.required_people) AS required_people
             FROM batch_operation_plans bop
             JOIN production_batch_plans pbp ON bop.batch_plan_id = pbp.id
             JOIN operations o ON bop.operation_id = o.id
@@ -936,10 +936,11 @@ export class DataAssemblerV4 {
 
         const placeholders = batchIds.map(() => '?').join(',');
         const query = `
-            SELECT DISTINCT bsg.id, bsg.group_name, bsg.share_mode, bsgm.batch_operation_plan_id, bop.required_people
+            SELECT DISTINCT bsg.id, bsg.group_name, bsg.share_mode, bsgm.batch_operation_plan_id, COALESCE(o.required_people, bop.required_people) AS required_people
             FROM batch_share_groups bsg
             JOIN batch_share_group_members bsgm ON bsg.id = bsgm.group_id
             JOIN batch_operation_plans bop ON bsgm.batch_operation_plan_id = bop.id
+            JOIN operations o ON bop.operation_id = o.id
             WHERE bop.planned_start_datetime BETWEEN ? AND ?
               AND bop.batch_plan_id IN (${placeholders})
         `;

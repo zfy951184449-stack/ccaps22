@@ -75,7 +75,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         bop.planned_start_datetime,
         bop.planned_end_datetime,
         bop.planned_duration,
-        bop.required_people,
+        COALESCE(o.required_people, bop.required_people) AS required_people,
         -- Assignment Status
         COUNT(bpa.employee_id) AS assigned_people
       FROM production_batch_plans pbp

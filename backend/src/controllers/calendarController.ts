@@ -279,12 +279,12 @@ export const getActiveBatchOperations = async (req: Request, res: Response) => {
           )
         END AS window_end_datetime,
         bop.planned_duration,
-        bop.required_people,
+        COALESCE(o.required_people, bop.required_people) AS required_people,
         bop.is_locked,
         bop.is_independent,
         IFNULL(ap.assigned_people, 0) AS assigned_people,
         CASE
-          WHEN IFNULL(ap.assigned_people, 0) >= bop.required_people THEN 'COMPLETE'
+          WHEN IFNULL(ap.assigned_people, 0) >= COALESCE(o.required_people, bop.required_people) THEN 'COMPLETE'
           WHEN IFNULL(ap.assigned_people, 0) > 0 THEN 'PARTIAL'
           ELSE 'UNASSIGNED'
         END AS assignment_status
@@ -337,7 +337,7 @@ export const getBatchOperations = async (req: Request, res: Response) => {
         o.operation_name,
         bop.planned_start_datetime,
         bop.planned_end_datetime,
-        bop.required_people,
+        COALESCE(o.required_people, bop.required_people) AS required_people,
         pbp.plan_status,
         GROUP_CONCAT(DISTINCT bsg.group_name SEPARATOR ', ') as share_group_name,
         GROUP_CONCAT(DISTINCT bsg.group_code SEPARATOR ', ') as share_group_code,
@@ -933,7 +933,7 @@ export const assignPositionPersonnel = async (req: Request, res: Response) => {
 
     // 获取操作信息
     const [opRows] = await connection.execute<RowDataPacket[]>(
-      `SELECT bop.id, bop.required_people, bop.planned_start_datetime, bop.planned_end_datetime,
+      `SELECT bop.id, COALESCE(o.required_people, bop.required_people) AS required_people, bop.planned_start_datetime, bop.planned_end_datetime,
               o.operation_name, pbp.batch_code
        FROM batch_operation_plans bop
        JOIN operations o ON bop.operation_id = o.id
@@ -1067,10 +1067,10 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
 
     // 获取所有未分配或部分分配的操作
     const [operations] = await connection.execute<RowDataPacket[]>(
-      `SELECT 
+      `SELECT
         bop.id,
         bop.operation_id,
-        bop.required_people,
+        COALESCE(o.required_people, bop.required_people) AS required_people,
         bop.planned_start_datetime,
         bop.planned_end_datetime,
         IFNULL(
@@ -1081,6 +1081,7 @@ export const bulkAutoAssign = async (req: Request, res: Response) => {
           0
         ) as assigned_count
       FROM batch_operation_plans bop
+      JOIN operations o ON bop.operation_id = o.id
       WHERE bop.batch_plan_id = ?
       HAVING assigned_count < required_people`,
       [batchId]

@@ -745,7 +745,7 @@ export const getDailyAssignments = async (req: Request, res: Response) => {
                 o.operation_name,
                 TIME_FORMAT(bop.planned_start_datetime, '%H:%i') as start_time,
                 TIME_FORMAT(bop.planned_end_datetime, '%H:%i') as end_time,
-                bop.required_people,
+                COALESCE(o.required_people, bop.required_people) AS required_people,
                 bpa.position_number,
                 e.employee_name
              FROM batch_operation_plans bop

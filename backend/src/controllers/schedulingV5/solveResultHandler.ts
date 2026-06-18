@@ -88,7 +88,7 @@ export const getSolveResultV5 = async (req: Request, res: Response) => {
                     bop.operation_id,
                     pbp.batch_code,
                     o.operation_name,
-                    bop.required_people,
+                    COALESCE(o.required_people, bop.required_people) AS required_people,
                     bop.planned_start_datetime,
                     bop.planned_end_datetime,
                     GROUP_CONCAT(DISTINCT bsg.id ORDER BY bsg.id) as share_group_ids,
@@ -104,7 +104,7 @@ export const getSolveResultV5 = async (req: Request, res: Response) => {
                 WHERE pbp.id IN (${placeholders})
                   AND bop.planned_start_datetime >= ?
                   AND bop.planned_start_datetime <= DATE_ADD(?, INTERVAL 1 DAY)
-                GROUP BY bop.id, bop.operation_id, pbp.batch_code, bop.required_people,
+                GROUP BY bop.id, bop.operation_id, pbp.batch_code, COALESCE(o.required_people, bop.required_people),
                          bop.planned_start_datetime, bop.planned_end_datetime, o.operation_name, ps.stage_name
             `, [...batchIds, windowStart, windowEnd]);
 
