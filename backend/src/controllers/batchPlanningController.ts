@@ -6,6 +6,7 @@ import BatchLifecycleService, { BatchLifecycleError } from '../services/batchLif
 import { generateBatchOperationPlansWithResources } from '../services/batchOperationGenerationService';
 import { MfgTemplatePackageService } from '../services/mfgTemplatePackageService';
 import { TEMPLATE_MIN_DAY_SQL, getTemplateMinDay } from '../services/templateDayOffsetService';
+import { computeRefreshDiff, applyRefresh } from '../services/batchTemplateRefreshService';
 
 // 只有 DRAFT 状态的批次可以通过 API 直接修改，ACTIVATED 需要通过生命周期接口
 const MUTABLE_BATCH_STATUSES = new Set(['DRAFT']);
@@ -958,5 +959,113 @@ export const getBatchOperationsTree = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching batch operations tree:', error);
     res.status(500).json({ error: 'Failed to fetch operations tree' });
+  }
+};
+
+// 从模版刷新 —— 预览:按当前模版重新推导,与批次现有工序做三向对比(只读)。
+export const getBatchRefreshPreview = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      `SELECT
+         pbp.id, pbp.batch_code, pbp.batch_name, pbp.template_id, pbp.plan_status,
+         pt.template_name,
+         DATE_FORMAT(pbp.planned_start_date, '%Y-%m-%d') as planned_start_date,
+         ${DAY0_DATE_SELECT}
+       FROM production_batch_plans pbp
+       LEFT JOIN process_templates pt ON pbp.template_id = pt.id
+       ${TEMPLATE_MIN_DAY_JOIN}
+       WHERE pbp.id = ?`,
+      [id],
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: '批次不存在' });
+    }
+    const batch = rows[0];
+    const status = String(batch.plan_status || '').toUpperCase();
+    const canRefresh = MUTABLE_BATCH_STATUSES.has(status);
+
+    const diff = await computeRefreshDiff(pool, Number(id));
+
+    return res.json({
+      batch: {
+        id: batch.id,
+        batch_code: batch.batch_code,
+        batch_name: batch.batch_name,
+        template_id: batch.template_id,
+        template_name: batch.template_name ?? null,
+        plan_status: status,
+        planned_start_date: batch.planned_start_date,
+        day0_date: batch.day0_date ?? null,
+      },
+      canRefresh,
+      blockReason: canRefresh ? null : '仅 DRAFT 批次可直接刷新,已激活批次请先撤销激活。',
+      summary: {
+        added: diff.added.length,
+        removed: diff.removed.length,
+        changed: diff.changed.length,
+        unchanged: diff.unchangedCount,
+        locked: diff.lockedCount,
+      },
+      added: diff.added,
+      removed: diff.removed,
+      changed: diff.changed,
+    });
+  } catch (error) {
+    console.error('Error building batch refresh preview:', error);
+    res.status(500).json({ error: '生成刷新预览失败' });
+  }
+};
+
+// 从模版刷新 —— 应用:仅 DRAFT;增量应用选中差异(scheduleIds 省略=全部),保留未变工序。
+export const refreshBatchFromTemplate = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  try {
+    const { id } = req.params;
+    const { scheduleIds } = req.body ?? {};
+
+    const selection: number[] | null = Array.isArray(scheduleIds)
+      ? scheduleIds.map((n: unknown) => Number(n)).filter((n: number) => Number.isFinite(n))
+      : null;
+
+    await connection.beginTransaction();
+
+    const [rows] = await connection.execute<RowDataPacket[]>(
+      'SELECT plan_status FROM production_batch_plans WHERE id = ? FOR UPDATE',
+      [id],
+    );
+    if (!rows.length) {
+      await connection.rollback();
+      return res.status(404).json({ error: '批次不存在' });
+    }
+    const status = String(rows[0].plan_status || '').toUpperCase();
+    if (!MUTABLE_BATCH_STATUSES.has(status)) {
+      await connection.rollback();
+      return res.status(409).json({ error: '仅 DRAFT 批次可直接刷新,已激活批次请先撤销激活。' });
+    }
+
+    // 防御:DRAFT 批次不应有下游排班/加班/冲突引用;若有则拒绝,避免删工序行触发硬外键。
+    const blocking = await findBlockingReferences(connection, Number(id));
+    if (blocking.length > 0) {
+      await connection.rollback();
+      const detail = blocking.map((b) => `${b.label} ${b.count} 条`).join('、');
+      return res.status(409).json({ error: `该批次存在下游数据(${detail}),无法直接刷新。` });
+    }
+
+    const result = await applyRefresh(connection, Number(id), selection);
+    await connection.commit();
+
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    await connection.rollback();
+    console.error('Error refreshing batch from template:', error);
+    console.error(
+      `[batch-refresh-fail] id=${req.params?.id} code=${error?.code} errno=${error?.errno} sqlMessage=${error?.sqlMessage}`,
+    );
+    res.status(500).json({ error: '从模版刷新失败' });
+  } finally {
+    connection.release();
   }
 };

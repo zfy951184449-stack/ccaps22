@@ -17,6 +17,7 @@ interface BatchListV4Props {
     onDelete: (batch: BatchPlan) => void;
     onActivate: (batch: BatchPlan) => void;
     onDeactivate: (batch: BatchPlan) => void;
+    onRefresh: (batch: BatchPlan) => void;
     selectedRowKeys: React.Key[];
     selectedDraftCount: number;
     selectedActivatedCount: number;
@@ -44,6 +45,7 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
     onDelete,
     onActivate,
     onDeactivate,
+    onRefresh,
     selectedRowKeys,
     selectedDraftCount,
     selectedActivatedCount,
@@ -97,10 +99,10 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
         {
             title: '操作',
             key: 'actions',
-            width: 240,
+            width: 290,
             render: (_, record) => (
                 <WxbTableActionCell
-                    maxInline={3}
+                    maxInline={4}
                     actions={[
                         record.plan_status === 'DRAFT'
                             ? {
@@ -130,6 +132,17 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                             ),
                             onClick: () => onEdit(record),
                         },
+                        ...(record.plan_status === 'DRAFT'
+                            ? [{
+                                key: 'refresh',
+                                label: (
+                                    <WxbTooltip title="按当前模版重新对比并刷新该批次工序">
+                                        <span><WxbIcon name="recipe" size={13} /> 刷新</span>
+                                    </WxbTooltip>
+                                ),
+                                onClick: () => onRefresh(record),
+                            }]
+                            : []),
                         {
                             key: 'delete',
                             label: (
@@ -152,7 +165,7 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                 />
             ),
         },
-    ], [onActivate, onDeactivate, onDelete, onEdit]);
+    ], [onActivate, onDeactivate, onDelete, onEdit, onRefresh]);
 
     return (
         <>

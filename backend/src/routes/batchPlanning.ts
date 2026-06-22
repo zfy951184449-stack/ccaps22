@@ -13,7 +13,9 @@ import {
   createBatchPlansInBulk,
   getBatchOperationsTree,
   createBatchPlanFromMfgPackage,
-  createBatchPlansFromMfgPackageInBulk
+  createBatchPlansFromMfgPackageInBulk,
+  getBatchRefreshPreview,
+  refreshBatchFromTemplate
 } from '../controllers/batchPlanningController';
 import requirePermission from '../middleware/requirePermission';
 import requireScope from '../middleware/requireScope';
@@ -45,6 +47,10 @@ router.post('/from-package/bulk', requirePermission('APS_BATCH_WRITE'), createBa
 router.get('/', requirePermission('APS_BATCH_READ'), getAllBatchPlans);
 router.get('/:id', requirePermission('APS_BATCH_READ'), getBatchPlanById);
 router.get('/:id/operations-tree', requirePermission('APS_BATCH_READ'), getBatchOperationsTree);
+
+// 从模版刷新:预览差异(只读) + 应用(仅 DRAFT,增量)
+router.get('/:id/refresh-preview', requirePermission('APS_BATCH_READ'), getBatchRefreshPreview);
+router.post('/:id/refresh', requirePermission('APS_BATCH_WRITE'), requireScope(batchScope), refreshBatchFromTemplate);
 router.post('/', requirePermission('APS_BATCH_WRITE'), createBatchPlan);
 router.put('/:id', requirePermission('APS_BATCH_WRITE'), requireScope(batchScope), updateBatchPlan);
 router.delete('/:id', requirePermission('APS_BATCH_WRITE'), requireScope(batchScope), deleteBatchPlan);

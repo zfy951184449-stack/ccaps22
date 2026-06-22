@@ -14,6 +14,7 @@ import BatchListV4 from './BatchListV4';
 import BatchFilterBar from './BatchFilterBar';
 import CreateBatchModalV4 from './CreateBatchModalV4';
 import BulkCreateModalV4 from './BulkCreateModalV4';
+import RefreshFromTemplateModal from './RefreshFromTemplateModal';
 import { batchPlanApi, mfgTemplatePackageApi, processTemplateApi } from '../../services/api';
 import type { BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary, ProcessTemplate } from '../../types';
 import './BatchManagementV4.css';
@@ -41,6 +42,7 @@ const BatchManagementV4: React.FC = () => {
     const [createModalVisible, setCreateModalVisible] = React.useState(false);
     const [bulkModalVisible, setBulkModalVisible] = React.useState(false);
     const [editingBatch, setEditingBatch] = React.useState<BatchPlan | null>(null);
+    const [refreshTarget, setRefreshTarget] = React.useState<BatchPlan | null>(null);
 
     const [selectedBatchIds, setSelectedBatchIds] = React.useState<number[]>([]);
     const [selectedTemplateIds, setSelectedTemplateIds] = React.useState<number[]>([]);
@@ -150,6 +152,15 @@ const BatchManagementV4: React.FC = () => {
         setEditingBatch(batch);
         setCreateModalVisible(true);
     }, []);
+
+    const handleRefresh = useCallback((batch: BatchPlan) => {
+        setRefreshTarget(batch);
+    }, []);
+
+    const handleRefreshApplied = useCallback(() => {
+        setRefreshTarget(null);
+        loadData();
+    }, [loadData]);
 
     const handleSuccess = useCallback(() => {
         setCreateModalVisible(false);
@@ -325,6 +336,7 @@ const BatchManagementV4: React.FC = () => {
                             onDelete={handleDelete}
                             onActivate={handleActivate}
                             onDeactivate={handleDeactivate}
+                            onRefresh={handleRefresh}
                             selectedRowKeys={selectedTableRowKeys}
                             selectedDraftCount={selectedDraftCount}
                             selectedActivatedCount={selectedActivatedCount}
@@ -379,6 +391,13 @@ const BatchManagementV4: React.FC = () => {
                     onSuccess={handleSuccess}
                 />
             )}
+
+            <RefreshFromTemplateModal
+                batchId={refreshTarget?.id ?? null}
+                visible={!!refreshTarget}
+                onClose={() => setRefreshTarget(null)}
+                onApplied={handleRefreshApplied}
+            />
 
             <WxbModal
                 open={!!deleteTarget}

@@ -253,6 +253,65 @@ export const mfgTemplatePackageApi = {
   remove: (id: number) => api.delete(`/mfg-template-packages/${id}`).then((res) => res.data),
 };
 
+// 「从模版刷新」预览/应用契约
+export interface BatchRefreshOp {
+  template_schedule_id: number;
+  operation_id: number;
+  operation_code: string | null;
+  operation_name: string | null;
+  stage_name: string | null;
+  planned_start_datetime: string | null;
+  planned_end_datetime: string | null;
+  planned_duration: number | null;
+  window_start_datetime: string | null;
+  window_end_datetime: string | null;
+  required_people: number | null;
+}
+
+export interface BatchRefreshChangedField {
+  field: string;
+  label: string;
+  from: string | number | null;
+  to: string | number | null;
+}
+
+export interface BatchRefreshChangedOp {
+  template_schedule_id: number;
+  operation_id: number;
+  operation_code: string | null;
+  operation_name: string | null;
+  stage_name: string | null;
+  is_locked: boolean;
+  fields: BatchRefreshChangedField[];
+}
+
+export interface BatchRefreshPreview {
+  batch: {
+    id: number;
+    batch_code: string;
+    batch_name: string;
+    template_id: number;
+    template_name: string | null;
+    plan_status: string;
+    planned_start_date: string;
+    day0_date: string | null;
+  };
+  canRefresh: boolean;
+  blockReason: string | null;
+  summary: { added: number; removed: number; changed: number; unchanged: number; locked: number };
+  added: BatchRefreshOp[];
+  removed: BatchRefreshOp[];
+  changed: BatchRefreshChangedOp[];
+}
+
+export interface BatchRefreshResult {
+  success: boolean;
+  added: number;
+  removed: number;
+  changed: number;
+  skippedLocked: number;
+}
+
 export const batchPlanApi = {
   list: () => api.get<any>('/batch-plans').then((res) => (res.data.data ? res.data.data : res.data)),
   getTemplates: () => api.get<BatchTemplateSummary[]>('/batch-plans/templates').then((res) => res.data),
@@ -279,6 +338,11 @@ export const batchPlanApi = {
     api.post(`/batch-plans/${id}/activate`, options).then((res) => res.data),
   deactivate: (id: number) =>
     api.post(`/batch-plans/${id}/deactivate`).then((res) => res.data),
+  // 从模版刷新：预览差异(只读) / 应用选中差异(仅 DRAFT,scheduleIds 省略=全部)
+  refreshPreview: (id: number) =>
+    api.get<BatchRefreshPreview>(`/batch-plans/${id}/refresh-preview`).then((res) => res.data),
+  refresh: (id: number, payload?: { scheduleIds?: number[] }) =>
+    api.post<BatchRefreshResult>(`/batch-plans/${id}/refresh`, payload ?? {}).then((res) => res.data),
   // 新增：获取模版的day0偏移量
   getTemplateDay0Offset: (templateId: number) =>
     api.get<{ offset: number; min_day: number; has_pre_day0: boolean; pre_day0_count: number }>(
