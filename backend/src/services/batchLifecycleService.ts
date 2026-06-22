@@ -542,6 +542,25 @@ export class BatchLifecycleService {
       }
     }
 
+    // 8. aps_constraint_conflicts (硬 FK 回引 batch_operation_plans(id) 与 production_batch_plans(id)，
+    //    两列均「无 ON DELETE」→ 默认 RESTRICT；不先清理会在删 batch_operation_plans / production_batch_plans
+    //    时抛 ER_ROW_IS_REFERENCED_2(1451) → 整事务回滚为 500。可选表(手动迁移可能缺表)，缺表则跳过。
+    try {
+      if (operationIds.length) {
+        const placeholders = operationIds.map(() => '?').join(',');
+        await connection.execute(
+          `DELETE FROM aps_constraint_conflicts WHERE batch_operation_plan_id IN (${placeholders}) OR batch_plan_id = ?`,
+          [...operationIds, batchId],
+        );
+      } else {
+        await connection.execute('DELETE FROM aps_constraint_conflicts WHERE batch_plan_id = ?', [batchId]);
+      }
+    } catch (error: any) {
+      if (!BatchLifecycleService.isOptionalSchemaError(error)) {
+        throw error;
+      }
+    }
+
     await connection.execute('DELETE FROM batch_operation_plans WHERE batch_plan_id = ?', [batchId]);
     await connection.execute('DELETE FROM production_batch_plans WHERE id = ?', [batchId]);
   }
