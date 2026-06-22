@@ -250,6 +250,8 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
     const [idleOnly, setIdleOnly] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<List>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+    const [containerTop, setContainerTop] = useState<number | null>(null);
 
     // ── Singleton Popover state ──
     const [popoverTarget, setPopoverTarget] = useState<PopoverTarget | null>(null);
@@ -322,10 +324,16 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
 
     const weekdayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
+    // Dynamic column width: expand to fill container, floor to whole pixels
+    const colWidth = useMemo(() => {
+        if (!containerWidth || !dates.length) return MIN_COL_WIDTH;
+        return Math.max(MIN_COL_WIDTH, Math.floor((containerWidth - SIDEBAR_WIDTH - STAT_WIDTH) / dates.length));
+    }, [containerWidth, dates.length]);
+
     // Grid template columns — shared between header and body rows
     const gridTemplateColumns = useMemo(() => {
-        return `${SIDEBAR_WIDTH}px repeat(${dates.length}, ${MIN_COL_WIDTH}px) ${STAT_WIDTH}px`;
-    }, [dates.length]);
+        return `${SIDEBAR_WIDTH}px repeat(${dates.length}, ${colWidth}px) ${STAT_WIDTH}px`;
+    }, [dates.length, colWidth]);
 
     // ── Singleton Popover: cell click handler ──
     const handleCellClick = useCallback((empId: number, date: string, e: React.MouseEvent<HTMLDivElement>) => {
@@ -338,6 +346,26 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
     const handleScroll = useCallback(() => {
         if (popoverTarget) setPopoverTarget(null);
     }, [popoverTarget]);
+
+    // Measure container width + top-position for dynamic column width and list height
+    useEffect(() => {
+        const el = tableContainerRef.current;
+        if (!el) return;
+        const measure = () => {
+            const rect = el.getBoundingClientRect();
+            setContainerWidth(rect.width);
+            setContainerTop(rect.top);
+        };
+        const raf = requestAnimationFrame(measure);
+        const ro = new ResizeObserver(measure);
+        ro.observe(el);
+        window.addEventListener('resize', measure);
+        return () => {
+            cancelAnimationFrame(raf);
+            ro.disconnect();
+            window.removeEventListener('resize', measure);
+        };
+    }, []);
 
     // Close popover on click outside
     useEffect(() => {
@@ -436,16 +464,18 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
         );
     }, [employeeData, dates, mode, idleOnly, today, gridTemplateColumns, handleCellClick]);
 
-    // Container height for virtual list
+    // List height: use measured container top to fill remaining viewport
     const listHeight = useMemo(() => {
-        // Cap at viewport minus header area
-        return Math.min(employeeData.length * ROW_HEIGHT, window.innerHeight - 340);
-    }, [employeeData.length]);
+        const avail = containerTop != null
+            ? Math.max(window.innerHeight - containerTop - HEADER_HEIGHT - 20, ROW_HEIGHT * 3)
+            : window.innerHeight - 340;
+        return Math.min(employeeData.length * ROW_HEIGHT, avail);
+    }, [containerTop, employeeData.length]);
 
     // 表头(普通块)、虚拟列表、包裹层统一用固定的内容总宽 + 固定列宽,
     // 保证表头与虚拟行逐列对齐(react-window 行为 absolute 定位,width="100%"
     // 只取可视宽、且 sticky-right 无法与表头对齐,故改固定宽 + 统计列设为普通列)。
-    const contentWidth = SIDEBAR_WIDTH + dates.length * MIN_COL_WIDTH + STAT_WIDTH;
+    const contentWidth = SIDEBAR_WIDTH + dates.length * colWidth + STAT_WIDTH;
 
     return (
         <div className="schedule-matrix-container">
