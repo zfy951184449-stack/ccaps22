@@ -36,7 +36,7 @@ interface PopoverTarget {
  * getShiftStyle — Replicates PersonnelScheduleTable's getShiftStyle logic exactly.
  * Returns Tailwind class names and label for cell rendering.
  */
-function getShiftStyle(shiftName: string | undefined, nominalHours: number, planType: string) {
+function getShiftStyle(shiftName: string | undefined, nominalHours: number, planType: string, hasOp: boolean = true) {
     const baseClasses = "flex items-center justify-center w-full h-[20px] rounded-sm text-[9px] font-medium shadow-sm cursor-default border border-transparent leading-none";
 
     if (planType === 'REST' || (!shiftName && nominalHours === 0)) {
@@ -57,22 +57,22 @@ function getShiftStyle(shiftName: string | undefined, nominalHours: number, plan
         };
     }
 
+    // 工作班次:有操作 = 实心色块;在岗无操作(空转)= 同色系空心(浅底 + 描边)
+    let solid: string, ghost: string;
     if (logicKey.includes('夜') || logicKey.includes('night')) {
-        return {
-            className: `${baseClasses} bg-red-600 text-white shadow-red-200`,
-            label: hoursLabel,
-        };
+        solid = 'bg-red-600 text-white shadow-red-200';
+        ghost = 'bg-red-50 text-red-600 border-red-200 shadow-none';
     } else if (logicKey.includes('长白') || logicKey.includes('long')) {
-        return {
-            className: `${baseClasses} bg-blue-600 text-white shadow-blue-200`,
-            label: hoursLabel,
-        };
+        solid = 'bg-blue-600 text-white shadow-blue-200';
+        ghost = 'bg-blue-50 text-blue-600 border-blue-200 shadow-none';
     } else {
-        return {
-            className: `${baseClasses} bg-emerald-600 text-white shadow-emerald-200`,
-            label: hoursLabel,
-        };
+        solid = 'bg-emerald-600 text-white shadow-emerald-200';
+        ghost = 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-none';
     }
+    return {
+        className: `${baseClasses} ${hasOp ? solid : ghost}`,
+        label: hoursLabel,
+    };
 }
 
 // ── Employee data type ──
@@ -107,6 +107,7 @@ interface EmployeeRowProps {
     emp: EmployeeRowData;
     dates: DateInfo[];
     mode: MatrixMode;
+    idleOnly: boolean;
     today: string;
     gridTemplateColumns: string;
     datesLength: number;
@@ -114,7 +115,7 @@ interface EmployeeRowProps {
 }
 
 const EmployeeRow = React.memo<EmployeeRowProps>(({
-    emp, dates, mode, today, gridTemplateColumns, datesLength, onCellClick,
+    emp, dates, mode, idleOnly, today, gridTemplateColumns, datesLength, onCellClick,
 }) => {
     const rowIndex = 2; // Not used for grid-row in virtualized mode
     return (
@@ -146,14 +147,26 @@ const EmployeeRow = React.memo<EmployeeRowProps>(({
                 // Orphaned operation detection: employee has ops but no covering work shift
                 const hasOrphanedOps = ops.length > 0 && (!shift || shift.plan_type === 'REST' || shift.nominal_hours <= 0.01);
 
+                // 有操作 / 在岗无操作(空岗)判定
+                const hasOp = ops.length > 0;
+                const isWorkShift = !!shift && shift.plan_type !== 'REST' && (shift.nominal_hours || 0) > 0.01;
+                const isIdleShift = isWorkShift && !hasOp;
+
                 let cellContent: React.ReactNode = null;
 
                 if (mode === 'shift') {
                     if (shift) {
-                        const style = getShiftStyle(shift.shift_name, shift.nominal_hours, shift.plan_type);
+                        const style = getShiftStyle(shift.shift_name, shift.nominal_hours, shift.plan_type, hasOp);
+                        // 「只看空岗」聚光:空岗高亮,其余淡化
+                        const spotlight = idleOnly
+                            ? (isIdleShift ? ' ring-2 ring-amber-400 z-10' : ' opacity-25')
+                            : '';
                         cellContent = (
                             <div className="relative w-full">
-                                <div className={style.className}>{style.label}</div>
+                                <div className={style.className + spotlight}>{style.label}</div>
+                                {hasOp && ops.length > 1 && (
+                                    <span className="schedule-op-count" title={`${ops.length} 个操作`}>{ops.length}</span>
+                                )}
                             </div>
                         );
                     }
@@ -234,6 +247,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
     onEditShift,
 }) => {
     const [mode, setMode] = useState<MatrixMode>('shift');
+    const [idleOnly, setIdleOnly] = useState(false);
     const tableContainerRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<List>(null);
 
@@ -364,13 +378,17 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                             班次: {shift.shift_name || shift.shift_code || '未知'}
                             {shift.nominal_hours > 0 && ` (${shift.nominal_hours}h)`}
                         </div>
-                        {ops.length > 0 && (
+                        {ops.length > 0 ? (
                             <div style={{ marginTop: 8 }}>
-                                <div style={{ color: '#999', fontSize: 12, marginBottom: 4 }}>操作分配:</div>
+                                <div style={{ color: '#999', fontSize: 12, marginBottom: 4 }}>操作分配 ({ops.length}):</div>
                                 {ops.map((op, i) => (
                                     <div key={i} style={{ paddingLeft: 8, color: '#333', fontSize: 13 }}>· {op}</div>
                                 ))}
                             </div>
+                        ) : (
+                            shift.nominal_hours > 0 && (
+                                <div style={{ marginTop: 8, color: '#d97706', fontSize: 12 }}>在岗无操作分配(空岗)</div>
+                            )
                         )}
                     </>
                 ) : (
@@ -408,6 +426,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                     emp={emp}
                     dates={dates}
                     mode={mode}
+                    idleOnly={idleOnly}
                     today={today}
                     gridTemplateColumns={gridTemplateColumns}
                     datesLength={dates.length}
@@ -415,7 +434,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                 />
             </div>
         );
-    }, [employeeData, dates, mode, today, gridTemplateColumns, handleCellClick]);
+    }, [employeeData, dates, mode, idleOnly, today, gridTemplateColumns, handleCellClick]);
 
     // Container height for virtual list
     const listHeight = useMemo(() => {
@@ -441,6 +460,20 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                         <UnorderedListOutlined style={{ marginRight: 4 }} />操作
                     </button>
                 </div>
+                {mode === 'shift' && (
+                    <div className="schedule-matrix-legend">
+                        <span className="sml-item"><span className="sml-swatch solid" />有操作</span>
+                        <span className="sml-item"><span className="sml-swatch ghost" />在岗无操作</span>
+                        <span className="sml-item"><span className="sml-swatch rest" />休息</span>
+                        <button
+                            className={`sml-toggle ${idleOnly ? 'active' : ''}`}
+                            onClick={() => setIdleOnly(v => !v)}
+                            title="高亮在岗但无操作的格子,其余淡化"
+                        >
+                            只看空岗
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* === CSS Grid Table — Virtualized === */}
@@ -556,6 +589,27 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                     .schedule-matrix-container .no-scrollbar::-webkit-scrollbar-thumb {
                         background: rgba(0,0,0,0.1);
                         border-radius: 3px;
+                    }
+                    .schedule-matrix-toolbar { display: flex; align-items: center; }
+                    .schedule-matrix-legend {
+                        display: flex; align-items: center; gap: 12px;
+                        margin-left: 16px; font-size: 11px; color: #6b7280;
+                    }
+                    .schedule-matrix-legend .sml-item { display: inline-flex; align-items: center; gap: 5px; }
+                    .schedule-matrix-legend .sml-swatch { width: 16px; height: 12px; border-radius: 3px; display: inline-block; box-sizing: border-box; }
+                    .schedule-matrix-legend .sml-swatch.solid { background: #059669; }
+                    .schedule-matrix-legend .sml-swatch.ghost { background: #ecfdf5; border: 1px solid #6ee7b7; }
+                    .schedule-matrix-legend .sml-swatch.rest { background: #f9fafb; border: 1px solid #e5e7eb; }
+                    .schedule-matrix-legend .sml-toggle {
+                        font-size: 11px; padding: 2px 10px; border: 1px solid #e5e7eb;
+                        border-radius: 12px; background: #fff; color: #6b7280; cursor: pointer; line-height: 16px;
+                    }
+                    .schedule-matrix-legend .sml-toggle.active { background: #fffbeb; border-color: #fbbf24; color: #b45309; }
+                    .schedule-op-count {
+                        position: absolute; top: -3px; right: -3px;
+                        min-width: 11px; height: 11px; padding: 0 2px;
+                        background: #0f172a; color: #fff; font-size: 7px; line-height: 11px;
+                        text-align: center; border-radius: 6px; box-sizing: border-box;
                     }
                 `}
                 </style>
