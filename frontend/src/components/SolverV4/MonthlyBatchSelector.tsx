@@ -41,6 +41,8 @@ interface BatchPlan {
     plan_status: string;
     planned_start_date: string;
     planned_end_date: string;
+    // 基准日期 Day0（后端按模板 min_day 从最早工序日 planned_start_date 反推）
+    day0_date?: string | null;
 }
 
 interface Team {
@@ -226,6 +228,18 @@ const MonthlyBatchSelector: React.FC = () => {
             title: '部门',
             dataIndex: 'team_name',
             key: 'team_name',
+            render: (text) => text || '-',
+        },
+        {
+            title: 'Day0',
+            dataIndex: 'day0_date',
+            key: 'day0_date',
+            defaultSortOrder: 'ascend',
+            sorter: (a, b) => {
+                const av = a.day0_date ? dayjs(a.day0_date).valueOf() : Number.POSITIVE_INFINITY;
+                const bv = b.day0_date ? dayjs(b.day0_date).valueOf() : Number.POSITIVE_INFINITY;
+                return av - bv;
+            },
             render: (text) => text || '-',
         },
         {
