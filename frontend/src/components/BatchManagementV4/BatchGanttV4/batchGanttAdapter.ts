@@ -16,6 +16,20 @@ import type {
 
 const COLOR_KEYS = ['STAGE1', 'STAGE2', 'STAGE3', 'STAGE4', 'STAGE5', 'DEFAULT'] as const;
 
+/**
+ * operations.description 在当前数据里多被用作导入溯源字段：要么是整段 JSON 元数据
+ * （{"source":...,"raw_text":...}），要么是 "Bulk Import" 占位串，都不是给人看的描述。
+ * 这里只放行真正的自由文本描述，其余归一成 null，避免浮窗里出现一坨 JSON。
+ */
+function cleanOperationDescription(raw: string | null | undefined): string | null {
+    if (typeof raw !== 'string') return null;
+    const text = raw.trim();
+    if (!text) return null;
+    if (text.startsWith('{') || text.startsWith('[')) return null;
+    if (text.toLowerCase() === 'bulk import') return null;
+    return text;
+}
+
 export interface BatchGanttModel {
     tasks: GanttTask[];
     groups: GanttGroup[];
@@ -152,6 +166,7 @@ export function buildBatchGanttModel(
                         data: {
                             operationId: operation.id,
                             templateScheduleId: operation.templateScheduleId ?? null,
+                            description: cleanOperationDescription(operation.description),
                             batchId: batch.id,
                             batchCode: batch.code,
                             stageId: stage.id,

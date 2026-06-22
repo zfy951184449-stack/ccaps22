@@ -22,6 +22,7 @@ export interface GanttOperation {
     templateScheduleId?: number | null;
     stage_id: number;
     name: string;
+    description?: string | null;
     startDate: string;
     endDate: string;
     status: string;

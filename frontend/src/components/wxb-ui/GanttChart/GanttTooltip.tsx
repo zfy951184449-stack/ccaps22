@@ -24,6 +24,7 @@ interface GanttTooltipProps {
 const TOOLTIP_W = 304;
 const TOOLTIP_BASE_H = 142;
 const ASSIGNMENT_ROW_H = 20;
+const DESCRIPTION_H = 40;
 const MAX_VISIBLE_ASSIGNMENTS = 6;
 const GAP = 12;
 
@@ -81,15 +82,9 @@ function resolvePosition(x: number, y: number, avoidRects: GanttAvoidRect[] = []
 }
 
 const formatEmployee = (assignment: NonNullable<GanttTask['personnelAssignments']>[number]) => {
-  const name = assignment.employeeName || assignment.employeeCode || (
+  return assignment.employeeName || assignment.employeeCode || (
     Number.isFinite(assignment.employeeId) ? `员工 ${assignment.employeeId}` : '未指定员工'
   );
-
-  if (assignment.employeeName && assignment.employeeCode) {
-    return `${assignment.employeeName} (${assignment.employeeCode})`;
-  }
-
-  return name;
 };
 
 const formatPersonnelSummary = (assignedPeople: number | undefined, requiredPeople: number | undefined, detailCount: number) => {
@@ -113,10 +108,12 @@ const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidR
   const displayEnd = typeof task.data?.displayEnd === 'string'
     ? task.data.displayEnd
     : formatHour(task.end);
+  const description = typeof task.data?.description === 'string' ? task.data.description.trim() : '';
   const personnelAssignments = task.personnelAssignments ?? [];
   const visibleAssignments = personnelAssignments.slice(0, MAX_VISIBLE_ASSIGNMENTS);
   const hiddenAssignmentCount = personnelAssignments.length - visibleAssignments.length;
   const tooltipHeight = TOOLTIP_BASE_H
+    + (description ? DESCRIPTION_H : 0)
     + visibleAssignments.length * ASSIGNMENT_ROW_H
     + (hiddenAssignmentCount > 0 ? ASSIGNMENT_ROW_H : 0);
   const position = resolvePosition(x, y, avoidRects, tooltipHeight);
@@ -144,9 +141,27 @@ const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidR
 
       <div style={{ padding: '8px 12px' }}>
         {/* Title */}
-        <div style={{ fontSize: 13, fontWeight: 600, color: THEME.ink, marginBottom: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: THEME.ink, marginBottom: description ? 4 : 6 }}>
           {task.label}
         </div>
+
+        {/* Operation description */}
+        {description && (
+          <div
+            style={{
+              fontSize: 12,
+              color: THEME.fg3,
+              lineHeight: 1.5,
+              marginBottom: 6,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {description}
+          </div>
+        )}
 
         <div style={{ fontSize: 12, color: THEME.fg2, lineHeight: 1.6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -170,7 +185,7 @@ const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidR
               {visibleAssignments.length > 0 ? (
                 <div style={{ marginTop: 4, display: 'grid', gap: 2 }}>
                   {visibleAssignments.map((assignment, index) => {
-                    const meta = [assignment.role, assignment.shiftName].filter(Boolean).join(' · ');
+                    const shiftName = assignment.shiftName?.trim() || '';
                     const label = `位置 ${assignment.positionNumber ?? index + 1}`;
                     return (
                       <div
@@ -184,8 +199,8 @@ const GanttTooltip: React.FC<GanttTooltipProps> = ({ task, x, y, visible, avoidR
                       >
                         <span style={{ color: THEME.fg3 }}>{label}</span>
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {shiftName ? `${shiftName} · ` : ''}
                           {formatEmployee(assignment)}
-                          {meta ? ` · ${meta}` : ''}
                         </span>
                       </div>
                     );

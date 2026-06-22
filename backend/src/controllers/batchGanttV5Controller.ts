@@ -8,6 +8,7 @@ interface GanttOperation {
     templateScheduleId?: number | null;
     stage_id: number;
     name: string;
+    description?: string | null;
     startDate: string;
     endDate: string;
     // New fields for V5
@@ -147,6 +148,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         bop.id AS operation_id,
         bop.template_schedule_id,
         o.operation_name,
+        o.description AS operation_description,
         bop.planned_start_datetime,
         bop.planned_end_datetime,
         bop.window_start_datetime, -- NEW
@@ -282,6 +284,7 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
                 templateScheduleId: row.template_schedule_id ? Number(row.template_schedule_id) : null,
                 stage_id: stageId,
                 name: row.operation_name,
+                description: row.operation_description ?? null,
                 startDate: row.planned_start_datetime,
                 endDate: row.planned_end_datetime,
                 windowStartDate: row.window_start_datetime, // Map new field
