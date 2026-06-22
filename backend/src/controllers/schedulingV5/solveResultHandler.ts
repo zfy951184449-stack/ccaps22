@@ -199,9 +199,10 @@ export const getSolveResultV5 = async (req: Request, res: Response) => {
         if (empIds.length > 0) {
             const empPlaceholders = empIds.map(() => '?').join(',');
             const [empRows] = await pool.execute<RowDataPacket[]>(`
-                SELECT id, employee_name, employee_code
-                FROM employees
-                WHERE id IN (${empPlaceholders})
+                SELECT e.id, e.employee_name, e.employee_code, ou.unit_name AS department
+                FROM employees e
+                LEFT JOIN organization_units ou ON ou.id = e.unit_id
+                WHERE e.id IN (${empPlaceholders})
             `, empIds);
 
             empRows.forEach(r => empMap.set(r.id, r));
@@ -544,6 +545,24 @@ export const getSolveResultV5 = async (req: Request, res: Response) => {
             op.status = assignedPos === totalPos ? 'COMPLETE' : (assignedPos > 0 ? 'PARTIAL' : 'UNASSIGNED');
         });
 
+        // Per-employee meta for the manual-reassignment panel: org + actual qualification levels.
+        // qualifications reuses empQualMap (already loaded above); empty when no op carries requirements.
+        const employeeMeta: Record<number, {
+            code: string; name: string; department: string | null;
+            qualifications: { qualification_id: number; level: number }[];
+        }> = {};
+        empMap.forEach((emp, id) => {
+            employeeMeta[id] = {
+                code: emp.employee_code || '',
+                name: emp.employee_name || '',
+                department: emp.department || null,
+                qualifications: (empQualMap.get(id) || []).map(q => ({
+                    qualification_id: q.qualification_id,
+                    level: q.qualification_level,
+                })),
+            };
+        });
+
         const response: ResultSummaryV5 = {
             metrics: {
                 completion_rate: totalPositionsCount > 0 ? Math.round((assignedCount / totalPositionsCount) * 100) : 0,
@@ -576,8 +595,11 @@ export const getSolveResultV5 = async (req: Request, res: Response) => {
                 shift_code: sp.shift_code,
                 start_time: sp.start_time || '00:00',
                 end_time: sp.end_time || '00:00',
-                nominal_hours: sp.shift_nominal_hours
+                nominal_hours: sp.shift_nominal_hours,
+                is_night_shift: !!sp.is_night_shift,
+                plan_type: sp.plan_type || (sp.shift_nominal_hours > 0 ? 'WORK' : 'REST'),
             })),
+            employee_meta: employeeMeta,
             operations: Array.from(operationsMap.values()),
             special_shift_assignments: specialShiftAssignments,
             special_shift_shortages: specialShiftShortages,

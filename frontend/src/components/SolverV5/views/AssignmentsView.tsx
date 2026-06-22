@@ -1,14 +1,16 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Input, Popover, Modal, Radio, Empty, message } from 'antd';
+import { Input, Modal, Radio, Empty, message } from 'antd';
 import {
     SearchOutlined, UserOutlined, CheckCircleOutlined,
     ExclamationCircleOutlined, MinusCircleOutlined,
     ClockCircleOutlined, TeamOutlined, WarningOutlined,
     DownOutlined, RightOutlined, SwapOutlined, DeleteOutlined,
-    StarFilled, InfoCircleOutlined, AppstoreOutlined, ToolOutlined,
-    SafetyCertificateOutlined, ArrowRightOutlined,
+    InfoCircleOutlined, AppstoreOutlined, ToolOutlined,
+    SafetyCertificateOutlined, ArrowRightOutlined, ThunderboltOutlined,
+    MoonOutlined, FieldTimeOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { WxbDrawer, WxbTag, WxbEmpty } from '../../wxb-ui';
 import AssignmentCalendarView from './AssignmentCalendarView';
 import '../SolverV5.css';
 
@@ -76,10 +78,29 @@ interface CalendarDay {
 
 type CandidateTier = 'RECOMMENDED' | 'NEEDS_SHIFT' | 'RESTING';
 
+/** 候选人当天已排、与本操作时间重叠的其它操作 */
+interface CandidateConflict {
+    op_name: string;
+    batch_code: string;
+    start: string;
+    end: string;
+}
+
+/** 候选人对本岗位每条资质要求的匹配情况 */
+interface QualMatch {
+    qualification_id: number;
+    name: string;
+    need: number;
+    have: number;
+    mandatory: boolean;
+    ok: boolean;
+}
+
 interface Candidate {
     employee_id: number;
     employee_name: string;
     employee_code?: string;
+    department?: string | null;
     shift_name: string;
     shift_id: number;
     start_time?: string;
@@ -87,6 +108,28 @@ interface Candidate {
     nominal_hours?: number;
     plan_type?: string;
     tier: CandidateTier;
+    // ── 决策信息(纯前端从 operations + shiftAssignments + employeeMeta 计算)──
+    conflicts: CandidateConflict[];     // 当天时间冲突的其它操作
+    assignedHours: number;              // 当天已排操作工时合计
+    capacityHours: number;              // 当天班次额定工时
+    streakDays: number;                 // 含本次的连续上班天数
+    prevNight: boolean;                 // 前一日是否上夜班
+    quals: QualMatch[];                 // 资质匹配明细
+}
+
+/** 被资质过滤掉的在岗人员(用于"查看原因") */
+interface FilteredCandidate {
+    employee_id: number;
+    employee_name: string;
+    employee_code?: string;
+    missing: QualMatch[];               // 不达标的强制资质
+}
+
+export interface EmployeeMetaEntry {
+    code: string;
+    name: string;
+    department: string | null;
+    qualifications: { qualification_id: number; level: number }[];
 }
 
 export type AssignmentStatusFilter = 'ALL' | 'UNASSIGNED' | 'PARTIAL' | 'COMPLETE';
@@ -96,6 +139,8 @@ interface AssignmentsViewProps {
     shiftAssignments: ShiftAssignment[];
     shiftOptions: ShiftOption[];
     calendarDays?: CalendarDay[];
+    /** 员工元信息(组织 + 实际资质等级),用于更换面板。key = employee_id */
+    employeeMeta?: Record<number, EmployeeMetaEntry>;
     /** 外部(如 KPI 卡)触发的过滤切换;nonce 变化时生效 */
     externalFilter?: { status: AssignmentStatusFilter; nonce: number } | null;
     onAssign: (opId: number, posNum: number, empId: number) => void;
@@ -185,7 +230,7 @@ function findBestCoveringShift(shiftOptions: ShiftOption[], op: Operation): Shif
 // ══════════════════════════════════════
 
 const AssignmentsView: React.FC<AssignmentsViewProps> = ({
-    operations, shiftAssignments, shiftOptions, calendarDays = [], externalFilter,
+    operations, shiftAssignments, shiftOptions, calendarDays = [], employeeMeta = {}, externalFilter,
     onAssign, onUnassign, onAssignWithShiftChange
 }) => {
     const [selectedOpId, setSelectedOpId] = useState<number | null>(null);
@@ -202,6 +247,12 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         currentShift: string; suggestedShift: ShiftOption | null; date: string;
     } | null>(null);
     const [shiftAction, setShiftAction] = useState<'change' | 'force'>('change');
+
+    // Replace/assign drawer state
+    const [replaceTarget, setReplaceTarget] = useState<{ op: Operation; pos: Position } | null>(null);
+    const [candSearch, setCandSearch] = useState('');
+    const [candSort, setCandSort] = useState<'recommend' | 'load' | 'qual'>('recommend');
+    const [showFiltered, setShowFiltered] = useState(false);
 
     // ── Computed ──
 
@@ -303,13 +354,50 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         return () => clearTimeout(timer);
     }, [pendingScroll, dayGroups]);
 
-    // ── Candidate Calculation (qualification-aware) ──
+    // ── Helper maps for candidate decision info ──
+
+    // Operations grouped by date — for time-conflict + workload lookups.
+    const opsByDate = useMemo(() => {
+        const m = new Map<string, Operation[]>();
+        operations.forEach(o => {
+            const d = o.planned_start?.slice(0, 10);
+            if (!d) return;
+            if (!m.has(d)) m.set(d, []);
+            m.get(d)!.push(o);
+        });
+        return m;
+    }, [operations]);
+
+    // Working dates per employee — for the consecutive-day streak.
+    const workDatesByEmp = useMemo(() => {
+        const m = new Map<number, Set<string>>();
+        shiftAssignments.forEach(s => {
+            const working = s.plan_type ? s.plan_type !== 'REST' : (s.nominal_hours || 0) > 0.01;
+            if (!working) return;
+            if (!m.has(s.employee_id)) m.set(s.employee_id, new Set());
+            m.get(s.employee_id)!.add(s.date);
+        });
+        return m;
+    }, [shiftAssignments]);
+
+    // Night-shift dates per employee — for prev-day night detection.
+    const nightDatesByEmp = useMemo(() => {
+        const m = new Map<number, Set<string>>();
+        shiftAssignments.forEach(s => {
+            if (!s.is_night_shift) return;
+            if (!m.has(s.employee_id)) m.set(s.employee_id, new Set());
+            m.get(s.employee_id)!.add(s.date);
+        });
+        return m;
+    }, [shiftAssignments]);
+
+    // ── Candidate Calculation (qualification + conflict + load + fatigue aware) ──
 
     const getCandidates = useCallback((op: Operation, position?: Position | null): {
-        candidates: Candidate[]; filteredOut: number;
+        candidates: Candidate[]; filteredOut: number; filteredList: FilteredCandidate[];
     } => {
         const opDate = op.planned_start?.slice(0, 10);
-        if (!opDate) return { candidates: [], filteredOut: 0 };
+        if (!opDate) return { candidates: [], filteredOut: 0, filteredList: [] };
 
         const eligibleSet = position?.eligible_employee_ids != null
             ? new Set(position.eligible_employee_ids)
@@ -320,36 +408,107 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                 .map(p => p.employee!.id) || []
         );
 
-        const empMap = new Map<number, ShiftAssignment>();
-        const filteredSet = new Set<number>();
+        const reqs = position?.qualification_requirements || [];
+        const opStart = dayjs(op.planned_start);
+        const opEnd = dayjs(op.planned_end);
+        const opsToday = opsByDate.get(opDate) || [];
+        const prevDate = dayjs(opDate).subtract(1, 'day').format('YYYY-MM-DD');
+
+        const qualMatchFor = (empId: number): QualMatch[] => {
+            const metaQuals = employeeMeta[empId]?.qualifications || [];
+            return reqs.map(r => {
+                const have = metaQuals
+                    .filter(q => q.qualification_id === r.qualification_id)
+                    .reduce((mx, q) => Math.max(mx, q.level), 0);
+                return {
+                    qualification_id: r.qualification_id,
+                    name: r.qualification_name,
+                    need: r.required_level,
+                    have,
+                    mandatory: r.is_mandatory,
+                    ok: have >= r.required_level,
+                };
+            });
+        };
+
+        // 含本次指派当天的连续上班天数(当天若休息则指派后即为第 1 天)
+        const streakFor = (empId: number): number => {
+            const dates = workDatesByEmp.get(empId);
+            if (!dates) return 1;
+            let count = 0;
+            let cur = dayjs(opDate).subtract(1, 'day');
+            while (dates.has(cur.format('YYYY-MM-DD'))) { count++; cur = cur.subtract(1, 'day'); }
+            return count + 1;
+        };
+
+        // 当天已排操作工时 + 与本操作时间重叠的冲突
+        const workloadFor = (empId: number): { assignedHours: number; conflicts: CandidateConflict[] } => {
+            let assignedHours = 0;
+            const conflicts: CandidateConflict[] = [];
+            opsToday.forEach(o => {
+                const isOn = o.positions?.some(p => p.status === 'ASSIGNED' && p.employee?.id === empId);
+                if (!isOn) return;
+                const s = dayjs(o.planned_start);
+                const e = dayjs(o.planned_end);
+                assignedHours += Math.max(0, e.diff(s, 'minute')) / 60;
+                if (o.operation_plan_id !== op.operation_plan_id
+                    && s.isBefore(opEnd) && opStart.isBefore(e)) {
+                    conflicts.push({
+                        op_name: o.operation_name,
+                        batch_code: o.batch_code,
+                        start: o.planned_start,
+                        end: o.planned_end,
+                    });
+                }
+            });
+            return { assignedHours, conflicts };
+        };
+
+        const empSeen = new Map<number, ShiftAssignment>();
+        const filteredList: FilteredCandidate[] = [];
         shiftAssignments.filter(s => s.date === opDate).forEach(s => {
-            if (alreadyAssigned.has(s.employee_id) || empMap.has(s.employee_id)) return;
+            if (alreadyAssigned.has(s.employee_id) || empSeen.has(s.employee_id)) return;
             if (eligibleSet && !eligibleSet.has(s.employee_id)) {
-                filteredSet.add(s.employee_id);
+                filteredList.push({
+                    employee_id: s.employee_id,
+                    employee_name: s.employee_name,
+                    employee_code: s.employee_code,
+                    missing: qualMatchFor(s.employee_id).filter(q => q.mandatory && !q.ok),
+                });
                 return;
             }
-            empMap.set(s.employee_id, s);
+            empSeen.set(s.employee_id, s);
         });
 
-        const candidates = Array.from(empMap.values()).map(s => ({
-            employee_id: s.employee_id,
-            employee_name: s.employee_name,
-            employee_code: s.employee_code,
-            shift_name: s.shift_name,
-            shift_id: s.shift_id,
-            start_time: s.start_time,
-            end_time: s.end_time,
-            nominal_hours: s.nominal_hours,
-            plan_type: s.plan_type,
-            tier: ((): CandidateTier => {
-                if (s.plan_type === 'REST' || (s.nominal_hours || 0) <= 0.01) return 'RESTING';
-                if (isShiftCoveringOp(s, op)) return 'RECOMMENDED';
-                return 'NEEDS_SHIFT';
-            })(),
-        })).sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
+        const candidates: Candidate[] = Array.from(empSeen.values()).map(s => {
+            const { assignedHours, conflicts } = workloadFor(s.employee_id);
+            return {
+                employee_id: s.employee_id,
+                employee_name: s.employee_name,
+                employee_code: s.employee_code,
+                department: employeeMeta[s.employee_id]?.department ?? null,
+                shift_name: s.shift_name,
+                shift_id: s.shift_id,
+                start_time: s.start_time,
+                end_time: s.end_time,
+                nominal_hours: s.nominal_hours,
+                plan_type: s.plan_type,
+                tier: ((): CandidateTier => {
+                    if (s.plan_type === 'REST' || (s.nominal_hours || 0) <= 0.01) return 'RESTING';
+                    if (isShiftCoveringOp(s, op)) return 'RECOMMENDED';
+                    return 'NEEDS_SHIFT';
+                })(),
+                conflicts,
+                assignedHours,
+                capacityHours: s.nominal_hours || 0,
+                streakDays: streakFor(s.employee_id),
+                prevNight: nightDatesByEmp.get(s.employee_id)?.has(prevDate) || false,
+                quals: qualMatchFor(s.employee_id),
+            };
+        }).sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
 
-        return { candidates, filteredOut: filteredSet.size };
-    }, [shiftAssignments]);
+        return { candidates, filteredOut: filteredList.length, filteredList };
+    }, [shiftAssignments, opsByDate, workDatesByEmp, nightDatesByEmp, employeeMeta]);
 
     // Candidate stats per vacant position of the selected op (drives hints & warnings)
     const vacancyStats = useMemo(() => {
@@ -383,6 +542,13 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
 
     // ── Handlers ──
 
+    const openReplace = useCallback((op: Operation, pos: Position) => {
+        setCandSearch('');
+        setCandSort('recommend');
+        setShowFiltered(false);
+        setReplaceTarget({ op, pos });
+    }, []);
+
     const handleSelectCandidate = useCallback((op: Operation, posNum: number, candidate: Candidate) => {
         if (candidate.tier === 'RECOMMENDED') {
             onAssign(op.operation_plan_id, posNum, candidate.employee_id);
@@ -402,6 +568,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
             });
             setShiftAction(suggestedShift ? 'change' : 'force');
         }
+        setReplaceTarget(null);
     }, [onAssign, shiftOptions]);
 
     const handleConfirmShiftChange = useCallback(() => {
@@ -475,95 +642,212 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     }, []);
 
     // ══════════════════════════════════════
-    // Render: Candidate Popover
+    // Render: Replace / Assign Drawer
     // ══════════════════════════════════════
 
-    const renderCandidateSelector = (op: Operation, position: Position) => {
-        const posNum = position.position_number;
-        const { candidates, filteredOut } = getCandidates(op, position);
-        const recommended = candidates.filter(c => c.tier === 'RECOMMENDED');
-        const needsShift = candidates.filter(c => c.tier === 'NEEDS_SHIFT');
-        const resting = candidates.filter(c => c.tier === 'RESTING');
-        const quals = position.qualification_requirements || [];
-        const hasQualFilter = position.eligible_employee_ids != null;
+    const r1 = (n: number) => Math.round(n * 10) / 10;
+    // 容错时间格式化:既能处理 "HH:mm",也能处理完整 ISO 日期时间
+    const fmtHM = (t?: string) => {
+        if (!t) return '';
+        if (/^\d{1,2}:\d{2}/.test(t)) return t.slice(0, 5);
+        const d = dayjs(t);
+        return d.isValid() ? d.format('HH:mm') : t;
+    };
+
+    const renderCandidateCard = (
+        op: Operation, posNum: number, c: Candidate,
+        bestId: number | undefined, suggested: ShiftOption | null,
+    ) => {
+        const hasConflict = c.conflicts.length > 0;
+        const pct = c.capacityHours > 0
+            ? Math.min(100, Math.round((c.assignedHours / c.capacityHours) * 100))
+            : (c.assignedHours > 0 ? 100 : 0);
+        const loadLevel = pct >= 100 ? 'full' : (pct >= 85 ? 'warn' : 'ok');
 
         return (
-            <div className="asgn-cand-list">
-                {quals.length > 0 && (
-                    <div className="asgn-cand-qual-req">
+            <button type="button" key={c.employee_id}
+                className={`asgn-cc tier-${c.tier.toLowerCase()}${hasConflict ? ' has-conflict' : ''}`}
+                onClick={() => handleSelectCandidate(op, posNum, c)}>
+                <div className="asgn-cc-head">
+                    <span className="asgn-cc-name">{c.employee_name}</span>
+                    <span className="asgn-cc-sub">
+                        {c.employee_code}{c.department ? ` · ${c.department}` : ''}
+                    </span>
+                    {c.employee_id === bestId && <span className="asgn-cc-best">最佳</span>}
+                </div>
+
+                {hasConflict && (
+                    <div className="asgn-cc-conflict">
+                        <WarningOutlined /> 时间冲突:{c.conflicts.map(cf =>
+                            `${cf.op_name} ${fmtHM(cf.start)}–${fmtHM(cf.end)}`).join('、')}
+                    </div>
+                )}
+
+                <div className="asgn-cc-line">
+                    <ClockCircleOutlined />
+                    {c.tier === 'RECOMMENDED' && (
+                        <span>{c.shift_name} {fmtHM(c.start_time)}–{fmtHM(c.end_time)} <em className="ok">覆盖操作 ✓</em></span>
+                    )}
+                    {c.tier === 'NEEDS_SHIFT' && (
+                        <span>当前 {c.shift_name} {fmtHM(c.start_time)}–{fmtHM(c.end_time)} <em className="warn">盖不住操作</em>
+                            {suggested && <> → 建议改 {suggested.shift_name}</>}</span>
+                    )}
+                    {c.tier === 'RESTING' && (
+                        <span>当天休息 · 指派需排班{suggested ? ` ${suggested.shift_name}` : ''}</span>
+                    )}
+                </div>
+
+                {c.quals.length > 0 && (
+                    <div className="asgn-cc-line quals">
                         <SafetyCertificateOutlined />
-                        <span>
-                            岗位要求:{quals.map(q =>
-                                `${q.qualification_name}≥${q.required_level}级${q.is_mandatory ? '' : '(非强制)'}`
-                            ).join('、')}
-                        </span>
+                        {c.quals.map(q => (
+                            <span key={q.qualification_id} className={`asgn-cc-qual ${q.ok ? 'ok' : 'no'}`}>
+                                {q.name} L{q.have}≥L{q.need} {q.ok ? '✓' : '✗'}{q.mandatory ? '' : '(优选)'}
+                            </span>
+                        ))}
                     </div>
                 )}
-                {candidates.length === 0 ? (
-                    <div className="asgn-cand-empty">
-                        {filteredOut > 0
-                            ? `当天 ${filteredOut} 人在岗,但均不符合本岗位资质`
-                            : '当天无可用候选人'}
+
+                {(c.prevNight || c.streakDays >= 5) && (
+                    <div className="asgn-cc-chips">
+                        {c.prevNight && (
+                            <span className="asgn-cc-chip warn"><MoonOutlined /> 昨夜夜班</span>
+                        )}
+                        {c.streakDays >= 5 && (
+                            <span className={`asgn-cc-chip ${c.streakDays >= 6 ? 'danger' : 'warn'}`}>
+                                <ThunderboltOutlined /> 连续上班 {c.streakDays} 天
+                            </span>
+                        )}
                     </div>
+                )}
+
+                <div className="asgn-cc-load">
+                    <span className="asgn-cc-load-label"><FieldTimeOutlined /> 当日负荷</span>
+                    <span className="asgn-cc-load-bar">
+                        <span className={`asgn-cc-load-fill ${loadLevel}`} style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="asgn-cc-load-val">
+                        {c.capacityHours > 0 ? `${r1(c.assignedHours)}/${r1(c.capacityHours)}h` : `${r1(c.assignedHours)}h`}
+                    </span>
+                </div>
+            </button>
+        );
+    };
+
+    const renderReplaceDrawer = () => {
+        if (!replaceTarget) return null;
+        const { op, pos } = replaceTarget;
+        const posNum = pos.position_number;
+        const { candidates, filteredList } = getCandidates(op, pos);
+        const reqs = pos.qualification_requirements || [];
+        const hasQualFilter = pos.eligible_employee_ids != null;
+        const suggested = findBestCoveringShift(shiftOptions, op);
+
+        const q = candSearch.trim().toLowerCase();
+        const matchSearch = (c: Candidate) => !q
+            || c.employee_name.toLowerCase().includes(q)
+            || (c.employee_code || '').toLowerCase().includes(q);
+        const sortKey = (c: Candidate) => {
+            if (candSort === 'load') return c.assignedHours;
+            if (candSort === 'qual') return -c.quals.filter(x => x.ok).length;
+            return (c.conflicts.length > 0 ? 1000 : 0) + c.assignedHours; // recommend
+        };
+        const sortCands = (arr: Candidate[]) => [...arr].sort((a, b) => sortKey(a) - sortKey(b));
+
+        const visible = candidates.filter(matchSearch);
+        const recommended = sortCands(visible.filter(c => c.tier === 'RECOMMENDED'));
+        const needsShift = sortCands(visible.filter(c => c.tier === 'NEEDS_SHIFT'));
+        const resting = sortCands(visible.filter(c => c.tier === 'RESTING'));
+        const bestId = recommended.find(c => c.conflicts.length === 0)?.employee_id;
+
+        const title = pos.status === 'ASSIGNED' && pos.employee
+            ? `更换 ${pos.employee.name}`
+            : `分配 · 岗位${posNum}`;
+
+        return (
+            <WxbDrawer open width={440} placement="right" destroyOnClose
+                className="asgn-replace-drawer"
+                onClose={() => setReplaceTarget(null)}
+                title={<span className="asgn-rd-title"><SwapOutlined /> {title}</span>}>
+                <div className="asgn-rd-ctx">
+                    <div className="asgn-rd-op">{op.operation_name}</div>
+                    <div className="asgn-rd-meta">
+                        <span>{op.batch_code === 'STANDALONE' ? '独立任务' : op.batch_code}</span>
+                        <span><ClockCircleOutlined /> {formatDateRange(op.planned_start, op.planned_end)}</span>
+                        <span>岗位{posNum}</span>
+                    </div>
+                    {reqs.length > 0 && (
+                        <div className="asgn-rd-quals">
+                            {reqs.map(rq => (
+                                <WxbTag key={`${rq.qualification_id}-${rq.required_level}`}
+                                    color={rq.is_mandatory ? 'blue' : 'neutral'}>
+                                    {rq.qualification_name} ≥L{rq.required_level}{rq.is_mandatory ? '' : ' 优选'}
+                                </WxbTag>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="asgn-rd-toolbar">
+                    <Input prefix={<SearchOutlined />} placeholder="搜索姓名 / 工号" allowClear
+                        value={candSearch} onChange={e => setCandSearch(e.target.value)} />
+                    <select className="asgn-rd-sort" value={candSort}
+                        onChange={e => setCandSort(e.target.value as 'recommend' | 'load' | 'qual')}>
+                        <option value="recommend">按推荐度</option>
+                        <option value="load">按当日负荷</option>
+                        <option value="qual">按资质</option>
+                    </select>
+                </div>
+
+                {visible.length === 0 ? (
+                    <WxbEmpty description={filteredList.length > 0
+                        ? `当天 ${filteredList.length} 人在岗,但均不符合本岗位资质`
+                        : '当天无可用候选人'} />
                 ) : (
-                    <>
-                        {recommended.length > 0 && (
-                            <>
-                                <div className="asgn-cand-tier rec">推荐（班次覆盖操作时间）</div>
-                                {recommended.map(c => (
-                                    <div key={c.employee_id} className="asgn-cand-row rec"
-                                        onClick={() => handleSelectCandidate(op, posNum, c)}>
-                                        <StarFilled className="asgn-cand-icon rec" />
-                                        <span className="asgn-cand-name">{c.employee_name}</span>
-                                        <span className="asgn-cand-meta">
-                                            {c.shift_name} {c.start_time}-{c.end_time}
-                                        </span>
-                                    </div>
-                                ))}
-                            </>
-                        )}
-                        {needsShift.length > 0 && (
-                            <>
-                                <div className="asgn-cand-tier warn">需调整班次</div>
-                                {needsShift.map(c => (
-                                    <div key={c.employee_id} className="asgn-cand-row warn"
-                                        onClick={() => handleSelectCandidate(op, posNum, c)}>
-                                        <WarningOutlined className="asgn-cand-icon warn" />
-                                        <span className="asgn-cand-name">{c.employee_name}</span>
-                                        <span className="asgn-cand-meta">
-                                            当前: {c.shift_name} {c.start_time}-{c.end_time}
-                                        </span>
-                                    </div>
-                                ))}
-                            </>
-                        )}
-                        {resting.length > 0 && (
-                            <>
-                                <div className="asgn-cand-tier rest">当天休息</div>
-                                {resting.map(c => (
-                                    <div key={c.employee_id} className="asgn-cand-row rest"
-                                        onClick={() => handleSelectCandidate(op, posNum, c)}>
-                                        <MinusCircleOutlined className="asgn-cand-icon rest" />
-                                        <span className="asgn-cand-name">{c.employee_name}</span>
-                                        <span className="asgn-cand-meta">REST</span>
-                                    </div>
-                                ))}
-                            </>
-                        )}
-                    </>
-                )}
-                {filteredOut > 0 && candidates.length > 0 && (
-                    <div className="asgn-cand-filtered">
-                        <SafetyCertificateOutlined /> 已按资质过滤 {filteredOut} 人
+                    <div className="asgn-rd-list">
+                        {recommended.length > 0 && <div className="asgn-rd-group rec">推荐 · 班次覆盖操作</div>}
+                        {recommended.map(c => renderCandidateCard(op, posNum, c, bestId, suggested))}
+                        {needsShift.length > 0 && <div className="asgn-rd-group warn">需调整班次</div>}
+                        {needsShift.map(c => renderCandidateCard(op, posNum, c, bestId, suggested))}
+                        {resting.length > 0 && <div className="asgn-rd-group rest">当天休息</div>}
+                        {resting.map(c => renderCandidateCard(op, posNum, c, bestId, suggested))}
                     </div>
                 )}
-                <div className="asgn-cand-footer">
+
+                {filteredList.length > 0 && (
+                    <div className="asgn-rd-filtered">
+                        <button type="button" className="asgn-rd-filtered-toggle"
+                            onClick={() => setShowFiltered(v => !v)}>
+                            <SafetyCertificateOutlined /> 资质过滤已隐藏 {filteredList.length} 人
+                            <span className="asgn-rd-filtered-caret">{showFiltered ? '收起' : '查看原因'}</span>
+                        </button>
+                        {showFiltered && (
+                            <div className="asgn-rd-filtered-list">
+                                {filteredList.map(f => (
+                                    <div key={f.employee_id} className="asgn-rd-filtered-row">
+                                        <span className="asgn-rd-filtered-name">
+                                            {f.employee_name}
+                                            <span className="asgn-rd-filtered-code">{f.employee_code}</span>
+                                        </span>
+                                        <span className="asgn-rd-filtered-miss">
+                                            {f.missing.length > 0
+                                                ? f.missing.map(m => `缺 ${m.name} L${m.need}(现 L${m.have || 0})`).join('、')
+                                                : '不符合资质要求'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="asgn-rd-foot">
                     <InfoCircleOutlined />
                     {hasQualFilter
-                        ? ' 候选人已按岗位资质要求筛选'
-                        : ' 该岗位未配置资质要求,请人工确认资质'}
+                        ? ' 候选人已按岗位资质筛选;点选即指派,休息/需调班会先弹确认'
+                        : ' 该岗位未配置强制资质,请人工确认资质'}
                 </div>
-            </div>
+            </WxbDrawer>
         );
     };
 
@@ -720,10 +1004,10 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                                             <span className="asgn-detail-pos-code">({pos.employee.code})</span>
                                         </span>
                                         <div className="asgn-detail-pos-actions">
-                                            <Popover content={renderCandidateSelector(selectedOp, pos)}
-                                                trigger="click" placement="bottomRight" destroyTooltipOnHide>
-                                                <button className="asgn-act-btn swap"><SwapOutlined /> 更换</button>
-                                            </Popover>
+                                            <button className="asgn-act-btn swap"
+                                                onClick={() => openReplace(selectedOp, pos)}>
+                                                <SwapOutlined /> 更换
+                                            </button>
                                             <button className="asgn-act-btn remove"
                                                 onClick={() => handleRemove(selectedOp, pos.position_number)}>
                                                 <DeleteOutlined /> 移除
@@ -739,10 +1023,10 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                                             </span>
                                         )}
                                         <div className="asgn-detail-pos-actions">
-                                            <Popover content={renderCandidateSelector(selectedOp, pos)}
-                                                trigger="click" placement="bottomRight" destroyTooltipOnHide>
-                                                <button className="asgn-act-btn assign"><UserOutlined /> 分配 ▾</button>
-                                            </Popover>
+                                            <button className="asgn-act-btn assign"
+                                                onClick={() => openReplace(selectedOp, pos)}>
+                                                <UserOutlined /> 分配 ▾
+                                            </button>
                                         </div>
                                     </>
                                 )}
@@ -833,6 +1117,9 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                     {renderDetailPanel()}
                 </div>
             </div>
+
+            {/* ── Replace / Assign Drawer ── */}
+            {renderReplaceDrawer()}
 
             {/* ── Shift Confirmation Modal ── */}
             <Modal

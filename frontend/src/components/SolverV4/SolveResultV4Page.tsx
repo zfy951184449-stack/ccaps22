@@ -49,6 +49,7 @@ interface ResultData {
     assignments: any[];
     shift_assignments?: any[];
     operations?: any[];
+    employee_meta?: Record<number, any>;
     calendar_days?: { date: string; is_workday: boolean }[];
     standard_hours?: number;
     precheck_results?: {
@@ -831,6 +832,7 @@ const SolveResultV4Page: React.FC<SolveResultV4PageProps> = ({ visible, runId, o
                                 shiftAssignments={data.shift_assignments || []}
                                 shiftOptions={shiftOptions}
                                 calendarDays={data.calendar_days || []}
+                                employeeMeta={data.employee_meta || {}}
                                 externalFilter={assignFilterSignal}
                                 onAssign={handleAssign}
                                 onUnassign={handleUnassign}
