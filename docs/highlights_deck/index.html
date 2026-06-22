@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>生产排产 · 排班系统 — 项目亮点</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;600;700&family=Noto+Sans+SC:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* ============ 设计 tokens（定稿，勿改） ============ */
+:root{
+  --paper:#F7F3EB; --paper-2:#F1ECE0; --ink:#1C1B17; --ink-2:#6B655A; --ink-3:#9A917E;
+  --hair:#E4DECF; --hair-2:#EFEADF; --accent:#0E6E5E; --accent-soft:#2A9384;
+  --foil:#CFC8B8; --white:#FFFFFF;
+  --serif:"Noto Serif SC","Songti SC",serif;
+  --sans:"Noto Sans SC","PingFang SC",system-ui,sans-serif;
+  --mono:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --pad-x:7.2vw; --pad-y:6.4vh;
+  --ease:cubic-bezier(.22,.61,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%;overflow:hidden;background:var(--ink);}
+body{font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+img{display:block;max-width:100%;}
+
+/* ============ 舞台 ============ */
+.deck{position:fixed;inset:0;background:var(--paper);}
+.slide{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  padding:var(--pad-y) var(--pad-x);background:var(--paper);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .5s var(--ease),visibility .5s var(--ease);
+  z-index:1;
+}
+.slide.is-active{opacity:1;visibility:visible;pointer-events:auto;z-index:2;}
+.slide:nth-child(even of .content){background:var(--paper-2);}
+
+/* ============ 进度条 ============ */
+.progress{position:fixed;top:0;left:0;height:2px;background:var(--accent);width:0;z-index:50;transition:width .5s var(--ease);}
+
+/* ============ 通用排版 ============ */
+.kicker{font-family:var(--sans);font-weight:500;font-size:.78rem;letter-spacing:.22em;color:var(--accent);text-transform:uppercase;}
+.kicker .num{font-family:var(--mono);font-weight:600;}
+.headline{font-family:var(--serif);font-weight:600;color:var(--ink);line-height:1.12;letter-spacing:.005em;font-size:clamp(2rem,4.2vw,3.4rem);}
+.headline .em{color:var(--accent);}
+.lead{font-family:var(--serif);font-weight:500;color:var(--ink);line-height:1.55;font-size:clamp(1.05rem,1.55vw,1.4rem);max-width:30ch;}
+.lead.sans{font-family:var(--sans);font-weight:400;color:var(--ink-2);}
+.note{font-family:var(--sans);font-weight:400;color:var(--ink-3);font-size:.86rem;line-height:1.6;max-width:36ch;}
+
+/* ============ 两栏布局（文/图） ============ */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:5.2vw;align-items:center;flex:1;min-height:0;}
+.split.rev{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);}
+.split.rev .col-copy{order:2;}
+.split.rev .col-shot{order:1;}
+.col-copy{display:flex;flex-direction:column;gap:1.5rem;min-width:0;}
+.col-shot{min-width:0;display:flex;align-items:center;justify-content:center;}
+
+/* ============ 现状 / 本项目 对比（两行细线） ============ */
+.compare{border-top:1px solid var(--hair);max-width:46ch;}
+.compare .row{display:grid;grid-template-columns:5.2em 1fr;gap:1.2rem;align-items:baseline;padding:.95rem 0;border-bottom:1px solid var(--hair);}
+.compare .lbl{font-family:var(--sans);font-weight:500;font-size:.74rem;letter-spacing:.14em;padding-top:.1em;}
+.compare .row.now .lbl{color:var(--ink-3);}
+.compare .row.ours .lbl{color:var(--accent);}
+.compare .txt{font-family:var(--sans);font-weight:400;font-size:1rem;line-height:1.5;}
+.compare .row.now .txt{color:var(--ink-3);}
+.compare .row.ours .txt{color:var(--ink);}
+
+/* ============ tag 行（青绿点+短语） ============ */
+.tags{display:flex;flex-wrap:wrap;gap:.5rem 1.6rem;}
+.tag{display:inline-flex;align-items:center;gap:.5em;font-size:.82rem;color:var(--ink-2);font-weight:400;}
+.tag::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);flex:none;}
+
+/* ============ 浏览器外框（截图） ============ */
+.browser{width:100%;background:var(--white);border:1px solid var(--hair);border-radius:10px;overflow:hidden;}
+.browser .bar{display:flex;align-items:center;gap:.55rem;padding:.62rem .9rem;border-bottom:1px solid var(--hair-2);background:var(--white);}
+.browser .dots{display:flex;gap:6px;flex:none;}
+.browser .dots i{width:9px;height:9px;border-radius:50%;background:var(--hair);display:block;}
+.browser .route{font-family:var(--mono);font-size:.74rem;color:var(--ink-3);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.browser .shot{display:block;width:100%;height:auto;}
+
+/* ============ B. coverage 覆盖轴 ============ */
+.cover-axis{max-width:48ch;margin-top:.4rem;}
+.cover-axis .stages{display:grid;grid-template-columns:repeat(4,1fr);margin-left:5.4em;}
+.cover-axis .stage-name{font-family:var(--sans);font-weight:500;font-size:.8rem;color:var(--ink-2);text-align:center;padding-bottom:.55rem;border-left:1px solid var(--hair-2);}
+.cover-axis .stage-name:first-child{border-left:none;}
+.cover-axis .track-row{display:grid;grid-template-columns:5.4em 1fr;align-items:center;gap:0;padding:.5rem 0;}
+.cover-axis .track-lbl{font-family:var(--sans);font-weight:500;font-size:.74rem;letter-spacing:.1em;text-align:left;}
+.cover-axis .track-row.ours .track-lbl{color:var(--accent);}
+.cover-axis .track-row.theirs .track-lbl{color:var(--ink-3);}
+.cover-axis .track{position:relative;height:14px;}
+.cover-axis .seg{position:absolute;top:0;height:14px;border-radius:7px;transform-origin:left center;}
+.cover-axis .track-row.ours .seg{background:var(--accent-soft);}
+.cover-axis .track-row.theirs .seg{background:var(--foil);}
+.cover-axis .grid-ticks{position:relative;height:0;margin-left:5.4em;}
+.cover-axis .grid-ticks i{position:absolute;top:-3.1rem;width:1px;height:3.4rem;background:var(--hair-2);}
+
+/* ============ C. delta 落差（from → to） ============ */
+.delta{display:flex;flex-direction:column;gap:1.4rem;}
+.delta .fromto{display:flex;align-items:baseline;gap:1.1rem;flex-wrap:wrap;}
+.delta .from{font-family:var(--sans);font-weight:400;font-size:clamp(1rem,1.5vw,1.35rem);color:var(--ink-3);}
+.delta .arrow{flex:none;color:var(--accent);font-family:var(--mono);font-weight:500;font-size:clamp(1.4rem,2.2vw,2rem);line-height:1;}
+.delta .to{font-family:var(--serif);font-weight:700;color:var(--ink);font-size:clamp(2.4rem,5vw,4rem);line-height:1;letter-spacing:.01em;}
+.delta .to .unit{font-family:var(--sans);font-weight:500;font-size:.42em;color:var(--ink-2);margin-left:.3em;letter-spacing:.02em;}
+
+/* ============ D. stats 数列 ============ */
+.stats-row{display:flex;align-items:flex-end;gap:2.4vw;flex-wrap:wrap;}
+.stat{display:flex;flex-direction:column;gap:.45rem;padding-right:2.4vw;border-right:1px solid var(--hair);}
+.stat:last-child{border-right:none;padding-right:0;}
+.stat .big{font-family:var(--mono);font-weight:600;color:var(--ink);font-size:clamp(2.4rem,5.4vw,4.2rem);line-height:.95;letter-spacing:-.01em;}
+.stat .big .unit{font-family:var(--sans);font-weight:500;font-size:.32em;color:var(--ink-2);margin-left:.22em;letter-spacing:.02em;}
+.stat .slabel{font-family:var(--sans);font-weight:400;font-size:.86rem;color:var(--ink-2);line-height:1.4;max-width:14ch;}
+
+/* ============ 入场动效 ============ */
+[data-anim]{opacity:0;transform:translateY(18px);transition:opacity .7s var(--ease),transform .7s var(--ease);}
+.slide.is-active [data-anim]{opacity:1;transform:none;}
+.slide.is-active [data-anim].a1{transition-delay:.08s;}
+.slide.is-active [data-anim].a2{transition-delay:.20s;}
+.slide.is-active [data-anim].a3{transition-delay:.32s;}
+.slide.is-active [data-anim].a4{transition-delay:.44s;}
+.slide.is-active .cover-axis .seg{transition:transform .9s var(--ease) .35s;}
+.cover-axis .seg{transform:scaleX(0);}
+.slide.is-active .cover-axis .seg{transform:scaleX(1);}
+
+/* ============ 封面 ============ */
+.slide.cover{justify-content:space-between;}
+.cover .top{display:flex;align-items:center;}
+.cover .brand{height:34px;width:auto;opacity:.95;}
+.cover .mid{display:flex;flex-direction:column;gap:1.5rem;flex:1;justify-content:center;}
+.cover .ctitle{font-family:var(--serif);font-weight:700;color:var(--ink);font-size:clamp(2.8rem,7vw,5.6rem);line-height:1.05;letter-spacing:.01em;}
+.cover .ctitle .em{color:var(--accent);}
+.cover .csub{font-family:var(--serif);font-weight:500;color:var(--ink-2);font-size:clamp(1.1rem,2vw,1.7rem);}
+.cover .ctag{font-family:var(--sans);font-weight:400;color:var(--ink-3);font-size:1rem;letter-spacing:.04em;}
+.cover .bottom{display:flex;align-items:center;gap:1.6rem;}
+.btn-enter{font-family:var(--sans);font-weight:500;font-size:.95rem;color:var(--white);background:var(--accent);border:none;border-radius:8px;padding:.85rem 1.8rem;cursor:pointer;letter-spacing:.04em;transition:background .25s var(--ease),transform .15s var(--ease);}
+.btn-enter:hover{background:var(--accent-soft);}
+.btn-enter:active{transform:scale(.98);}
+.cover .hint{font-family:var(--sans);font-weight:400;font-size:.82rem;color:var(--ink-3);letter-spacing:.04em;}
+.cover .rule{width:64px;height:2px;background:var(--accent);}
+
+/* ============ 收尾 ============ */
+.slide.outro{background:var(--ink);}
+.outro .o-top{display:flex;align-items:center;justify-content:space-between;}
+.outro .o-brand{height:30px;width:auto;filter:brightness(0) invert(1);opacity:.85;}
+.outro .o-kick{font-family:var(--sans);font-weight:500;font-size:.78rem;letter-spacing:.22em;color:var(--accent-soft);text-transform:uppercase;}
+.outro .o-body{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:5vw;align-items:center;}
+.outro .o-headline{font-family:var(--serif);font-weight:600;color:var(--paper);font-size:clamp(2rem,4vw,3.2rem);line-height:1.15;}
+.outro .o-list{border-top:1px solid rgba(231,222,207,.18);}
+.outro .o-list .o-item{display:grid;grid-template-columns:2.4em 1fr;gap:1rem;align-items:baseline;padding:.78rem 0;border-bottom:1px solid rgba(231,222,207,.18);}
+.outro .o-list .o-n{font-family:var(--mono);font-weight:600;font-size:.82rem;color:var(--accent-soft);}
+.outro .o-list .o-t{font-family:var(--sans);font-weight:400;font-size:1rem;color:var(--paper);letter-spacing:.01em;}
+.outro .o-foot{font-family:var(--serif);font-weight:500;color:var(--ink-3);font-size:1.05rem;}
+
+/* ============ 底部控件 ============ */
+.controls{position:fixed;bottom:0;left:0;right:0;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:.7rem var(--pad-x);pointer-events:none;}
+.controls > *{pointer-events:auto;}
+.ctrl-l,.ctrl-r{display:flex;align-items:center;gap:1rem;}
+.navbtn{width:32px;height:32px;border-radius:50%;border:1px solid var(--hair);background:transparent;color:var(--ink-2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color .2s,color .2s,background .2s;}
+.navbtn:hover{border-color:var(--accent);color:var(--accent);}
+.navbtn svg{width:14px;height:14px;}
+.dots-nav{display:flex;align-items:center;gap:9px;}
+.dots-nav button{width:7px;height:7px;border-radius:50%;border:none;background:var(--hair);cursor:pointer;padding:0;transition:background .25s var(--ease),transform .25s var(--ease);}
+.dots-nav button.on{background:var(--accent);transform:scale(1.35);}
+.counter{font-family:var(--mono);font-size:.78rem;color:var(--ink-3);letter-spacing:.06em;}
+.counter .cur{color:var(--ink);font-weight:600;}
+.fsbtn{font-family:var(--sans);font-weight:400;font-size:.76rem;color:var(--ink-3);background:transparent;border:none;cursor:pointer;letter-spacing:.04em;display:inline-flex;align-items:center;gap:.4em;}
+.fsbtn:hover{color:var(--accent);}
+.fsbtn svg{width:13px;height:13px;}
+.slide.outro ~ .controls{}
+body.dark-ctrl .navbtn{border-color:rgba(231,222,207,.25);color:var(--paper-2);}
+body.dark-ctrl .counter{color:var(--ink-3);}
+body.dark-ctrl .counter .cur{color:var(--paper);}
+body.dark-ctrl .dots-nav button{background:rgba(231,222,207,.22);}
+body.dark-ctrl .dots-nav button.on{background:var(--accent-soft);}
+body.dark-ctrl .fsbtn{color:var(--ink-3);}
+
+@media (prefers-reduced-motion: reduce){
+  .slide,[data-anim],.cover-axis .seg{transition:none !important;}
+  [data-anim]{opacity:1 !important;transform:none !important;}
+  .cover-axis .seg{transform:scaleX(1) !important;}
+}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+
+<div class="deck" id="deck">
+
+  <!-- ============ 封面 ============ -->
+  <section class="slide cover is-active" data-bg="paper">
+    <div class="top" data-anim class="a1">
+      <img class="brand" src="assets/wuxibio-logo.png" alt="WuXi Biologics" loading="eager" />
+    </div>
+    <div class="mid">
+      <div class="kicker" data-anim>项目亮点 · 八项</div>
+      <h1 class="ctitle" data-anim class="a1">生产排产 · <span class="em">排班系统</span></h1>
+      <div class="rule" data-anim class="a2"></div>
+      <p class="csub" data-anim class="a2">把工艺模板、批次计划、人员排班、资源约束串成一条线</p>
+      <p class="ctag" data-anim class="a3">生产一线自研 · AI 辅助</p>
+    </div>
+    <div class="bottom" data-anim class="a4">
+      <button class="btn-enter" id="enterBtn">进入全屏放映</button>
+      <span class="hint">← → 翻页 · F 全屏</span>
+    </div>
+  </section>
+
+  <section class="slide content" id="s1" data-slide data-n="1" data-bg="paper">
+  <div class="split">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">01</span></div>
+      <h2 class="headline" data-anim class="a1">一线自研的<br/><span class="em">敏捷开发</span></h2>
+      <p class="lead" data-anim class="a1">开发的人就是一线，需求不用外传，改起来也快。</p>
+      <div class="compare" data-anim class="a2">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">交给开发团队：需求隔一层、来回确认，等得久。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">一线自研：提需求的就是写代码的，想到一个改一个、当天见效。</span></div>
+      </div>
+      <div class="tags" data-anim class="a3">
+        <span class="tag">借助 AI 辅助，一线独立完成</span>
+        <span class="tag">贴着真实工艺做</span>
+        <span class="tag">改完即上线</span>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">运营总览 · /operations-overview</span></div>
+        <img class="shot" src="assets/02_operations_overview.png" alt="运营总览看板" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s2" data-slide data-n="2" data-bg="paper">
+  <div class="split rev">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">02</span></div>
+      <h2 class="headline" data-anim class="a1">排产<span class="em">模板化</span>，<br/>绕开自动排产</h2>
+      <p class="lead" data-anim class="a1">商业化工艺常年不变，把人和任务写进模板、按批次套用，不自研排产算法。</p>
+      <div class="compare" data-anim class="a2">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">自动排产要做组合优化求解，难；适合中试、临床那种多变场景，并非商业化批次所需。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">模板化：配好模板套用就行，工程投入集中到排班，开发难度降下来、效果不受影响。</span></div>
+      </div>
+      <div class="tags" data-anim class="a3">
+        <span class="tag">工艺即模板</span>
+        <span class="tag">过程透明可追</span>
+        <span class="tag">人能改、能解释</span>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">工艺模板 · /process-templates</span></div>
+        <img class="shot" src="assets/23_template_editor.png" alt="工艺模板编辑器" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s3" data-slide data-n="3" data-bg="paper">
+  <div class="split">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">03</span></div>
+      <h2 class="headline" data-anim class="a1">排班覆盖<br/><span class="em">全工艺流</span></h2>
+      <p class="lead" data-anim class="a1">一套系统把 media、buffer、上游、下游排在一起，不用各部门各排一套。</p>
+      <div class="cover-axis" data-anim class="a2">
+        <div class="grid-ticks"><i style="left:25%"></i><i style="left:50%"></i><i style="left:75%"></i></div>
+        <div class="stages">
+          <span class="stage-name">media</span>
+          <span class="stage-name">buffer</span>
+          <span class="stage-name">上游</span>
+          <span class="stage-name">下游</span>
+        </div>
+        <div class="track-row ours">
+          <span class="track-lbl">本项目</span>
+          <span class="track"><span class="seg" style="left:0;width:100%"></span></span>
+        </div>
+        <div class="track-row theirs">
+          <span class="track-lbl">已有系统</span>
+          <span class="track"><span class="seg" style="left:50%;width:25%"></span></span>
+        </div>
+      </div>
+      <div class="compare" data-anim class="a3">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">各部门各排各的，衔接靠线下，一个环节拖了后面才发现。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">全流程统一排，上下游怎么衔接一起算。</span></div>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">生产计划甘特 · /batch-gantt</span></div>
+        <img class="shot" src="assets/24_batch_gantt.png" alt="生产计划甘特（覆盖全工艺流）" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s4" data-slide data-n="4" data-bg="paper">
+  <div class="split rev">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">04</span></div>
+      <h2 class="headline" data-anim class="a1">工艺和<span class="em">独立任务</span>一起排</h2>
+      <p class="lead" data-anim class="a1">排班不只排工艺操作，值班、取样、培训这类独立任务也一起排进去。</p>
+      <div class="compare" data-anim class="a2">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">只排工艺操作：独立任务另排，可能和工艺抢同一个人。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">工艺＋独立并入同一张班表：同一个人不会被排两份。</span></div>
+      </div>
+      <div class="tags" data-anim class="a3">
+        <span class="tag">统一时间轴</span>
+        <span class="tag">冲突自动避让</span>
+        <span class="tag">下一步纳入计划性维护</span>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">排班结果 · /solver-v5</span></div>
+        <img class="shot" src="assets/35_solver_v5.png" alt="排班结果（含独立任务）" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s5" data-slide data-n="5" data-bg="paper">
+  <div class="split">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">05</span></div>
+      <h2 class="headline" data-anim class="a1">排班按<br/><span class="em">资质等级</span></h2>
+      <p class="lead" data-anim class="a1">不只看有没有资质，还看等级够不够；每个位置单独定，不达标的排不进去。</p>
+      <div class="compare" data-anim class="a2">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">只看有没有、不分等级：不熟练的人可能上关键操作。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">关键位置要够等级，非关键位置可带新人，自然形成老带新。</span></div>
+      </div>
+      <div class="tags" data-anim class="a3">
+        <span class="tag">资质矩阵打底</span>
+        <span class="tag">按等级择优</span>
+        <span class="tag">杜绝错配</span>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">资质矩阵 · /qualification-matrix</span></div>
+        <img class="shot" src="assets/12_qualification_matrix.png" alt="资质矩阵" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s6" data-slide data-n="6" data-bg="paper">
+  <div class="split rev">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">06</span></div>
+      <h2 class="headline" data-anim class="a1">请假，<span class="em">一键换人</span></h2>
+      <div class="delta" data-anim class="a2">
+        <div class="fromto">
+          <span class="from">手工重排</span>
+          <span class="arrow">→</span>
+          <span class="to">一键 · 秒级</span>
+        </div>
+        <p class="lead">有人请假，系统先列出受影响的班，再按条件挑出合适的人，一键换上、只动受影响。</p>
+        <p class="note">简单替换秒级；复杂情况走求解器约 15–30 秒。</p>
+      </div>
+      <div class="compare" data-anim class="a3">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">一个人请假，整张班表手动翻、来回试，半天理不顺。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">锁定其余人，只动受影响的格子，方案预览后一键应用。</span></div>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">异常排班修复 · /roster-exceptions</span></div>
+        <img class="shot" src="assets/33_roster_exceptions.png" alt="异常排班快速修复" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s7" data-slide data-n="7" data-bg="paper">
+  <div class="split">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">07</span></div>
+      <h2 class="headline" data-anim class="a1">求解<span class="em">速度快</span></h2>
+      <div class="stats-row" data-anim class="a2">
+        <div class="stat">
+          <span class="big"><span data-countup="5" data-suffix="" data-dec="0">0</span><span class="unit">分钟</span></span>
+          <span class="slabel">一个月排班，接近最优</span>
+        </div>
+        <div class="stat">
+          <span class="big"><span data-countup="1" data-suffix="" data-dec="0">0</span><span class="unit">秒</span></span>
+          <span class="slabel">简单情况出结果</span>
+        </div>
+        <div class="stat">
+          <span class="big">≤<span data-countup="1" data-suffix="%" data-dec="0">0</span></span>
+          <span class="slabel">离理论最优的差距</span>
+        </div>
+      </div>
+      <p class="lead" data-anim class="a3">复杂的一个月排班 5 分钟出接近最优解，简单的 1 秒；离最优差多少有量化。</p>
+      <div class="compare" data-anim class="a4">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">跑一轮要等很久，不敢频繁试，改了也懒得重排。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">快到可以反复试方案，排班从一锤定音变成边调边看。</span></div>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">求解器 · /solver-v4</span></div>
+        <img class="shot" src="assets/34_solver_v4.png" alt="求解器运行" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <section class="slide content" id="s8" data-slide data-n="8" data-bg="paper">
+  <div class="split rev">
+    <div class="col-copy">
+      <div class="kicker" data-anim>亮点 <span class="num">08</span></div>
+      <h2 class="headline" data-anim class="a1">省<span class="em">排班员</span>的工时</h2>
+      <div class="delta" data-anim class="a2">
+        <div class="fromto">
+          <span class="from">人工排一轮要数天</span>
+          <span class="arrow">→</span>
+          <span class="to">分钟</span>
+        </div>
+        <p class="lead">过去一轮排班要排班员盯着排好几天，现在交给系统，人只做审核和微调。</p>
+        <p class="note">排班员排班耗时（精确天数待补），按现有批次量级估算为数天 → 分钟。</p>
+      </div>
+      <div class="compare" data-anim class="a3">
+        <div class="row now"><span class="lbl">现状</span><span class="txt">排一版人工要好几天，改一次又重来。</span></div>
+        <div class="row ours"><span class="lbl">本项目</span><span class="txt">系统跑分钟级出方案，排班员从「排」变成「审」。</span></div>
+      </div>
+    </div>
+    <div class="col-shot">
+      <div class="browser" data-anim class="a2">
+        <div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="route">批次甘特 · /batch-gantt</span></div>
+        <img class="shot" src="assets/24_batch_gantt.png" alt="求解器产出的整月排班甘特" loading="eager" />
+      </div>
+    </div>
+  </div>
+</section>
+
+  <!-- ============ 收尾 ============ -->
+  <section class="slide outro" data-bg="ink">
+    <div class="o-top">
+      <span class="o-kick" data-anim>八项亮点 · 一张系统</span>
+      <img class="o-brand" src="assets/wuxibio-logo.png" alt="WuXi Biologics" loading="eager" />
+    </div>
+    <div class="o-body">
+      <div>
+        <h2 class="o-headline" data-anim class="a1">一线长出来的<br/>排产与排班</h2>
+      </div>
+      <div class="o-list">
+        <div class="o-item" data-anim class="a2"><span class="o-n">01</span><span class="o-t">一线自研的敏捷开发</span></div>
+        <div class="o-item" data-anim class="a2"><span class="o-n">02</span><span class="o-t">排产模板化，绕开自动排产</span></div>
+        <div class="o-item" data-anim class="a3"><span class="o-n">03</span><span class="o-t">排班覆盖全工艺流</span></div>
+        <div class="o-item" data-anim class="a3"><span class="o-n">04</span><span class="o-t">工艺和独立任务一起排</span></div>
+        <div class="o-item" data-anim class="a3"><span class="o-n">05</span><span class="o-t">排班按资质等级</span></div>
+        <div class="o-item" data-anim class="a4"><span class="o-n">06</span><span class="o-t">请假一键换人</span></div>
+        <div class="o-item" data-anim class="a4"><span class="o-n">07</span><span class="o-t">求解速度快</span></div>
+        <div class="o-item" data-anim class="a4"><span class="o-n">08</span><span class="o-t">省排班员的工时</span></div>
+      </div>
+    </div>
+    <p class="o-foot" data-anim class="a4">谢谢。问题与讨论。</p>
+  </section>
+
+</div>
+
+<!-- ============ 底部控件 ============ -->
+<div class="controls" id="controls">
+  <div class="ctrl-l">
+    <button class="navbtn" id="prevBtn" aria-label="上一页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button class="navbtn" id="nextBtn" aria-label="下一页"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <div class="dots-nav" id="dotsNav"></div>
+  </div>
+  <div class="ctrl-r">
+    <span class="counter"><span class="cur" id="curN">1</span> / <span id="totN">10</span></span>
+    <button class="fsbtn" id="fsBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>全屏</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var deck = document.getElementById('deck');
+  var slides = Array.prototype.slice.call(deck.querySelectorAll('.slide'));
+  var total = slides.length;
+  var idx = 0;
+  var progress = document.getElementById('progress');
+  var curN = document.getElementById('curN');
+  var totN = document.getElementById('totN');
+  var dotsNav = document.getElementById('dotsNav');
+  var body = document.body;
+  totN.textContent = total;
+
+  // build dots
+  slides.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.setAttribute('aria-label', '跳到第' + (i+1) + '页');
+    b.addEventListener('click', function(){ go(i); });
+    dotsNav.appendChild(b);
+  });
+  var dots = Array.prototype.slice.call(dotsNav.children);
+
+  function resetAnims(slide){
+    // re-trigger entrance: countups + segs reset handled by class toggle.
+    var ups = slide.querySelectorAll('[data-countup]');
+    ups.forEach(function(el){
+      el.textContent = '0' + (el.getAttribute('data-suffix') || '');
+    });
+  }
+
+  function runCountups(slide){
+    var ups = slide.querySelectorAll('[data-countup]');
+    ups.forEach(function(el){
+      var target = parseFloat(el.getAttribute('data-countup')) || 0;
+      var suffix = el.getAttribute('data-suffix') || '';
+      var dec = (el.getAttribute('data-dec')) ? parseInt(el.getAttribute('data-dec'),10) : 0;
+      var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if(reduce){ el.textContent = target.toFixed(dec) + suffix; return; }
+      var dur = 900, start = null;
+      function step(ts){
+        if(start===null) start = ts;
+        var p = Math.min((ts-start)/dur, 1);
+        var eased = 1 - Math.pow(1-p, 3);
+        var val = target * eased;
+        el.textContent = (dec>0 ? val.toFixed(dec) : Math.round(val)) + suffix;
+        if(p<1){ el._raf = requestAnimationFrame(step); }
+        else { el.textContent = target.toFixed(dec) + suffix; }
+      }
+      if(el._raf) cancelAnimationFrame(el._raf);
+      el._raf = requestAnimationFrame(step);
+    });
+  }
+
+  function go(n){
+    n = Math.max(0, Math.min(total-1, n));
+    if(n === idx && slides[n].classList.contains('is-active')) return;
+    var prev = idx;
+    idx = n;
+    slides.forEach(function(s, i){
+      if(i === idx){ s.classList.add('is-active'); }
+      else {
+        if(s.classList.contains('is-active')){ s.classList.remove('is-active'); resetAnims(s); }
+      }
+    });
+    // progress + counter + dots
+    progress.style.width = (((idx+1)/total)*100) + '%';
+    curN.textContent = idx+1;
+    dots.forEach(function(d,i){ d.classList.toggle('on', i===idx); });
+    // dark controls on ink-bg slides
+    var dark = slides[idx].getAttribute('data-bg') === 'ink';
+    body.classList.toggle('dark-ctrl', dark);
+    // countups after the active class settles
+    runCountups(slides[idx]);
+  }
+
+  function next(){ go(idx+1); }
+  function prev(){ go(idx-1); }
+
+  // keyboard
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' '){ e.preventDefault(); next(); }
+    else if(e.key === 'ArrowLeft' || e.key === 'PageUp'){ e.preventDefault(); prev(); }
+    else if(e.key === 'Home'){ e.preventDefault(); go(0); }
+    else if(e.key === 'End'){ e.preventDefault(); go(total-1); }
+    else if(e.key === 'f' || e.key === 'F'){ e.preventDefault(); toggleFs(); }
+  });
+
+  // buttons
+  document.getElementById('nextBtn').addEventListener('click', next);
+  document.getElementById('prevBtn').addEventListener('click', prev);
+
+  // fullscreen
+  function toggleFs(){
+    var el = document.documentElement;
+    var doc = document;
+    var isFs = doc.fullscreenElement || doc.webkitFullscreenElement;
+    if(!isFs){
+      if(el.requestFullscreen) el.requestFullscreen();
+      else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } else {
+      if(doc.exitFullscreen) doc.exitFullscreen();
+      else if(doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+    }
+  }
+  document.getElementById('fsBtn').addEventListener('click', toggleFs);
+  var enterBtn = document.getElementById('enterBtn');
+  if(enterBtn){ enterBtn.addEventListener('click', function(){ toggleFs(); if(idx===0) next(); }); }
+
+  // touch swipe
+  var tsX = null, tsY = null;
+  deck.addEventListener('touchstart', function(e){
+    if(e.touches.length!==1) return;
+    tsX = e.touches[0].clientX; tsY = e.touches[0].clientY;
+  }, {passive:true});
+  deck.addEventListener('touchend', function(e){
+    if(tsX===null) return;
+    var dx = e.changedTouches[0].clientX - tsX;
+    var dy = e.changedTouches[0].clientY - tsY;
+    if(Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)*1.4){ if(dx<0) next(); else prev(); }
+    tsX = null; tsY = null;
+  }, {passive:true});
+
+  // init
+  go(0);
+})();
+</script>
+
+<!-- ============ 逐元素入场编排（覆盖整块动效，细到具体元素） ============ -->
+<style id="choreo-css">
+.slide [data-anim]{opacity:1;transform:none;transition:none;}
+.an{opacity:0 !important;transition:opacity .58s var(--ease), transform .58s var(--ease);}
+.an.r{transform:translateY(18px) !important;}
+.an.f{transform:none !important;}
+.an.s{transform:translateY(10px) scale(.962) !important;transform-origin:left top;}
+.an.soft{transform:scale(.985) !important;}
+.an.bar{transform:scaleX(0) !important;transform-origin:left center;transition:transform .8s var(--ease) !important;}
+.an.show{opacity:1 !important;transform:none !important;}
+.an.bar.show{transform:scaleX(1) !important;}
+@media (prefers-reduced-motion: reduce){ .an{opacity:1 !important;transform:none !important;} }
+</style>
+<script id="choreo-js">
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce) return;
+  var ORDER = ['.kicker','.headline','.lead','.cover-axis .stage-name','.cover-axis .track-lbl','.cover-axis .seg','.delta .from','.delta .arrow','.delta .to','.stats-row .stat','.compare .row','.tags .tag','.note','.browser','.o-head','.o-item','.o-foot'];
+  function variant(el){
+    if(el.matches('.cover-axis .seg')) return 'bar';
+    if(el.matches('.delta .to')) return 's';
+    if(el.matches('.browser')) return 'soft';
+    if(el.matches('.delta .from,.delta .arrow,.note,.cover-axis .stage-name,.cover-axis .track-lbl,.o-foot')) return 'f';
+    return 'r';
+  }
+  function collect(slide){
+    var seen=[],i,ns,k;
+    for(k=0;k<ORDER.length;k++){ ns=slide.querySelectorAll(ORDER[k]); for(i=0;i<ns.length;i++){ if(seen.indexOf(ns[i])<0) seen.push(ns[i]); } }
+    ns=slide.querySelectorAll('[data-anim]'); for(i=0;i<ns.length;i++){ if(seen.indexOf(ns[i])<0) seen.push(ns[i]); }
+    return seen;
+  }
+  function prep(slide){ collect(slide).forEach(function(el){ el.classList.add('an'); el.classList.add(variant(el)); }); }
+  function reveal(slide){
+    var els=collect(slide), step=Math.min(58, Math.round(780/Math.max(1,els.length)));
+    els.forEach(function(el,i){ el.style.transitionDelay=(i*step)+'ms'; el.classList.add('show'); });
+  }
+  function unreveal(slide){ collect(slide).forEach(function(el){ el.classList.remove('show'); el.style.transitionDelay=''; }); }
+  var slides=Array.prototype.slice.call(document.querySelectorAll('.deck .slide'));
+  slides.forEach(prep);
+  var act=document.querySelector('.slide.is-active');
+  if(act){ act._shown=true; requestAnimationFrame(function(){ reveal(act); }); }
+  var obs=new MutationObserver(function(muts){
+    for(var i=0;i<muts.length;i++){ var el=muts[i].target;
+      if(el.classList.contains('is-active')){ if(!el._shown){ el._shown=true; reveal(el); } }
+      else if(el._shown){ el._shown=false; unreveal(el); }
+    }
+  });
+  slides.forEach(function(s){ obs.observe(s,{attributes:true,attributeFilter:['class']}); });
+})();
+</script>
+</body>
+</html>
