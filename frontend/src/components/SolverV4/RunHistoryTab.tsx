@@ -18,13 +18,31 @@ interface RunRecord {
     window_end: string;
     created_at: string;
     completed_at: string | null;
+    updated_at?: string | null;
 }
+
+// 与后端 reaper 阈值（V4_RUN_STALE_TIMEOUT_SECONDS，默认 180s）对齐：超过此时长无写入即视为可能中断。
+// 后端 reaper 最终会把这类行翻成 FAILED，这里做客户端即时兜底提示，避免清扫前的空窗显示成"求解中"。
+const STALE_RUN_SECONDS = 180;
 
 /** 求解质量展示 */
 const SolverQualityTag: React.FC<{ record: RunRecord }> = ({ record }) => {
     // 正在运行
     if (['QUEUED', 'RUNNING'].includes(record.status)) {
+        const lastBeat = record.updated_at || record.created_at;
+        const staleSeconds = lastBeat ? dayjs().diff(dayjs(lastBeat), 'second') : 0;
+        if (staleSeconds > STALE_RUN_SECONDS) {
+            return (
+                <WxbTooltip title={`已 ${Math.floor(staleSeconds / 60)} 分钟无进展，求解进程可能已中断；系统将自动标记为失败`}>
+                    <WxbTag color="amber">可能中断</WxbTag>
+                </WxbTooltip>
+            );
+        }
         return <WxbTag color="blue">求解中</WxbTag>;
+    }
+
+    if (record.status === 'STOPPING') {
+        return <WxbTag color="amber">停止中</WxbTag>;
     }
 
     if (record.status === 'APPLIED') {

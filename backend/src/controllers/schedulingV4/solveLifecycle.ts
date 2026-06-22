@@ -78,10 +78,10 @@ export const listRunsV4 = async (req: Request, res: Response) => {
     try {
         const [rows] = await pool.execute<RowDataPacket[]>(
             `SELECT id, run_code, status, stage, window_start, window_end, solve_start, solve_end,
-                    result_summary, created_at, completed_at
-             FROM scheduling_runs 
+                    result_summary, created_at, completed_at, updated_at
+             FROM scheduling_runs
              WHERE run_code LIKE 'V4-%'
-             ORDER BY created_at DESC 
+             ORDER BY created_at DESC
              LIMIT 50`
         );
 
@@ -121,6 +121,7 @@ export const listRunsV4 = async (req: Request, res: Response) => {
                 is_interval_solve: !!(row.solve_start && row.solve_end),
                 created_at: row.created_at,
                 completed_at: row.completed_at,
+                updated_at: row.updated_at,
             };
         });
 

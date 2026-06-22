@@ -102,10 +102,16 @@ export const updateSolveProgressV4 = async (req: Request, res: Response) => {
 
         const updateParams = [status || null, JSON.stringify(progressUpdate), run_id];
 
+        // 终态守卫：一旦 run 进入 COMPLETED/FAILED/APPLIED，迟到的进度帧（多为求解期攒下、
+        // monitor 每秒 flush 的 RUNNING 心跳）不得把状态打回 RUNNING。此前用 COALESCE(?,status)
+        // 无条件覆盖，会让已完成/已被 reaper 收尾的行被"复活"成求解中。日志/进度内容仍照常合并。
         await pool.execute<any>(
-            `UPDATE scheduling_runs 
-            SET 
-                status = COALESCE(?, status),
+            `UPDATE scheduling_runs
+            SET
+                status = CASE
+                    WHEN status IN ('COMPLETED', 'FAILED', 'APPLIED') THEN status
+                    ELSE COALESCE(?, status)
+                END,
                 solver_progress = JSON_MERGE_PATCH(COALESCE(solver_progress, '{}'), ?)
             WHERE id = ?`,
             updateParams

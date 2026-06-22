@@ -101,15 +101,20 @@ if [[ -d "solver_v4/.venv" ]]; then
     echo "  ⚠️ 未找到 SOLVER_CALLBACK_SECRET（backend/.env 也没有）；solver 回调将缺少鉴权头，backend 会以 401 拒绝。"
   fi
   if command -v gunicorn >/dev/null 2>&1; then
-    # Gunicorn: 2 workers, 10-minute timeout for long solves
+    # Gunicorn：改用 gthread 线程型 worker。CP-SAT 求解在 C++ 层释放 GIL，多线程可并发求解，
+    # 且长求解不再触发 sync worker「单请求超 --timeout 即 SIGKILL」的看门狗。--timeout 同步抬到
+    # 覆盖前端可设的最大求解时间(3600s)+缓冲，杜绝延长求解时间后 worker 在 600s 处被强杀的卡死。
     gunicorn app:app \
       --bind "0.0.0.0:${SOLVER_V4_PORT}" \
       --workers 2 \
-      --timeout 600 \
+      --threads 4 \
+      --worker-class gthread \
+      --timeout 3900 \
+      --graceful-timeout 30 \
       --access-logfile - \
       --error-logfile - &
     PIDS+=($!)
-    echo "  → 使用 Gunicorn (2 workers, timeout=600s)"
+    echo "  → 使用 Gunicorn (2 workers x 4 threads, gthread, timeout=3900s)"
   else
     echo "  ⚠️ Gunicorn 未安装，使用 Flask 开发服务器"
     python app.py &

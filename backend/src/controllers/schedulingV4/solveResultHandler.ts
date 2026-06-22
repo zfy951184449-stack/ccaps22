@@ -623,6 +623,16 @@ export const receiveSolveResultV4 = async (req: Request, res: Response) => {
 
         console.log(`[SchedulingV4] Received final result via callback for Run ${run_id}`);
 
+        // 守卫：若该 run 已被用户 APPLIED，迟到的结果回调不得覆盖已应用结果（避免把已落地的排班推翻）。
+        const [existing] = await pool.execute<RowDataPacket[]>(
+            'SELECT status FROM scheduling_runs WHERE id = ?',
+            [Number(run_id)],
+        );
+        if (existing.length > 0 && existing[0].status === 'APPLIED') {
+            console.log(`[SchedulingV4] Run ${run_id} already APPLIED, ignoring late result callback.`);
+            return res.json({ success: true, ignored: true });
+        }
+
         const isSuccess = isSuccessfulSolverResult(result);
         const finalStatus = isSuccess ? 'COMPLETED' : 'FAILED';
         const errorMsg = isSuccess ? null : (result.message || `Solver returned status: ${result.status}`);

@@ -257,6 +257,9 @@ export async function createRunRecord(
     return res.insertId;
 }
 
+// 终态集合：到达后不再被进度/迟到回调降级（见 updateSolveProgressV4 的 CASE 守卫与 reaper）。
+export const V4_TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'APPLIED'];
+
 export async function updateRunStatus(runId: number, status: string, error?: string | null, stage?: string) {
     let sql = 'UPDATE scheduling_runs SET status = ?';
     const params: any[] = [status];
@@ -269,11 +272,25 @@ export async function updateRunStatus(runId: number, status: string, error?: str
         sql += ', stage = ?';
         params.push(stage);
     }
+    // 到达终态时落 completed_at（列早已存在但此前从不写，历史列表/对账都缺基准时间）。
+    if (V4_TERMINAL_STATUSES.includes(status)) {
+        sql += ', completed_at = NOW()';
+    }
 
     sql += ' WHERE id = ?';
     params.push(runId);
 
     await pool.execute(sql, params);
+}
+
+// 进入真正求解阶段时记录开始时刻与本次时间上限：既供历史展示，也给 reaper/前端一个真实截止基准。
+export async function markSolveStarted(runId: number, timeLimitSeconds: number | null) {
+    await pool.execute(
+        `UPDATE scheduling_runs
+            SET status = 'RUNNING', stage = 'SOLVING', solve_started_at = NOW(), time_limit_seconds = ?
+          WHERE id = ?`,
+        [Number.isFinite(timeLimitSeconds as number) ? timeLimitSeconds : null, runId],
+    );
 }
 
 export async function saveResults(runId: number, result: any) {

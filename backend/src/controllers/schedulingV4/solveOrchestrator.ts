@@ -14,9 +14,11 @@ import {
     updateRunSummary,
     getRunSummary,
     saveResults,
+    markSolveStarted,
     isSuccessfulSolverResult,
     normalizeSpecialShiftRequirements,
     buildSpecialShiftRunSummary,
+    V4_TERMINAL_STATUSES,
 } from './helpers';
 
 export const createSolveTaskV4 = async (req: Request, res: Response) => {
@@ -116,10 +118,18 @@ async function triggerSolveAsync(
             },
         );
 
-        await updateRunStatus(runId, 'RUNNING', null, 'SOLVING');
+        // 求解时间上限（与 solver 内部 max_time_seconds 同源）。记录到 run 上，供历史展示 + reaper/前端判活基准。
+        const maxTimeSeconds = Number(config?.max_time_seconds) > 0 ? Number(config.max_time_seconds) : 300;
+        await markSolveStarted(runId, maxTimeSeconds);
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+        // 关键修复：中止超时从「写死 600s」改为「跟随本次求解时间上限 + 180s 缓冲」。
+        // 此前 600s 与用户可设到 3600s 的求解时间互相打架：延长时间后必在 600s 处被中止/误判 FAILED。
+        // 缓冲覆盖 solver 内部 max_time+10 的硬截止 + 结果抽取 + 结果回传(_push_result_summary 超时 30s)；
+        // 正常情况下 solver 先自行收尾返回，此定时器永不触发，仅作为「solver 真的挂死」时的进程内兜底
+        // （孤儿行另由 reaper 收尾）。须 < gunicorn --timeout(3900s) 以便后端先于 worker 干净中止。
+        const abortAfterMs = (maxTimeSeconds + 180) * 1000;
+        const timeoutId = setTimeout(() => controller.abort(), abortAfterMs);
 
         const response = await fetch(`${SOLVER_V4_URL}/api/v4/solve`, {
             method: 'POST',
@@ -154,14 +164,16 @@ async function triggerSolveAsync(
         console.error(`[SchedulingV4] Run ${runId} Failed:`, error);
 
         const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT status, result_summary FROM scheduling_runs WHERE id = ?',
+            'SELECT status FROM scheduling_runs WHERE id = ?',
             [runId]
         );
 
-        if (rows.length > 0 && rows[0].status === 'COMPLETED' && rows[0].result_summary) {
-            console.log(`[SchedulingV4] Run ${runId} already marked COMPLETED by callback, skipping FAILED status.`);
+        // 不要降级任何已到终态的行：solver 回调可能已写入 COMPLETED/FAILED，或用户已 APPLIED，
+        // 或 reaper 已兜底为 FAILED。仅当仍处于非终态时才把这次失败写进去。
+        if (rows.length > 0 && V4_TERMINAL_STATUSES.includes(rows[0].status)) {
+            console.log(`[SchedulingV4] Run ${runId} already terminal (${rows[0].status}), skipping FAILED write.`);
         } else {
-            await updateRunStatus(runId, 'FAILED', error.message);
+            await updateRunStatus(runId, 'FAILED', error.message, 'DONE');
         }
     }
 }

@@ -33,6 +33,7 @@ import organizationHierarchyRoutes from './routes/organizationHierarchy';
 import shiftDefinitionRoutes from './routes/shiftDefinitions';
 import HolidayScheduler from './scheduler/holidayScheduler';
 import HolidayService from './services/holidayService';
+import { startStaleRunReaper } from './controllers/schedulingV4/staleRunReaper';
 import systemRoutes from './routes/system';
 import schedulingV4Routes from './routes/schedulingV4';
 import schedulingV5Routes from './routes/schedulingV5';
@@ -264,6 +265,9 @@ if (process.env.NODE_ENV !== 'test') {
   }, 60 * 60 * 1000); // 1小时
 
   console.log('节假日API缓存清理定时器已启动');
+
+  // 启动 V4 孤儿运行清扫器：进程重启/求解中断导致终态丢失时，把卡死在"求解中"的行兜底翻成 FAILED。
+  startStaleRunReaper();
 }
 
 export { server };
