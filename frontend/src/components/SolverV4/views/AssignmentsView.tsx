@@ -369,10 +369,11 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
     }, [operations]);
 
     // Working dates per employee — for the consecutive-day streak.
+    // 注意:后端 plan_type 对休息日仍可能标 WORK,故以额定工时为准(休息=0h)。
     const workDatesByEmp = useMemo(() => {
         const m = new Map<number, Set<string>>();
         shiftAssignments.forEach(s => {
-            const working = s.plan_type ? s.plan_type !== 'REST' : (s.nominal_hours || 0) > 0.01;
+            const working = (s.nominal_hours || 0) > 0.01;
             if (!working) return;
             if (!m.has(s.employee_id)) m.set(s.employee_id, new Set());
             m.get(s.employee_id)!.add(s.date);

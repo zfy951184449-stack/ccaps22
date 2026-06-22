@@ -179,7 +179,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
             empRows.forEach(r => empMap.set(r.id, r));
         }
 
-        const [shiftRows] = await pool.execute<RowDataPacket[]>('SELECT id, shift_name, shift_code, nominal_hours FROM shift_definitions');
+        const [shiftRows] = await pool.execute<RowDataPacket[]>('SELECT id, shift_name, shift_code, nominal_hours, start_time, end_time, is_night_shift FROM shift_definitions');
         const shiftMap = new Map<number, any>();
         shiftRows.forEach(r => shiftMap.set(r.id, r));
 
