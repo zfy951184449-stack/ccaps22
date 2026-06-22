@@ -117,12 +117,14 @@ interface Candidate {
     quals: QualMatch[];                 // 资质匹配明细
 }
 
-/** 被资质过滤掉的在岗人员(用于"查看原因") */
+/** 被过滤掉的在岗人员(用于"查看原因"):资质不达标 或 当前不可用 */
 interface FilteredCandidate {
     employee_id: number;
     employee_name: string;
     employee_code?: string;
-    missing: QualMatch[];               // 不达标的强制资质
+    reason: 'QUAL' | 'UNAVAILABLE';
+    missing: QualMatch[];               // 不达标的强制资质(reason=QUAL)
+    unavailableLabel?: string;          // 不可用原因标签(reason=UNAVAILABLE)
 }
 
 export interface EmployeeMetaEntry {
@@ -130,6 +132,8 @@ export interface EmployeeMetaEntry {
     name: string;
     department: string | null;
     qualifications: { qualification_id: number; level: number }[];
+    /** 不可用时段(请假/培训/占用等);更换面板据此排除时间窗重叠的人员 */
+    unavailable_periods?: { start: string; end: string; label?: string }[];
 }
 
 export type AssignmentStatusFilter = 'ALL' | 'UNASSIGNED' | 'PARTIAL' | 'COMPLETE';
@@ -465,15 +469,39 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
             return { assignedHours, conflicts };
         };
 
+        // 某不可用时段与本操作时间窗重叠 → 该员工本操作不可用(请假/培训/占用等),硬排除
+        const unavailableReasonFor = (empId: number): string | null => {
+            const periods = employeeMeta[empId]?.unavailable_periods || [];
+            for (const p of periods) {
+                if (dayjs(p.start).isBefore(opEnd) && opStart.isBefore(dayjs(p.end))) {
+                    return p.label || '不可用';
+                }
+            }
+            return null;
+        };
+
         const empSeen = new Map<number, ShiftAssignment>();
         const filteredList: FilteredCandidate[] = [];
         shiftAssignments.filter(s => s.date === opDate).forEach(s => {
             if (alreadyAssigned.has(s.employee_id) || empSeen.has(s.employee_id)) return;
+            const unavailReason = unavailableReasonFor(s.employee_id);
+            if (unavailReason) {
+                filteredList.push({
+                    employee_id: s.employee_id,
+                    employee_name: s.employee_name,
+                    employee_code: s.employee_code,
+                    reason: 'UNAVAILABLE',
+                    missing: [],
+                    unavailableLabel: unavailReason,
+                });
+                return;
+            }
             if (eligibleSet && !eligibleSet.has(s.employee_id)) {
                 filteredList.push({
                     employee_id: s.employee_id,
                     employee_name: s.employee_name,
                     employee_code: s.employee_code,
+                    reason: 'QUAL',
                     missing: qualMatchFor(s.employee_id).filter(q => q.mandatory && !q.ok),
                 });
                 return;
@@ -760,6 +788,12 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
         const needsShift = sortCands(visible.filter(c => c.tier === 'NEEDS_SHIFT'));
         const resting = sortCands(visible.filter(c => c.tier === 'RESTING'));
         const bestId = recommended.find(c => c.conflicts.length === 0)?.employee_id;
+        const hiddenQual = filteredList.filter(f => f.reason === 'QUAL').length;
+        const hiddenUnavail = filteredList.filter(f => f.reason === 'UNAVAILABLE').length;
+        const hiddenLabel = [
+            hiddenQual > 0 ? `资质 ${hiddenQual}` : '',
+            hiddenUnavail > 0 ? `不可用 ${hiddenUnavail}` : '',
+        ].filter(Boolean).join(' · ');
 
         const title = pos.status === 'ASSIGNED' && pos.employee
             ? `更换 ${pos.employee.name}`
@@ -802,7 +836,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
 
                 {visible.length === 0 ? (
                     <WxbEmpty description={filteredList.length > 0
-                        ? `当天 ${filteredList.length} 人在岗,但均不符合本岗位资质`
+                        ? `当天 ${filteredList.length} 人在岗,但均不可选(资质不符或不可用)`
                         : '当天无可用候选人'} />
                 ) : (
                     <div className="asgn-rd-list">
@@ -819,7 +853,7 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                     <div className="asgn-rd-filtered">
                         <button type="button" className="asgn-rd-filtered-toggle"
                             onClick={() => setShowFiltered(v => !v)}>
-                            <SafetyCertificateOutlined /> 资质过滤已隐藏 {filteredList.length} 人
+                            <SafetyCertificateOutlined /> 已隐藏 {filteredList.length} 人{hiddenLabel ? `(${hiddenLabel})` : ''}
                             <span className="asgn-rd-filtered-caret">{showFiltered ? '收起' : '查看原因'}</span>
                         </button>
                         {showFiltered && (
@@ -831,9 +865,11 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                                             <span className="asgn-rd-filtered-code">{f.employee_code}</span>
                                         </span>
                                         <span className="asgn-rd-filtered-miss">
-                                            {f.missing.length > 0
-                                                ? f.missing.map(m => `缺 ${m.name} L${m.need}(现 L${m.have || 0})`).join('、')
-                                                : '不符合资质要求'}
+                                            {f.reason === 'UNAVAILABLE'
+                                                ? `不可用 · ${f.unavailableLabel || '请假/占用'}`
+                                                : (f.missing.length > 0
+                                                    ? f.missing.map(m => `缺 ${m.name} L${m.need}(现 L${m.have || 0})`).join('、')
+                                                    : '不符合资质要求')}
                                         </span>
                                     </div>
                                 ))}
@@ -845,8 +881,8 @@ const AssignmentsView: React.FC<AssignmentsViewProps> = ({
                 <div className="asgn-rd-foot">
                     <InfoCircleOutlined />
                     {hasQualFilter
-                        ? ' 候选人已按岗位资质筛选;点选即指派,休息/需调班会先弹确认'
-                        : ' 该岗位未配置强制资质,请人工确认资质'}
+                        ? ' 候选人已按岗位资质筛选并排除当天不可用人员;点选即指派,休息/需调班会先弹确认'
+                        : ' 该岗位未配置强制资质(已排除当天不可用人员),请人工确认资质'}
                 </div>
             </WxbDrawer>
         );

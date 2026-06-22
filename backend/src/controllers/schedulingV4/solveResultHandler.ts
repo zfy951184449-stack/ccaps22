@@ -179,6 +179,30 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
             empRows.forEach(r => empMap.set(r.id, r));
         }
 
+        // 不可用时段(请假/培训/占用等),供更换面板按操作时间窗硬排除人员。
+        // 表在部分环境可能缺失,读取失败时退化为空(不影响其余结果)。
+        const unavailMap = new Map<number, { start: string; end: string; label: string }[]>();
+        if (empIds.length > 0) {
+            try {
+                const ph = empIds.map(() => '?').join(',');
+                const [unavailRows] = await pool.execute<RowDataPacket[]>(`
+                    SELECT employee_id, start_datetime, end_datetime, reason_label, category
+                    FROM employee_unavailability
+                    WHERE employee_id IN (${ph})
+                `, empIds);
+                unavailRows.forEach(r => {
+                    if (!unavailMap.has(r.employee_id)) unavailMap.set(r.employee_id, []);
+                    unavailMap.get(r.employee_id)!.push({
+                        start: new Date(r.start_datetime).toISOString(),
+                        end: new Date(r.end_datetime).toISOString(),
+                        label: r.reason_label || r.category || '不可用',
+                    });
+                });
+            } catch (e: any) {
+                console.warn('[SchedulingV4] employee_unavailability 读取失败,跳过不可用过滤:', e?.message);
+            }
+        }
+
         const [shiftRows] = await pool.execute<RowDataPacket[]>('SELECT id, shift_name, shift_code, nominal_hours, start_time, end_time, is_night_shift FROM shift_definitions');
         const shiftMap = new Map<number, any>();
         shiftRows.forEach(r => shiftMap.set(r.id, r));
@@ -521,6 +545,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
         const employeeMeta: Record<number, {
             code: string; name: string; department: string | null;
             qualifications: { qualification_id: number; level: number }[];
+            unavailable_periods: { start: string; end: string; label: string }[];
         }> = {};
         empMap.forEach((emp, id) => {
             employeeMeta[id] = {
@@ -531,6 +556,7 @@ export const getSolveResultV4 = async (req: Request, res: Response) => {
                     qualification_id: q.qualification_id,
                     level: q.qualification_level,
                 })),
+                unavailable_periods: unavailMap.get(id) || [],
             };
         });
 
