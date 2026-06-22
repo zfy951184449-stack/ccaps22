@@ -205,7 +205,18 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
 
         const run = runRows[0];
 
-        if (run.status === 'APPLIED') {
+        // === 手动覆盖应用(manual override)===
+        // 结果页的手改(更换/移除/调班)只存前端 state，apply 默认是回读 result_summary(求解器原始结果)
+        // 重写生产表 —— 故手改不会落库。这里允许调用方在请求体里传入【当前编辑后的结果】来覆盖:
+        //   · override_result.assignments / .shift_schedule 提供 → 用它替代 result_summary 里的分配/班次;
+        //   · force === true(或带 override)→ 跳过"已应用"短路,允许对 APPLIED 的 run 再次覆盖写入。
+        // 不带请求体时,以下两个布尔均为 false,整条链路与改动前【逐字节一致】(向后兼容,守住回归门禁)。
+        const overrideRaw = (req.body && typeof req.body === 'object') ? (req.body as any).override_result : undefined;
+        const hasOverride = !!overrideRaw && typeof overrideRaw === 'object'
+            && (Array.isArray(overrideRaw.assignments) || Array.isArray(overrideRaw.shift_schedule));
+        const forceReapply = (req.body && (req.body as any).force === true) || hasOverride;
+
+        if (run.status === 'APPLIED' && !forceReapply) {
             return res.status(400).json({ error: 'Result already applied' });
         }
 
@@ -213,9 +224,20 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'No result available to apply' });
         }
 
-        const rawResult = typeof run.result_summary === 'string'
+        let rawResult = typeof run.result_summary === 'string'
             ? JSON.parse(run.result_summary)
             : run.result_summary;
+        if (hasOverride) {
+            // 仅替换分配与班次两块(保留 special_shift_* 等其余字段);删掉 schedules 强制走
+            // assignments / shift_schedule 这条展平分支(下方 263 行的判断)。
+            rawResult = {
+                ...rawResult,
+                schedules: undefined,
+                assignments: Array.isArray(overrideRaw.assignments) ? overrideRaw.assignments : [],
+                shift_schedule: Array.isArray(overrideRaw.shift_schedule) ? overrideRaw.shift_schedule : [],
+            };
+            console.log(`[SchedulingV4] Run ${runId} 手动覆盖应用: ${rawResult.assignments.length} 条分配, ${rawResult.shift_schedule.length} 条班次 (force=${forceReapply}, prevStatus=${run.status})`);
+        }
         const runSummary = parseRunSummary(run.summary_json);
 
         // === L1: 解析本次求解责任域(scope),决定 apply 的删除收窄范围 ===
@@ -662,10 +684,19 @@ export const applySolveResultV4 = async (req: Request, res: Response) => {
             special_shift_assignments: specialShiftAssignments,
             special_shift_shortages: specialShiftShortages,
         };
-        await connection.execute(
-            'UPDATE scheduling_runs SET status = ?, summary_json = ? WHERE id = ?',
-            ['APPLIED', JSON.stringify(nextRunSummary), runIdNum]
-        );
+        if (hasOverride) {
+            // 覆盖应用:同时把编辑后的结果写回 result_summary,使重开结果页/刷新看到的就是改后的版本
+            // (否则 getSolveResultV4 仍回读求解器原始结果,手改在 UI 上会"丢失")。
+            await connection.execute(
+                'UPDATE scheduling_runs SET status = ?, summary_json = ?, result_summary = ? WHERE id = ?',
+                ['APPLIED', JSON.stringify(nextRunSummary), JSON.stringify(rawResult), runIdNum]
+            );
+        } else {
+            await connection.execute(
+                'UPDATE scheduling_runs SET status = ?, summary_json = ? WHERE id = ?',
+                ['APPLIED', JSON.stringify(nextRunSummary), runIdNum]
+            );
+        }
 
         await connection.commit();
 
