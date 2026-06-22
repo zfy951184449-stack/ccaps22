@@ -8,6 +8,14 @@ import {
     ShiftStylesV2Response,
     ShiftStyleV2
 } from '../models/types';
+import {
+    OrgUnitLite,
+    collectSubtreeUnitIds,
+    foldEmployeeDays,
+    buildOpTeamMap,
+    ROSTER_CALENDAR_ROWS_SELECT,
+    ROSTER_OP_TEAM_SELECT
+} from '../services/rosterCalendar/rosterCalendarAssembler';
 
 /**
  * GET /api/personnel-schedules/v2/filters
@@ -264,5 +272,120 @@ export const getGridData = async (req: Request, res: Response) => {
     } catch (error) {
         console.error('Error fetching V2 grid data:', error);
         res.status(500).json({ error: 'Failed to fetch grid data' });
+    }
+};
+
+/* ───────────────────────── Roster Calendar (员工排班日历) ─────────────────────────
+ * 组织回溯 / 子树展开 / 班次细分 / 折叠逻辑见共享模块 rosterCalendarAssembler,
+ * 与 /api/me/calendar(员工自助)同源,口径一致。 */
+
+/**
+ * GET /api/personnel-schedules/v2/calendar
+ * 按 员工 × 日 聚合"排班情况(班次)"与"对应的工作(批次/操作)"。
+ * 参数:
+ *   - start_date, end_date  (必填)
+ *   - unit_id?              选中的组织节点(部门/Team/组,任意层级),展开其子树下的全部在职员工
+ *   - employee_id?          只看单个员工(优先于 unit_id)
+ */
+export const getCalendarData = async (req: Request, res: Response) => {
+    try {
+        const { start_date, end_date, unit_id, employee_id } = req.query;
+
+        if (!start_date || !end_date) {
+            return res.status(400).json({ error: 'start_date and end_date are required' });
+        }
+
+        // 1. 一次性载入全部启用的组织单元 —— 既用于子树展开,也用于回溯员工的部门/Team/组标签。
+        const [unitRows] = await pool.execute<any[]>(
+            `SELECT id, parent_id, unit_type, unit_name FROM organization_units WHERE is_active = 1`
+        );
+        const unitMap = new Map<number, OrgUnitLite>();
+        unitRows.forEach((u) => unitMap.set(u.id, {
+            id: u.id,
+            parent_id: u.parent_id ?? null,
+            unit_type: u.unit_type,
+            unit_name: u.unit_name
+        }));
+
+        // 2. 解析员工范围
+        let employees: any[] = [];
+        const empBaseSql = `
+            SELECT e.id, e.employee_code, e.employee_name, e.org_role, e.unit_id
+            FROM employees e
+            WHERE e.employment_status = 'ACTIVE'`;
+
+        if (employee_id) {
+            const [rows] = await pool.execute<any[]>(
+                `${empBaseSql} AND e.id = ? ORDER BY e.employee_code`,
+                [employee_id]
+            );
+            employees = rows;
+        } else if (unit_id) {
+            const subtreeIds = collectSubtreeUnitIds(Number(unit_id), unitMap);
+            if (subtreeIds.length > 0) {
+                const ph = subtreeIds.map(() => '?').join(',');
+                const [rows] = await pool.execute<any[]>(
+                    `${empBaseSql} AND e.unit_id IN (${ph}) ORDER BY e.employee_code`,
+                    subtreeIds
+                );
+                employees = rows;
+            }
+        } else {
+            const [rows] = await pool.execute<any[]>(
+                `${empBaseSql} ORDER BY e.employee_code`,
+                []
+            );
+            employees = rows;
+        }
+
+        if (employees.length === 0) {
+            return res.json({
+                meta: { totalEmployees: 0, startDate: String(start_date), endDate: String(end_date) },
+                employees: []
+            });
+        }
+
+        const employeeIds = employees.map((e) => e.id);
+        const placeHolders = employeeIds.map(() => '?').join(',');
+
+        // 3. 班次 + 对应工作明细(共享查询),折叠成 员工 → 日期。
+        const [rows] = await pool.execute<any[]>(
+            `${ROSTER_CALENDAR_ROWS_SELECT}
+             WHERE esp.plan_date BETWEEN ? AND ?
+               AND esp.employee_id IN (${placeHolders})
+             ORDER BY esp.employee_id, esp.plan_date, bop.planned_start_datetime`,
+            [start_date, end_date, ...employeeIds]
+        );
+
+        // 4. 同岗成员/空缺:把本次出现的所有 operation_plan_id 的全部岗位分配一次性查出。
+        const opIds = Array.from(new Set(
+            rows.map((r) => r.operation_plan_id).filter((v) => v != null)
+        ));
+        let opTeamMap;
+        if (opIds.length > 0) {
+            const opPh = opIds.map(() => '?').join(',');
+            const [teamRows] = await pool.execute<any[]>(
+                `${ROSTER_OP_TEAM_SELECT}
+                 WHERE bpa.batch_operation_plan_id IN (${opPh})
+                   AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')
+                 ORDER BY bpa.batch_operation_plan_id, bpa.position_number`,
+                opIds
+            );
+            opTeamMap = buildOpTeamMap(teamRows);
+        }
+
+        const resultEmployees = foldEmployeeDays(rows, employees, unitMap, opTeamMap);
+
+        res.json({
+            meta: {
+                totalEmployees: resultEmployees.length,
+                startDate: String(start_date),
+                endDate: String(end_date)
+            },
+            employees: resultEmployees
+        });
+    } catch (error) {
+        console.error('Error fetching roster calendar data:', error);
+        res.status(500).json({ error: 'Failed to fetch roster calendar data' });
     }
 };

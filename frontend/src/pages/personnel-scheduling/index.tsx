@@ -1,194 +1,175 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
-import {
-    WxbButton,
-    WxbDivider,
-    WxbEmpty,
-    WxbFilterBar,
-    WxbSearchInput,
-    WxbSelect,
-    WxbSpinner,
-    WxbTooltip
-} from '../../components/wxb-ui';
-import { useScheduleData } from './hooks/useScheduleData';
-import PersonnelScheduleTable from './components/PersonnelScheduleTable';
-import './PersonnelSchedulingPage.css';
+import { WxbCard, WxbSpinner } from '../../components/wxb-ui';
+import { useRosterCalendar } from './hooks/useRosterCalendar';
+import RosterFilterBar from './components/RosterFilterBar';
+import EmployeeSummary from './components/EmployeeSummary';
+import EmployeeCalendar from './components/EmployeeCalendar';
+import GroupOverviewCalendar from './components/GroupOverviewCalendar';
+import DayDetailPanel from './components/DayDetailPanel';
+import ShiftLegend from './components/ShiftLegend';
+import './RosterCalendar.css';
 
-const ChevronLeftIcon = () => (
-    <svg className="personnel-scheduling-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M15 18l-6-6 6-6" />
-    </svg>
-);
-
-const ChevronRightIcon = () => (
-    <svg className="personnel-scheduling-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M9 18l6-6-6-6" />
-    </svg>
-);
-
-const RefreshIcon = () => (
-    <svg className="personnel-scheduling-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M20 6v5h-5" />
-        <path d="M4 18v-5h5" />
-        <path d="M18.5 9a7 7 0 0 0-11.8-2.4L4 9" />
-        <path d="M5.5 15a7 7 0 0 0 11.8 2.4L20 15" />
-    </svg>
-);
+const mondayIndex = (d: Dayjs): number => (d.day() + 6) % 7;
 
 /**
- * Personnel Scheduling Page - Enhanced
+ * 排班日历 —— 顶部按 部门/Team/组/员工 逐级筛选,以日历汇总所选员工的班次与对应工作。
+ *   · 选到员工 → 个人月/周详历 + 当日工作明细
+ *   · 仅选到组织 → 组级多人总览(点员工名展开个人详历)
  */
 const PersonnelSchedulingPage: React.FC = () => {
-    const [currentMonth, setCurrentMonth] = useState<Dayjs>(dayjs().startOf('month'));
-    const [selectedDeptId, setSelectedDeptId] = useState<number | null>(null);
-    const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
-    const [employeeSearch, setEmployeeSearch] = useState('');
+    const { orgOptions, orgLoading, data, dayTypes, loading, fetchCalendar } = useRosterCalendar();
 
-    const { filters, gridData, fetchGrid, loading, filtersLoading, refreshFilters, styles } = useScheduleData();
+    const [orgPath, setOrgPath] = useState<number[]>([]);
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+    const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
+    const [anchor, setAnchor] = useState<Dayjs>(dayjs());
+    const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
 
+    const unitId = orgPath.length ? orgPath[orgPath.length - 1] : null;
+
+    const { start, end, startStr, endStr, periodLabel } = useMemo(() => {
+        if (viewMode === 'week') {
+            const ws = anchor.subtract(mondayIndex(anchor), 'day');
+            const we = ws.add(6, 'day');
+            return {
+                start: ws, end: we,
+                startStr: ws.format('YYYY-MM-DD'),
+                endStr: we.format('YYYY-MM-DD'),
+                periodLabel: `${ws.format('YYYY年M月D日')} – ${we.format('M月D日')}`
+            };
+        }
+        const ms = anchor.startOf('month');
+        const me = anchor.endOf('month');
+        return {
+            start: ms, end: me,
+            startStr: ms.format('YYYY-MM-DD'),
+            endStr: me.format('YYYY-MM-DD'),
+            periodLabel: anchor.format('YYYY年 M月')
+        };
+    }, [anchor, viewMode]);
+
+    // 拉数据:范围或组织变化时
     useEffect(() => {
-        const start = currentMonth.startOf('month').format('YYYY-MM-DD');
-        const end = currentMonth.endOf('month').format('YYYY-MM-DD');
-        fetchGrid(start, end, selectedDeptId, selectedTeamId);
-    }, [currentMonth, selectedDeptId, selectedTeamId, fetchGrid]);
+        fetchCalendar(startStr, endStr, unitId);
+    }, [startStr, endStr, unitId, fetchCalendar]);
 
-    const availableTeams = useMemo(() => {
-        if (!selectedDeptId) return [];
-        return filters.find(d => d.id === selectedDeptId)?.teams || [];
-    }, [filters, selectedDeptId]);
-
-    const filteredEmployees = useMemo(() => {
-        if (!gridData?.employees) return [];
-        const searchTerm = employeeSearch.trim().toLowerCase();
-        if (!searchTerm) return gridData.employees;
-
-        return gridData.employees.filter(emp =>
-            emp.name.toLowerCase().includes(searchTerm) ||
-            emp.code.toLowerCase().includes(searchTerm)
-        );
-    }, [gridData?.employees, employeeSearch]);
-
-    const handlePrevMonth = () => setCurrentMonth(prev => prev.subtract(1, 'month'));
-    const handleNextMonth = () => setCurrentMonth(prev => prev.add(1, 'month'));
-
-    const handleDeptChange = (val: number | null) => {
-        setSelectedDeptId(val);
-        setSelectedTeamId(null);
+    // 组织切换后清空已选员工(可能不在新范围内)
+    const handleOrgChange = (path: number[]) => {
+        setOrgPath(path);
+        setSelectedEmployeeId(null);
     };
 
-    const departmentNotFoundContent = filtersLoading ? (
-        <div className="personnel-scheduling-select-state">
-            <WxbSpinner size={16} tip="加载中" />
-        </div>
-    ) : (
-        <WxbEmpty className="personnel-scheduling-select-state" description="暂无部门" />
+    // 已选员工若不在最新数据里则清除
+    useEffect(() => {
+        if (selectedEmployeeId == null || !data) return;
+        if (!data.employees.some((e) => e.id === selectedEmployeeId)) {
+            setSelectedEmployeeId(null);
+        }
+    }, [data, selectedEmployeeId]);
+
+    // 选中日期落在可视范围之外时,重新落点(优先今天)
+    useEffect(() => {
+        const sel = dayjs(selectedDate);
+        if (sel.isBefore(start, 'day') || sel.isAfter(end, 'day')) {
+            const today = dayjs();
+            const inRange = !today.isBefore(start, 'day') && !today.isAfter(end, 'day');
+            setSelectedDate((inRange ? today : start).format('YYYY-MM-DD'));
+        }
+    }, [start, end, selectedDate]);
+
+    const today = dayjs().format('YYYY-MM-DD');
+    const employees = data?.employees ?? [];
+    const employeeOptions = useMemo(
+        () => employees.map((e) => ({ label: `${e.name}(${e.code})`, value: e.id })),
+        [employees]
+    );
+    const selectedEmployee = useMemo(
+        () => employees.find((e) => e.id === selectedEmployeeId) || null,
+        [employees, selectedEmployeeId]
     );
 
-    const teamNotFoundContent = (
-        <WxbEmpty className="personnel-scheduling-select-state" description="暂无团队" />
-    );
+    const handlePrev = () => setAnchor((a) => a.subtract(1, viewMode === 'week' ? 'week' : 'month'));
+    const handleNext = () => setAnchor((a) => a.add(1, viewMode === 'week' ? 'week' : 'month'));
+
+    const renderBody = () => {
+        if (loading && !data) {
+            return <WxbCard className="rc-cal-card"><div className="rc-state"><WxbSpinner size={32} tip="正在加载排班数据..." /></div></WxbCard>;
+        }
+
+        if (selectedEmployee) {
+            return (
+                <>
+                    <EmployeeSummary employee={selectedEmployee} />
+                    <div className="rc-two">
+                        <div className="rc-main">
+                            <EmployeeCalendar
+                                employee={selectedEmployee}
+                                anchor={anchor}
+                                viewMode={viewMode}
+                                selectedDate={selectedDate}
+                                today={today}
+                                dayTypes={dayTypes}
+                                onSelectDay={setSelectedDate}
+                                onJumpMonth={(delta) => setAnchor((a) => a.add(delta, 'month'))}
+                            />
+                        </div>
+                        <div className="rc-rail-col">
+                            <DayDetailPanel
+                                date={selectedDate}
+                                day={selectedEmployee.days[selectedDate] || null}
+                                focalEmployeeId={selectedEmployee.id}
+                                employeeName={selectedEmployee.name}
+                                dayInfo={dayTypes[selectedDate]}
+                            />
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        return (
+            <>
+                <GroupOverviewCalendar
+                    employees={employees}
+                    anchor={anchor}
+                    viewMode={viewMode}
+                    today={today}
+                    dayTypes={dayTypes}
+                    selectedEmployeeId={selectedEmployeeId}
+                    onSelectEmployee={setSelectedEmployeeId}
+                />
+                <div className="rc-below">
+                    <WxbCard className="rc-detail">
+                        <div className="rc-detail-empty">
+                            {employees.length
+                                ? '点击左侧员工姓名,展开其个人月/周详历与每日工作明细。'
+                                : '请在顶部选择部门 / Team / 组,查看该范围下的排班总览。'}
+                        </div>
+                    </WxbCard>
+                    <ShiftLegend />
+                </div>
+            </>
+        );
+    };
 
     return (
-        <div className="personnel-scheduling-page">
-            <WxbFilterBar
-                className="personnel-scheduling-toolbar"
-                leading={(
-                    <div className="personnel-scheduling-month-nav" aria-label="排班月份">
-                        <WxbTooltip title="上一月">
-                            <WxbButton
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="personnel-scheduling-icon-button"
-                                onClick={handlePrevMonth}
-                                aria-label="上一月"
-                            >
-                                <ChevronLeftIcon />
-                            </WxbButton>
-                        </WxbTooltip>
-                        <span className="personnel-scheduling-month-label">
-                            {currentMonth.format('YYYY年 M月')}
-                        </span>
-                        <WxbTooltip title="下一月">
-                            <WxbButton
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="personnel-scheduling-icon-button"
-                                onClick={handleNextMonth}
-                                aria-label="下一月"
-                            >
-                                <ChevronRightIcon />
-                            </WxbButton>
-                        </WxbTooltip>
-                    </div>
-                )}
-                filters={(
-                    <div className="personnel-scheduling-controls">
-                        <WxbSelect
-                            placeholder="选择部门"
-                            allowClear
-                            showSearch
-                            value={selectedDeptId ?? undefined}
-                            onChange={(value) => handleDeptChange(typeof value === 'number' ? value : null)}
-                            options={filters.map(d => ({ label: d.name, value: d.id }))}
-                            loading={filtersLoading}
-                            popupMatchSelectWidth={false}
-                            className="personnel-scheduling-select personnel-scheduling-dept-select"
-                            optionFilterProp="label"
-                            notFoundContent={departmentNotFoundContent}
-                        />
-                        <WxbSelect
-                            placeholder="选择团队"
-                            allowClear
-                            showSearch
-                            value={selectedTeamId ?? undefined}
-                            onChange={(value) => setSelectedTeamId(typeof value === 'number' ? value : null)}
-                            options={availableTeams.map(t => ({ label: t.name, value: t.id }))}
-                            disabled={!selectedDeptId}
-                            popupMatchSelectWidth={false}
-                            className="personnel-scheduling-select personnel-scheduling-team-select"
-                            optionFilterProp="label"
-                            notFoundContent={teamNotFoundContent}
-                        />
-                        <WxbDivider direction="vertical" className="personnel-scheduling-toolbar-divider" />
-                        <WxbSearchInput
-                            className="personnel-scheduling-search"
-                            placeholder="搜索员工..."
-                            value={employeeSearch}
-                            onChange={setEmployeeSearch}
-                            allowClear
-                        />
-                    </div>
-                )}
-                resultCount={filteredEmployees.length}
-                resultLabel="名员工"
-                actions={(
-                    <WxbTooltip title="刷新部门与团队">
-                        <WxbButton
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className={`personnel-scheduling-icon-button ${filtersLoading ? 'is-loading' : ''}`}
-                            onClick={refreshFilters}
-                            aria-label="刷新部门与团队"
-                            aria-busy={filtersLoading || undefined}
-                            disabled={filtersLoading}
-                        >
-                            <RefreshIcon />
-                        </WxbButton>
-                    </WxbTooltip>
-                )}
+        <div className="rc-page">
+            <RosterFilterBar
+                orgOptions={orgOptions}
+                orgPath={orgPath}
+                onOrgChange={handleOrgChange}
+                orgLoading={orgLoading}
+                employeeOptions={employeeOptions}
+                selectedEmployeeId={selectedEmployeeId}
+                onEmployeeChange={setSelectedEmployeeId}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                periodLabel={periodLabel}
+                onPrev={handlePrev}
+                onNext={handleNext}
             />
-
-            <div className="personnel-scheduling-content">
-                <PersonnelScheduleTable
-                    currentMonth={currentMonth}
-                    employees={filteredEmployees}
-                    styles={styles}
-                    loading={loading}
-                />
-            </div>
+            {renderBody()}
         </div>
     );
 };
