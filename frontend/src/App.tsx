@@ -30,6 +30,7 @@ import PsResourceMasterPage from './pages/PsResourceMasterPage';
 import EquipmentManagementPage from './pages/EquipmentManagementPage';
 import RosterLeadershipCockpitPage from './pages/roster/RosterLeadershipCockpitPage';
 import RosterExceptionRepairPage from './pages/roster/RosterExceptionRepairPage';
+import RosterTriagePage from './pages/roster-triage';
 import LoginPage from './pages/LoginPage';
 import RoleManagementPage from './pages/governance/RoleManagementPage';
 import UserManagementPage from './pages/governance/UserManagementPage';
@@ -261,6 +262,14 @@ const AppLayout: React.FC = () => (
             element={
               <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_SCHEDULE_READ">
                 <PersonnelSchedulingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/roster/triage"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_SCHEDULE_READ">
+                <RosterTriagePage />
               </ProtectedRoute>
             }
           />

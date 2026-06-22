@@ -1,0 +1,160 @@
+/* 排班分诊台 —— 全部走 wxb-theme 令牌,无散落 hex。正文色不低于 fg-3(AA)。
+   严重度色阶:缺0 绿 / 缺1 浅琥珀 / 缺2-3 琥珀 / 缺4-6 浅红 / 缺≥7 实红白字。 */
+
+.rt-page {
+    padding: var(--wx-space-16) var(--wx-space-20) var(--wx-space-32);
+    display: flex;
+    flex-direction: column;
+    gap: var(--wx-space-16);
+}
+
+/* ── 顶部工具条 ── */
+.rt-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--wx-space-12);
+    flex-wrap: wrap;
+    padding: var(--wx-space-12) var(--wx-space-16);
+}
+.rt-toolbar-left { display: flex; align-items: center; gap: var(--wx-space-12); flex-wrap: wrap; }
+.rt-toolbar-right { display: flex; align-items: center; gap: var(--wx-space-12); flex-wrap: wrap; }
+.rt-filter-group { display: flex; align-items: center; gap: var(--wx-space-8); }
+.rt-filter-label {
+    font-size: var(--wx-fs-13); color: var(--wx-fg-3); font-weight: 500;
+    display: inline-flex; align-items: center; gap: var(--wx-space-4); white-space: nowrap;
+}
+.rt-ico { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── 健康指标条 ── */
+.rt-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--wx-space-12); }
+.rt-kpi {
+    background: var(--wx-surface-2); border: 1px solid transparent; border-radius: var(--wx-radius-8);
+    padding: var(--wx-space-12) var(--wx-space-14); cursor: pointer; text-align: left;
+    transition: border-color .12s, background .12s; min-width: 0;
+}
+.rt-kpi:hover { border-color: var(--wx-border-strong); }
+.rt-kpi:focus-visible { outline: 2px solid var(--wx-blue-600); outline-offset: 1px; }
+.rt-kpi--active { border-color: var(--wx-blue-500); background: var(--wx-blue-50); }
+.rt-kpi-label { font-size: var(--wx-fs-12); color: var(--wx-fg-3); display: flex; align-items: center; gap: var(--wx-space-4); }
+.rt-kpi-value { font-size: 26px; font-weight: 500; color: var(--wx-ink); font-variant-numeric: tabular-nums; line-height: 1.25; }
+.rt-kpi-value--alarm { color: var(--wx-red-700); }
+.rt-kpi-value--warn { color: var(--wx-amber-700); }
+.rt-kpi-sub { font-size: var(--wx-fs-12); color: var(--wx-fg-3); }
+.rt-kpi-trend { font-size: var(--wx-fs-12); color: var(--wx-red-700); display: inline-flex; align-items: center; gap: 2px; margin-left: var(--wx-space-6); }
+.rt-gauge-bar { height: 5px; border-radius: 3px; background: var(--wx-surface-3); margin-top: var(--wx-space-6); overflow: hidden; }
+.rt-gauge-fill { height: 100%; border-radius: 3px; }
+
+/* ── 每日缺口迷你条 ── */
+.rt-daystrip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--wx-space-6); }
+.rt-day {
+    text-align: center; border-radius: var(--wx-radius-8); padding: var(--wx-space-6) 2px;
+    background: var(--wx-surface-2); cursor: pointer; border: 1px solid transparent; min-width: 0;
+}
+.rt-day:hover { border-color: var(--wx-border-strong); }
+.rt-day:focus-visible { outline: 2px solid var(--wx-blue-600); outline-offset: 1px; }
+.rt-day--selected { border-color: var(--wx-blue-500); background: var(--wx-blue-50); }
+.rt-day-dow { font-size: 11px; color: var(--wx-fg-3); }
+.rt-day-dow--off { color: var(--wx-red-700); }
+.rt-day-date { font-size: var(--wx-fs-13); color: var(--wx-ink); }
+.rt-day-val { font-size: var(--wx-fs-12); font-weight: 500; line-height: 1.3; }
+.rt-day-val--ok { color: var(--wx-fg-4); }
+.rt-day-mark { font-size: 11px; color: var(--wx-red-700); }
+
+/* ── 工单流 ── */
+.rt-worklist-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--wx-space-4); }
+.rt-worklist-title { font-size: var(--wx-fs-14); font-weight: 500; color: var(--wx-ink); }
+.rt-worklist-count { font-size: var(--wx-fs-12); color: var(--wx-fg-3); }
+.rt-rows { display: flex; flex-direction: column; gap: var(--wx-space-6); }
+.rt-row {
+    display: flex; align-items: center; gap: var(--wx-space-10); width: 100%; text-align: left;
+    border: 1px solid var(--wx-border); border-radius: var(--wx-radius-8);
+    padding: var(--wx-space-8) var(--wx-space-10); background: var(--wx-bg); cursor: pointer;
+    transition: border-color .12s, box-shadow .12s;
+}
+.rt-row:hover { border-color: var(--wx-border-strong); }
+.rt-row:focus-visible { outline: 2px solid var(--wx-blue-600); outline-offset: 1px; }
+.rt-row--overload { background: var(--wx-surface-1); }
+.rt-row-main { flex: 1; min-width: 0; }
+.rt-row-l1 { font-size: var(--wx-fs-13); color: var(--wx-ink); display: flex; align-items: center; gap: var(--wx-space-6); min-width: 0; }
+.rt-row-l2 { font-size: var(--wx-fs-12); color: var(--wx-fg-3); display: flex; align-items: center; gap: var(--wx-space-6); margin-top: 2px; min-width: 0; flex-wrap: wrap; }
+.rt-row-tx { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rt-row-actions { display: flex; align-items: center; gap: var(--wx-space-8); flex-shrink: 0; }
+.rt-shift-ico { display: inline-flex; flex-shrink: 0; }
+.rt-lock { width: 13px; height: 13px; color: var(--wx-fg-4); flex-shrink: 0; }
+
+/* 批次标签(复用 rc-batch-N 提供的 --rc-bc 系列变量) */
+.rt-batch-tag {
+    font-size: 11px; font-weight: 500; padding: 1px 7px; border-radius: var(--wx-radius-4); white-space: nowrap;
+    background: var(--rc-bcbg, var(--wx-surface-3)); color: var(--rc-bctx, var(--wx-fg-2));
+}
+
+/* ── 严重度徽标 ── */
+.rt-sev {
+    flex-shrink: 0; min-width: 52px; text-align: center; border-radius: var(--wx-radius-6);
+    padding: var(--wx-space-4) var(--wx-space-6); font-size: var(--wx-fs-12); font-weight: 500;
+    display: inline-flex; align-items: center; justify-content: center; gap: 3px; line-height: 1.3;
+}
+.rt-sev--none { background: var(--wx-green-100); color: var(--wx-green-700); }
+.rt-sev--s1 { background: var(--wx-amber-100); color: var(--wx-amber-700); }
+.rt-sev--s2 { background: var(--wx-amber-500); color: var(--wx-fg-1); }
+.rt-sev--s3 { background: var(--wx-red-100); color: var(--wx-red-700); }
+.rt-sev--s4 { background: var(--wx-red-500); color: var(--wx-bg); }
+.rt-sev--neutral { background: var(--wx-surface-3); color: var(--wx-fg-3); min-width: 52px; }
+.rt-sev-ico { width: 12px; height: 12px; }
+
+/* ── 同岗 filled/required 微条 ── */
+.rt-team { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.rt-team-tx { font-size: var(--wx-fs-12); color: var(--wx-fg-3); white-space: nowrap; }
+.rt-pips { display: inline-flex; gap: 2px; }
+.rt-pip { width: 7px; height: 7px; border-radius: 2px; background: var(--wx-blue-500); }
+.rt-pip--empty { background: var(--wx-surface-3); border: 1px solid var(--wx-border-strong); box-sizing: border-box; }
+
+/* ── 空 / 健康 / 加载态 ── */
+.rt-state { display: flex; align-items: center; justify-content: center; min-height: 220px; }
+.rt-healthy { display: flex; flex-direction: column; align-items: center; gap: var(--wx-space-8); padding: var(--wx-space-32) 0; color: var(--wx-fg-3); }
+.rt-healthy-badge {
+    display: inline-flex; align-items: center; gap: var(--wx-space-6);
+    background: var(--wx-green-100); color: var(--wx-green-700);
+    border-radius: var(--wx-radius-6); padding: var(--wx-space-6) var(--wx-space-12); font-size: var(--wx-fs-13); font-weight: 500;
+}
+.rt-healthy-ico { width: 32px; height: 32px; color: var(--wx-green-500); stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.rt-healthy-tip { font-size: var(--wx-fs-13); color: var(--wx-fg-3); text-align: center; max-width: 420px; }
+.rt-stub-note {
+    font-size: var(--wx-fs-12); color: var(--wx-amber-700); background: var(--wx-amber-100);
+    border-radius: var(--wx-radius-6); padding: var(--wx-space-6) var(--wx-space-10);
+    display: inline-flex; align-items: center; gap: var(--wx-space-6);
+}
+
+/* ── 处置抽屉内部 ── */
+.rt-dw-head { display: flex; align-items: center; gap: var(--wx-space-6); flex-wrap: wrap; font-size: var(--wx-fs-12); color: var(--wx-fg-3); margin-top: var(--wx-space-8); }
+.rt-dw-section-label { font-size: var(--wx-fs-12); color: var(--wx-fg-3); margin: var(--wx-space-12) 0 var(--wx-space-8); }
+.rt-dw-posrow { display: flex; align-items: center; gap: var(--wx-space-6); flex-wrap: wrap; margin-bottom: var(--wx-space-8); }
+.rt-dw-pos {
+    width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--wx-fs-12); font-weight: 500; flex-shrink: 0;
+}
+.rt-dw-pos--filled { background: var(--wx-blue-100); color: var(--wx-blue-700); }
+.rt-dw-pos--gap { border: 1px dashed var(--wx-border-strong); color: var(--wx-fg-4); }
+.rt-cand { display: flex; align-items: center; gap: var(--wx-space-10); width: 100%; padding: var(--wx-space-8) 0; }
+.rt-cand-main { flex: 1; min-width: 0; }
+.rt-cand-name { font-size: var(--wx-fs-13); color: var(--wx-ink); }
+.rt-cand-meta { font-size: var(--wx-fs-12); color: var(--wx-fg-3); }
+.rt-cand-code { font-size: 11px; color: var(--wx-fg-3); margin-left: var(--wx-space-4); }
+.rt-dw-hidden { font-size: var(--wx-fs-12); color: var(--wx-fg-4); display: flex; align-items: center; gap: var(--wx-space-4); padding: var(--wx-space-6) 0; }
+.rt-dw-footer-note { font-size: var(--wx-fs-12); color: var(--wx-fg-3); display: flex; align-items: center; gap: var(--wx-space-4); }
+.rt-form-row { display: flex; flex-direction: column; gap: var(--wx-space-4); margin-bottom: var(--wx-space-12); }
+.rt-form-label { font-size: var(--wx-fs-12); color: var(--wx-fg-3); }
+
+/* ── 热力图 ── */
+.rt-heat-wrap { overflow-x: auto; }
+.rt-heat { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+.rt-heat th, .rt-heat td { border-bottom: 1px solid var(--wx-divider); }
+.rt-heat-unit { position: sticky; left: 0; z-index: 2; background: var(--wx-bg); min-width: 150px; text-align: left; padding: var(--wx-space-6) var(--wx-space-10); border-right: 1px solid var(--wx-border); font-size: var(--wx-fs-13); color: var(--wx-fg-1); }
+.rt-heat-dayh { min-width: 34px; text-align: center; font-size: var(--wx-fs-12); color: var(--wx-fg-3); font-weight: 400; padding: var(--wx-space-4) 2px; background: var(--wx-surface-2); position: sticky; top: 0; }
+.rt-heat-cell { text-align: center; padding: 3px; }
+.rt-heat-chip {
+    display: inline-flex; align-items: center; justify-content: center; gap: 2px;
+    min-width: 26px; height: 22px; border-radius: var(--wx-radius-4); font-size: 11px; font-weight: 500; cursor: pointer;
+}
+.rt-heat-total { font-size: var(--wx-fs-12); font-weight: 500; color: var(--wx-fg-2); text-align: center; padding: 0 var(--wx-space-8); }
