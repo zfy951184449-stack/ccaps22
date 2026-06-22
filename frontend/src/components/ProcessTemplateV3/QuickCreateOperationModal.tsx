@@ -436,6 +436,11 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   const [apiError, setApiError] = useState<string | null>(null);
   // 编辑模式下「替换操作」：展开操作库列表，选另一个操作原地替换本排程。
   const [replaceMode, setReplaceMode] = useState(false);
+  // 实时操作库：打开「替换」面板时重新拉一次，覆盖父级传入的快照，
+  // 这样别处新增的操作也能马上出现（null = 尚未刷新，沿用 prop 快照）。
+  const [liveOperationLibrary, setLiveOperationLibrary] = useState<OperationLibraryItem[] | null>(null);
+  const [libraryRefreshing, setLibraryRefreshing] = useState(false);
+  const effectiveOperationLibrary = liveOperationLibrary ?? operationLibrary;
 
   const allNodes = useMemo(() => flattenNodes(resourceNodes), [resourceNodes]);
   const leafNodes = useMemo(
@@ -451,8 +456,8 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     [draft?.resourceNodeId, leafNodes],
   );
   const selectedOperation = useMemo(
-    () => operationLibrary.find((item) => Number(item.id) === Number(draft?.operationId)) ?? null,
-    [draft?.operationId, operationLibrary],
+    () => effectiveOperationLibrary.find((item) => Number(item.id) === Number(draft?.operationId)) ?? null,
+    [draft?.operationId, effectiveOperationLibrary],
   );
   const selectedOperationType = useMemo(
     () => operationTypes.find((item) => Number(item.id) === Number(draft?.operationTypeId)) ?? null,
@@ -491,6 +496,8 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       setSavingStep('');
       setEditInitialResourceNodeId(null);
       setReplaceMode(false);
+      setLiveOperationLibrary(null);
+      setLibraryRefreshing(false);
       return;
     }
 
@@ -597,7 +604,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     if (templateTeamId) {
       teamMap.set(Number(templateTeamId), templateTeamName || '当前模板团队');
     }
-    operationLibrary.forEach((item) => {
+    effectiveOperationLibrary.forEach((item) => {
       const teamId = getOperationTeamId(item);
       if (!teamId) return;
       teamMap.set(
@@ -612,7 +619,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       return leftName.localeCompare(rightName, 'zh-Hans-CN');
     });
 
-    const hasUnassignedOperations = operationLibrary.some((item) => getOperationTeamId(item) === null);
+    const hasUnassignedOperations = effectiveOperationLibrary.some((item) => getOperationTeamId(item) === null);
 
     return [
       { value: ALL_TEAMS_VALUE, label: '全部团队' },
@@ -622,7 +629,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       })),
       ...(hasUnassignedOperations ? [{ value: UNASSIGNED_TEAM_VALUE, label: '未归属团队' }] : []),
     ];
-  }, [operationLibrary, templateTeamId, templateTeamName]);
+  }, [effectiveOperationLibrary, templateTeamId, templateTeamName]);
 
   const selectedTeamLabel = useMemo(
     () => teamOptions.find((item) => item.value === teamFilterValue)?.label ?? '全部团队',
@@ -632,12 +639,12 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   const includeUnassignedForCurrentTeam = useMemo(() => {
     if (teamFilterValue === ALL_TEAMS_VALUE || teamFilterValue === UNASSIGNED_TEAM_VALUE) return false;
     const selectedTeamId = Number(teamFilterValue);
-    return !operationLibrary.some((item) => getOperationTeamId(item) === selectedTeamId);
-  }, [operationLibrary, teamFilterValue]);
+    return !effectiveOperationLibrary.some((item) => getOperationTeamId(item) === selectedTeamId);
+  }, [effectiveOperationLibrary, teamFilterValue]);
 
   const filteredOperations = useMemo(() => {
     const searchValue = normalizeText(draft?.searchValue ?? '');
-    return operationLibrary
+    return effectiveOperationLibrary
       .filter((item) => {
         if (!matchesTeamFilter(item, teamFilterValue, includeUnassignedForCurrentTeam)) return false;
         if (!searchValue) return true;
@@ -656,9 +663,13 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
 
         return left.operation_name.localeCompare(right.operation_name, 'zh-Hans-CN');
       });
-  }, [draft?.searchValue, includeUnassignedForCurrentTeam, operationLibrary, recentOperationIds, stageOperationIds, teamFilterValue]);
+  }, [draft?.searchValue, includeUnassignedForCurrentTeam, effectiveOperationLibrary, recentOperationIds, stageOperationIds, teamFilterValue]);
 
-  const visibleOperations = filteredOperations.slice(0, MAX_VISIBLE_OPERATIONS);
+  // 「替换操作」面板不限条数（用户要求全量可选）；新增弹窗仍保留上限以兼顾性能。
+  const isReplacePicker = mode === 'edit' && replaceMode;
+  const visibleOperations = isReplacePicker
+    ? filteredOperations
+    : filteredOperations.slice(0, MAX_VISIBLE_OPERATIONS);
   const hiddenOperationCount = Math.max(filteredOperations.length - visibleOperations.length, 0);
 
   const updateDraft = (recipe: (current: QuickCreateDraft) => QuickCreateDraft) => {
@@ -801,6 +812,25 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     Boolean(editTarget) && Number(draft?.operationId) !== Number(editTarget?.operationId);
   const currentOperationName = selectedOperation?.operation_name ?? editTarget?.operationName ?? '';
   const currentOperationCode = selectedOperation?.operation_code ?? editTarget?.operationCode ?? '';
+
+  // 实时拉取最新操作库（覆盖父级快照），让别处新增的操作立即可选。
+  const refreshLibrary = async () => {
+    try {
+      setLibraryRefreshing(true);
+      const latest = await processTemplateV2Api.listOperationLibrary();
+      setLiveOperationLibrary(latest);
+    } catch (error) {
+      console.error('刷新操作库失败:', error);
+    } finally {
+      setLibraryRefreshing(false);
+    }
+  };
+
+  // 进入替换模式：展开操作库列表并立即刷新一次。
+  const handleEnterReplace = () => {
+    setReplaceMode(true);
+    void refreshLibrary();
+  };
 
   // 选中替换操作：同步工时/人数，并切到自动时间窗按新工时重算，保证保存校验通过。
   const applyReplacementSelection = (item: OperationLibraryItem) => {
@@ -1090,7 +1120,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                         取消替换
                       </WxbButton>
                     ) : (
-                      <WxbButton variant="secondary" size="sm" onClick={() => setReplaceMode(true)}>
+                      <WxbButton variant="secondary" size="sm" onClick={handleEnterReplace}>
                         替换操作
                       </WxbButton>
                     ))}
@@ -1123,6 +1153,24 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                     <div className="qcom-source-existing">
                       <div className="qcom-muted">
                         选择要替换成的操作；当前排程的位置、时间窗、约束、共享组、设备绑定保持不变。
+                      </div>
+                      <div
+                        className="qcom-muted"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+                      >
+                        <span>
+                          {libraryRefreshing
+                            ? '正在获取最新操作…'
+                            : `共 ${filteredOperations.length} 个操作${liveOperationLibrary ? '（已是最新）' : ''}`}
+                        </span>
+                        <WxbButton
+                          variant="ghost"
+                          size="sm"
+                          disabled={libraryRefreshing}
+                          onClick={() => void refreshLibrary()}
+                        >
+                          刷新
+                        </WxbButton>
                       </div>
                       <div className="qcom-source-tools">
                         <WxbSelect
