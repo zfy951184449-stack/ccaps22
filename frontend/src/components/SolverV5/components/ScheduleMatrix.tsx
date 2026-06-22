@@ -210,7 +210,7 @@ const EmployeeRow = React.memo<EmployeeRowProps>(({
 
             {/* Stats Column (Sticky Right) */}
             <div
-                className="sticky right-0 z-10 flex items-center justify-center px-1 border-b border-l border-gray-200/50 bg-white/90"
+                className="z-10 flex items-center justify-center px-1 border-b border-l border-gray-200/50 bg-white/90"
                 style={{ gridColumn: `${datesLength + 2} / ${datesLength + 3}` }}
             >
                 <span className="text-[9px] text-gray-500 whitespace-nowrap">
@@ -324,7 +324,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
 
     // Grid template columns — shared between header and body rows
     const gridTemplateColumns = useMemo(() => {
-        return `${SIDEBAR_WIDTH}px repeat(${dates.length}, minmax(${MIN_COL_WIDTH}px, 1fr)) ${STAT_WIDTH}px`;
+        return `${SIDEBAR_WIDTH}px repeat(${dates.length}, ${MIN_COL_WIDTH}px) ${STAT_WIDTH}px`;
     }, [dates.length]);
 
     // ── Singleton Popover: cell click handler ──
@@ -442,6 +442,11 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
         return Math.min(employeeData.length * ROW_HEIGHT, window.innerHeight - 340);
     }, [employeeData.length]);
 
+    // 表头(普通块)、虚拟列表、包裹层统一用固定的内容总宽 + 固定列宽,
+    // 保证表头与虚拟行逐列对齐(react-window 行为 absolute 定位,width="100%"
+    // 只取可视宽、且 sticky-right 无法与表头对齐,故改固定宽 + 统计列设为普通列)。
+    const contentWidth = SIDEBAR_WIDTH + dates.length * MIN_COL_WIDTH + STAT_WIDTH;
+
     return (
         <div className="schedule-matrix-container">
             {/* Mode Toggle */}
@@ -489,7 +494,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                         className="grid sticky top-0 z-20"
                         style={{
                             gridTemplateColumns,
-                            minWidth: `${SIDEBAR_WIDTH + dates.length * MIN_COL_WIDTH + STAT_WIDTH}px`,
+                            width: `${contentWidth}px`,
                         }}
                     >
                         {/* Top Left Corner (Fixed) */}
@@ -533,7 +538,7 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
 
                         {/* Stats Header (Sticky Top + Right) */}
                         <div
-                            className="sticky top-0 right-0 z-30 bg-white/95 border-b border-l border-gray-200/50 flex items-center justify-center shadow-sm"
+                            className="z-30 bg-white/95 border-b border-l border-gray-200/50 flex items-center justify-center shadow-sm"
                             style={{ gridColumn: `${dates.length + 2} / ${dates.length + 3}`, height: HEADER_HEIGHT }}
                         >
                             <span className="text-[9px] font-semibold text-gray-400">统计</span>
@@ -541,13 +546,13 @@ const ScheduleMatrix: React.FC<ScheduleMatrixProps> = ({
                     </div>
 
                     {/* Virtualized Employee Rows */}
-                    <div style={{ minWidth: `${SIDEBAR_WIDTH + dates.length * MIN_COL_WIDTH + STAT_WIDTH}px` }}>
+                    <div style={{ width: `${contentWidth}px` }}>
                         <List
                             ref={listRef}
                             height={listHeight}
                             itemCount={employeeData.length}
                             itemSize={ROW_HEIGHT}
-                            width="100%"
+                            width={contentWidth}
                             overscanCount={OVERSCAN_COUNT}
                         >
                             {Row}
