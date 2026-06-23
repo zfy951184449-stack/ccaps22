@@ -541,12 +541,53 @@ const SolveResultV5Page: React.FC<SolveResultV5PageProps> = ({ visible, runId, o
         ? (infeasibilityAnalysis.minimal_conflict_groups ?? null)
         : null;
 
+    // 把当前(可能手改过的)结果展平成 apply 接口认识的 assignments / shift_schedule 覆盖载荷。
+    // 用于"按当前修改后的结果直接覆盖"——后端据此重写生产表,而非回读求解器原始结果。
+    const buildManualOverride = useCallback(() => {
+        if (!data) return null;
+        const shiftByEmpDate = new Map<string, number>();
+        (data.shift_assignments || []).forEach((s: any) => {
+            if (s.employee_id != null && s.date) shiftByEmpDate.set(`${s.employee_id}:${s.date}`, s.shift_id);
+        });
+        const assignments: any[] = [];
+        (data.operations || []).forEach((op: any) => {
+            const date = op.planned_start ? String(op.planned_start).slice(0, 10) : null;
+            const isStandalone = op.batch_code === 'STANDALONE';
+            (op.positions || []).forEach((p: any) => {
+                if (p.status === 'ASSIGNED' && p.employee) {
+                    assignments.push({
+                        operation_id: op.operation_plan_id,
+                        position_number: p.position_number,
+                        employee_id: p.employee.id,
+                        is_standalone: isStandalone,
+                        date,
+                        shift_id: date != null ? (shiftByEmpDate.get(`${p.employee.id}:${date}`) ?? null) : null,
+                    });
+                }
+            });
+        });
+        const shift_schedule = (data.shift_assignments || []).map((s: any) => ({
+            employee_id: s.employee_id,
+            date: s.date,
+            shift_id: s.shift_id,
+        }));
+        return { assignments, shift_schedule };
+    }, [data]);
+
     // Apply result
     const handleApplyResult = async () => {
-        if (!runId || applying || runStatus === 'APPLIED') return;
+        if (!runId || applying) return;
+        const hasEdits = editHistory.length > 0;
         setApplying(true);
         try {
-            const res = await fetch(`/api/v5/scheduling/runs/${runId}/apply`, { method: 'POST' });
+            // 有手改 → 覆盖应用:把当前编辑后的结果作为载荷下发,并 force 跳过"已应用"短路。
+            // 无手改 → 维持原有无 body 调用(对未应用的 run 走常规应用,与改动前一致)。
+            const init: RequestInit = { method: 'POST' };
+            if (hasEdits) {
+                init.headers = { 'Content-Type': 'application/json' };
+                init.body = JSON.stringify({ override_result: buildManualOverride(), force: true });
+            }
+            const res = await fetch(`/api/v5/scheduling/runs/${runId}/apply`, init);
             const json = await res.json();
             if (!res.ok || !json.success) {
                 message.error(json.error || '应用失败');
@@ -556,7 +597,7 @@ const SolveResultV5Page: React.FC<SolveResultV5PageProps> = ({ visible, runId, o
                 `批次分配 ${json.data?.batch_assignments_inserted ?? 0} 条`,
                 `班次 ${json.data?.shift_plans_inserted ?? 0} 条`,
             ];
-            message.success(`排班已应用：${summary.join('，')}`);
+            message.success(`${hasEdits ? '已按当前修改覆盖：' : '排班已应用：'}${summary.join('，')}`);
             setRunStatus('APPLIED');
             fetchResult();
         } catch (e) {
