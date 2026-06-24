@@ -595,6 +595,15 @@ export const getTemplateExportData = async (req: Request, res: Response) => {
         sos.operation_order,
         tsb.resource_node_id,
         rn.node_name AS resource_node_name,
+        -- 并占设备全集(主设备 + 并用设备,主设备优先),与单台 resource_node_name 并存
+        (SELECT GROUP_CONCAT(rn_all.node_name
+                  ORDER BY FIELD(tsb_all.binding_role, 'PRIMARY', 'AUXILIARY'), rn_all.id SEPARATOR '、')
+           FROM template_stage_operation_resource_bindings tsb_all
+           JOIN resource_nodes rn_all ON rn_all.id = tsb_all.resource_node_id
+          WHERE tsb_all.template_schedule_id = sos.id) AS resource_node_names,
+        (SELECT COUNT(*)
+           FROM template_stage_operation_resource_bindings tsb_cnt
+          WHERE tsb_cnt.template_schedule_id = sos.id) AS resource_node_count,
         CASE
           WHEN tsb.resource_node_id IS NULL THEN 'UNBOUND'
           WHEN rn.id IS NULL THEN 'INVALID_NODE'
@@ -678,6 +687,15 @@ export const getTemplateReportData = async (req: Request, res: Response) => {
           o.required_people,
           sos.operation_order,
           rn.node_name AS resource_node_name,
+          -- 并占设备全集(主设备 + 并用设备,主设备优先),与单台 resource_node_name 并存
+          (SELECT GROUP_CONCAT(rn_all.node_name
+                    ORDER BY FIELD(tsb_all.binding_role, 'PRIMARY', 'AUXILIARY'), rn_all.id SEPARATOR '、')
+             FROM template_stage_operation_resource_bindings tsb_all
+             JOIN resource_nodes rn_all ON rn_all.id = tsb_all.resource_node_id
+            WHERE tsb_all.template_schedule_id = sos.id) AS resource_node_names,
+          (SELECT COUNT(*)
+             FROM template_stage_operation_resource_bindings tsb_cnt
+            WHERE tsb_cnt.template_schedule_id = sos.id) AS resource_node_count,
           CASE
             WHEN tsb.resource_node_id IS NULL THEN 'UNBOUND'
             WHEN rn.id IS NULL THEN 'INVALID_NODE'

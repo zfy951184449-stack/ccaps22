@@ -17,6 +17,18 @@ export interface GanttPersonnelAssignment {
     planDate?: string | null;
 }
 
+/** One device an operation occupies. 并占 / co-requisite: PRIMARY is the anchor, every
+ *  other entry is an equally-required co-used device. The operation block renders on each. */
+export interface GanttResourceNode {
+    resourceNodeId: number;
+    resourceName?: string | null;
+    resourceNodeClass?: string | null;
+    resourceSystemType?: string | null;
+    resourceEquipmentClass?: string | null;
+    bindingRole?: string | null; // 'PRIMARY' | 'AUXILIARY'(=并用必需) | null(legacy)
+    isPrimary?: boolean;
+}
+
 export interface GanttOperation {
     id: number;
     templateScheduleId?: number | null;
@@ -38,6 +50,8 @@ export interface GanttOperation {
     resourceNodeClass?: string | null;
     resourceSystemType?: string | null;
     resourceEquipmentClass?: string | null;
+    // Full co-occupied device set (PRIMARY anchor first). Drives multi-lane rendering.
+    resourceNodes?: GanttResourceNode[];
     // isOffScreen is kept for rowUtils lane-layout logic (dead DOM layer)
     isOffScreen?: boolean;
     batch_id?: number; // Added for context lookup

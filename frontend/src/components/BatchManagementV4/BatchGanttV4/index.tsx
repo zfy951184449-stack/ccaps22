@@ -21,6 +21,7 @@ import EditOperationModal from './EditOperationModal';
 import CreateIndependentOperationModal, { type CreateOpPrefill } from './CreateIndependentOperationModal';
 import type { DatePreset, GanttBatch, GanttDependency, GanttOperation, GanttShareGroup } from './types';
 import {
+    baseOperationTaskId,
     buildBatchGanttModel,
     buildBatchGanttRenderModel,
     getBatchDateExtent,
@@ -440,7 +441,9 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
     }, [markUserInteracted]);
 
     const handleEditTask = useCallback((task: GanttTask) => {
-        const operation = model.operationByTaskId.get(task.id);
+        // A co-occupied operation may be clicked on a co-used device's mirror clone
+        // (id suffixed with __equip-<id>); resolve back to the canonical operation.
+        const operation = model.operationByTaskId.get(baseOperationTaskId(task.id));
         if (operation) {
             setEditingOperation(operation);
         }

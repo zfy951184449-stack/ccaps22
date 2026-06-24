@@ -52,6 +52,8 @@ export interface TemplateExportOperation {
   standard_time?: number;
   required_people?: number;
   resource_node_name?: string | null;
+  /** 并占设备全集(主设备 + 并用设备,顿号分隔);存在时优先于单台 resource_node_name 显示。 */
+  resource_node_names?: string | null;
   binding_status?: string;
   operation_order: number;
 }
@@ -416,7 +418,7 @@ function buildOperationsSheet(wb: ExcelJS.Workbook, data: TemplateExportData) {
     ws.getCell(currentRow, 6).value = formatTime(op.recommended_time);
     ws.getCell(currentRow, 7).value = op.standard_time ?? '-';
     ws.getCell(currentRow, 8).value = op.required_people ?? '-';
-    ws.getCell(currentRow, 9).value = op.resource_node_name || '-';
+    ws.getCell(currentRow, 9).value = op.resource_node_names || op.resource_node_name || '-';
 
     // Binding status with color
     const statusInfo = getBindingStatusLabel(op.binding_status);

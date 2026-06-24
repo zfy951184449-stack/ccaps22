@@ -134,6 +134,73 @@ export const putTemplateStageOperationResourceBindings = async (req: Request, re
 };
 
 /**
+ * Batch multi-device (并占) binding: apply the SAME device set to many schedules at once.
+ * Body: { schedule_ids: number[], primary_node_id: number | null, candidate_node_ids: number[] }
+ * Each schedule is replaced with 1 PRIMARY (主设备) + N AUXILIARY (并用) in ONE transaction
+ * (all-or-nothing). primary_node_id null unbinds every listed schedule.
+ */
+export const batchReplaceBindings = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const { schedule_ids } = req.body;
+    if (!Array.isArray(schedule_ids) || schedule_ids.length === 0) {
+      return res.status(400).json({ error: 'schedule_ids must be a non-empty array' });
+    }
+
+    const scheduleIds = schedule_ids
+      .map((item: unknown) => Number(item))
+      .filter((item: number) => Number.isInteger(item) && item > 0);
+    if (!scheduleIds.length) {
+      return res.status(400).json({ error: 'No valid schedule_ids' });
+    }
+
+    const primaryNodeId =
+      req.body.primary_node_id !== undefined && req.body.primary_node_id !== null
+        ? Number(req.body.primary_node_id)
+        : null;
+    if (primaryNodeId !== null && (!Number.isInteger(primaryNodeId) || primaryNodeId <= 0)) {
+      return res.status(400).json({ error: 'Invalid primary_node_id' });
+    }
+
+    const rawCandidates = req.body.candidate_node_ids;
+    if (rawCandidates !== undefined && rawCandidates !== null && !Array.isArray(rawCandidates)) {
+      return res.status(400).json({ error: 'candidate_node_ids must be an array' });
+    }
+    const candidateNodeIds: number[] = Array.isArray(rawCandidates)
+      ? rawCandidates.map((item: unknown) => Number(item))
+      : [];
+    if (candidateNodeIds.some((item) => !Number.isInteger(item) || item <= 0)) {
+      return res.status(400).json({ error: 'Invalid candidate_node_ids' });
+    }
+
+    const hasCandidates = candidateNodeIds.filter((item) => item !== primaryNodeId).length > 0;
+    if (primaryNodeId === null && hasCandidates) {
+      return res
+        .status(400)
+        .json({ error: 'candidate_node_ids require a primary_node_id (a primary must exist first)' });
+    }
+
+    await connection.beginTransaction();
+    for (const scheduleId of scheduleIds) {
+      await replaceTemplateScheduleBindings(scheduleId, primaryNodeId, candidateNodeIds, connection);
+    }
+    await connection.commit();
+
+    res.json({ success: scheduleIds.length, total: scheduleIds.length });
+  } catch (error) {
+    await connection.rollback();
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error in batch replace bindings:', error);
+    res.status(500).json({ error: 'Failed to batch replace bindings' });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
  * List ALL resource bindings for a given template (PRIMARY + AUXILIARY, one row each).
  * Returns bindings joined with resource_nodes so the frontend gets, per binding row,
  * { template_schedule_id, resource_node_id, binding_role, node_name, node_class, equipment_system_type, ... }.

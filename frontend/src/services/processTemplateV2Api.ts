@@ -756,6 +756,23 @@ export const processTemplateV2Api = {
     });
     return response.data;
   },
+  /**
+   * Batch 并占 (co-occupancy) binding: apply the SAME device set (1 主设备 + N 并用) to many
+   * schedules at once, atomically. primaryNodeId = null unbinds every listed schedule.
+   * candidateNodeIds must not include the primary (deduped server-side anyway).
+   */
+  batchUpdateScheduleBindings: async (
+    scheduleIds: number[],
+    primaryNodeId: number | null,
+    candidateNodeIds: number[],
+  ): Promise<{ success: number; total: number }> => {
+    const response = await client.put('/template-stage-operations/batch-resource-bindings', {
+      schedule_ids: scheduleIds,
+      primary_node_id: primaryNodeId,
+      candidate_node_ids: candidateNodeIds,
+    });
+    return response.data;
+  },
   updateTemplateStageOperationResources: async (scheduleId: number, requirements: ResourceRequirementRule[]) => {
     const response = await client.put(`/template-stage-operations/${scheduleId}/resources`, {
       requirements: requirements.map((rule) => ({

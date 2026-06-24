@@ -422,6 +422,18 @@
   gap: var(--wx-space-2, 8px);
 }
 
+.qcom-multibind-hint {
+  margin: 0;
+  font-size: var(--wx-font-size-12, 12px);
+  line-height: 1.5;
+  color: var(--wx-fg-3);
+}
+
+.qcom-multibind-hint strong {
+  color: var(--wx-fg-2);
+  font-weight: 600;
+}
+
 .qcom-multibind-list {
   display: flex;
   flex-direction: column;

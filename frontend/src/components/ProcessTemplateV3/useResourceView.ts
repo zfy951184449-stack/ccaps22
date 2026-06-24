@@ -55,13 +55,6 @@ export interface UseResourceViewResult {
   getCandidatesForSchedule: (scheduleId: number) => EquipmentInfo[];
 }
 
-type ResourceTaskUpdate = {
-  groupId: string;
-  conflictType?: 'OVERLAP';
-  color?: string;
-  renderOnGroupRow?: boolean;
-};
-
 // ---------------------------------------------------------------------------
 // Stage color palette (extended for ≥6 stages)
 // ---------------------------------------------------------------------------
@@ -202,11 +195,44 @@ function extractStages(ganttNodes: GanttNode[]): Array<{
   return stages;
 }
 
-/** Extract schedule ID from task ID (e.g., "operation_123" → 123) */
+/** Extract schedule ID from task ID (e.g., "operation_123" → 123).
+ *  Tolerates the co-occupancy mirror-clone suffix ("operation_123__equip-45" → 123) so a
+ *  right-click / edit on a co-used device lane still resolves to the right schedule. */
 function extractScheduleId(taskId: string): number | null {
-  const parts = taskId.split('_');
+  const base = taskId.replace(/__equip-\d+$/, '');
+  const parts = base.split('_');
   const num = Number(parts[parts.length - 1]);
   return Number.isFinite(num) && num > 0 ? num : null;
+}
+
+/**
+ * Expand one operation task into one entry per co-occupied device (并占 / co-requisite).
+ * The PRIMARY device (index 0 of the schedule's device list) keeps the original task id so
+ * right-click / edit / drag still anchor to it; every co-used device gets a read-only,
+ * non-draggable mirror clone with a suffixed id. When >1 device, labels get a 并用×N marker.
+ * Unbound schedules yield a single entry with equipKey 'unbound'.
+ */
+function expandTaskDevices(
+  task: GanttTask,
+  allDevicesMap: Map<number, EquipmentInfo[]>,
+): Array<{ clone: GanttTask; equipKey: string; equipInfo: EquipmentInfo | null }> {
+  const scheduleId = extractScheduleId(task.id);
+  const devices = scheduleId ? (allDevicesMap.get(scheduleId) ?? []) : [];
+  if (devices.length === 0) {
+    return [{ clone: task, equipKey: 'unbound', equipInfo: null }];
+  }
+  const coUse = devices.length > 1;
+  return devices.map((equip, idx) => {
+    const isPrimary = idx === 0;
+    const clone: GanttTask = {
+      ...task,
+      id: isPrimary ? task.id : `${task.id}__equip-${equip.resourceNodeId}`,
+      label: coUse ? `${task.label} ·并用×${devices.length}` : task.label,
+      draggable: isPrimary ? task.draggable : false,
+      readOnly: isPrimary ? task.readOnly : true,
+    };
+    return { clone, equipKey: `equip-${equip.resourceNodeId}`, equipInfo: equip };
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -216,11 +242,10 @@ function extractScheduleId(taskId: string): number | null {
 function buildStageEquipmentGroups(
   stages: Array<{ id: string; name: string; code: string; order: number }>,
   tasks: GanttTask[],
-  bindingMap: Map<number, EquipmentInfo>,
-  equipmentMap: Map<number, EquipmentInfo>,
-): { groups: GanttGroup[]; taskUpdates: Map<string, ResourceTaskUpdate> } {
+  allDevicesMap: Map<number, EquipmentInfo[]>,
+): { groups: GanttGroup[]; tasks: GanttTask[] } {
   const groups: GanttGroup[] = [];
-  const taskUpdates = new Map<string, ResourceTaskUpdate>();
+  const outTasks: GanttTask[] = [];
 
   for (const stage of stages) {
     const stageColor = STAGE_COLOR_PALETTE[stage.order % STAGE_COLOR_PALETTE.length];
@@ -240,25 +265,25 @@ function buildStageEquipmentGroups(
       return stageId !== undefined && `stage_${stageId}` === stage.id;
     });
 
-    // Group by equipment
+    // Group by equipment, expanding a co-occupied operation into one clone per device.
     const byEquipment = new Map<string, GanttTask[]>();
+    const equipInfoByKey = new Map<string, EquipmentInfo | null>();
 
     for (const task of stageTasks) {
-      const scheduleId = extractScheduleId(task.id);
-      const binding = scheduleId ? bindingMap.get(scheduleId) : null;
-      const key = binding
-        ? `equip-${binding.resourceNodeId}`
-        : `res-stage-${stage.id}-unbound`;
-      if (!byEquipment.has(key)) byEquipment.set(key, []);
-      byEquipment.get(key)!.push(task);
+      for (const { clone, equipKey, equipInfo } of expandTaskDevices(task, allDevicesMap)) {
+        const key = equipKey === 'unbound' ? `res-stage-${stage.id}-unbound` : equipKey;
+        if (!byEquipment.has(key)) {
+          byEquipment.set(key, []);
+          equipInfoByKey.set(key, equipInfo);
+        }
+        byEquipment.get(key)!.push(clone);
+      }
     }
 
     // Create equipment sub-groups
     for (const [equipGroupId, eqTasks] of Array.from(byEquipment.entries())) {
       const isUnbound = equipGroupId.endsWith('-unbound');
-      const equipInfo = !isUnbound
-        ? equipmentMap.get(Number(equipGroupId.replace('equip-', '')))
-        : null;
+      const equipInfo = equipInfoByKey.get(equipGroupId) ?? null;
 
       const equipLabel = isUnbound
         ? '[未绑定] 设备'
@@ -289,9 +314,10 @@ function buildStageEquipmentGroups(
         });
 
         for (const task of layerTasks) {
-          taskUpdates.set(task.id, {
+          outTasks.push({
+            ...task,
             groupId: laneGroupId,
-            conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : undefined,
+            conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : task.conflictType,
             renderOnGroupRow: true,
           });
         }
@@ -299,28 +325,31 @@ function buildStageEquipmentGroups(
     }
   }
 
-  return { groups, taskUpdates };
+  return { groups, tasks: outTasks };
 }
 
 function buildEquipmentGroups(
   tasks: GanttTask[],
-  bindingMap: Map<number, EquipmentInfo>,
-  equipmentMap: Map<number, EquipmentInfo>,
+  allDevicesMap: Map<number, EquipmentInfo[]>,
   stages: Array<{ id: string; name: string; code: string; order: number }>,
-): { groups: GanttGroup[]; taskUpdates: Map<string, ResourceTaskUpdate> } {
+): { groups: GanttGroup[]; tasks: GanttTask[] } {
   const groups: GanttGroup[] = [];
-  const taskUpdates = new Map<string, ResourceTaskUpdate>();
+  const outTasks: GanttTask[] = [];
 
-  // Group all tasks by equipment (ignoring stage)
+  // Group all tasks by equipment (ignoring stage), expanding a co-occupied operation into
+  // one clone per device so it appears on every device row it occupies.
   const byEquipment = new Map<string, GanttTask[]>();
+  const equipInfoByKey = new Map<string, EquipmentInfo | null>();
 
   for (const task of tasks) {
     if (task.type === 'timeWindow') continue; // Skip time windows
-    const scheduleId = extractScheduleId(task.id);
-    const binding = scheduleId ? bindingMap.get(scheduleId) : null;
-    const key = binding ? `equip-${binding.resourceNodeId}` : 'unbound';
-    if (!byEquipment.has(key)) byEquipment.set(key, []);
-    byEquipment.get(key)!.push(task);
+    for (const { clone, equipKey, equipInfo } of expandTaskDevices(task, allDevicesMap)) {
+      if (!byEquipment.has(equipKey)) {
+        byEquipment.set(equipKey, []);
+        equipInfoByKey.set(equipKey, equipInfo);
+      }
+      byEquipment.get(equipKey)!.push(clone);
+    }
   }
 
   // Build stage color lookup for task coloring
@@ -334,9 +363,7 @@ function buildEquipmentGroups(
 
   for (const [equipKey, eqTasks] of Array.from(byEquipment.entries())) {
     const isUnbound = equipKey === 'unbound';
-    const equipInfo = !isUnbound
-      ? equipmentMap.get(Number(equipKey.replace('equip-', '')))
-      : null;
+    const equipInfo = equipInfoByKey.get(equipKey) ?? null;
 
     const equipLabel = isUnbound
       ? `[未绑定] 设备 (${eqTasks.length})`
@@ -371,17 +398,18 @@ function buildEquipmentGroups(
         const stageFullId = stageId !== undefined ? `stage_${stageId}` : undefined;
         const color = stageFullId ? stageColorMap.get(stageFullId) : undefined;
 
-        taskUpdates.set(task.id, {
+        outTasks.push({
+          ...task,
           groupId: laneGroupId,
-          conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : undefined,
-          color,
+          conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : task.conflictType,
+          color: color ?? task.color,
           renderOnGroupRow: true,
         });
       }
     });
   }
 
-  return { groups, taskUpdates };
+  return { groups, tasks: outTasks };
 }
 
 // ---------------------------------------------------------------------------
@@ -426,15 +454,16 @@ export function useResourceView(
   }, [templateId, yAxisMode]);
 
   // ---- Derived maps ----
-  // A single operation can now own multiple binding rows (1 PRIMARY + 0..N AUXILIARY).
-  //  - bindingMap (schedule → PRIMARY EquipmentInfo) drives Gantt Y-axis lanes + the
-  //    right-click menu; AUXILIARY rows are intentionally excluded so layout is unchanged.
-  //  - candidateMap (schedule → AUXILIARY EquipmentInfo[]) is display-only (tags/tooltips).
-  //  - equipmentMap (node id → EquipmentInfo) caches every node we've seen for labels.
-  const { bindingMap, candidateMap, equipmentMap } = useMemo(() => {
+  // 并占 / co-requisite: a single operation can own multiple binding rows (1 PRIMARY anchor +
+  // 0..N co-used devices, stored as AUXILIARY rows). All bound devices are equally required.
+  //  - bindingMap (schedule → PRIMARY EquipmentInfo): the anchor — keeps the canonical task id,
+  //    drives the right-click menu.
+  //  - candidateMap (schedule → non-primary EquipmentInfo[]): the co-used devices.
+  //  - allDevicesMap (schedule → [PRIMARY, ...co-used]): drives the multi-lane Gantt rendering
+  //    (the operation block appears on every device's lane).
+  const { bindingMap, candidateMap, allDevicesMap } = useMemo(() => {
     const bMap = new Map<number, EquipmentInfo>();
     const cMap = new Map<number, EquipmentInfo[]>();
-    const eMap = new Map<number, EquipmentInfo>();
 
     for (const b of bindings) {
       const info: EquipmentInfo = {
@@ -444,20 +473,31 @@ export function useResourceView(
         systemType: b.equipment_system_type,
         equipmentClass: b.equipment_class,
       };
-      eMap.set(b.resource_node_id, info);
 
       if (!b.binding_role || b.binding_role === 'PRIMARY') {
-        // PRIMARY (or legacy rows without a role) → the one device used everywhere downstream.
+        // PRIMARY (or legacy rows without a role) → the anchor device.
         bMap.set(b.template_schedule_id, info);
       } else {
-        // AUXILIARY → alternative candidate, never gets its own Gantt lane.
+        // Co-used (并用必需) device — also occupied by this operation.
         const list = cMap.get(b.template_schedule_id) ?? [];
         list.push(info);
         cMap.set(b.template_schedule_id, list);
       }
     }
 
-    return { bindingMap: bMap, candidateMap: cMap, equipmentMap: eMap };
+    // Build the full per-schedule device list, PRIMARY anchor first.
+    const allMap = new Map<number, EquipmentInfo[]>();
+    const scheduleIds = new Set<number>([...Array.from(bMap.keys()), ...Array.from(cMap.keys())]);
+    for (const sid of Array.from(scheduleIds)) {
+      const list: EquipmentInfo[] = [];
+      const primary = bMap.get(sid);
+      if (primary) list.push(primary);
+      const aux = cMap.get(sid);
+      if (aux) list.push(...aux);
+      allMap.set(sid, list);
+    }
+
+    return { bindingMap: bMap, candidateMap: cMap, allDevicesMap: allMap };
   }, [bindings]);
 
   // ---- Stage info ----
@@ -469,47 +509,23 @@ export function useResourceView(
     [tasks],
   );
 
-  // ---- Build resource groups + task updates ----
+  // ---- Build resource groups + tasks ----
   const { resourceGroups, resourceTasks } = useMemo(() => {
     if (yAxisMode === 'operation') {
       return { resourceGroups: groups, resourceTasks: tasks };
     }
 
-    let result: {
-      groups: GanttGroup[];
-      taskUpdates: Map<string, ResourceTaskUpdate>;
-    };
-
-    if (yAxisMode === 'stage-equipment') {
-      result = buildStageEquipmentGroups(stages, opTasks, bindingMap, equipmentMap);
-    } else {
-      result = buildEquipmentGroups(opTasks, bindingMap, equipmentMap, stages);
-    }
-
-    // Apply task updates (groupId remap + conflictType + color)
-    const updatedTasks = tasks.map(task => {
-      const update = result.taskUpdates.get(task.id);
-      if (!update) {
-        // timeWindow tasks or tasks not in resource view → hide
-        if (task.type === 'timeWindow') {
-          return null; // Filter out timeWindows in resource view
-        }
-        return task;
-      }
-      return {
-        ...task,
-        groupId: update.groupId,
-        conflictType: update.conflictType ?? task.conflictType,
-        color: (update as any).color ?? task.color,
-        renderOnGroupRow: update.renderOnGroupRow ?? task.renderOnGroupRow,
-      };
-    }).filter(Boolean) as GanttTask[];
+    // Equipment views expand each operation into one task clone per co-occupied device, so
+    // they return the fully-formed task list (lane groupIds already applied) directly.
+    const result = yAxisMode === 'stage-equipment'
+      ? buildStageEquipmentGroups(stages, opTasks, allDevicesMap)
+      : buildEquipmentGroups(opTasks, allDevicesMap, stages);
 
     return {
       resourceGroups: result.groups,
-      resourceTasks: updatedTasks,
+      resourceTasks: result.tasks,
     };
-  }, [yAxisMode, tasks, opTasks, groups, stages, bindingMap, equipmentMap]);
+  }, [yAxisMode, tasks, opTasks, groups, stages, allDevicesMap]);
 
   // ---- Refresh function (imperative, for binding UI) ----
   const refreshBindings = useCallback(async () => {

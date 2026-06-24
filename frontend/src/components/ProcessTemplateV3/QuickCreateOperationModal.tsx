@@ -67,8 +67,9 @@ export type EditOperationTarget = {
   durationHours: number;
   requiredPeople: number;
   /**
-   * Current candidate (备选 / AUXILIARY) equipment node ids for this schedule, used to prefill
-   * the multi-bind editor. Does NOT include the primary node. Optional; defaults to empty.
+   * Current co-used (并用必需 / AUXILIARY-stored) equipment node ids for this schedule, used to
+   * prefill the multi-bind editor. Does NOT include the primary (anchor) node. These devices are
+   * all required and co-occupied by the operation. Optional; defaults to empty.
    */
   candidateNodeIds?: number[];
 };
@@ -186,7 +187,7 @@ const formatHourLabel = (value: number) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
-const flattenNodes = (nodes: ResourceNode[]): ResourceNode[] => {
+export const flattenNodes = (nodes: ResourceNode[]): ResourceNode[] => {
   const result: ResourceNode[] = [];
   const walk = (items: ResourceNode[]) => {
     items.forEach((item) => {
@@ -198,7 +199,7 @@ const flattenNodes = (nodes: ResourceNode[]): ResourceNode[] => {
   return result;
 };
 
-type BindTreeNode = {
+export type BindTreeNode = {
   value: number | string;
   title: string;
   selectable?: boolean;
@@ -207,13 +208,13 @@ type BindTreeNode = {
   children?: BindTreeNode[];
 };
 
-const BIND_GROUP_PREFIX = 'grp-';
+export const BIND_GROUP_PREFIX = 'grp-';
 
-// 把资源节点树(厂区→产线→房间→设备)转成 TreeSelect 数据,供「设备绑定(候选池)」逐层勾选。
+// 把资源节点树(厂区→产线→房间→设备)转成 TreeSelect 数据,供「设备绑定(并用)」逐层勾选。
 // - 仅「可调度的设备叶子」可勾(checkable);厂区/产线/房间等中间层只用于展开,不可勾不可选;
 // - 不含任何可绑设备的分支整支剪除;
 // - 同时收集「需默认展开到房间一层」的上层 key(厂区+产线)。
-const buildBindingTree = (
+export const buildBindingTree = (
   nodes: ResourceNode[],
 ): { treeData: BindTreeNode[]; expandedKeys: Array<string | number> } => {
   const expandedKeys: Array<string | number> = [];
@@ -660,7 +661,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     [leafNodes],
   );
 
-  // 层级树数据(厂区→产线→房间→设备),供「设备绑定(候选池)」逐层勾选;直接用已传入的 resourceNodes 树。
+  // 层级树数据(厂区→产线→房间→设备),供「设备绑定(并用)」逐层勾选;直接用已传入的 resourceNodes 树。
   const { treeData: bindingTreeData, expandedKeys: bindingTreeExpandedKeys } = useMemo(
     () => buildBindingTree(resourceNodes),
     [resourceNodes],
@@ -1113,8 +1114,8 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         windowEndTime: Number(draft.windowEndTime ?? 0),
         windowEndDayOffset: Number(draft.windowEndDayOffset ?? 0),
       });
-      // Persist the equipment candidate pool (优选 PRIMARY + 备选 AUXILIARY) only when it
-      // changed. primary = null unbinds everything; candidates never include the primary.
+      // Persist the co-occupied device set (主设备 PRIMARY + 并用 AUXILIARY rows) only when it
+      // changed. primary = null unbinds everything; the co-used list never includes the primary.
       const nextPrimaryNodeId = draft.resourceNodeId ?? null;
       const nextCandidateNodeIds = (draft.candidateNodeIds ?? []).filter(
         (id) => id !== nextPrimaryNodeId,
@@ -1662,7 +1663,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                   {mode === 'edit' ? (
                     <div className="qcom-multibind">
                       <WxbTreeSelect
-                        label="设备绑定（候选池）"
+                        label="设备绑定（并用 · 全部必需）"
                         treeData={bindingTreeData}
                         value={editSelectedNodeIds}
                         treeCheckable
@@ -1674,14 +1675,17 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                         popupClassName="qcom-bind-popup"
                         listHeight={360}
                         maxTagCount={0}
-                        maxTagPlaceholder={(omitted) => `已选 ${omitted.length} 台（见下方清单）`}
-                        placeholder="按 厂区 / 产线 / 房间 逐层展开，勾选设备"
+                        maxTagPlaceholder={(omitted) => `已选 ${omitted.length} 台并用（见下方清单）`}
+                        placeholder="按 厂区 / 产线 / 房间 逐层展开，勾选本操作并用的设备"
                         onChange={(value) =>
                           handleEditSelectedNodesChange(
                             (value as Array<number | string>) ?? [],
                           )
                         }
                       />
+                      <p className="qcom-multibind-hint">
+                        所选设备都将被这道操作<strong>同时占用</strong>；主设备为锚点（默认显示/排序），其余为并用设备。
+                      </p>
                       {editSelectedNodeIds.length > 0 ? (
                         <ul className="qcom-multibind-list">
                           {editSelectedNodeIds.map((nodeId) => {
@@ -1692,7 +1696,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                                   type="button"
                                   className={`qcom-multibind-star ${isPrimary ? 'is-primary' : ''}`}
                                   aria-pressed={isPrimary}
-                                  title={isPrimary ? '当前优选设备' : '设为优选'}
+                                  title={isPrimary ? '主设备（锚点）' : '设为主设备'}
                                   onClick={() => handleSetPrimaryNode(nodeId)}
                                 >
                                   <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
@@ -1709,9 +1713,9 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                                   {bindingNodeLabelById.get(nodeId) ?? `设备 #${nodeId}`}
                                 </span>
                                 {isPrimary ? (
-                                  <WxbTag color="green">优选</WxbTag>
+                                  <WxbTag color="green">主设备</WxbTag>
                                 ) : (
-                                  <WxbTag color="neutral">备选</WxbTag>
+                                  <WxbTag color="blue">并用</WxbTag>
                                 )}
                               </li>
                             );

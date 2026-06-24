@@ -3,6 +3,20 @@ import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
 import dayjs from 'dayjs';
 
+// One device an operation occupies. An operation can co-occupy multiple devices
+// (并占 / co-requisite): PRIMARY is the anchor, every other row is an equally-required
+// co-used device. The single `resourceNodeId/resourceName/...` fields above stay = the
+// PRIMARY anchor (backward-compatible default); `resourceNodes` carries the full set.
+interface GanttResourceNode {
+    resourceNodeId: number;
+    resourceName: string | null;
+    resourceNodeClass: string | null;
+    resourceSystemType: string | null;
+    resourceEquipmentClass: string | null;
+    bindingRole: string | null; // 'PRIMARY' | 'AUXILIARY'(=并用必需) | null(legacy)
+    isPrimary: boolean;
+}
+
 interface GanttOperation {
     id: number;
     templateScheduleId?: number | null;
@@ -25,6 +39,9 @@ interface GanttOperation {
     resourceNodeClass?: string | null;
     resourceSystemType?: string | null;
     resourceEquipmentClass?: string | null;
+    // Full co-occupied device set (PRIMARY anchor first). Empty/single for unbound or
+    // independent ops. The frontend renders the operation block on EACH device's lane.
+    resourceNodes?: GanttResourceNode[];
 }
 
 interface GanttPersonnelAssignment {
@@ -238,6 +255,60 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
             });
         }
 
+        // 1b. Fetch the FULL device set per template schedule (co-occupancy / 并占).
+        // The main query above only carries the PRIMARY anchor (it filters binding_role='PRIMARY'
+        // + GROUP BY bop.id, which collapses multiple bindings to one). To show an operation on
+        // every device it occupies, re-query all binding rows for the visible schedules and
+        // assemble a device array per schedule, mirroring the assignments pass above.
+        const visibleScheduleIds = Array.from(
+            new Set(
+                rows
+                    .map((row) => (row.template_schedule_id ? Number(row.template_schedule_id) : null))
+                    .filter((id): id is number => Number.isFinite(id as number) && (id as number) > 0)
+            )
+        );
+        const resourceNodesBySchedule = new Map<number, GanttResourceNode[]>();
+
+        if (visibleScheduleIds.length > 0) {
+            const [bindingRows] = await pool.execute<RowDataPacket[]>(
+                `
+                    SELECT
+                        tsb.template_schedule_id,
+                        tsb.resource_node_id,
+                        tsb.binding_role,
+                        rn.node_name,
+                        rn.node_class,
+                        rn.equipment_system_type,
+                        rn.equipment_class
+                    FROM template_stage_operation_resource_bindings tsb
+                    JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
+                    WHERE tsb.template_schedule_id IN (${placeholders(visibleScheduleIds)})
+                    ORDER BY tsb.template_schedule_id,
+                             FIELD(tsb.binding_role, 'PRIMARY', 'AUXILIARY'),
+                             tsb.resource_node_id
+                `,
+                visibleScheduleIds
+            );
+
+            bindingRows.forEach((row) => {
+                const scheduleId = Number(row.template_schedule_id);
+                if (!resourceNodesBySchedule.has(scheduleId)) {
+                    resourceNodesBySchedule.set(scheduleId, []);
+                }
+                const role = (row.binding_role as string) ?? null;
+                resourceNodesBySchedule.get(scheduleId)!.push({
+                    resourceNodeId: Number(row.resource_node_id),
+                    resourceName: row.node_name ?? null,
+                    resourceNodeClass: row.node_class ?? null,
+                    resourceSystemType: row.equipment_system_type ?? null,
+                    resourceEquipmentClass: row.equipment_class ?? null,
+                    bindingRole: role,
+                    // PRIMARY (or a legacy NULL role) is the anchor; everything else is co-required.
+                    isPrimary: role === 'PRIMARY' || role === null,
+                });
+            });
+        }
+
         // 2. Reconstruct Tree Structure
         const batchMap = new Map<number, GanttBatch>();
 
@@ -282,9 +353,27 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
             if (row.batch_status === 'ACTIVATED') opStatus = 'READY';
             if (assignedPeople >= row.required_people) opStatus = 'COMPLETED'; // Simplified logic
 
+            // Resolve the full device set: template-derived ops use the multi-binding map;
+            // independent ops (template_schedule_id NULL) carry a single device on the row.
+            const scheduleId = row.template_schedule_id ? Number(row.template_schedule_id) : null;
+            let resourceNodes: GanttResourceNode[] = scheduleId
+                ? (resourceNodesBySchedule.get(scheduleId) ?? [])
+                : [];
+            if (resourceNodes.length === 0 && row.resource_node_id) {
+                resourceNodes = [{
+                    resourceNodeId: Number(row.resource_node_id),
+                    resourceName: row.resource_name || null,
+                    resourceNodeClass: row.resource_node_class || null,
+                    resourceSystemType: row.resource_system_type || null,
+                    resourceEquipmentClass: row.resource_equipment_class || null,
+                    bindingRole: 'PRIMARY',
+                    isPrimary: true,
+                }];
+            }
+
             stage.operations.push({
                 id: row.operation_id,
-                templateScheduleId: row.template_schedule_id ? Number(row.template_schedule_id) : null,
+                templateScheduleId: scheduleId,
                 stage_id: stageId,
                 name: row.operation_name,
                 startDate: row.planned_start_datetime,
@@ -302,7 +391,8 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
                 resourceName: row.resource_name || null,
                 resourceNodeClass: row.resource_node_class || null,
                 resourceSystemType: row.resource_system_type || null,
-                resourceEquipmentClass: row.resource_equipment_class || null
+                resourceEquipmentClass: row.resource_equipment_class || null,
+                resourceNodes
             });
 
             // Update Stage Times (Expand specific stage range)

@@ -1148,11 +1148,22 @@ export const upsertTemplateScheduleBinding = async (
   bindingRole: BindingRole = 'PRIMARY',
 ): Promise<TemplateScheduleBindingRecord | null> => {
   if (!resourceNodeId) {
-    // Unbind: delete matching role
-    await executor.execute(
-      'DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ? AND binding_role = ?',
-      [scheduleId, bindingRole],
-    );
+    // Unbind. Removing the PRIMARY anchor unbinds the whole operation: the co-used
+    // (AUXILIARY / 并用) devices can't stand alone without an anchor, so wipe every row
+    // for the schedule — otherwise right-click / batch「解除绑定」would leave orphan 并用
+    // rows (a schedule with AUXILIARY rows but no PRIMARY). Unbinding only an AUXILIARY
+    // role removes just that role's rows.
+    if (bindingRole === 'PRIMARY') {
+      await executor.execute(
+        'DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ?',
+        [scheduleId],
+      );
+    } else {
+      await executor.execute(
+        'DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ? AND binding_role = ?',
+        [scheduleId, bindingRole],
+      );
+    }
     return null;
   }
 

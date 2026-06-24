@@ -38,6 +38,7 @@ import { useResourceView } from './useResourceView';
 import { buildCreateTimingContext, parseStageIdFromGroupId } from './createOperationContext';
 import V3EditorHeader from './V3EditorHeader';
 import QuickCreateOperationModal, { type EditOperationTarget } from './QuickCreateOperationModal';
+import DeviceCoUseBindModal from './DeviceCoUseBindModal';
 import './EquipmentBinding.css';
 
 // ---------------------------------------------------------------------------
@@ -150,6 +151,14 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     departmentCode: string | null;
   }>>([]);
   const [showCreateEquipModal, setShowCreateEquipModal] = useState(false);
+  // 并用设备多选弹窗(右键/批量入口共用):scheduleIds.length===1 走单操作,>1 走批量。
+  const [coUsePicker, setCoUsePicker] = useState<{
+    scheduleIds: number[];
+    primaryId: number | null;
+    candidateIds: number[];
+    subtitle: string;
+  } | null>(null);
+  const [coUseSaving, setCoUseSaving] = useState(false);
   const [newEquipName, setNewEquipName] = useState('');
   const [newEquipSystemType, setNewEquipSystemType] = useState<string>('SUS');
   const [newEquipClass, setNewEquipClass] = useState('');
@@ -745,6 +754,19 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         }
         return;
       }
+      if (action === 'bind-multi') {
+        const scheduleId = task.data?.scheduleId as number | undefined;
+        if (!scheduleId) return;
+        const primary = resourceView.getBindingForSchedule(scheduleId);
+        const candidates = resourceView.getCandidatesForSchedule(scheduleId);
+        setCoUsePicker({
+          scheduleIds: [scheduleId],
+          primaryId: primary?.resourceNodeId ?? null,
+          candidateIds: candidates.map((c) => c.resourceNodeId),
+          subtitle: `为操作「${task.label}」配置并用设备(这道操作会同时占用所选设备)`,
+        });
+        return;
+      }
       if (action === 'create-equip') {
         setShowCreateEquipModal(true);
         setPendingBindTask(task);
@@ -778,6 +800,9 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       const currentBinding = scheduleId
         ? resourceView.getBindingForSchedule(scheduleId)
         : null;
+      const coUseCount = scheduleId
+        ? resourceView.getCandidatesForSchedule(scheduleId).length
+        : 0;
 
       const equipLabel = (n: typeof equipmentNodes[0]) => {
         const parts = [n.nodeName];
@@ -796,15 +821,20 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
                 React.createElement('path', { d: 'M2.5 6l2.5 2.5 4.5-5', fill: 'none', stroke: 'currentColor', strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round' }))
             : undefined,
         })),
+        { key: 'div-multi', label: '—', divider: true },
+        { key: 'bind-multi', label: '编辑并用设备…（多台）' },
         { key: 'div-unbind', label: '—', divider: true },
-        { key: 'unbind-equip', label: '解除绑定', danger: true, disabled: !currentBinding },
+        { key: 'unbind-equip', label: '解除绑定（含并用）', danger: true, disabled: !currentBinding },
         { key: 'div-create', label: '—', divider: true },
         { key: 'create-equip', label: '+ 新建设备...' },
       ];
 
+      const bindLabel = currentBinding
+        ? `设备: ${currentBinding.name}${coUseCount > 0 ? ` +并用${coUseCount}` : ''}`
+        : '绑定设备';
       const baseItems: ContextMenuItem[] = [
         { key: 'edit', label: '编辑操作' },
-        { key: 'bind-equipment', label: currentBinding ? `设备: ${currentBinding.name}` : '绑定设备', children: bindChildren },
+        { key: 'bind-equipment', label: bindLabel, children: bindChildren },
         { key: 'delete', label: '删除操作', danger: true },
         { key: 'divider-share', label: '—', divider: true },
       ];
@@ -884,6 +914,49 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
     }
   }, [resourceView]);
 
+  // ---- Open the 并用 multi-device picker for a batch of selected operations ----
+  const handleBatchCoUse = useCallback((selectedTaskIds: string[]) => {
+    const scheduleIds = selectedTaskIds
+      .map(id => parseInt(id.replace(/\D/g, ''), 10))
+      .filter(Number.isFinite);
+    if (!scheduleIds.length) {
+      wxbToast.warning('请先在甘特图中选择操作');
+      return;
+    }
+    setCoUsePicker({
+      scheduleIds,
+      primaryId: null,
+      candidateIds: [],
+      subtitle: `将对所选 ${scheduleIds.length} 个操作设置同一组并用设备（会覆盖各自现有的设备绑定）`,
+    });
+  }, []);
+
+  // ---- Persist the picker result: single → updateScheduleBindings, batch → batchUpdateScheduleBindings ----
+  const handleCoUseConfirm = useCallback(async (primaryNodeId: number | null, candidateNodeIds: number[]) => {
+    if (!coUsePicker) return;
+    const { scheduleIds } = coUsePicker;
+    setCoUseSaving(true);
+    try {
+      if (scheduleIds.length === 1) {
+        await processTemplateV2Api.updateScheduleBindings(scheduleIds[0], primaryNodeId, candidateNodeIds);
+      } else {
+        await processTemplateV2Api.batchUpdateScheduleBindings(scheduleIds, primaryNodeId, candidateNodeIds);
+      }
+      const deviceCount = (primaryNodeId != null ? 1 : 0) + candidateNodeIds.length;
+      wxbToast.success(
+        primaryNodeId != null
+          ? `已为 ${scheduleIds.length} 个操作设置 ${deviceCount} 台并用设备`
+          : `已解除 ${scheduleIds.length} 个操作的设备绑定`,
+      );
+      setCoUsePicker(null);
+      await resourceView.refreshBindings();
+    } catch (err: any) {
+      wxbToast.error(err?.response?.data?.error || '设置并用设备失败');
+    } finally {
+      setCoUseSaving(false);
+    }
+  }, [coUsePicker, resourceView]);
+
   // ---- Create equipment handler ----
   const handleCreateEquipment = useCallback(async () => {
     if (!newEquipName.trim()) { wxbToast.warning('请输入设备名称'); return; }
@@ -942,6 +1015,14 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           options={equipmentBindingOptions}
           style={{ width: '100%' }}
         />
+        <WxbButton
+          variant="secondary"
+          size="sm"
+          style={{ width: '100%' }}
+          onClick={() => handleBatchCoUse(selectedTaskIds)}
+        >
+          并用绑定…（多台）
+        </WxbButton>
         <div style={{ display: 'flex', gap: 6 }}>
           <WxbButton
             variant="ghost"
@@ -962,7 +1043,7 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
         </div>
       </div>
     ),
-    [handleBatchBind, handleBatchUnbind, equipmentBindingOptions],
+    [handleBatchBind, handleBatchUnbind, handleBatchCoUse, equipmentBindingOptions],
   );
 
   // ---- Loading / error states ----
@@ -1104,6 +1185,18 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       )}
 
       {/* Create Equipment Modal — Wxb Design System */}
+      <DeviceCoUseBindModal
+        open={coUsePicker !== null}
+        title={coUsePicker && coUsePicker.scheduleIds.length > 1 ? '批量并用绑定' : '编辑并用设备'}
+        subtitle={coUsePicker?.subtitle}
+        resourceNodes={resourceEditorData?.resourceTree ?? []}
+        initialPrimaryId={coUsePicker?.primaryId ?? null}
+        initialCandidateIds={coUsePicker?.candidateIds ?? []}
+        confirmLoading={coUseSaving}
+        onCancel={() => setCoUsePicker(null)}
+        onConfirm={handleCoUseConfirm}
+      />
+
       <WxbModal
         open={showCreateEquipModal}
         title="新建设备"

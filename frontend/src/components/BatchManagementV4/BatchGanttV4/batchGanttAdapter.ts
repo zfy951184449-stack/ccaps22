@@ -11,6 +11,7 @@ import type {
     GanttBatch,
     GanttDependency,
     GanttOperation,
+    GanttResourceNode,
     GanttShareGroup,
 } from './types';
 
@@ -34,15 +35,22 @@ export interface BatchGanttRenderModel {
     links: GanttLink[];
 }
 
-type ResourceTaskUpdate = {
-    groupId: string;
-    conflictType?: 'OVERLAP';
-    color?: string;
-    label?: string;
-    renderOnGroupRow?: boolean;
-};
-
 export const toOperationTaskId = (operationId: number): string => `batch-operation-${operationId}`;
+
+// A co-occupied operation renders as one clone per device; non-primary clones carry an
+// `__equip-<id>` suffix. Strip it to recover the canonical operation task id (used when
+// resolving a clicked clone back to its operation).
+export const baseOperationTaskId = (taskId: string): string => taskId.replace(/__equip-\d+$/, '');
+
+const coUseCount = (resourceNodes?: GanttResourceNode[] | null): number =>
+    Array.isArray(resourceNodes) ? resourceNodes.length : 0;
+
+// Append a 并用×N marker when an operation co-occupies more than one device, so the
+// multi-device nature is visible even in the operation (non-equipment) view.
+const decorateCoUseLabel = (baseLabel: string, resourceNodes?: GanttResourceNode[] | null): string => {
+    const n = coUseCount(resourceNodes);
+    return n > 1 ? `${baseLabel} ·并用×${n}` : baseLabel;
+};
 export const toBatchGroupId = (batchId: number): string => `batch-${batchId}`;
 export const toStageGroupId = (batchId: number, stageId: number): string => `batch-${batchId}-stage-${stageId}`;
 
@@ -133,7 +141,7 @@ export function buildBatchGanttModel(
 
                     tasks.push({
                         id: taskId,
-                        label: operation.name,
+                        label: decorateCoUseLabel(operation.name, operation.resourceNodes),
                         start,
                         end: Math.max(end, start + 0.25),
                         groupId: stageGroupId,
@@ -161,6 +169,7 @@ export function buildBatchGanttModel(
                             resourceNodeClass: operation.resourceNodeClass ?? null,
                             resourceSystemType: operation.resourceSystemType ?? null,
                             resourceEquipmentClass: operation.resourceEquipmentClass ?? null,
+                            resourceNodes: operation.resourceNodes ?? null,
                             displayStart: dayjs(operation.startDate).format('YYYY-MM-DD HH:mm'),
                             displayEnd: dayjs(operation.endDate).format('YYYY-MM-DD HH:mm'),
                         },
@@ -203,27 +212,15 @@ export function buildBatchGanttRenderModel(
         };
     }
 
+    // Equipment views expand each operation into one clone per co-occupied device, so they
+    // return the fully-formed task list (with lane groupIds already applied) rather than a
+    // taskId→update map. timeWindow tasks are dropped inside the builders.
     const result = yAxisMode === 'stage-equipment'
         ? buildStageEquipmentView(model.groups, tasks)
         : buildEquipmentView(tasks);
 
     return {
-        tasks: tasks
-            .map((task) => {
-                const update = result.taskUpdates.get(task.id);
-                if (!update) {
-                    return task.type === 'timeWindow' ? null : task;
-                }
-                return {
-                    ...task,
-                    groupId: update.groupId,
-                    conflictType: update.conflictType ?? task.conflictType,
-                    color: update.color ?? task.color,
-                    label: update.label ?? task.label,
-                    renderOnGroupRow: update.renderOnGroupRow ?? task.renderOnGroupRow,
-                };
-            })
-            .filter(Boolean) as GanttTask[],
+        tasks: result.tasks,
         groups: result.groups,
         dependencies: [],
         links: model.links,
@@ -369,28 +366,71 @@ function findOverlappingTaskIds(tasks: GanttTask[]): Set<string> {
     return overlapping;
 }
 
-function assignTasksToResourceRows(
+// Expand one operation task into one clone per co-occupied device (并占). The PRIMARY device
+// keeps the original task id so dependencies / share-group links / edit-resolution still
+// anchor to it; every co-used device gets a suffixed, read-only mirror clone whose data
+// carries that device so getResourceKey/getResourceLabel place it on the right lane.
+function expandTaskByDevices(task: GanttTask): GanttTask[] {
+    const resourceNodes = getTaskData<GanttResourceNode[]>(task, 'resourceNodes');
+    if (!Array.isArray(resourceNodes) || resourceNodes.length <= 1) {
+        return [task];
+    }
+    let primaryIdx = resourceNodes.findIndex((device) => device.isPrimary);
+    if (primaryIdx < 0) primaryIdx = 0;
+
+    return resourceNodes.map((device, idx) => {
+        const isPrimary = idx === primaryIdx;
+        return {
+            ...task,
+            id: isPrimary ? task.id : `${task.id}__equip-${device.resourceNodeId}`,
+            draggable: isPrimary ? task.draggable : false,
+            readOnly: isPrimary ? task.readOnly : true,
+            data: {
+                ...task.data,
+                resourceNodeId: device.resourceNodeId,
+                resourceName: device.resourceName ?? null,
+                resourceNodeClass: device.resourceNodeClass ?? null,
+                resourceSystemType: device.resourceSystemType ?? null,
+                resourceEquipmentClass: device.resourceEquipmentClass ?? null,
+            },
+        };
+    });
+}
+
+// Split a single device's tasks into overlap-free lanes; emit the lane groups and the
+// finalized tasks (groupId / conflict / color / label applied).
+function layoutDeviceLanes(
     parentGroupId: string,
-    tasks: GanttTask[],
-    taskUpdates: Map<string, ResourceTaskUpdate>,
+    deviceTasks: GanttTask[],
     options: { color: string; labelWithBatch?: boolean },
-) {
-    const layers = splitIntoLayers(tasks);
-    const overlappingTaskIds = findOverlappingTaskIds(tasks);
+): { laneGroups: GanttGroup[]; tasks: GanttTask[] } {
+    const layers = splitIntoLayers(deviceTasks);
+    const overlappingTaskIds = findOverlappingTaskIds(deviceTasks);
+    const laneGroups: GanttGroup[] = [];
+    const tasks: GanttTask[] = [];
 
     layers.forEach((layerTasks, index) => {
         const laneGroupId = `${parentGroupId}__lane-${index + 1}`;
+        laneGroups.push({
+            id: laneGroupId,
+            parentId: parentGroupId,
+            label: `轨道 ${index + 1}`,
+            color: options.color,
+            showSummaryBar: false,
+            isSubRow: true,
+        });
         layerTasks.forEach((task) => {
-            taskUpdates.set(task.id, {
+            tasks.push({
+                ...task,
                 groupId: laneGroupId,
-                conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : undefined,
+                conflictType: overlappingTaskIds.has(task.id) ? 'OVERLAP' : task.conflictType,
                 color: task.color ?? options.color,
                 label: formatResourceTaskLabel(task, options.labelWithBatch),
                 renderOnGroupRow: true,
             });
         });
     });
-    return layers.length;
+    return { laneGroups, tasks };
 }
 
 function formatResourceTaskLabel(task: GanttTask, labelWithBatch?: boolean): string {
@@ -404,9 +444,9 @@ function formatResourceTaskLabel(task: GanttTask, labelWithBatch?: boolean): str
 function buildStageEquipmentView(
     sourceGroups: GanttGroup[],
     tasks: GanttTask[],
-): { groups: GanttGroup[]; taskUpdates: Map<string, ResourceTaskUpdate> } {
+): { groups: GanttGroup[]; tasks: GanttTask[] } {
     const groups: GanttGroup[] = [];
-    const taskUpdates = new Map<string, ResourceTaskUpdate>();
+    const outTasks: GanttTask[] = [];
     const operationTasks = tasks.filter((task) => task.type !== 'timeWindow');
 
     sourceGroups
@@ -432,10 +472,12 @@ function buildStageEquipmentView(
 
                     const byEquipment = new Map<string, GanttTask[]>();
                     stageTasks.forEach((task) => {
-                        const key = getResourceKey(task);
-                        const current = byEquipment.get(key) ?? [];
-                        current.push(task);
-                        byEquipment.set(key, current);
+                        expandTaskByDevices(task).forEach((clone) => {
+                            const key = getResourceKey(clone);
+                            const current = byEquipment.get(key) ?? [];
+                            current.push(clone);
+                            byEquipment.set(key, current);
+                        });
                     });
 
                     Array.from(byEquipment.entries()).forEach(([resourceKey, resourceTasks]) => {
@@ -452,38 +494,32 @@ function buildStageEquipmentView(
                             showSummaryBar: true,
                         });
 
-                        const laneCount = assignTasksToResourceRows(resourceGroupId, resourceTasks, taskUpdates, { color });
-                        for (let i = 0; i < laneCount; i += 1) {
-                            groups.push({
-                                id: `${resourceGroupId}__lane-${i + 1}`,
-                                parentId: resourceGroupId,
-                                label: `轨道 ${i + 1}`,
-                                color,
-                                showSummaryBar: false,
-                                isSubRow: true,
-                            });
-                        }
+                        const { laneGroups, tasks: laidOut } = layoutDeviceLanes(resourceGroupId, resourceTasks, { color });
+                        groups.push(...laneGroups);
+                        outTasks.push(...laidOut);
                     });
                 });
         });
 
-    return { groups, taskUpdates };
+    return { groups, tasks: outTasks };
 }
 
 function buildEquipmentView(
     tasks: GanttTask[],
-): { groups: GanttGroup[]; taskUpdates: Map<string, ResourceTaskUpdate> } {
+): { groups: GanttGroup[]; tasks: GanttTask[] } {
     const groups: GanttGroup[] = [];
-    const taskUpdates = new Map<string, ResourceTaskUpdate>();
+    const outTasks: GanttTask[] = [];
     const byEquipment = new Map<string, GanttTask[]>();
 
     tasks
         .filter((task) => task.type !== 'timeWindow')
         .forEach((task) => {
-            const key = getResourceKey(task);
-            const current = byEquipment.get(key) ?? [];
-            current.push(task);
-            byEquipment.set(key, current);
+            expandTaskByDevices(task).forEach((clone) => {
+                const key = getResourceKey(clone);
+                const current = byEquipment.get(key) ?? [];
+                current.push(clone);
+                byEquipment.set(key, current);
+            });
         });
 
     Array.from(byEquipment.entries()).forEach(([resourceKey, resourceTasks]) => {
@@ -499,21 +535,13 @@ function buildEquipmentView(
             showSummaryBar: true,
         });
 
-        const laneCount = assignTasksToResourceRows(resourceGroupId, resourceTasks, taskUpdates, {
+        const { laneGroups, tasks: laidOut } = layoutDeviceLanes(resourceGroupId, resourceTasks, {
             color,
             labelWithBatch: true,
         });
-        for (let i = 0; i < laneCount; i += 1) {
-            groups.push({
-                id: `${resourceGroupId}__lane-${i + 1}`,
-                parentId: resourceGroupId,
-                label: `轨道 ${i + 1}`,
-                color,
-                showSummaryBar: false,
-                isSubRow: true,
-            });
-        }
+        groups.push(...laneGroups);
+        outTasks.push(...laidOut);
     });
 
-    return { groups, taskUpdates };
+    return { groups, tasks: outTasks };
 }
