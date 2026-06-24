@@ -415,6 +415,96 @@
   white-space: nowrap;
 }
 
+/* ---- Edit-mode multi-bind (candidate pool: 优选 + 备选) ---- */
+.qcom-multibind {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wx-space-2, 8px);
+}
+
+.qcom-multibind-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--wx-space-1, 4px);
+  max-height: 220px;
+  margin: 0;
+  padding: var(--wx-space-1, 4px);
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+  background: var(--wx-surface-1);
+}
+
+.qcom-multibind-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--wx-space-2, 8px);
+  min-width: 0;
+  padding: var(--wx-space-1, 4px) var(--wx-space-2, 8px);
+  border-radius: var(--wx-radius-sm, 4px);
+}
+
+.qcom-multibind-item:hover {
+  background: var(--wx-bg-2);
+}
+
+.qcom-multibind-star {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--wx-radius-sm, 4px);
+  background: transparent;
+  color: var(--wx-fg-4);
+  cursor: pointer;
+}
+
+.qcom-multibind-star:hover {
+  background: var(--wx-bg-2);
+  color: var(--wx-amber-500);
+}
+
+.qcom-multibind-star.is-primary {
+  color: var(--wx-amber-500);
+}
+
+.qcom-multibind-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--wx-fg-2);
+  font-size: var(--wx-fs-13);
+  line-height: 1.4;
+}
+
+.qcom-multibind-item .wxb-tag {
+  flex: 0 0 auto;
+}
+
+/* Equipment-pool dropdown: let long device labels wrap instead of clipping. */
+.qcom-bind-popup .ant-select-item-option-content,
+.qcom-bind-popup .ant-select-tree-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Equipment-pool tree: roomy rows so wrapped titles + checkboxes stay aligned. */
+.qcom-bind-popup .ant-select-tree-treenode {
+  align-items: flex-start;
+  padding-block: var(--wx-space-1, 4px);
+}
+
+.qcom-multibind-empty {
+  margin: 0;
+  color: var(--wx-fg-4);
+  font-size: var(--wx-fs-13);
+}
+
 @media (max-width: 900px) {
   .qcom-layout {
     grid-template-columns: 1fr;

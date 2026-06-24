@@ -1190,6 +1190,143 @@ export const upsertTemplateScheduleBinding = async (
   };
 };
 
+/**
+ * Replace ALL bindings of a single schedule in one transaction.
+ * Multi-equipment candidate-pool semantics:
+ *   - 1 PRIMARY (优选) + 0..N AUXILIARY (备选).
+ * Steps: DELETE every existing binding for the schedule -> insert 1 PRIMARY (if primaryNodeId
+ * is not null) -> insert one AUXILIARY per deduped candidate (candidates containing primary
+ * are stripped out).
+ * Caller MUST pass a transactional executor (a pooled connection inside beginTransaction);
+ * `executor` is required (no pool default) so a non-transactional misuse — which would
+ * auto-commit the DELETE then fail mid-INSERT, leaving a half-bound row — cannot compile.
+ * Validation is asymmetric on purpose: PRIMARY runs the full evaluateTemplateScheduleBinding
+ * (must be BOUND), while AUXILIARY candidates only check existence + bindable class + leaf.
+ * 备选本期不进排产、只在模版层存储/展示, so the looser check avoids rejecting legit alternates.
+ * Returns the full updated binding list (PRIMARY + AUXILIARY rows).
+ */
+export const replaceTemplateScheduleBindings = async (
+  scheduleId: number,
+  primaryNodeId: number | null,
+  candidateNodeIds: number[],
+  executor: SqlExecutor,
+): Promise<TemplateScheduleBindingRecord[]> => {
+  const normalizedPrimary =
+    primaryNodeId !== null && primaryNodeId !== undefined && Number.isInteger(primaryNodeId) && primaryNodeId > 0
+      ? primaryNodeId
+      : null;
+
+  const normalizedCandidates = Array.from(
+    new Set(
+      (Array.isArray(candidateNodeIds) ? candidateNodeIds : [])
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    ),
+  ).filter((item) => item !== normalizedPrimary);
+
+  // Wipe every existing binding for this schedule first.
+  await executor.execute('DELETE FROM template_stage_operation_resource_bindings WHERE template_schedule_id = ?', [
+    scheduleId,
+  ]);
+
+  if (normalizedPrimary !== null) {
+    const evaluation = await evaluateTemplateScheduleBinding(scheduleId, normalizedPrimary, executor);
+    if (evaluation.status !== 'BOUND') {
+      throw new Error(evaluation.reason ?? 'Primary resource node binding is invalid');
+    }
+
+    await executor.execute(
+      `INSERT INTO template_stage_operation_resource_bindings
+       (template_schedule_id, resource_node_id, binding_mode, binding_role)
+       VALUES (?, ?, 'DEFAULT', 'PRIMARY')`,
+      [scheduleId, normalizedPrimary],
+    );
+
+    for (const candidateNodeId of normalizedCandidates) {
+      const candidateNode = await assertNodeExists(candidateNodeId, executor);
+      if (!BINDABLE_NODE_CLASSES.has(candidateNode.node_class)) {
+        throw new Error(`Candidate binding must target ${Array.from(BINDABLE_NODE_CLASSES).join(', ')}`);
+      }
+      if (candidateNode.child_count > 0) {
+        throw new Error('Candidate binding must target a leaf resource node');
+      }
+
+      await executor.execute(
+        `INSERT INTO template_stage_operation_resource_bindings
+         (template_schedule_id, resource_node_id, binding_mode, binding_role)
+         VALUES (?, ?, 'DEFAULT', 'AUXILIARY')`,
+        [scheduleId, candidateNodeId],
+      );
+    }
+  }
+
+  return listAllTemplateScheduleBindings([scheduleId], executor);
+};
+
+/**
+ * List ALL binding rows (PRIMARY + AUXILIARY, one record per row) for the given schedules,
+ * joined with resource_nodes/resources. Unlike listTemplateScheduleBindings (PRIMARY-only 1:1,
+ * used by downstream derive/gantt/roster paths), this is for the template-editor read path.
+ */
+export const listAllTemplateScheduleBindings = async (
+  scheduleIds: number[],
+  executor: SqlExecutor = pool,
+): Promise<TemplateScheduleBindingRecord[]> => {
+  if (!scheduleIds.length) {
+    return [];
+  }
+
+  const placeholders = scheduleIds.map(() => '?').join(', ');
+  const [rows] = await executor.execute<RowDataPacket[]>(
+    `SELECT
+        b.id,
+        b.template_schedule_id,
+        b.resource_node_id,
+        b.binding_mode,
+        b.binding_role,
+        rn.node_code,
+        rn.node_name,
+        rn.node_class,
+        rn.node_subtype,
+        rn.parent_id,
+        rn.node_scope,
+        rn.department_code,
+        rn.equipment_system_type,
+        rn.equipment_class,
+        rn.equipment_model,
+        rn.bound_resource_id,
+        r.resource_code AS bound_resource_code,
+        r.resource_name AS bound_resource_name,
+        r.resource_type AS bound_resource_type,
+        r.status AS bound_resource_status,
+        r.is_schedulable AS bound_resource_is_schedulable,
+        rn.sort_order,
+        rn.is_active,
+        rn.metadata,
+        (SELECT COUNT(*) FROM resource_nodes child WHERE child.parent_id = rn.id) AS child_count
+     FROM template_stage_operation_resource_bindings b
+     LEFT JOIN resource_nodes rn ON rn.id = b.resource_node_id
+     LEFT JOIN resources r ON r.id = rn.bound_resource_id
+     WHERE b.template_schedule_id IN (${placeholders})
+     ORDER BY b.template_schedule_id, FIELD(b.binding_role, 'PRIMARY', 'AUXILIARY'), b.id`,
+    scheduleIds,
+  );
+
+  return rows.map((row) => {
+    const node = row.resource_node_id ? mapResourceNodeRow(row) : null;
+    return {
+      id: Number(row.id),
+      template_schedule_id: Number(row.template_schedule_id),
+      resource_node_id: Number(row.resource_node_id),
+      binding_mode: 'DEFAULT' as const,
+      binding_role: (row.binding_role as BindingRole) || 'PRIMARY',
+      node,
+      status: node ? ('BOUND' as TemplateBindingStatus) : ('INVALID_NODE' as TemplateBindingStatus),
+      reason: node ? null : 'Resource node not found',
+    };
+  });
+};
+
 export const copyTemplateScheduleBindings = async (
   executor: SqlExecutor,
   scheduleIdMap: Map<number, number>,

@@ -3,6 +3,7 @@ import pool from '../config/database';
 import {
   listTemplateScheduleBindings,
   upsertTemplateScheduleBinding,
+  replaceTemplateScheduleBindings,
   BindingRole,
 } from '../services/resourceNodeService';
 
@@ -64,9 +65,80 @@ export const putTemplateStageOperationResourceBinding = async (req: Request, res
 };
 
 /**
- * List all resource bindings for a given template.
- * Returns bindings joined with resource_nodes so the frontend gets
- * schedule_id → { resource_node_id, node_name, node_class, equipment_system_type, binding_role } in one call.
+ * Replace the full candidate pool of a single schedule (multi-equipment binding).
+ * Body: { primary_node_id: number | null, candidate_node_ids: number[] }
+ *   - primary_node_id null  -> unbind everything for this schedule.
+ *   - primary_node_id null while candidate_node_ids non-empty -> 400 (must have a primary first).
+ * One transaction: wipe -> 1 PRIMARY (优选) -> N AUXILIARY (备选, primary deduped out).
+ * Returns the full updated binding list.
+ */
+export const putTemplateStageOperationResourceBindings = async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+
+  try {
+    const scheduleId = Number(req.params.scheduleId);
+    if (!Number.isInteger(scheduleId) || scheduleId <= 0) {
+      return res.status(400).json({ error: 'Invalid scheduleId' });
+    }
+
+    const primaryNodeId =
+      req.body.primary_node_id !== undefined && req.body.primary_node_id !== null
+        ? Number(req.body.primary_node_id)
+        : null;
+
+    if (primaryNodeId !== null && (!Number.isInteger(primaryNodeId) || primaryNodeId <= 0)) {
+      return res.status(400).json({ error: 'Invalid primary_node_id' });
+    }
+
+    const rawCandidates = req.body.candidate_node_ids;
+    if (rawCandidates !== undefined && rawCandidates !== null && !Array.isArray(rawCandidates)) {
+      return res.status(400).json({ error: 'candidate_node_ids must be an array' });
+    }
+
+    const candidateNodeIds: number[] = Array.isArray(rawCandidates)
+      ? rawCandidates.map((item: unknown) => Number(item))
+      : [];
+
+    if (candidateNodeIds.some((item) => !Number.isInteger(item) || item <= 0)) {
+      return res.status(400).json({ error: 'Invalid candidate_node_ids' });
+    }
+
+    const hasCandidates =
+      candidateNodeIds.filter((item) => item !== primaryNodeId).length > 0;
+    if (primaryNodeId === null && hasCandidates) {
+      return res
+        .status(400)
+        .json({ error: 'candidate_node_ids require a primary_node_id (a primary must exist first)' });
+    }
+
+    await connection.beginTransaction();
+    const bindings = await replaceTemplateScheduleBindings(
+      scheduleId,
+      primaryNodeId,
+      candidateNodeIds,
+      connection,
+    );
+    await connection.commit();
+
+    res.json({ scheduleId, bindings });
+  } catch (error) {
+    await connection.rollback();
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Error replacing template stage operation resource bindings:', error);
+    res.status(500).json({ error: 'Failed to replace template stage operation resource bindings' });
+  } finally {
+    connection.release();
+  }
+};
+
+/**
+ * List ALL resource bindings for a given template (PRIMARY + AUXILIARY, one row each).
+ * Returns bindings joined with resource_nodes so the frontend gets, per binding row,
+ * { template_schedule_id, resource_node_id, binding_role, node_name, node_class, equipment_system_type, ... }.
+ * The frontend groups rows by template_schedule_id into a candidate pool (优选 + 备选).
+ * NOTE: intentionally NOT filtered to PRIMARY only — this is the template-editor read path.
  */
 export const listBindingsByTemplate = async (req: Request, res: Response) => {
   try {
@@ -90,6 +162,7 @@ export const listBindingsByTemplate = async (req: Request, res: Response) => {
       JOIN process_stages ps ON sos.stage_id = ps.id
       JOIN resource_nodes rn ON b.resource_node_id = rn.id
       WHERE ps.template_id = ?
+      ORDER BY b.template_schedule_id, FIELD(b.binding_role, 'PRIMARY', 'AUXILIARY'), b.id
     `, [templateId]);
 
     res.json(rows);

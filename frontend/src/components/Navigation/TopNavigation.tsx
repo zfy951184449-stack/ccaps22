@@ -136,6 +136,7 @@ const navGroups: NavGroup[] = [
       { key: 'equipment-state-machine', icon: <ExperimentOutlined />, label: '排产原型 · 设备状态机', path: '/equipment-state-machine', requiredPermission: 'APS_TEMPLATE_READ' },
       { key: 'derivable-library', icon: <ExperimentOutlined />, label: '排产原型 · 派生库', path: '/derivable-library', requiredPermission: 'APS_TEMPLATE_READ' },
       { key: 'ps-resource-master', icon: <ExperimentOutlined />, label: '排产原型 · 资源主数据', path: '/ps-resource-master', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'factory-sandtable', icon: <ExperimentOutlined />, label: '排产原型 · 工厂沙盘', path: '/factory-sandtable', requiredPermission: 'APS_TEMPLATE_READ' },
     ],
   },
 ];

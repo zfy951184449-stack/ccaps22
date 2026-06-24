@@ -686,6 +686,44 @@ export const processTemplateV2Api = {
     return response.data;
   },
   /**
+   * Replace the full equipment candidate pool for one schedule row (multi-bind).
+   * primaryNodeId = the preferred 优选 device (binding_role='PRIMARY'); null unbinds everything.
+   * candidateNodeIds = alternative 备选 devices (binding_role='AUXILIARY'); must not include primary.
+   * The backend wipes existing bindings then re-inserts PRIMARY + AUXILIARY rows in one transaction.
+   * Downstream (batch derive / Gantt / roster solver) still only reads the PRIMARY row.
+   */
+  updateScheduleBindings: async (
+    scheduleId: number,
+    primaryNodeId: number | null,
+    candidateNodeIds: number[],
+  ): Promise<{
+    scheduleId: number;
+    // NOTE: the write endpoint echoes the full updated list as rich records
+    // (resource node info nested under `node`, matching listAllTemplateScheduleBindings),
+    // NOT the flat `node_name` shape of listBindingsByTemplate. Callers currently ignore
+    // this payload and re-fetch via listBindingsByTemplate, but the type stays honest.
+    bindings: Array<{
+      id: number;
+      template_schedule_id: number;
+      resource_node_id: number;
+      binding_mode: string;
+      binding_role: string;
+      node: { node_name?: string; [key: string]: unknown } | null;
+      status: string;
+      reason: string | null;
+      [key: string]: unknown;
+    }>;
+  }> => {
+    const response = await client.put(
+      `/template-stage-operations/${scheduleId}/resource-bindings`,
+      {
+        primary_node_id: primaryNodeId,
+        candidate_node_ids: candidateNodeIds,
+      },
+    );
+    return response.data;
+  },
+  /**
    * List all resource bindings for a template in one bulk call.
    * Used by the resource Gantt view to map operations → equipment.
    */

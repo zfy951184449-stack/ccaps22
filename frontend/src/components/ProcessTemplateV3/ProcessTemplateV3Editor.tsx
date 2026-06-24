@@ -622,9 +622,13 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
       windowEndDayOffset: Number(op.window_end_day_offset ?? 0),
       durationHours: Number(op.standard_time ?? libItem?.standard_time ?? 2),
       requiredPeople: Number(op.required_people ?? libItem?.required_people ?? 1),
+      // 备选(AUXILIARY)候选设备:从资源视图已加载的绑定列表回填,供弹窗多选编辑回显。
+      candidateNodeIds: resourceView
+        .getCandidatesForSchedule(op.id)
+        .map((candidate) => candidate.resourceNodeId),
     });
     setEditOperationModalOpen(true);
-  }, [findStageOperation, resourceEditorData]);
+  }, [findStageOperation, resourceEditorData, resourceView]);
 
   const openDeleteConfirm = useCallback((targets: GanttTask[]) => {
     const seen = new Set<number>();
@@ -1080,7 +1084,6 @@ const ProcessTemplateV3Editor: React.FC<ProcessTemplateV3EditorProps> = ({ templ
           operationLibrary={resourceEditorData.operationLibrary ?? []}
           capabilities={resourceEditorData.capabilities}
           context={null}
-          bindingOptions={equipmentBindingOptions}
           onCreated={async () => {}}
           onCancel={() => {
             setEditOperationModalOpen(false);

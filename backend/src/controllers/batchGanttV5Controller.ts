@@ -140,9 +140,9 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         pbp.batch_color,
         pbp.planned_start_date AS batch_start_date,
         -- Stage Info (Derived from operations or joined table)
-        ps.id AS stage_id,
-        ps.stage_name,
-        ps.id AS stage_order, -- simplified ordering
+        COALESCE(ps.id, ps_ind.id) AS stage_id,
+        COALESCE(ps.stage_name, ps_ind.stage_name) AS stage_name,
+        COALESCE(ps.id, ps_ind.id) AS stage_order, -- simplified ordering
         -- Operation Info
         bop.id AS operation_id,
         bop.template_schedule_id,
@@ -153,11 +153,11 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         bop.window_end_datetime,   -- NEW
         bop.planned_duration,
         COALESCE(o.required_people, bop.required_people) AS required_people,
-        MAX(tsb.resource_node_id) AS resource_node_id,
-        MAX(rn.node_name) AS resource_name,
-        MAX(rn.node_class) AS resource_node_class,
-        MAX(rn.equipment_system_type) AS resource_system_type,
-        MAX(rn.equipment_class) AS resource_equipment_class,
+        COALESCE(MAX(tsb.resource_node_id), MAX(bop.resource_node_id)) AS resource_node_id,
+        COALESCE(MAX(rn.node_name), MAX(rn_ind.node_name)) AS resource_name,
+        COALESCE(MAX(rn.node_class), MAX(rn_ind.node_class)) AS resource_node_class,
+        COALESCE(MAX(rn.equipment_system_type), MAX(rn_ind.equipment_system_type)) AS resource_system_type,
+        COALESCE(MAX(rn.equipment_class), MAX(rn_ind.equipment_class)) AS resource_equipment_class,
         -- Assignment Status
         COUNT(bpa.employee_id) AS assigned_people
       FROM production_batch_plans pbp
@@ -170,13 +170,18 @@ export const getGanttHierarchy = async (req: Request, res: Response) => {
         ON tsb.template_schedule_id = bop.template_schedule_id
         AND (tsb.binding_role = 'PRIMARY' OR tsb.binding_role IS NULL)
       LEFT JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
+      -- Independent-op fallbacks: stage / equipment are carried directly on the row
+      -- (template_schedule_id is NULL for ops added via the gantt right-click, so the
+      --  template-derived joins above yield NULL; COALESCE pulls the lane from here).
+      LEFT JOIN process_stages ps_ind ON ps_ind.id = bop.stage_id
+      LEFT JOIN resource_nodes rn_ind ON rn_ind.id = bop.resource_node_id
       -- Assignments
       LEFT JOIN batch_personnel_assignments bpa ON bop.id = bpa.batch_operation_plan_id 
         AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')
       WHERE 
         ${hierarchyWhereClauses.join('\n        AND ')}
       GROUP BY bop.id
-      ORDER BY pbp.id, ps.id, bop.planned_start_datetime
+      ORDER BY pbp.id, COALESCE(ps.id, ps_ind.id), bop.planned_start_datetime
     `;
 
         const [rows] = await pool.execute<RowDataPacket[]>(query, hierarchyParams);
@@ -559,6 +564,104 @@ export const updateGanttOperationsBatch = async (req: Request, res: Response) =>
         await connection.rollback();
         console.error('Error batch-updating operations:', error);
         res.status(500).json({ error: 'Failed to update operations' });
+    } finally {
+        connection.release();
+    }
+};
+
+// Create a brand-new INDEPENDENT operation directly on a batch (gantt right-click
+// "新增操作"). Unlike template-derived ops it has no template_schedule_id; it carries
+// its own stage_id / resource_node_id so it renders in the clicked lane instead of the
+// "General Operations" fallback. operation_id must reference an existing operations
+// catalog row — the frontend either picks one or mints one first via POST /api/operations.
+export const createGanttOperation = async (req: Request, res: Response) => {
+    const connection = await pool.getConnection();
+    try {
+        const batchPlanId = Number(req.body?.batch_plan_id);
+        const operationId = Number(req.body?.operation_id);
+        const stageId = req.body?.stage_id !== undefined && req.body?.stage_id !== null
+            ? Number(req.body.stage_id)
+            : null;
+        const resourceNodeId = req.body?.resource_node_id !== undefined && req.body?.resource_node_id !== null
+            ? Number(req.body.resource_node_id)
+            : null;
+
+        if (!Number.isInteger(batchPlanId) || batchPlanId <= 0) {
+            return res.status(400).json({ error: 'batch_plan_id is required' });
+        }
+        if (!Number.isInteger(operationId) || operationId <= 0) {
+            return res.status(400).json({ error: 'operation_id is required' });
+        }
+
+        const startDate = normalizeDateTimeForMysql(req.body?.startDate);
+        if (!startDate) {
+            return res.status(400).json({ error: 'startDate is required' });
+        }
+
+        const duration = Number(req.body?.plannedDuration);
+        if (!Number.isFinite(duration) || duration <= 0) {
+            return res.status(400).json({ error: 'plannedDuration must be a positive number' });
+        }
+
+        // End is derived from start + duration unless an explicit end is supplied.
+        const explicitEnd = normalizeDateTimeForMysql(req.body?.endDate);
+        const endDate = explicitEnd ?? dayjs(startDate).add(duration, 'hour').format('YYYY-MM-DD HH:mm:ss');
+
+        const windowStartDate = normalizeDateTimeForMysql(req.body?.windowStartDate);
+        const windowEndDate = normalizeDateTimeForMysql(req.body?.windowEndDate);
+
+        const requiredPeopleRaw = Number(req.body?.requiredPeople);
+        const requiredPeople = Number.isFinite(requiredPeopleRaw) && requiredPeopleRaw > 0
+            ? Math.round(requiredPeopleRaw)
+            : 1;
+
+        // Window guard — mirror the update path so start/end stay inside the window.
+        if (windowStartDate && dayjs(startDate).isBefore(dayjs(windowStartDate))) {
+            return res.status(400).json({ error: 'Start date cannot be earlier than window start date' });
+        }
+        if (windowEndDate && dayjs(endDate).isAfter(dayjs(windowEndDate))) {
+            return res.status(400).json({ error: 'End date cannot be later than window end date' });
+        }
+
+        await connection.beginTransaction();
+
+        // Validate the batch exists (the FK would catch it, but a clean 404 is friendlier).
+        const [batchRows] = await connection.execute<RowDataPacket[]>(
+            'SELECT id FROM production_batch_plans WHERE id = ?',
+            [batchPlanId]
+        );
+        if (batchRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ error: 'Batch not found' });
+        }
+
+        const [result] = await connection.execute(
+            `INSERT INTO batch_operation_plans
+                (batch_plan_id, template_schedule_id, operation_id,
+                 planned_start_datetime, planned_end_datetime, planned_duration,
+                 window_start_datetime, window_end_datetime,
+                 required_people, is_independent, stage_id, resource_node_id)
+             VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+            [
+                batchPlanId,
+                operationId,
+                startDate,
+                endDate,
+                duration,
+                windowStartDate,
+                windowEndDate,
+                requiredPeople,
+                stageId,
+                resourceNodeId,
+            ]
+        ) as any;
+
+        await connection.commit();
+        res.status(201).json({ message: 'Independent operation created', id: result.insertId });
+    } catch (error) {
+        await connection.rollback();
+        console.error('Error creating independent operation:', error);
+        res.status(500).json({ error: 'Failed to create operation' });
     } finally {
         connection.release();
     }

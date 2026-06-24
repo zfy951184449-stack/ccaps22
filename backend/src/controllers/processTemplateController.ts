@@ -605,7 +605,9 @@ export const getTemplateExportData = async (req: Request, res: Response) => {
       JOIN process_stages ps ON ps.id = sos.stage_id
       JOIN process_templates pt ON pt.id = ps.template_id
       JOIN operations o ON o.id = sos.operation_id
-      LEFT JOIN template_stage_operation_resource_bindings tsb ON tsb.template_schedule_id = sos.id
+      LEFT JOIN template_stage_operation_resource_bindings tsb
+        ON tsb.template_schedule_id = sos.id
+        AND tsb.binding_role = 'PRIMARY'
       LEFT JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
       WHERE ps.template_id IN (${placeholders})
       ORDER BY pt.template_code, ps.stage_order, sos.operation_day, sos.operation_order
@@ -685,7 +687,9 @@ export const getTemplateReportData = async (req: Request, res: Response) => {
        FROM stage_operation_schedules sos
        JOIN process_stages ps ON ps.id = sos.stage_id
        JOIN operations o ON o.id = sos.operation_id
-       LEFT JOIN template_stage_operation_resource_bindings tsb ON tsb.template_schedule_id = sos.id
+       LEFT JOIN template_stage_operation_resource_bindings tsb
+         ON tsb.template_schedule_id = sos.id
+         AND tsb.binding_role = 'PRIMARY'
        LEFT JOIN resource_nodes rn ON rn.id = tsb.resource_node_id
        WHERE ps.template_id = ?
        ORDER BY ps.stage_order, sos.operation_day, sos.operation_order`,

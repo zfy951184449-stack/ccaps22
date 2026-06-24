@@ -386,3 +386,274 @@
   border: 1px solid var(--wx-blue-100);
   border-radius: 6px;
 }
+
+/* ── CIP 编辑:工具条 / 校验汇总 ── */
+.psrm-pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.psrm-toolbar-hint {
+  margin-bottom: 0;
+}
+
+.psrm-issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.psrm-issue-item {
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: 12.5px;
+  color: var(--wx-red-700);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.psrm-issue-item:hover {
+  color: var(--wx-red-500);
+}
+
+/* ── 拓扑:列头「+ 新增」+ 拖拽 handle ── */
+.psrm-topo-col-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.psrm-topo-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--wx-blue-300);
+  border-radius: 5px;
+  background: var(--wx-bg, #ffffff);
+  color: var(--wx-primary, var(--wx-blue-600));
+  cursor: pointer;
+}
+
+.psrm-topo-add:hover {
+  background: var(--wx-blue-100);
+}
+
+.psrm-topo .psrm-topo-handle {
+  cursor: grab;
+}
+
+.psrm-topo.editing .psrm-topo-handle:active {
+  cursor: grabbing;
+}
+
+/* ── 工厂数字沙盘 ── */
+.psrm-sandtable {
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: var(--wx-bg, #ffffff);
+  overflow-x: auto;
+}
+
+.psrm-sand-cap {
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  margin-bottom: 6px;
+}
+
+.psrm-sand-sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.psrm-sand-sw.blue {
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+}
+
+.psrm-sand-sw.amber {
+  background: var(--wx-amber-100);
+  border: 1px solid var(--wx-amber-500);
+}
+
+.psrm-sand-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.psrm-sand-dot.green {
+  background: var(--wx-green-500);
+}
+
+.psrm-sand-dot.amber {
+  background: var(--wx-amber-500);
+}
+
+/* ── 编辑抽屉 ── */
+.psrm-drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.psrm-conseq {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--wx-blue-100);
+  border: 1px solid var(--wx-blue-300);
+  color: var(--wx-blue-700);
+}
+
+.psrm-conseq-glyph {
+  flex: none;
+  margin-top: 2px;
+  color: var(--wx-primary, var(--wx-blue-600));
+}
+
+.psrm-read-danger {
+  color: var(--wx-red-700);
+}
+
+.psrm-identity-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-identity-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px 2px;
+}
+
+.psrm-lock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.psrm-lock-label {
+  width: 48px;
+  flex: none;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-lock-value {
+  font-weight: 500;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-lock-note {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-identity-link {
+  font-size: 12px;
+  color: var(--wx-primary, var(--wx-blue-600));
+  text-decoration: none;
+}
+
+.psrm-drawer-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-drawer-divider span {
+  flex: 1;
+  height: 1px;
+  background: var(--wx-blue-100);
+}
+
+.psrm-reverse {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.psrm-reverse-title {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+}
+
+.psrm-reverse-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+  color: var(--wx-blue-700);
+  padding: 3px 8px;
+  border: 1px solid var(--wx-blue-100);
+  border-radius: 6px;
+  background: var(--wx-bg, #ffffff);
+  cursor: pointer;
+}
+
+.psrm-reverse-chip:hover {
+  border-color: var(--wx-blue-300);
+}
+
+.psrm-reverse-role {
+  font-family: inherit;
+  font-weight: 500;
+  font-size: 10.5px;
+  color: var(--wx-green-700);
+}
+
+.psrm-reverse-role.backup {
+  color: var(--wx-amber-700);
+}
+
+.psrm-drawer-foot {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--wx-blue-100);
+}
+
+.psrm-del-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  font-size: 12.5px;
+  color: var(--wx-red-700);
+  cursor: pointer;
+  padding: 0;
+}
+
+.psrm-del-btn.disabled {
+  color: var(--wx-text-secondary, var(--wx-blue-700));
+  cursor: not-allowed;
+}

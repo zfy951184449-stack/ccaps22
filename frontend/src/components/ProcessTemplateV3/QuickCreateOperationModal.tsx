@@ -15,6 +15,7 @@ import {
   WxbSwitch,
   WxbTag,
   WxbTextarea,
+  WxbTreeSelect,
 } from '../wxb-ui';
 import { processTemplateV2Api } from '../../services';
 import type {
@@ -65,6 +66,11 @@ export type EditOperationTarget = {
   windowEndDayOffset: number;
   durationHours: number;
   requiredPeople: number;
+  /**
+   * Current candidate (备选 / AUXILIARY) equipment node ids for this schedule, used to prefill
+   * the multi-bind editor. Does NOT include the primary node. Optional; defaults to empty.
+   */
+  candidateNodeIds?: number[];
 };
 
 type QuickCreateOperationModalProps = {
@@ -87,14 +93,15 @@ type QuickCreateOperationModalProps = {
   editTarget?: EditOperationTarget | null;
   /** Called after a successful edit save. */
   onUpdated?: (result: { scheduleId: number; stageId: number }) => Promise<void> | void;
-  /** Grouped equipment options for the edit-mode 设备绑定 field (by team, current team first). */
-  bindingOptions?: Array<{ label: string; options: Array<{ label: string; value: number }> }>;
 };
 
 type QuickCreateDraft = {
   sourceMode: SourceMode;
   stageId: number | null;
+  /** The 优选 (PRIMARY) equipment node — the single device used by all downstream consumers. */
   resourceNodeId: number | null;
+  /** The 备选 (AUXILIARY) candidate equipment node ids — stored on the template, display only. */
+  candidateNodeIds: number[];
   operationId: number | null;
   searchValue: string;
   operationDay: number;
@@ -189,6 +196,59 @@ const flattenNodes = (nodes: ResourceNode[]): ResourceNode[] => {
   };
   walk(nodes);
   return result;
+};
+
+type BindTreeNode = {
+  value: number | string;
+  title: string;
+  selectable?: boolean;
+  checkable?: boolean;
+  isLeaf?: boolean;
+  children?: BindTreeNode[];
+};
+
+const BIND_GROUP_PREFIX = 'grp-';
+
+// 把资源节点树(厂区→产线→房间→设备)转成 TreeSelect 数据,供「设备绑定(候选池)」逐层勾选。
+// - 仅「可调度的设备叶子」可勾(checkable);厂区/产线/房间等中间层只用于展开,不可勾不可选;
+// - 不含任何可绑设备的分支整支剪除;
+// - 同时收集「需默认展开到房间一层」的上层 key(厂区+产线)。
+const buildBindingTree = (
+  nodes: ResourceNode[],
+): { treeData: BindTreeNode[]; expandedKeys: Array<string | number> } => {
+  const expandedKeys: Array<string | number> = [];
+  const walk = (list: ResourceNode[]): BindTreeNode[] => {
+    const out: BindTreeNode[] = [];
+    for (const node of list ?? []) {
+      if (node.nodeClass === 'EQUIPMENT_UNIT') {
+        if (!node.isActive || !node.boundResourceIsSchedulable) continue;
+        const extra = [node.equipmentSystemType, node.equipmentClass]
+          .filter(Boolean)
+          .join(' · ');
+        out.push({
+          value: Number(node.id),
+          title: extra ? `${node.nodeName}（${extra}）` : node.nodeName,
+          isLeaf: true,
+        });
+      } else {
+        const children = walk(node.children ?? []);
+        if (children.length === 0) continue; // 剪掉没有可绑设备的分支
+        const key = `${BIND_GROUP_PREFIX}${node.id}`;
+        if (node.nodeClass === 'SITE' || node.nodeClass === 'LINE') {
+          expandedKeys.push(key);
+        }
+        out.push({
+          value: key,
+          title: node.nodeName,
+          selectable: false,
+          checkable: false,
+          children,
+        });
+      }
+    }
+    return out;
+  };
+  return { treeData: walk(nodes), expandedKeys };
 };
 
 const getStageStartDay = (stage: TemplateStageSummary | null | undefined) => Number(stage?.start_day ?? 0);
@@ -353,6 +413,7 @@ const buildInitialDraft = ({
     sourceMode: 'existing',
     stageId: selectedStage?.id ?? null,
     resourceNodeId: selectedNode?.id ?? null,
+    candidateNodeIds: [],
     operationId: selectedOperation?.id ?? null,
     searchValue: '',
     operationDay: Number(timing.operationDay ?? 0),
@@ -386,6 +447,7 @@ const buildEditDraft = (editTarget: EditOperationTarget): QuickCreateDraft => ({
   sourceMode: 'existing',
   stageId: editTarget.stageId,
   resourceNodeId: null,
+  candidateNodeIds: editTarget.candidateNodeIds ?? [],
   operationId: editTarget.operationId,
   searchValue: '',
   operationDay: Number(editTarget.operationDay ?? 0),
@@ -422,10 +484,11 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
   mode = 'create',
   editTarget = null,
   onUpdated,
-  bindingOptions = [],
 }) => {
   const [draft, setDraft] = useState<QuickCreateDraft | null>(null);
   const [editInitialResourceNodeId, setEditInitialResourceNodeId] = useState<number | null>(null);
+  // Initial 备选 candidate node ids when the edit modal opened, for change detection on save.
+  const [editInitialCandidateNodeIds, setEditInitialCandidateNodeIds] = useState<number[]>([]);
   const [operationTypes, setOperationTypes] = useState<OperationTypeOption[]>([]);
   const [qualifications, setQualifications] = useState<QualificationOption[]>([]);
   const [recentOperationIds, setRecentOperationIds] = useState<number[]>([]);
@@ -495,6 +558,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       setApiError(null);
       setSavingStep('');
       setEditInitialResourceNodeId(null);
+      setEditInitialCandidateNodeIds([]);
       setReplaceMode(false);
       setLiveOperationLibrary(null);
       setLibraryRefreshing(false);
@@ -518,6 +582,11 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         setOperationTypes(nextOperationTypes);
         setQualifications(nextQualifications);
         if (mode === 'edit' && editTarget) {
+          // 备选 (AUXILIARY) candidates are prefilled from editTarget (sourced from the
+          // resource view's bulk binding load). The 优选 (PRIMARY) is fetched authoritatively
+          // below to avoid depending on resource-view load timing.
+          const initialCandidates = (editTarget.candidateNodeIds ?? []).map(Number);
+          setEditInitialCandidateNodeIds(initialCandidates);
           setDraft(buildEditDraft(editTarget));
           // Prefill current equipment binding (authoritative single fetch — avoids
           // depending on resource-view load timing).
@@ -533,6 +602,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
           }
         } else {
           setEditInitialResourceNodeId(null);
+          setEditInitialCandidateNodeIds([]);
           setDraft(
             buildInitialDraft({
               stages,
@@ -589,6 +659,33 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       })),
     [leafNodes],
   );
+
+  // 层级树数据(厂区→产线→房间→设备),供「设备绑定(候选池)」逐层勾选;直接用已传入的 resourceNodes 树。
+  const { treeData: bindingTreeData, expandedKeys: bindingTreeExpandedKeys } = useMemo(
+    () => buildBindingTree(resourceNodes),
+    [resourceNodes],
+  );
+
+  // Flat node-id → display label(设备含 系统·类别,与树标题一致),用于下方已选清单的设备名。
+  const bindingNodeLabelById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const node of allNodes) {
+      const extra =
+        node.nodeClass === 'EQUIPMENT_UNIT'
+          ? [node.equipmentSystemType, node.equipmentClass].filter(Boolean).join(' · ')
+          : '';
+      map.set(Number(node.id), extra ? `${node.nodeName}（${extra}）` : node.nodeName);
+    }
+    return map;
+  }, [allNodes]);
+
+  // Edit-mode multi-bind: the full set of selected devices (优选 + 备选), primary first.
+  const editSelectedNodeIds = useMemo<number[]>(() => {
+    if (!draft) return [];
+    const primary = draft.resourceNodeId;
+    const candidates = (draft.candidateNodeIds ?? []).filter((id) => id !== primary);
+    return primary != null ? [primary, ...candidates] : candidates;
+  }, [draft]);
 
   const operationTypeOptions = useMemo(
     () =>
@@ -684,6 +781,35 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       };
     });
     setApiError(null);
+  };
+
+  // Edit-mode multi-bind: the user picks any number of devices; the first kept selection
+  // becomes 优选 (PRIMARY) unless an existing primary is still selected. The rest are 备选.
+  const handleEditSelectedNodesChange = (nextIdsRaw: Array<number | string>) => {
+    const nextIds = nextIdsRaw.map(Number);
+    updateDraft((current) => {
+      if (nextIds.length === 0) {
+        return { ...current, resourceNodeId: null, candidateNodeIds: [] };
+      }
+      const keptPrimary =
+        current.resourceNodeId != null && nextIds.includes(current.resourceNodeId)
+          ? current.resourceNodeId
+          : nextIds[0];
+      return {
+        ...current,
+        resourceNodeId: keptPrimary,
+        candidateNodeIds: nextIds.filter((id) => id !== keptPrimary),
+      };
+    });
+  };
+
+  // Promote one already-selected device to 优选; the former primary drops to 备选.
+  const handleSetPrimaryNode = (nodeId: number) => {
+    updateDraft((current) => {
+      if (current.resourceNodeId === nodeId) return current;
+      const rest = editSelectedNodeIds.filter((id) => id !== nodeId);
+      return { ...current, resourceNodeId: nodeId, candidateNodeIds: rest };
+    });
   };
 
   useEffect(() => {
@@ -987,11 +1113,25 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         windowEndTime: Number(draft.windowEndTime ?? 0),
         windowEndDayOffset: Number(draft.windowEndDayOffset ?? 0),
       });
-      // Persist equipment binding only when it changed (null = unbind).
-      const nextResourceNodeId = draft.resourceNodeId ?? null;
-      if (nextResourceNodeId !== editInitialResourceNodeId) {
+      // Persist the equipment candidate pool (优选 PRIMARY + 备选 AUXILIARY) only when it
+      // changed. primary = null unbinds everything; candidates never include the primary.
+      const nextPrimaryNodeId = draft.resourceNodeId ?? null;
+      const nextCandidateNodeIds = (draft.candidateNodeIds ?? []).filter(
+        (id) => id !== nextPrimaryNodeId,
+      );
+      const primaryChanged = nextPrimaryNodeId !== editInitialResourceNodeId;
+      const candidatesChanged =
+        nextCandidateNodeIds.length !== editInitialCandidateNodeIds.length ||
+        nextCandidateNodeIds.some((id) => !editInitialCandidateNodeIds.includes(id));
+      if (primaryChanged || candidatesChanged) {
         setSavingStep('更新设备绑定');
-        await processTemplateV2Api.batchUpdateBindings([editTarget.scheduleId], nextResourceNodeId, 'PRIMARY');
+        // Backend rejects candidates without a primary; drop them defensively so the
+        // user gets the "unbind" they asked for instead of a 400.
+        await processTemplateV2Api.updateScheduleBindings(
+          editTarget.scheduleId,
+          nextPrimaryNodeId,
+          nextPrimaryNodeId === null ? [] : nextCandidateNodeIds,
+        );
       }
       await onUpdated?.({ scheduleId: editTarget.scheduleId, stageId: Number(draft.stageId) });
       message.success(replaced ? '操作已替换' : '操作已更新');
@@ -1520,21 +1660,67 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                     }
                   />
                   {mode === 'edit' ? (
-                    <WxbSelect
-                      label="设备绑定"
-                      value={draft.resourceNodeId ?? undefined}
-                      options={bindingOptions}
-                      showSearch
-                      allowClear
-                      optionFilterProp="label"
-                      placeholder="未绑定"
-                      onChange={(value) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          resourceNodeId: value ? Number(value) : null,
-                        }))
-                      }
-                    />
+                    <div className="qcom-multibind">
+                      <WxbTreeSelect
+                        label="设备绑定（候选池）"
+                        treeData={bindingTreeData}
+                        value={editSelectedNodeIds}
+                        treeCheckable
+                        showSearch
+                        allowClear
+                        treeNodeFilterProp="title"
+                        treeDefaultExpandedKeys={bindingTreeExpandedKeys}
+                        popupMatchSelectWidth={false}
+                        popupClassName="qcom-bind-popup"
+                        listHeight={360}
+                        maxTagCount={0}
+                        maxTagPlaceholder={(omitted) => `已选 ${omitted.length} 台（见下方清单）`}
+                        placeholder="按 厂区 / 产线 / 房间 逐层展开，勾选设备"
+                        onChange={(value) =>
+                          handleEditSelectedNodesChange(
+                            (value as Array<number | string>) ?? [],
+                          )
+                        }
+                      />
+                      {editSelectedNodeIds.length > 0 ? (
+                        <ul className="qcom-multibind-list">
+                          {editSelectedNodeIds.map((nodeId) => {
+                            const isPrimary = draft.resourceNodeId === nodeId;
+                            return (
+                              <li key={nodeId} className="qcom-multibind-item">
+                                <button
+                                  type="button"
+                                  className={`qcom-multibind-star ${isPrimary ? 'is-primary' : ''}`}
+                                  aria-pressed={isPrimary}
+                                  title={isPrimary ? '当前优选设备' : '设为优选'}
+                                  onClick={() => handleSetPrimaryNode(nodeId)}
+                                >
+                                  <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden="true">
+                                    <path
+                                      d="M7 1.2l1.76 3.57 3.94.57-2.85 2.78.67 3.92L7 10.78 3.48 12.06l.67-3.92L1.3 5.34l3.94-.57L7 1.2z"
+                                      fill={isPrimary ? 'currentColor' : 'none'}
+                                      stroke="currentColor"
+                                      strokeWidth="1"
+                                      strokeLinejoin="round"
+                                    />
+                                  </svg>
+                                </button>
+                                <span className="qcom-multibind-name">
+                                  {bindingNodeLabelById.get(nodeId) ?? `设备 #${nodeId}`}
+                                </span>
+                                {isPrimary ? (
+                                  <WxbTag color="green">优选</WxbTag>
+                                ) : (
+                                  <WxbTag color="neutral">备选</WxbTag>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : (
+                        <p className="qcom-multibind-empty">未绑定设备</p>
+                      )}
+                    </div>
                   ) : (
                     <WxbSelect
                       label="默认资源节点"

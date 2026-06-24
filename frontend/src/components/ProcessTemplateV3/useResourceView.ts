@@ -49,8 +49,10 @@ export interface UseResourceViewResult {
   loading: boolean;
   /** Force-refresh binding data (after a bind/unbind action) */
   refreshBindings: () => Promise<void>;
-  /** Get the primary equipment binding for a schedule ID */
+  /** Get the primary (优选) equipment binding for a schedule ID — drives Gantt lanes + menu. */
   getBindingForSchedule: (scheduleId: number) => EquipmentInfo | null;
+  /** Get the alternative (备选 / AUXILIARY) equipment for a schedule ID — display only. */
+  getCandidatesForSchedule: (scheduleId: number) => EquipmentInfo[];
 }
 
 type ResourceTaskUpdate = {
@@ -424,14 +426,17 @@ export function useResourceView(
   }, [templateId, yAxisMode]);
 
   // ---- Derived maps ----
-  const { bindingMap, equipmentMap } = useMemo(() => {
+  // A single operation can now own multiple binding rows (1 PRIMARY + 0..N AUXILIARY).
+  //  - bindingMap (schedule → PRIMARY EquipmentInfo) drives Gantt Y-axis lanes + the
+  //    right-click menu; AUXILIARY rows are intentionally excluded so layout is unchanged.
+  //  - candidateMap (schedule → AUXILIARY EquipmentInfo[]) is display-only (tags/tooltips).
+  //  - equipmentMap (node id → EquipmentInfo) caches every node we've seen for labels.
+  const { bindingMap, candidateMap, equipmentMap } = useMemo(() => {
     const bMap = new Map<number, EquipmentInfo>();
+    const cMap = new Map<number, EquipmentInfo[]>();
     const eMap = new Map<number, EquipmentInfo>();
 
     for (const b of bindings) {
-      // Only use PRIMARY bindings for Gantt Y-axis grouping
-      if (b.binding_role && b.binding_role !== 'PRIMARY') continue;
-
       const info: EquipmentInfo = {
         resourceNodeId: b.resource_node_id,
         name: b.node_name,
@@ -439,11 +444,20 @@ export function useResourceView(
         systemType: b.equipment_system_type,
         equipmentClass: b.equipment_class,
       };
-      bMap.set(b.template_schedule_id, info);
       eMap.set(b.resource_node_id, info);
+
+      if (!b.binding_role || b.binding_role === 'PRIMARY') {
+        // PRIMARY (or legacy rows without a role) → the one device used everywhere downstream.
+        bMap.set(b.template_schedule_id, info);
+      } else {
+        // AUXILIARY → alternative candidate, never gets its own Gantt lane.
+        const list = cMap.get(b.template_schedule_id) ?? [];
+        list.push(info);
+        cMap.set(b.template_schedule_id, list);
+      }
     }
 
-    return { bindingMap: bMap, equipmentMap: eMap };
+    return { bindingMap: bMap, candidateMap: cMap, equipmentMap: eMap };
   }, [bindings]);
 
   // ---- Stage info ----
@@ -519,5 +533,20 @@ export function useResourceView(
     [bindingMap],
   );
 
-  return { resourceGroups, resourceTasks, loading, refreshBindings, getBindingForSchedule };
+  // ---- Lookup for candidate (备选) equipment — display only, never drives lanes ----
+  const getCandidatesForSchedule = useCallback(
+    (scheduleId: number): EquipmentInfo[] => {
+      return candidateMap.get(scheduleId) ?? [];
+    },
+    [candidateMap],
+  );
+
+  return {
+    resourceGroups,
+    resourceTasks,
+    loading,
+    refreshBindings,
+    getBindingForSchedule,
+    getCandidatesForSchedule,
+  };
 }

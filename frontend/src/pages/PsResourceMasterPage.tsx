@@ -7,22 +7,31 @@
  * 重点 = 现有「资源节点管理」没有的排产专属维度:
  *   ① CIP 站拓扑(容量 1,设备→管线→{主站,备站})② 配液罐(短占+转储释放)
  *   ③ 储存容器(效期内占)④ 房间 & suite(放行状态机 + 互斥)⑤ 物料效期常数。
- * 这些是排产引擎在批次层做资源传播 + 确定性落点时查询的「主数据」,本身无时间、无批次实例。
  *
- * 第一刀:真实 mock + 分区/Tab + 可点选查看;不做后端持久化/CRUD(TODO)。
+ * viz+edit 重设计(2026-06-23):CIP 家族「图为主 · 点选即编辑」——
+ *   浏览/编辑双态;拓扑图受控,点节点 → 右侧抽屉编辑,改主站实线即时重连;
+ *   拖端点改主/备站;校验三层(字段 / 图上红点 / 顶部汇总条);抽屉级逐条直接保存(本地草稿,未接后端)。
+ *   其余四家族暂仍只读(下一步推同款模式)。
  */
 import React, { useMemo, useState } from 'react';
 import {
+  WxbAlert,
   WxbDataTable,
+  WxbDrawer,
   WxbPageHeader,
   WxbPageSection,
   WxbPageShell,
+  WxbSegmented,
   WxbTabs,
   WxbTag,
 } from '../components/wxb-ui';
 import { buildPsResourceMaster } from '../mock/psResourceMock';
 import { PsCipTopology } from '../components/PsResourceMaster/PsCipTopology';
+import type { PsCipFocus } from '../components/PsResourceMaster/PsCipTopology';
+import { PsFactorySandtable } from '../components/PsResourceMaster/PsFactorySandtable';
+import { PsCipEditDrawerBody } from '../components/PsResourceMaster/PsCipEditDrawer';
 import { PsOccupancyDiagram } from '../components/PsResourceMaster/PsOccupancyDiagram';
+import { issuesByEntity, validateCip } from '../components/PsResourceMaster/psResourceValidation';
 import {
   PS_RESOURCE_TAB_LABEL,
   PS_SHELF_CATEGORY_LABEL,
@@ -31,7 +40,11 @@ import {
   psSuiteRoleColor,
 } from '../types/psResource';
 import type {
+  PsCipEquipment,
+  PsCipStation,
+  PsPipeline,
   PsPrepTank,
+  PsResourceMaster,
   PsResourceTab,
   PsRoom,
   PsShelfLife,
@@ -51,9 +64,16 @@ const shelfTone = (h: number): 'crit' | 'warn' | 'mid' | 'ok' =>
 // sqrt 标度:让 4h 也看得见,又不让 168h 撑满
 const shelfBarPct = (h: number) => Math.max(8, Math.round(Math.sqrt(h / SHELF_MAX_HOURS) * 100));
 
+const genId = (prefix: string) =>
+  `${prefix}-new-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
 const PsResourceMasterPage: React.FC = () => {
-  const master = useMemo(() => buildPsResourceMaster(), []);
+  const [master, setMaster] = useState<PsResourceMaster>(() => buildPsResourceMaster());
   const [tab, setTab] = useState<PsResourceTab>('cip');
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [view, setView] = useState<'logic' | 'sandtable'>('logic');
+  const [cipFocus, setCipFocus] = useState<PsCipFocus | null>(null);
+  const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
 
   const counts = {
     cip: master.cipStations.length,
@@ -61,6 +81,62 @@ const PsResourceMasterPage: React.FC = () => {
     storage: master.storageVessels.length,
     room: master.rooms.length,
     'shelf-life': master.shelfLives.length,
+  };
+
+  // ── CIP 校验(纯函数 → 三层呈现)──
+  const cipIssues = useMemo(
+    () => validateCip(master.cipStations, master.pipelines),
+    [master.cipStations, master.pipelines],
+  );
+  const issueEntities = useMemo(() => {
+    const map = new Map<string, { severity: 'error' | 'warn'; message: string }>();
+    issuesByEntity(cipIssues).forEach((iss, id) => map.set(id, { severity: iss.severity, message: iss.message }));
+    return map;
+  }, [cipIssues]);
+
+  // ── CIP 编辑:patch / add / delete / reroute(本地草稿,抽屉级逐条直接保存)──
+  const patchStation = (id: string, partial: Partial<PsCipStation>) =>
+    setMaster((m) => ({ ...m, cipStations: m.cipStations.map((s) => (s.id === id ? { ...s, ...partial } : s)) }));
+  const patchPipeline = (id: string, partial: Partial<PsPipeline>) =>
+    setMaster((m) => ({ ...m, pipelines: m.pipelines.map((p) => (p.id === id ? { ...p, ...partial } : p)) }));
+  const patchEquipment = (id: string, partial: Partial<PsCipEquipment>) =>
+    setMaster((m) => ({ ...m, cipEquipment: m.cipEquipment.map((e) => (e.id === id ? { ...e, ...partial } : e)) }));
+
+  const markNew = (id: string) => setNewIds((s) => new Set(s).add(id));
+
+  const handleAdd = (kind: 'station' | 'pipeline' | 'equipment') => {
+    if (kind === 'station') {
+      const id = genId('cip-s');
+      setMaster((m) => ({ ...m, cipStations: [...m.cipStations, { id, code: '', name: '', department: '', capacity: 1 }] }));
+      markNew(id);
+      setCipFocus({ kind: 'station', id });
+    } else if (kind === 'pipeline') {
+      const id = genId('m');
+      setMaster((m) => ({ ...m, pipelines: [...m.pipelines, { id, code: '', name: '', primaryStationId: '' }] }));
+      markNew(id);
+      setCipFocus({ kind: 'pipeline', id });
+    } else {
+      const id = genId('eq');
+      setMaster((m) => ({
+        ...m,
+        cipEquipment: [...m.cipEquipment, { id, code: '', name: '', type: 'tank', pipelineId: m.pipelines[0]?.id ?? '' }],
+      }));
+      markNew(id);
+      setCipFocus({ kind: 'equipment', id });
+    }
+  };
+
+  const handleDelete = (focus: PsCipFocus) => {
+    setMaster((m) => {
+      if (focus.kind === 'station') return { ...m, cipStations: m.cipStations.filter((s) => s.id !== focus.id) };
+      if (focus.kind === 'pipeline') return { ...m, pipelines: m.pipelines.filter((p) => p.id !== focus.id) };
+      return { ...m, cipEquipment: m.cipEquipment.filter((e) => e.id !== focus.id) };
+    });
+    setCipFocus(null);
+  };
+
+  const handleReroute = (pipelineId: string, stationId: string, role: 'primary' | 'backup') => {
+    patchPipeline(pipelineId, role === 'primary' ? { primaryStationId: stationId } : { backupStationId: stationId });
   };
 
   // ── 配液罐表 ──
@@ -106,6 +182,16 @@ const PsResourceMasterPage: React.FC = () => {
     { title: '说明(→ 批次层 max-lag)', dataIndex: 'note', key: 'note', render: (v?: string) => <span className="psrm-muted">{v ?? '—'}</span> },
   ];
 
+  const drawerKindLabel = cipFocus
+    ? cipFocus.kind === 'pipeline' ? '管线' : cipFocus.kind === 'station' ? 'CIP 站' : '设备'
+    : '';
+  const drawerCode = (() => {
+    if (!cipFocus) return '';
+    if (cipFocus.kind === 'pipeline') return master.pipelines.find((p) => p.id === cipFocus.id)?.code || `新增${drawerKindLabel}`;
+    if (cipFocus.kind === 'station') return master.cipStations.find((s) => s.id === cipFocus.id)?.code || `新增${drawerKindLabel}`;
+    return master.cipEquipment.find((e) => e.id === cipFocus.id)?.code || `新增${drawerKindLabel}`;
+  })();
+
   return (
     <WxbPageShell size="full" gap="lg" className="psrm-page">
       <WxbPageHeader
@@ -123,7 +209,7 @@ const PsResourceMasterPage: React.FC = () => {
         <strong>这是「主数据」,不是排产结果。</strong>
         引擎排产时按各操作 demands(如「CEX skid@clean∧sterile」「buffer@已配制·效期内」「房间@released」)在此查 CIP 路由、配液/储存容量、suite 互斥与效期墙。
         CIP 引擎只往<strong>主站</strong>排,主站塞不下即<strong>报增援</strong>,动备站交给人(D20)。
-        <span className="psrm-todo">TODO:后端持久化 + 增删改连新建排产微服务 DataAssembler;当前为只读 mock。</span>
+        <span className="psrm-todo">设备身份(编号/容量/洁净度)来自平台资源台、此处只读;本页只维护排产专属属性。编辑为本地草稿,刷新即还原(后端排产微服务待接)。</span>
       </div>
 
       <WxbPageSection variant="framed" density="compact" className="psrm-section">
@@ -145,19 +231,75 @@ const PsResourceMasterPage: React.FC = () => {
         {/* ① CIP 站 & 拓扑 */}
         {tab === 'cip' && (
           <div className="psrm-pane">
-            <div className="psrm-view-label">设备 / 罐 → 管线 → {'{主站(优先), 备站(应急)}'} · 同站容量 1,同刻只洗一条管线</div>
-            <PsCipTopology
-              stations={master.cipStations}
-              pipelines={master.pipelines}
-              equipment={master.cipEquipment}
-            />
+            <div className="psrm-pane-toolbar">
+              <WxbSegmented
+                size="sm"
+                options={[{ label: '逻辑视图', value: 'logic' }, { label: '沙盘视图', value: 'sandtable' }]}
+                value={view}
+                onChange={(v) => setView(v as 'logic' | 'sandtable')}
+              />
+              <WxbSegmented
+                size="sm"
+                options={[{ label: '浏览', value: 'view' }, { label: '编辑', value: 'edit' }]}
+                value={mode}
+                onChange={(v) => { setMode(v as 'view' | 'edit'); if (v === 'view') setCipFocus(null); }}
+              />
+              <span className="psrm-view-label psrm-toolbar-hint">
+                {view === 'sandtable'
+                  ? '俯瞰车间:套间分区 · 房间在内 · CIP 站公用 · 管线照走向连'
+                  : '设备 / 罐 → 管线 → {主站(优先), 备站(应急)} · 同站容量 1,同刻只洗一条管线'}
+              </span>
+            </div>
+
+            {mode === 'edit' && cipIssues.length > 0 && (
+              <WxbAlert variant="error" title={`${cipIssues.length} 项待解决(红点未清零「不可发布」)`}>
+                <div className="psrm-issue-list">
+                  {cipIssues.map((iss) => (
+                    <button
+                      key={iss.id}
+                      type="button"
+                      className="psrm-issue-item"
+                      onClick={() => setCipFocus({ kind: iss.entityKind, id: iss.entityId })}
+                    >
+                      {iss.message}
+                    </button>
+                  ))}
+                </div>
+              </WxbAlert>
+            )}
+
+            {view === 'logic' ? (
+              <PsCipTopology
+                stations={master.cipStations}
+                pipelines={master.pipelines}
+                equipment={master.cipEquipment}
+                mode={mode}
+                selected={cipFocus}
+                onSelect={setCipFocus}
+                onReroute={handleReroute}
+                onAdd={handleAdd}
+                issueEntities={mode === 'edit' ? issueEntities : undefined}
+              />
+            ) : (
+              <PsFactorySandtable
+                suites={master.suites}
+                rooms={master.rooms}
+                stations={master.cipStations}
+                pipelines={master.pipelines}
+                equipment={master.cipEquipment}
+                mode={mode}
+                selected={cipFocus}
+                onSelect={setCipFocus}
+                issueEntities={mode === 'edit' ? issueEntities : undefined}
+              />
+            )}
 
             <div className="psrm-view-label psrm-mt">CIP 站清单</div>
             <div className="psrm-card-grid">
               {master.cipStations.map((s) => (
                 <div className={`psrm-res-card${s.emergencyOnly ? ' emergency' : ''}`} key={s.id}>
                   <div className="psrm-res-head">
-                    <span className="psrm-code">{s.code}</span>
+                    <span className="psrm-code">{s.code || '(未命名)'}</span>
                     <WxbTag color={s.emergencyOnly ? 'amber' : 'green'}>{s.emergencyOnly ? '备站(应急)' : '主站可用'}</WxbTag>
                     <span className="psrm-cap">容量 {s.capacity}</span>
                   </div>
@@ -176,10 +318,10 @@ const PsResourceMasterPage: React.FC = () => {
                 const equips = master.cipEquipment.filter((e) => e.pipelineId === p.id);
                 return (
                   <div className="psrm-pipe-row" key={p.id}>
-                    <span className="psrm-pipe-code">{p.code}</span>
+                    <span className="psrm-pipe-code">{p.code || '(未命名)'}</span>
                     <span className="psrm-pipe-name">{p.name}</span>
                     <span className="psrm-pipe-arrow">主站</span>
-                    <WxbTag color="green">{primary?.code ?? '—'}</WxbTag>
+                    {primary ? <WxbTag color="green">{primary.code}</WxbTag> : <WxbTag color="amber">待指定</WxbTag>}
                     {backup && (
                       <>
                         <span className="psrm-pipe-arrow">备站</span>
@@ -278,6 +420,32 @@ const PsResourceMasterPage: React.FC = () => {
           </div>
         )}
       </WxbPageSection>
+
+      {mode === 'edit' && cipFocus && tab === 'cip' && (
+        <WxbDrawer
+          open
+          width={440}
+          placement="right"
+          mask={false}
+          className="psrm-edit-drawer"
+          title={drawerCode}
+          extra={<WxbTag color="blue">{drawerKindLabel}</WxbTag>}
+          onClose={() => setCipFocus(null)}
+        >
+          <PsCipEditDrawerBody
+            focus={cipFocus}
+            isNew={newIds.has(cipFocus.id)}
+            stations={master.cipStations}
+            pipelines={master.pipelines}
+            equipment={master.cipEquipment}
+            onPatchStation={patchStation}
+            onPatchPipeline={patchPipeline}
+            onPatchEquipment={patchEquipment}
+            onDelete={handleDelete}
+            onSelect={setCipFocus}
+          />
+        </WxbDrawer>
+      )}
     </WxbPageShell>
   );
 };

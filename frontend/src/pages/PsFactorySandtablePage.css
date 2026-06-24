@@ -1,0 +1,100 @@
+/* 工厂数字沙盘页样式 + 集中色板 token(产线色 / 中性设备灰 / CIP 绿,集中定义不散落 hex) */
+.psft-page {
+  --ps-ink: var(--wx-text-primary, #1f2a37);
+  --ps-muted: var(--wx-text-secondary, #667085);
+  --ps-border: var(--wx-border, #e3e8ef);
+  --ps-eq-fill: #eef1f5;
+  --ps-eq-fill-cip: #dcf2e4;
+  --ps-line-1: #2f6fed;
+  --ps-line-2: #0e9f9c;
+  --ps-line-3: #7c5cff;
+  --ps-line-4: #e0823a;
+  --ps-line-5: #d6488a;
+  --ps-line-6: #3aa856;
+}
+
+.psft-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 0.5px solid var(--ps-border);
+  border-radius: 10px;
+  background: var(--wx-bg, #ffffff);
+}
+.psft-tb-label { font-size: 12px; color: var(--ps-muted); }
+.psft-line-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  border: 0.5px solid var(--ps-border);
+  background: var(--wx-bg, #ffffff);
+  color: var(--ps-ink);
+  cursor: pointer;
+}
+.psft-line-chip.on { border-color: currentColor; font-weight: 600; }
+.psft-line-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.psft-legend {
+  margin-left: auto;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--ps-muted);
+}
+.psft-leg { display: inline-flex; align-items: center; gap: 5px; }
+.psft-leg-sw { width: 12px; height: 12px; border-radius: 2px; }
+
+.psft-stage {
+  border: 0.5px solid var(--ps-border);
+  border-radius: 10px;
+  background: var(--wx-bg, #ffffff);
+  overflow-x: auto;
+  padding: 4px;
+}
+
+/* ── 选中信息条(全宽,无右侧空列) ── */
+.psft-selbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 14px;
+  border: 0.5px solid var(--ps-border);
+  border-radius: 10px;
+  background: var(--wx-bg, #ffffff);
+  font-size: 13px;
+  color: var(--ps-ink);
+}
+.psft-selbar.muted { color: var(--ps-muted); font-size: 12.5px; }
+.psft-sel-code { font-family: ui-monospace, monospace; font-weight: 600; }
+.psft-sel-name { color: var(--ps-muted); }
+.psft-sel-sep { width: 1px; height: 14px; background: var(--ps-border); }
+.psft-sel-kv { font-size: 12.5px; color: var(--ps-ink); }
+.psft-sel-hint { margin-left: auto; font-size: 12px; color: var(--ps-muted); }
+.psft-sel-close { font-size: 12px; color: var(--wx-blue-600, #2f5cc0); cursor: pointer; }
+
+/* ── 沙盘 SVG ── */
+.pst-canvas { display: block; width: 100%; }
+.pst-hr { stroke: var(--ps-border); stroke-width: 0.5; }
+.pst-zn { font-size: 11px; font-weight: 600; fill: var(--ps-muted); }
+.pst-room { fill: var(--wx-bg, #ffffff); stroke: var(--ps-border); stroke-width: 0.5; }
+.pst-room.shared { stroke: var(--wx-blue-300, #b9c8e8); stroke-width: 1.2; }
+.pst-rt { font-size: 12px; font-weight: 600; fill: var(--ps-ink); }
+.pst-rm { font-size: 11px; fill: var(--ps-muted); }
+.pst-bt { font-size: 10.5px; fill: var(--ps-muted); }
+.pst-code { font-size: 9px; fill: var(--ps-muted); font-family: ui-monospace, monospace; }
+.pst-tag { fill: var(--wx-blue-100, #e8eefb); }
+.pst-tag-t { font-size: 9.5px; fill: var(--wx-blue-700, #2f5cc0); }
+.pst-sel { fill: none; stroke: var(--wx-primary, #2f6fed); stroke-width: 1.6; stroke-dasharray: 4 3; }
+
+/* ── 设备图标(中性灰,CIP 绿) ── */
+.psi { display: block; overflow: visible; }
+.psi-ink { fill: none; stroke: var(--ps-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.psi-ink2 { fill: none; stroke: var(--ps-ink); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.psi-vessel { fill: var(--ps-eq-fill); stroke: var(--ps-ink); stroke-width: 2.4; stroke-linejoin: round; }
+.psi-cip { fill: var(--ps-eq-fill-cip); stroke: var(--ps-ink); stroke-width: 2.4; stroke-linejoin: round; }

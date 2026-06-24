@@ -30,15 +30,19 @@ CREATE TABLE IF NOT EXISTS resource_nodes (
     ON DELETE SET NULL
 );
 
+-- 一个操作可绑定多台设备(候选池/任选其一):
+--   1 条 binding_role='PRIMARY'(优选,下游排产只认它) + 0..N 条 'AUXILIARY'(备选,仅模版层存储/展示)。
+-- 唯一性为复合键 (template_schedule_id, resource_node_id):同一操作同一设备不重复,但允许多行。
 CREATE TABLE IF NOT EXISTS template_stage_operation_resource_bindings (
   id INT NOT NULL AUTO_INCREMENT,
   template_schedule_id INT NOT NULL,
   resource_node_id INT NOT NULL,
   binding_mode ENUM('DEFAULT') NOT NULL DEFAULT 'DEFAULT',
+  binding_role ENUM('PRIMARY', 'AUXILIARY') NOT NULL DEFAULT 'PRIMARY',
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_template_schedule_default_node (template_schedule_id),
+  UNIQUE KEY uk_schedule_node (template_schedule_id, resource_node_id),
   KEY idx_tsorb_resource_node (resource_node_id),
   CONSTRAINT fk_tsorb_schedule
     FOREIGN KEY (template_schedule_id) REFERENCES stage_operation_schedules(id)

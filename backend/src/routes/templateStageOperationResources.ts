@@ -7,6 +7,7 @@ import {
 import {
   getTemplateStageOperationResourceBinding,
   putTemplateStageOperationResourceBinding,
+  putTemplateStageOperationResourceBindings,
   listBindingsByTemplate,
   batchUpdateBindings,
 } from '../controllers/templateStageOperationBindingController';
@@ -20,6 +21,7 @@ router.put('/:scheduleId/resources', requirePermission('APS_TEMPLATE_WRITE'), pu
 router.delete('/:scheduleId/resources', requirePermission('APS_TEMPLATE_WRITE'), deleteTemplateStageOperationResources);
 router.get('/:scheduleId/resource-binding', requirePermission('APS_TEMPLATE_READ'), getTemplateStageOperationResourceBinding);
 router.put('/:scheduleId/resource-binding', requirePermission('APS_TEMPLATE_WRITE'), putTemplateStageOperationResourceBinding);
+router.put('/:scheduleId/resource-bindings', requirePermission('APS_TEMPLATE_WRITE'), putTemplateStageOperationResourceBindings);
 router.put('/batch-binding', requirePermission('APS_TEMPLATE_WRITE'), batchUpdateBindings);
 
 export default router;

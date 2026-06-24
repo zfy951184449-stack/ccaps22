@@ -15,9 +15,10 @@ import {
     WxbTooltip,
     wxbToast,
 } from '../../wxb-ui';
-import type { GanttTask, YAxisMode } from '../../wxb-ui/GanttChart/types';
-import type { ContextMenuItem } from '../../wxb-ui/GanttChart/GanttContextMenu';
+import type { GanttTask, YAxisMode, GanttContextActionContext } from '../../wxb-ui/GanttChart/types';
+import { DEFAULT_BG_MENU_ITEMS, DEFAULT_GROUP_MENU_ITEMS, type ContextMenuItem } from '../../wxb-ui/GanttChart/GanttContextMenu';
 import EditOperationModal from './EditOperationModal';
+import CreateIndependentOperationModal, { type CreateOpPrefill } from './CreateIndependentOperationModal';
 import type { DatePreset, GanttBatch, GanttDependency, GanttOperation, GanttShareGroup } from './types';
 import {
     buildBatchGanttModel,
@@ -107,9 +108,38 @@ function formatApiDate(value: Dayjs): string {
     return value.format('YYYY-MM-DD HH:mm:ss');
 }
 
+// "新增操作" (add an independent op at the clicked point) is offered on every right-click
+// surface so "在哪点就在哪加" holds: on a task bar, on a stage/equipment lane row, and on
+// empty background. Every lane in this gantt is a group row, so without the group entry a
+// right-click on a populated equipment lane would only show the group menu.
+const ADD_OP_ITEM: ContextMenuItem = { key: 'add-task', label: '新增操作' };
+
 const TASK_MENU_ITEMS: ContextMenuItem[] = [
     { key: 'edit', label: '编辑操作' },
+    { ...ADD_OP_ITEM, divider: true },
 ];
+
+const GROUP_MENU_ITEMS: ContextMenuItem[] = [
+    { ...ADD_OP_ITEM, divider: true },
+    ...DEFAULT_GROUP_MENU_ITEMS,
+];
+
+// Background (right-click empty area) menu — reuse the shared default but relabel the
+// generic "新建任务" to the domain term. The 'add-task' action is routed via
+// onContextAction below; the other items (expand/collapse/select) are handled inside
+// the gantt itself.
+const BG_MENU_ITEMS: ContextMenuItem[] = DEFAULT_BG_MENU_ITEMS.map((item) =>
+    item.key === 'add-task' ? { ...item, label: '新增操作' } : item,
+);
+
+// Match a render task that lives in (or under) the clicked group, with separator-safe
+// prefix boundaries so clicking batch "batch-5" never samples a task from "batch-50".
+const taskBelongsToGroup = (taskGroupId: string | undefined, clickedGroupId: string): boolean => {
+    if (!taskGroupId) return false;
+    return taskGroupId === clickedGroupId
+        || taskGroupId.startsWith(`${clickedGroupId}-`)
+        || taskGroupId.startsWith(`${clickedGroupId}__`);
+};
 
 const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateBatch }) => {
     const navigate = useNavigate();
@@ -127,6 +157,8 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
     const [shareGroups, setShareGroups] = useState<GanttShareGroup[]>([]);
     const [loading, setLoading] = useState(false);
     const [editingOperation, setEditingOperation] = useState<GanttOperation | null>(null);
+    const [createOpOpen, setCreateOpOpen] = useState(false);
+    const [createOpPrefill, setCreateOpPrefill] = useState<CreateOpPrefill | null>(null);
     const reloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const hasExplicitBatchFilter = filteredBatchIds !== undefined;
@@ -414,6 +446,57 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
         }
     }, [model.operationByTaskId]);
 
+    // Right-click "新增操作" — resolve the clicked lane (batch/stage/equipment) and time
+    // from the context, then open the create modal pre-filled with "where you clicked".
+    const handleContextAction = useCallback((
+        action: string,
+        task: GanttTask | null,
+        context: GanttContextActionContext,
+    ) => {
+        if (action !== 'add-task') return;
+
+        const startHour = context?.absoluteStartHour;
+        const startTime = typeof startHour === 'number' && Number.isFinite(startHour)
+            ? originDate.add(startHour, 'hour')
+            : null;
+
+        const prefill: CreateOpPrefill = {
+            batchId: batches.length === 1 ? batches[0].id : null,
+            stageId: null,
+            stageName: null,
+            resourceNodeId: null,
+            resourceName: null,
+            startTime,
+        };
+
+        const applyData = (data: Record<string, unknown> | undefined): boolean => {
+            if (!data) return false;
+            prefill.batchId = (data.batchId as number) ?? prefill.batchId;
+            prefill.stageId = (data.stageId as number) ?? null;
+            prefill.stageName = (data.stageName as string) ?? null;
+            prefill.resourceNodeId = (data.resourceNodeId as number) ?? null;
+            prefill.resourceName = (data.resourceName as string) ?? null;
+            return true;
+        };
+
+        // Most precise: right-clicked directly on an operation bar — use its own data.
+        if (!applyData(task?.data as Record<string, unknown> | undefined)) {
+            // Otherwise resolve the clicked lane/stage/batch from the group under the cursor.
+            const groupId = context?.groupId;
+            if (groupId) {
+                const sample = renderModel.tasks.find((t) => taskBelongsToGroup(t.groupId, groupId));
+                if (!applyData(sample?.data as Record<string, unknown> | undefined)) {
+                    // Batch summary / empty row — recover at least the batch id from the group id.
+                    const match = /^batch-(\d+)/.exec(groupId);
+                    if (match) prefill.batchId = Number(match[1]);
+                }
+            }
+        }
+
+        setCreateOpPrefill(prefill);
+        setCreateOpOpen(true);
+    }, [batches, originDate, renderModel.tasks]);
+
     const handleSaveOperation = useCallback(async (id: number, values: any) => {
         try {
             await axios.put(`/api/v5/gantt/operations/${id}`, values);
@@ -645,6 +728,9 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                         initialDayWidth={120}
                         personnelPeaks={personnelPeaks}
                         taskMenuItems={TASK_MENU_ITEMS}
+                        groupMenuItems={GROUP_MENU_ITEMS}
+                        backgroundMenuItems={BG_MENU_ITEMS}
+                        onContextAction={handleContextAction}
                         onTaskDoubleClick={handleEditTask}
                         onTaskEdit={handleEditTask}
                         onTaskDragEnd={handleTaskDragEnd}
@@ -693,6 +779,14 @@ const BatchGanttV4: React.FC<BatchGanttV4Props> = ({ filteredBatchIds, onCreateB
                     onDelete={handleDeleteOperation}
                 />
             )}
+
+            <CreateIndependentOperationModal
+                visible={createOpOpen}
+                batches={batches}
+                prefill={createOpPrefill}
+                onClose={() => setCreateOpOpen(false)}
+                onCreated={requestReload}
+            />
         </div>
     );
 };

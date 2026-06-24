@@ -1,0 +1,64 @@
+.create-indep-op__alert {
+    margin-bottom: 16px;
+}
+
+.create-indep-op__divider {
+    margin: 18px 0 12px;
+}
+
+.create-indep-op__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.create-indep-op__qual-empty {
+    margin: 2px 0 10px;
+    font-size: 12px;
+    color: var(--wx-fg-4);
+}
+
+.create-indep-op__qual-hint {
+    margin: 2px 0 8px;
+    font-size: 12px;
+    color: var(--wx-fg-3);
+}
+
+.create-indep-op__qual-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.create-indep-op__qual-name {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.create-indep-op__qual-panel {
+    padding-top: 6px;
+}
+
+.create-indep-op__qual-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.create-indep-op__end {
+    margin: 8px 0 4px;
+    font-size: 12px;
+    color: var(--wx-fg-3);
+}
+
+.create-indep-op__mode {
+    margin-bottom: 14px;
+}
+
+.create-indep-op__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
