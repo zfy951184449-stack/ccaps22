@@ -652,15 +652,6 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
     [stages],
   );
 
-  const resourceOptions = useMemo(
-    () =>
-      leafNodes.map((node) => ({
-        value: node.id,
-        label: `${node.nodeName}${node.nodeClass ? ` / ${node.nodeClass}` : ''}`,
-      })),
-    [leafNodes],
-  );
-
   // 层级树数据(厂区→产线→房间→设备),供「设备绑定(并用)」逐层勾选;直接用已传入的 resourceNodes 树。
   const { treeData: bindingTreeData, expandedKeys: bindingTreeExpandedKeys } = useMemo(
     () => buildBindingTree(resourceNodes),
@@ -1055,6 +1046,20 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
         absoluteStartHour: getAbsoluteStartHour(selectedStage, draft),
       });
 
+      // 并占:from-canvas 只落了单台主设备;若还选了并用设备,新建后把完整设备组(主 + 并用)再写一次。
+      const createCandidateNodeIds = (draft.candidateNodeIds ?? []).filter(
+        (id) => id !== draft.resourceNodeId,
+      );
+      if (createdScheduleId && draft.resourceNodeId != null && createCandidateNodeIds.length > 0) {
+        completedStep = '更新设备绑定';
+        setSavingStep(completedStep);
+        await processTemplateV2Api.updateScheduleBindings(
+          createdScheduleId,
+          draft.resourceNodeId,
+          createCandidateNodeIds,
+        );
+      }
+
       setRecentOperationIds(
         writeSavedConfig(templateId, resolvedOperationId, draft, recentOperationIds),
       );
@@ -1079,7 +1084,9 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
       console.error('Failed to quick create operation:', error);
       const rawMessage = error?.response?.data?.error || error?.message || '创建操作失败';
       const detail = createdScheduleId
-        ? `操作已创建，但刷新视图失败：${rawMessage}`
+        ? completedStep === '更新设备绑定'
+          ? `操作已创建，但并用设备绑定保存失败：${rawMessage}`
+          : `操作已创建，但刷新视图失败：${rawMessage}`
         : completedStep === '创建操作主数据'
           ? `操作主数据创建失败：${rawMessage}`
           : completedStep === '保存资质要求'
@@ -1660,8 +1667,7 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                       }))
                     }
                   />
-                  {mode === 'edit' ? (
-                    <div className="qcom-multibind">
+                  <div className="qcom-multibind">
                       <WxbTreeSelect
                         label="设备绑定（并用 · 全部必需）"
                         treeData={bindingTreeData}
@@ -1722,26 +1728,9 @@ const QuickCreateOperationModal: React.FC<QuickCreateOperationModalProps> = ({
                           })}
                         </ul>
                       ) : (
-                        <p className="qcom-multibind-empty">未绑定设备</p>
+                        <p className="qcom-multibind-empty">未绑定设备（可不绑定）</p>
                       )}
                     </div>
-                  ) : (
-                    <WxbSelect
-                      label="默认资源节点"
-                      value={draft.resourceNodeId ?? undefined}
-                      options={resourceOptions}
-                      showSearch
-                      allowClear
-                      optionFilterProp="label"
-                      placeholder="可不绑定"
-                      onChange={(value) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          resourceNodeId: value ? Number(value) : null,
-                        }))
-                      }
-                    />
-                  )}
                   <WxbInputNumber
                     label="阶段内 Day"
                     value={draft.operationDay}
