@@ -1,100 +1,123 @@
-/* 工厂数字沙盘页样式 + 集中色板 token(产线色 / 中性设备灰 / CIP 绿,集中定义不散落 hex) */
+/* 工厂数字沙盘 —— 绿色品牌 + 软灰地面 + 蓝/绿立体设备。chrome 用 wxb-ui;本文件:布局 + 画布 + 图标 token */
 .psft-page {
-  --ps-ink: var(--wx-text-primary, #1f2a37);
-  --ps-muted: var(--wx-text-secondary, #667085);
-  --ps-border: var(--wx-border, #e3e8ef);
-  --ps-eq-fill: #eef1f5;
-  --ps-eq-fill-cip: #dcf2e4;
-  --ps-line-1: #2f6fed;
-  --ps-line-2: #0e9f9c;
-  --ps-line-3: #7c5cff;
-  --ps-line-4: #e0823a;
-  --ps-line-5: #d6488a;
-  --ps-line-6: #3aa856;
+  --ps-strong: #0f172a;
+  --ps-ink: #475569;
+  --ps-muted: #94a3b8;
+  --ps-faint: #cbd5e1;
+  --ps-border: #e7ebf0;
+  --ps-border-hover: #d4dde6;
+  --ps-canvas-bg: #eef1f4;
+  --ps-card: #ffffff;
+  --ps-hover: #eef2f6;
+  --ps-shadow: #1e293b;
+  --ps-accent: #16a34a;
+  --ps-accent-wash: #eafaf0;
+  --ps-accent-soft: rgba(22, 163, 74, 0.35);
+  --ps-grid-dot: #dfe5ec;
+  --ps-line-1: #16a34a;
+  --ps-line-2: #2563eb;
+  --ps-line-3: #7c3aed;
+  --ps-line-4: #d97706;
+  --ps-line-5: #db2777;
+  --ps-line-6: #0891b2;
+  --ps-cg-blue-f: #dbe6fb; --ps-cg-blue-s: #3667c9;
+  --ps-cg-green-f: #d4efdd; --ps-cg-green-s: #1f9d57;
+  --ps-cg-slate-f: #e9edf2; --ps-cg-slate-s: #5b6b82;
+  --ps-cg-cip-f: #caf5dd; --ps-cg-cip-s: #15a04a;
 }
 
-.psft-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 10px 14px;
-  border: 0.5px solid var(--ps-border);
-  border-radius: 10px;
-  background: var(--wx-bg, #ffffff);
-}
-.psft-tb-label { font-size: 12px; color: var(--ps-muted); }
-.psft-line-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  padding: 4px 10px;
-  border-radius: 16px;
-  border: 0.5px solid var(--ps-border);
-  background: var(--wx-bg, #ffffff);
-  color: var(--ps-ink);
-  cursor: pointer;
-}
-.psft-line-chip.on { border-color: currentColor; font-weight: 600; }
-.psft-line-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.psft-legend {
-  margin-left: auto;
-  display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--ps-muted);
-}
-.psft-leg { display: inline-flex; align-items: center; gap: 5px; }
-.psft-leg-sw { width: 12px; height: 12px; border-radius: 2px; }
+.psft-meta { font-size: 12px; color: var(--ps-ink); }
 
-.psft-stage {
-  border: 0.5px solid var(--ps-border);
-  border-radius: 10px;
-  background: var(--wx-bg, #ffffff);
-  overflow-x: auto;
-  padding: 4px;
-}
+/* ── KPI / 工具条 / 信息条(wxb 卡只做布局) ── */
+.psft-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.psft-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 24px; }
+.psft-seg-line { display: inline-flex; align-items: center; gap: 7px; }
+.psft-line-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.psft-edit-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ps-accent); }
+.psft-legend { margin-left: auto; display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--ps-ink); }
+.psft-leg { display: inline-flex; align-items: center; gap: 6px; }
+.psft-leg-sw { width: 11px; height: 11px; border-radius: 3px; }
+.psft-leg-sw.cg-blue { background: var(--ps-cg-blue-f); border: 1px solid var(--ps-cg-blue-s); }
+.psft-leg-sw.cg-green { background: var(--ps-cg-green-f); border: 1px solid var(--ps-cg-green-s); }
+.psft-leg-sw.cg-cip { background: var(--ps-cg-cip-f); border: 1px solid var(--ps-cg-cip-s); }
 
-/* ── 选中信息条(全宽,无右侧空列) ── */
-.psft-selbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 14px;
-  border: 0.5px solid var(--ps-border);
-  border-radius: 10px;
-  background: var(--wx-bg, #ffffff);
-  font-size: 13px;
-  color: var(--ps-ink);
-}
-.psft-selbar.muted { color: var(--ps-muted); font-size: 12.5px; }
-.psft-sel-code { font-family: ui-monospace, monospace; font-weight: 600; }
-.psft-sel-name { color: var(--ps-muted); }
-.psft-sel-sep { width: 1px; height: 14px; background: var(--ps-border); }
-.psft-sel-kv { font-size: 12.5px; color: var(--ps-ink); }
+.psft-selbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 13px; color: var(--ps-strong); }
+.psft-selbar.muted { color: var(--ps-ink); font-size: 12px; }
+.psft-sel-code { font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 600; color: var(--ps-strong); }
+.psft-sel-name { color: var(--ps-ink); }
+.psft-sel-kv { font-size: 12px; color: var(--ps-ink); }
 .psft-sel-hint { margin-left: auto; font-size: 12px; color: var(--ps-muted); }
-.psft-sel-close { font-size: 12px; color: var(--wx-blue-600, #2f5cc0); cursor: pointer; }
 
-/* ── 沙盘 SVG ── */
-.pst-canvas { display: block; width: 100%; }
-.pst-hr { stroke: var(--ps-border); stroke-width: 0.5; }
-.pst-zn { font-size: 11px; font-weight: 600; fill: var(--ps-muted); }
-.pst-room { fill: var(--wx-bg, #ffffff); stroke: var(--ps-border); stroke-width: 0.5; }
-.pst-room.shared { stroke: var(--wx-blue-300, #b9c8e8); stroke-width: 1.2; }
-.pst-rt { font-size: 12px; font-weight: 600; fill: var(--ps-ink); }
-.pst-rm { font-size: 11px; fill: var(--ps-muted); }
-.pst-bt { font-size: 10.5px; fill: var(--ps-muted); }
-.pst-code { font-size: 9px; fill: var(--ps-muted); font-family: ui-monospace, monospace; }
-.pst-tag { fill: var(--wx-blue-100, #e8eefb); }
-.pst-tag-t { font-size: 9.5px; fill: var(--wx-blue-700, #2f5cc0); }
-.pst-sel { fill: none; stroke: var(--wx-primary, #2f6fed); stroke-width: 1.6; stroke-dasharray: 4 3; }
+/* ── 沙盘画布容器(软灰地面 + 极淡顶光) ── */
+.psft-stage {
+  position: relative;
+  border: 1px solid var(--ps-border);
+  border-radius: 18px;
+  background: radial-gradient(120% 80% at 50% 0%, #f4f7fa, var(--ps-canvas-bg));
+  overflow-x: auto;
+  padding: 20px;
+}
+.pst-canvas { display: block; width: 100%; -webkit-user-select: none; user-select: none; touch-action: none; }
+.pst-canvas text, .pst-canvas .pst-rt, .pst-canvas .pst-code { -webkit-user-select: none; user-select: none; }
+.pst-canvas.is-dragging { cursor: grabbing; }
+.pst-canvas.is-resizing { cursor: nwse-resize; }
 
-/* ── 设备图标(中性灰,CIP 绿) ── */
+/* ── 图表卡(WxbCard + WxbProgress) ── */
+.psft-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.psft-chart-title { font-size: 13px; font-weight: 600; color: var(--ps-strong); margin-bottom: 14px; }
+.psft-bars { display: flex; flex-direction: column; gap: 11px; }
+.psft-bar-row { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.psft-bar-label { width: 92px; flex: none; color: var(--ps-ink); display: inline-flex; align-items: center; gap: 6px; }
+.psft-bar-prog { flex: 1; }
+.psft-bar-val { width: 26px; flex: none; text-align: right; color: var(--ps-ink); font-variant-numeric: tabular-nums; }
+
+/* ── 网格背景(编辑态点阵淡入) ── */
+.pst-grid-bg { opacity: 0; transition: opacity .25s ease; }
+.pst-canvas.is-edit .pst-grid-bg { opacity: .7; }
+.pst-grid-dot { fill: var(--ps-grid-dot); }
+
+/* ── 文字层级(整数字号 + AA 对比) ── */
+.pst-rt { font-size: 13px; font-weight: 600; fill: var(--ps-strong); }
+.pst-rm { font-size: 11px; fill: var(--ps-ink); }
+.pst-bt { font-size: 11px; font-weight: 500; fill: var(--ps-ink); letter-spacing: 0.2px; }
+.pst-code { font-size: 10px; fill: var(--ps-ink); font-family: ui-monospace, SFMono-Regular, monospace; }
+.pst-hr { stroke: var(--ps-border); stroke-width: 1; }
+
+/* ── 房间卡 + hover 浮起 ── */
+.pst-room { fill: var(--ps-card); stroke: var(--ps-border); stroke-width: 1; transition: stroke .15s ease; }
+.pst-room.shared { stroke: var(--ps-faint); }
+.pst-room-g:hover:not(.pst-dragging) .pst-room { stroke: var(--ps-border-hover); }
+.pst-tag { fill: var(--ps-hover); }
+.pst-tag-t { font-size: 10px; font-weight: 500; fill: var(--ps-ink); }
+.pst-eshadow { fill: var(--ps-shadow); opacity: 0.07; }
+.pst-drag-dot { fill: var(--ps-muted); }
+
+/* ── 拖动落点 ghost ── */
+.pst-drop-ghost { fill: var(--ps-accent-wash); stroke: var(--ps-accent); stroke-width: 1.5; stroke-dasharray: 5 5; opacity: .6; }
+
+/* ── 设备选中:淡填充 + 柔光环 + 入场动效 ── */
+.pst-sel-wash { fill: var(--ps-accent-wash); }
+.pst-sel-glow { fill: none; stroke: var(--ps-accent-soft); stroke-width: 1; }
+.pst-sel { fill: none; stroke: var(--ps-accent); stroke-width: 1.5; transform-box: fill-box; transform-origin: center; animation: ps-sel-in .16s ease-out; }
+@keyframes ps-sel-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+
+/* ── 设备单元 hover / 焦点 ── */
+.pst-eq { cursor: pointer; }
+.pst-eq:focus { outline: none; }
+.pst-cell { fill: transparent; transition: fill 0.12s ease; }
+.pst-eq:hover .pst-cell, .pst-eq:focus-visible .pst-cell { fill: var(--ps-accent-wash); }
+
+/* ── resize 手柄:hover 淡入 ── */
+.pst-resize-grip { stroke: var(--ps-accent); stroke-width: 1.5; stroke-linecap: round; fill: none; opacity: 0; transition: opacity .12s ease; }
+.pst-room-g:hover .pst-resize-grip { opacity: 1; }
+
+/* ── 设备图标(分色立体) ── */
 .psi { display: block; overflow: visible; }
-.psi-ink { fill: none; stroke: var(--ps-ink); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
-.psi-ink2 { fill: none; stroke: var(--ps-ink); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.psi-vessel { fill: var(--ps-eq-fill); stroke: var(--ps-ink); stroke-width: 2.4; stroke-linejoin: round; }
-.psi-cip { fill: var(--ps-eq-fill-cip); stroke: var(--ps-ink); stroke-width: 2.4; stroke-linejoin: round; }
+.psi.cg-blue { --eqf: var(--ps-cg-blue-f); --eqs: var(--ps-cg-blue-s); }
+.psi.cg-green { --eqf: var(--ps-cg-green-f); --eqs: var(--ps-cg-green-s); }
+.psi.cg-slate { --eqf: var(--ps-cg-slate-f); --eqs: var(--ps-cg-slate-s); }
+.psi.cg-cip { --eqf: var(--ps-cg-cip-f); --eqs: var(--ps-cg-cip-s); }
+.psi-ink { fill: none; stroke: var(--eqs); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.psi-ink2 { fill: none; stroke: var(--eqs); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.psi-vessel { fill: var(--eqf); stroke: var(--eqs); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.psi-cip { fill: var(--eqf); stroke: var(--eqs); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }

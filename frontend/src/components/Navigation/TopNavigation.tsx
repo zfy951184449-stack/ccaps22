@@ -90,6 +90,7 @@ const navGroups: NavGroup[] = [
     icon: <ProjectOutlined />,
     children: [
       { key: 'process-templates', icon: <ProjectOutlined />, label: '工艺模版', path: '/process-templates', requiredPermission: 'APS_TEMPLATE_READ' },
+      { key: 'prod-cip-topology', icon: <ProjectOutlined />, label: '排产资源 · CIP 拓扑', path: '/prod/cip-topology', requiredPermission: 'APS_TEMPLATE_READ' },
       { key: 'batch-management-v4', icon: <ProjectOutlined />, label: '批次管理 V4', path: '/batch-management-v4', requiredPermission: 'APS_BATCH_READ' },
       { key: 'batch-management-workbench-v2', icon: <ProjectOutlined />, label: '批次管理工作台 V2', path: '/batch-management-workbench-v2', requiredPermission: 'APS_BATCH_READ' },
     ],

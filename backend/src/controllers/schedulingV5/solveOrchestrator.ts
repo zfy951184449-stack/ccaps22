@@ -11,6 +11,7 @@ import { SOLVER_V5_URL } from './types';
 import {
     createRunRecord,
     updateRunStatus,
+    markSolveStarted,
     updateRunSummary,
     getRunSummary,
     saveResults,
@@ -20,6 +21,7 @@ import {
     findLatestAppliedV5Run,
     compactSolution,
     validateHintShape,
+    V5_TERMINAL_STATUSES,
 } from './helpers';
 
 export const createSolveTaskV5 = async (req: Request, res: Response) => {
@@ -122,7 +124,9 @@ async function triggerSolveAsync(
             },
         );
 
-        await updateRunStatus(runId, 'RUNNING', null, 'SOLVING');
+        // 求解时间上限（与 solver 内部 max_time_seconds 同源）。记录到 run 上，供历史展示 + reaper 判活基准。
+        const maxTimeSeconds = Number(config?.max_time_seconds) > 0 ? Number(config.max_time_seconds) : 300;
+        await markSolveStarted(runId, maxTimeSeconds);
 
         // B2: 注入上次解种子（安全降级：任何失败均 try/catch 静默跳过，绝不阻断 solve）
         // 查找同 batchIds+window 的最近 APPLIED/COMPLETED V5 run → 精简 → 校验 → 注入
@@ -143,8 +147,15 @@ async function triggerSolveAsync(
             // 查不到 / 解析失败 → 不注入，solver 端贪心兜底接管
         }
 
+        // 中止超时跟随本次求解时间上限（对齐 V4 的同源修复）。此前写死 600s，会在「延长求解时间」或
+        // lexicographic L4 双阶段总耗时超过 600s 时，把仍在正常求解的 run 误判中止 → 前端显示 FAILED。
+        // lex 第二阶段会在 phase-1 之外再跑一段（phase_start_time 重置后各自计 max_time），启用时给到
+        // 2×max_time + 缓冲；未启用(默认)等同 V4 的 max_time + 180。正常情况下 solver 先自行收尾返回，
+        // 此定时器永不触发，仅作为「solver 真挂死」时的进程内兜底。
+        const lexEnabled = config?.enable_lexicographic_l4 === true;
+        const abortAfterMs = ((lexEnabled ? maxTimeSeconds * 2 : maxTimeSeconds) + 180) * 1000;
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+        const timeoutId = setTimeout(() => controller.abort(), abortAfterMs);
 
         const response = await fetch(`${SOLVER_V5_URL}/api/v5/solve`, {
             method: 'POST',
@@ -179,14 +190,16 @@ async function triggerSolveAsync(
         console.error(`[SchedulingV5] Run ${runId} Failed:`, error);
 
         const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT status, result_summary FROM scheduling_runs WHERE id = ?',
+            'SELECT status FROM scheduling_runs WHERE id = ?',
             [runId]
         );
 
-        if (rows.length > 0 && rows[0].status === 'COMPLETED' && rows[0].result_summary) {
-            console.log(`[SchedulingV5] Run ${runId} already marked COMPLETED by callback, skipping FAILED status.`);
+        // 不要降级任何已到终态的行：solver 回调可能已写入 COMPLETED/FAILED，或用户已 APPLIED，
+        // 或 reaper 已兜底为 FAILED。仅当仍处于非终态时才把这次失败写进去（与 V4 对齐，避免覆盖已应用排班）。
+        if (rows.length > 0 && V5_TERMINAL_STATUSES.includes(rows[0].status)) {
+            console.log(`[SchedulingV5] Run ${runId} already terminal (${rows[0].status}), skipping FAILED write.`);
         } else {
-            await updateRunStatus(runId, 'FAILED', error.message);
+            await updateRunStatus(runId, 'FAILED', error.message, 'DONE');
         }
     }
 }

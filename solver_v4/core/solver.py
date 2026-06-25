@@ -544,34 +544,39 @@ class SolverV4:
         while not self.stopping_event.is_set():
             time.sleep(1.0)
 
-            # 把求解线程攒下的进度/日志实际发出去(HTTP 在本线程,不阻塞 CP-SAT worker)
-            cb.flush()
+            try:
+                # 把求解线程攒下的进度/日志实际发出去(HTTP 在本线程,不阻塞 CP-SAT worker)
+                cb.flush()
 
-            if cb.should_stop:
-                return
-
-            now = time.time()
-            elapsed = now - cb.start_time
-            stagnation = now - cb.last_solution_time
-
-            if now - last_heartbeat > 5.0:
-                cb.log_heartbeat()
-                last_heartbeat = now
-
-            if elapsed > cb.max_time_seconds:
-                cb.request_stop(f"⏰ Reached Max Time Limit ({cb.max_time_seconds}s)")
-                return
-
-            if cb.best_objective != float('inf') and stagnation > cb.stagnation_limit:
-                cb.request_stop(f"📉 Stagnation detected ({stagnation:.1f}s > {cb.stagnation_limit}s)")
-                return
-
-            # 轮询后端停止信号:每 poll_interval(5s)一次,而非每秒(P1-12)
-            if now - cb.last_poll_time > cb.poll_interval:
-                cb.last_poll_time = now
-                if cb.poll_server_stop():
-                    cb.request_stop("🛑 Received Manual Stop Signal from server")
+                if cb.should_stop:
                     return
+
+                now = time.time()
+                elapsed = now - cb.start_time
+                stagnation = now - cb.last_solution_time
+
+                if now - last_heartbeat > 5.0:
+                    cb.log_heartbeat()
+                    last_heartbeat = now
+
+                if elapsed > cb.max_time_seconds:
+                    cb.request_stop(f"⏰ Reached Max Time Limit ({cb.max_time_seconds}s)")
+                    return
+
+                if cb.best_objective != float('inf') and stagnation > cb.stagnation_limit:
+                    cb.request_stop(f"📉 Stagnation detected ({stagnation:.1f}s > {cb.stagnation_limit}s)")
+                    return
+
+                # 轮询后端停止信号:每 poll_interval(5s)一次,而非每秒(P1-12)
+                if now - cb.last_poll_time > cb.poll_interval:
+                    cb.last_poll_time = now
+                    if cb.poll_server_stop():
+                        cb.request_stop("🛑 Received Manual Stop Signal from server")
+                        return
+            except Exception as e:
+                # 监控线程绝不能因偶发异常(网络抖动/序列化错误)整条退出——否则心跳与停止轮询双双失联,
+                # updated_at 停滞会触发后端 reaper 误判。吞掉单次迭代异常,下一秒继续。
+                logger.warning(f"[Monitor] 本轮监控迭代异常,已跳过: {e}")
 
     # ──────────────────────────────────────────────
     # Result Handling

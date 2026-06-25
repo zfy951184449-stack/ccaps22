@@ -49,8 +49,12 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
     const [isApplied, setIsApplied] = useState(false);
 
     const eventSourceRef = useRef<EventSource | null>(null);
+    const failedGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const logContainerRef = useRef<HTMLDivElement>(null);
     const isTerminalStatus = (value: string) => ['COMPLETED', 'APPLIED', 'FAILED'].includes(value);
+    // 收到 FAILED 后保持监听这么久再关闭：reaper 可能先于 solver 真正完成把状态写成 FAILED，
+    // 这段窗口内若后端恢复为 COMPLETED（结果回调 / SSE 5s 轮询）即可纠正显示，避免永久锁死在失败。
+    const FAILED_GRACE_MS = 12000;
 
     useEffect(() => {
         if (visible && runId) {
@@ -148,7 +152,20 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
                     }
                 }
 
-                if (isTerminalStatus(data.status)) {
+                if (data.status === 'FAILED') {
+                    // 不立刻永久关闭：保持监听一小段时间，若后端随后恢复为 COMPLETED 即可纠正显示。
+                    if (!failedGraceTimerRef.current) {
+                        failedGraceTimerRef.current = setTimeout(() => {
+                            failedGraceTimerRef.current = null;
+                            evtSource.close();
+                        }, FAILED_GRACE_MS);
+                    }
+                } else if (isTerminalStatus(data.status)) {
+                    // COMPLETED/APPLIED 是权威终态，立即关闭
+                    if (failedGraceTimerRef.current) {
+                        clearTimeout(failedGraceTimerRef.current);
+                        failedGraceTimerRef.current = null;
+                    }
                     evtSource.close();
                 }
 
@@ -170,6 +187,10 @@ const SolveProgressV4Modal: React.FC<SolveProgressV4ModalProps> = ({ visible, ru
     };
 
     const stopListening = () => {
+        if (failedGraceTimerRef.current) {
+            clearTimeout(failedGraceTimerRef.current);
+            failedGraceTimerRef.current = null;
+        }
         if (eventSourceRef.current) {
             eventSourceRef.current.close();
             eventSourceRef.current = null;

@@ -13,6 +13,25 @@ interface Props {
   title?: string;
 }
 
+/** 设备配色组(克制蓝/绿/中性,对齐 Navexa 仓库对象配色;颜色在 CSS .cg-* 定义) */
+export function colorGroup(type: PsEquipmentType): 'blue' | 'green' | 'slate' | 'cip' {
+  switch (type) {
+    case 'reactor':
+    case 'storage-tank':
+    case 'prep-tank':
+    case 'centrifuge':
+      return 'blue';
+    case 'wave':
+    case 'shaker':
+    case 'storage-bag':
+      return 'green';
+    case 'cip-station':
+      return 'cip';
+    default:
+      return 'slate';
+  }
+}
+
 /** 各类型的 viewBox 0..100 内的图标几何(类名:psi-ink / psi-ink2 / psi-vessel / psi-cip) */
 function glyph(type: PsEquipmentType, stir: PsStirDirection): React.ReactNode {
   switch (type) {
@@ -156,7 +175,7 @@ function glyph(type: PsEquipmentType, stir: PsStirDirection): React.ReactNode {
 
 export const PsEquipmentIcon: React.FC<Props> = ({ type, stirDirection = 'top', size = 48, title }) => (
   <svg
-    className="psi"
+    className={`psi cg-${colorGroup(type)}`}
     viewBox="0 0 100 100"
     width={size}
     height={size}

@@ -1,0 +1,181 @@
+/**
+ * CIP 拓扑 Excel 导入/模板下载(平台,用户自录的批量入口,无 mock)。
+ *
+ * 模型:清洗对象 = 设备 / 管线,各自直接归属一个 CIP 站;管线 = 起点设备-终点设备 的连接。
+ * 导入:解析 → 引用按「编码」解析(站/起终点设备)→ 全表校验(错就整批拒,列行号)→
+ *   事务 upsert(顺序 站→设备→管线,按 设施+编码 不建重复)。
+ */
+import path from 'path';
+import type { Request, Response } from 'express';
+import type { PoolConnection, RowDataPacket } from 'mysql2/promise';
+import XLSX from 'xlsx';
+import { pool } from '../../config/database';
+
+const TEMPLATE_PATH = path.resolve(process.cwd(), '..', 'docs/production_scheduling/CIP拓扑导入模板.xlsx');
+
+export function downloadTemplate(_req: Request, res: Response): void {
+  res.download(TEMPLATE_PATH, 'CIP拓扑导入模板.xlsx', (err) => {
+    if (err && !res.headersSent) res.status(404).json({ success: false, error: '模板文件不存在' });
+  });
+}
+
+const TYPE_MAP: Record<string, string> = {
+  反应器: 'reactor', 层析skid: 'akta-skid', 储罐: 'tank', 超滤skid: 'ufdf-skid', 转移: 'transfer', 其他: 'other',
+};
+const CATEGORY_MAP: Record<string, string> = {
+  培养基: 'media', 缓冲液: 'buffer', 清洗剂: 'cleaning-agent', 中间产物: 'intermediate', 试剂: 'reagent', 设备洁净: 'equipment-clean',
+};
+const BASIS_MAP: Record<string, string> = {
+  产出后: 'after_produced', 配制后: 'after_prepared', 清洗后: 'after_clean',
+};
+
+interface ImportError { sheet: string; row: number; reason: string }
+
+const norm = (h: unknown): string =>
+  String(h ?? '').replace(/\*/g, '').replace(/[（(][^)）]*[)）]/g, '').replace('→所属CIP站', '').trim();
+
+function readSheet(wb: XLSX.WorkBook, name: string, fieldByHeader: Record<string, string>): Array<{ row: number; data: Record<string, string> }> {
+  const sheet = wb.Sheets[name];
+  if (!sheet) return [];
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '', raw: false });
+  if (!rows.length) return [];
+  const headers = (rows[0] as unknown[]).map(norm);
+  const colOf: Record<string, number> = {};
+  headers.forEach((h, i) => { if (fieldByHeader[h] !== undefined) colOf[fieldByHeader[h]] = i; });
+  const out: Array<{ row: number; data: Record<string, string> }> = [];
+  for (let r = 1; r < rows.length; r++) {
+    const arr = rows[r] as unknown[];
+    const data: Record<string, string> = {};
+    let anyVal = false;
+    for (const header of Object.keys(fieldByHeader)) {
+      const f = fieldByHeader[header];
+      const idx = colOf[f];
+      const v = idx === undefined ? '' : String(arr[idx] ?? '').trim();
+      data[f] = v;
+      if (v) anyVal = true;
+    }
+    if (anyVal) out.push({ row: r + 1, data });
+  }
+  return out;
+}
+
+export async function importWorkbook(req: Request, res: Response): Promise<void> {
+  const file = (req as Request & { file?: { buffer: Buffer } }).file;
+  const facility = String((req.body?.facilityCode ?? '') || '').trim();
+  if (!file) { res.status(400).json({ success: false, error: '未收到文件' }); return; }
+  if (!facility) { res.status(400).json({ success: false, error: '缺少设施(facilityCode)' }); return; }
+
+  let wb: XLSX.WorkBook;
+  try {
+    wb = XLSX.read(file.buffer, { type: 'buffer' });
+  } catch {
+    res.status(400).json({ success: false, error: '无法解析 Excel 文件' });
+    return;
+  }
+
+  const stations = readSheet(wb, '站', { 站编码: 'code', 站名称: 'name', 部门: 'department', 容量: 'capacity', 备注: 'note' });
+  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', CIP站编码: 'station_code', 备注: 'note' });
+  const pipelines = readSheet(wb, '管线', { 管线编码: 'code', 管线名称: 'name', 起点设备编码: 'from_code', 终点设备编码: 'to_code', CIP站编码: 'station_code', 备注: 'note' });
+  const shelfLives = readSheet(wb, '物料效期', { 物料: 'material', 类别: 'category', 效期: 'shelf_life_hours', 起算基准: 'basis', 备注: 'note' });
+
+  const errors: ImportError[] = [];
+
+  // 已有 + 本次工作簿的编码集合,供引用校验
+  const [exStations] = await pool.execute<RowDataPacket[]>('SELECT code FROM ps_cip_station WHERE facility_code = ?', [facility]);
+  const [exEquip] = await pool.execute<RowDataPacket[]>('SELECT code FROM ps_cip_equipment WHERE facility_code = ?', [facility]);
+  const stationCodes = new Set<string>([...exStations.map((r) => r.code), ...stations.map((s) => s.data.code).filter(Boolean)]);
+  const equipmentCodes = new Set<string>([...exEquip.map((r) => r.code), ...equipment.map((e) => e.data.code).filter(Boolean)]);
+
+  const reqd = (sheet: string, item: { row: number; data: Record<string, string> }, fields: Array<[string, string]>) => {
+    for (const [f, label] of fields) if (!item.data[f]) errors.push({ sheet, row: item.row, reason: `缺必填:${label}` });
+  };
+
+  stations.forEach((s) => {
+    reqd('站', s, [['code', '站编码'], ['name', '站名称']]);
+    if (s.data.capacity && !/^\d+$/.test(s.data.capacity)) errors.push({ sheet: '站', row: s.row, reason: `容量须为整数:${s.data.capacity}` });
+  });
+  equipment.forEach((e) => {
+    reqd('设备', e, [['code', '设备编码'], ['name', '设备名称'], ['type', '类型']]);
+    if (e.data.type && !TYPE_MAP[e.data.type]) errors.push({ sheet: '设备', row: e.row, reason: `类型不在可选项:${e.data.type}` });
+    if (e.data.station_code && !stationCodes.has(e.data.station_code)) errors.push({ sheet: '设备', row: e.row, reason: `CIP站编码不存在:${e.data.station_code}` });
+  });
+  pipelines.forEach((p) => {
+    reqd('管线', p, [['code', '管线编码'], ['name', '管线名称'], ['from_code', '起点设备编码'], ['to_code', '终点设备编码'], ['station_code', 'CIP站编码']]);
+    if (p.data.from_code && !equipmentCodes.has(p.data.from_code)) errors.push({ sheet: '管线', row: p.row, reason: `起点设备不存在:${p.data.from_code}` });
+    if (p.data.to_code && !equipmentCodes.has(p.data.to_code)) errors.push({ sheet: '管线', row: p.row, reason: `终点设备不存在:${p.data.to_code}` });
+    if (p.data.station_code && !stationCodes.has(p.data.station_code)) errors.push({ sheet: '管线', row: p.row, reason: `CIP站编码不存在:${p.data.station_code}` });
+  });
+  shelfLives.forEach((s) => {
+    reqd('物料效期', s, [['material', '物料'], ['category', '类别'], ['shelf_life_hours', '效期(小时)']]);
+    if (s.data.category && !CATEGORY_MAP[s.data.category]) errors.push({ sheet: '物料效期', row: s.row, reason: `类别不在可选项:${s.data.category}` });
+    if (s.data.basis && !BASIS_MAP[s.data.basis]) errors.push({ sheet: '物料效期', row: s.row, reason: `起算基准不在可选项:${s.data.basis}` });
+    if (s.data.shelf_life_hours && !/^\d+$/.test(s.data.shelf_life_hours)) errors.push({ sheet: '物料效期', row: s.row, reason: `效期须为整数:${s.data.shelf_life_hours}` });
+  });
+
+  if (errors.length) {
+    res.status(400).json({ success: false, error: `校验未通过,共 ${errors.length} 处`, errors });
+    return;
+  }
+
+  const conn: PoolConnection = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    for (const s of stations) {
+      await conn.execute(
+        `INSERT INTO ps_cip_station (facility_code, code, name, department, capacity, note) VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), department=VALUES(department), capacity=VALUES(capacity), note=VALUES(note)`,
+        [facility, s.data.code, s.data.name, s.data.department || null, s.data.capacity ? Number(s.data.capacity) : 1, s.data.note || null],
+      );
+    }
+
+    const [stRows] = await conn.execute<RowDataPacket[]>('SELECT id, code FROM ps_cip_station WHERE facility_code = ?', [facility]);
+    const stIdByCode = new Map<string, number>(stRows.map((r) => [r.code, r.id]));
+
+    for (const e of equipment) {
+      const stationId = e.data.station_code ? stIdByCode.get(e.data.station_code) ?? null : null;
+      await conn.execute(
+        `INSERT INTO ps_cip_equipment (facility_code, code, name, type, cip_station_id, note) VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type), cip_station_id=VALUES(cip_station_id), note=VALUES(note)`,
+        [facility, e.data.code, e.data.name, TYPE_MAP[e.data.type], stationId, e.data.note || null],
+      );
+    }
+
+    const [eqRows] = await conn.execute<RowDataPacket[]>('SELECT id, code FROM ps_cip_equipment WHERE facility_code = ?', [facility]);
+    const eqIdByCode = new Map<string, number>(eqRows.map((r) => [r.code, r.id]));
+
+    for (const p of pipelines) {
+      const fromId = eqIdByCode.get(p.data.from_code);
+      const toId = eqIdByCode.get(p.data.to_code);
+      const stationId = stIdByCode.get(p.data.station_code);
+      if (fromId === undefined || toId === undefined || stationId === undefined) {
+        throw new Error(`管线 ${p.data.code} 引用未解析(起点/终点/站)`);
+      }
+      await conn.execute(
+        `INSERT INTO ps_pipeline (facility_code, code, name, from_equipment_id, to_equipment_id, cip_station_id, note) VALUES (?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), from_equipment_id=VALUES(from_equipment_id), to_equipment_id=VALUES(to_equipment_id), cip_station_id=VALUES(cip_station_id), note=VALUES(note)`,
+        [facility, p.data.code, p.data.name, fromId, toId, stationId, p.data.note || null],
+      );
+    }
+
+    for (const s of shelfLives) {
+      await conn.execute(
+        `INSERT INTO ps_shelf_life (facility_code, material, category, shelf_life_hours, basis, note) VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE shelf_life_hours=VALUES(shelf_life_hours), basis=VALUES(basis), note=VALUES(note)`,
+        [facility, s.data.material, CATEGORY_MAP[s.data.category], Number(s.data.shelf_life_hours),
+          s.data.basis ? BASIS_MAP[s.data.basis] : 'after_produced', s.data.note || null],
+      );
+    }
+
+    await conn.commit();
+    res.json({
+      success: true,
+      data: { summary: { stations: stations.length, equipment: equipment.length, pipelines: pipelines.length, shelfLives: shelfLives.length } },
+    });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ success: false, error: `导入失败(已回滚):${(err as Error).message}` });
+  } finally {
+    conn.release();
+  }
+}

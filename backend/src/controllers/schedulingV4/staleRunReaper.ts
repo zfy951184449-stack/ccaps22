@@ -12,17 +12,28 @@
  * 会刷新 updated_at（列定义 ON UPDATE CURRENT_TIMESTAMP）。进程一中断，再无任何写入，
  * updated_at 即停滞。据此把「非终态且 updated_at 已停滞超过阈值」的行兜底翻成 FAILED。
  *
- * 阈值默认 240s，远大于心跳间隔（5s）、SSE 回退轮询（5s）与常规 assemble 耗时（防止仍在装配数据的
- * 存活求解被误杀），故不会误判存活求解。仅作用于 run_code LIKE 'V4-%'，不触碰 V5/LEGACY 等其它子系统。
+ * 判活阈值「跟随本次求解时间上限」：进入求解后阈值 = time_limit_seconds + STALE_GRACE_SECONDS(默认 180)，
+ * 与 orchestrator 的中止定时器(max_time + 180)同源——进程存活时由进程内 abort/catch 先写终态，reaper 仅在
+ * 「进程真的死了、终态回写丢失」时兜底。这样把求解时间调到 >300s（甚至 3600s）的长求解不会再被一个写死的
+ * 240s 窗口误杀成 FAILED。尚未进入求解(QUEUED/ASSEMBLING，无 time_limit_seconds)的行回退到固定
+ * STALE_FALLBACK_SECONDS(默认 240s，远大于心跳间隔/常规 assemble 耗时)。仅作用于 run_code LIKE 'V4-%'，
+ * 不触碰 V5/LEGACY 等其它子系统。
  */
 import pool from '../../config/database';
 import { RowDataPacket } from 'mysql2';
 import { progressEmitter } from './types';
 import { V4_TERMINAL_STATUSES } from './helpers';
 
-const STALE_TIMEOUT_SECONDS = Number(process.env.V4_RUN_STALE_TIMEOUT_SECONDS) > 0
+// 兜底判活阈值（秒）：仅用于尚未进入求解、没有记录 time_limit_seconds 的行（QUEUED/ASSEMBLING）。
+const STALE_FALLBACK_SECONDS = Number(process.env.V4_RUN_STALE_TIMEOUT_SECONDS) > 0
     ? Number(process.env.V4_RUN_STALE_TIMEOUT_SECONDS)
     : 240;
+
+// 进入求解后，判活阈值 = 本次 time_limit_seconds + 该缓冲。与 orchestrator 中止定时器(max_time + 180)同源，
+// 确保「正常长求解」永远先由进程内 abort/catch 写终态，reaper 只在进程真死时按 time_limit+grace 兜底。
+const STALE_GRACE_SECONDS = Number(process.env.V4_RUN_STALE_GRACE_SECONDS) > 0
+    ? Number(process.env.V4_RUN_STALE_GRACE_SECONDS)
+    : 180;
 
 const SWEEP_INTERVAL_MS = Number(process.env.V4_RUN_REAPER_INTERVAL_MS) > 0
     ? Number(process.env.V4_RUN_REAPER_INTERVAL_MS)
@@ -43,8 +54,8 @@ export async function reapStaleRuns(): Promise<number> {
             `SELECT id FROM scheduling_runs
               WHERE run_code LIKE 'V4-%'
                 AND status NOT IN (${TERMINAL_LIST})
-                AND TIMESTAMPDIFF(SECOND, updated_at, NOW()) > ?`,
-            [...V4_TERMINAL_STATUSES, STALE_TIMEOUT_SECONDS],
+                AND TIMESTAMPDIFF(SECOND, updated_at, NOW()) > COALESCE(time_limit_seconds + ?, ?)`,
+            [...V4_TERMINAL_STATUSES, STALE_GRACE_SECONDS, STALE_FALLBACK_SECONDS],
         );
 
         if (rows.length === 0) {
@@ -66,7 +77,7 @@ export async function reapStaleRuns(): Promise<number> {
         );
 
         for (const id of ids) {
-            console.warn(`[SchedulingV4][Reaper] Run ${id} 超过 ${STALE_TIMEOUT_SECONDS}s 无写入，已自动标记 FAILED`);
+            console.warn(`[SchedulingV4][Reaper] Run ${id} 超过判活阈值(time_limit+${STALE_GRACE_SECONDS}s，无 time_limit 时兜底 ${STALE_FALLBACK_SECONDS}s)无写入，已自动标记 FAILED`);
             // 通知任何仍连着的 SSE 客户端立即收到终态（否则也会在 5s 回退轮询里读到）。
             progressEmitter.emit(`run:${id}`, {
                 status: 'FAILED',
@@ -102,7 +113,7 @@ export function startStaleRunReaper(): void {
         void reapStaleRuns();
     }, SWEEP_INTERVAL_MS);
 
-    console.log(`[SchedulingV4][Reaper] 已启动（超时阈值 ${STALE_TIMEOUT_SECONDS}s，清扫周期 ${SWEEP_INTERVAL_MS}ms）`);
+    console.log(`[SchedulingV4][Reaper] 已启动（判活阈值 time_limit+${STALE_GRACE_SECONDS}s / 兜底 ${STALE_FALLBACK_SECONDS}s，清扫周期 ${SWEEP_INTERVAL_MS}ms）`);
 }
 
 export function stopStaleRunReaper(): void {

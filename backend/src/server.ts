@@ -34,6 +34,7 @@ import shiftDefinitionRoutes from './routes/shiftDefinitions';
 import HolidayScheduler from './scheduler/holidayScheduler';
 import HolidayService from './services/holidayService';
 import { startStaleRunReaper } from './controllers/schedulingV4/staleRunReaper';
+import { startStaleRunReaperV5 } from './controllers/schedulingV5/staleRunReaper';
 import systemRoutes from './routes/system';
 import schedulingV4Routes from './routes/schedulingV4';
 import schedulingV5Routes from './routes/schedulingV5';
@@ -43,6 +44,7 @@ import operationTypesRoutes from './routes/operationTypes';
 import batchConstraintsRoutes from './routes/batchConstraints';
 import batchGanttV4Routes from './routes/batchGanttV4';
 import batchGanttV5Routes from './routes/batchGanttV5';
+import schedulingProdRoutes from './routes/schedulingProd';
 import batchWorkbenchV2Routes from './routes/batchWorkbenchV2';
 import personnelSchedulesV2Routes from './routes/personnelSchedulesV2';
 import unavailabilityRoutes from './routes/unavailabilityRoutes';
@@ -197,6 +199,9 @@ app.use('/api/v4/gantt', batchGanttV4Routes);
 // V5 Gantt API (Includes Operation Windows)
 app.use('/api/v5/gantt', batchGanttV5Routes);
 
+// 排产引擎(排产 ≠ 排班):CIP 容量尖峰分析等。调独立微服务 prod_scheduler(端口 5007)。
+app.use('/api/prod', schedulingProdRoutes);
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'APS Backend API is running' });
 });
@@ -266,8 +271,9 @@ if (process.env.NODE_ENV !== 'test') {
 
   console.log('节假日API缓存清理定时器已启动');
 
-  // 启动 V4 孤儿运行清扫器：进程重启/求解中断导致终态丢失时，把卡死在"求解中"的行兜底翻成 FAILED。
+  // 启动 V4/V5 孤儿运行清扫器：进程重启/求解中断导致终态丢失时，把卡死在"求解中"的行兜底翻成 FAILED。
   startStaleRunReaper();
+  startStaleRunReaperV5();
 }
 
 export { server };

@@ -273,10 +273,15 @@ export const updateSolveProgressV5 = async (req: Request, res: Response) => {
         const updateParams = [status || null, JSON.stringify(progressUpdate), run_id];
 
         // 步骤A：V4 同构的 merge（status/progress/metrics/message）。
+        // 终态守卫：一旦 run 进入 COMPLETED/FAILED/APPLIED，迟到的进度帧（多为求解期攒下、monitor flush
+        // 的 RUNNING 心跳）不得把状态打回 RUNNING（此前用裸 COALESCE 会「复活」已完成/已应用的 run）。
         await pool.execute<any>(
             `UPDATE scheduling_runs
             SET
-                status = COALESCE(?, status),
+                status = CASE
+                    WHEN status IN ('COMPLETED', 'FAILED', 'APPLIED') THEN status
+                    ELSE COALESCE(?, status)
+                END,
                 solver_progress = JSON_MERGE_PATCH(COALESCE(solver_progress, '{}'), ?)
             WHERE id = ?`,
             updateParams

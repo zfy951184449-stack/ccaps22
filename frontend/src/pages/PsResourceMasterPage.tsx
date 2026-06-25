@@ -28,7 +28,6 @@ import {
 import { buildPsResourceMaster } from '../mock/psResourceMock';
 import { PsCipTopology } from '../components/PsResourceMaster/PsCipTopology';
 import type { PsCipFocus } from '../components/PsResourceMaster/PsCipTopology';
-import { PsFactorySandtable } from '../components/PsResourceMaster/PsFactorySandtable';
 import { PsCipEditDrawerBody } from '../components/PsResourceMaster/PsCipEditDrawer';
 import { PsOccupancyDiagram } from '../components/PsResourceMaster/PsOccupancyDiagram';
 import { issuesByEntity, validateCip } from '../components/PsResourceMaster/psResourceValidation';
@@ -71,7 +70,6 @@ const PsResourceMasterPage: React.FC = () => {
   const [master, setMaster] = useState<PsResourceMaster>(() => buildPsResourceMaster());
   const [tab, setTab] = useState<PsResourceTab>('cip');
   const [mode, setMode] = useState<'view' | 'edit'>('view');
-  const [view, setView] = useState<'logic' | 'sandtable'>('logic');
   const [cipFocus, setCipFocus] = useState<PsCipFocus | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
 
@@ -234,20 +232,12 @@ const PsResourceMasterPage: React.FC = () => {
             <div className="psrm-pane-toolbar">
               <WxbSegmented
                 size="sm"
-                options={[{ label: '逻辑视图', value: 'logic' }, { label: '沙盘视图', value: 'sandtable' }]}
-                value={view}
-                onChange={(v) => setView(v as 'logic' | 'sandtable')}
-              />
-              <WxbSegmented
-                size="sm"
                 options={[{ label: '浏览', value: 'view' }, { label: '编辑', value: 'edit' }]}
                 value={mode}
                 onChange={(v) => { setMode(v as 'view' | 'edit'); if (v === 'view') setCipFocus(null); }}
               />
               <span className="psrm-view-label psrm-toolbar-hint">
-                {view === 'sandtable'
-                  ? '俯瞰车间:套间分区 · 房间在内 · CIP 站公用 · 管线照走向连'
-                  : '设备 / 罐 → 管线 → {主站(优先), 备站(应急)} · 同站容量 1,同刻只洗一条管线'}
+                设备 / 罐 → 管线 → {'{主站(优先), 备站(应急)}'} · 同站容量 1,同刻只洗一条管线
               </span>
             </div>
 
@@ -268,31 +258,17 @@ const PsResourceMasterPage: React.FC = () => {
               </WxbAlert>
             )}
 
-            {view === 'logic' ? (
-              <PsCipTopology
-                stations={master.cipStations}
-                pipelines={master.pipelines}
-                equipment={master.cipEquipment}
-                mode={mode}
-                selected={cipFocus}
-                onSelect={setCipFocus}
-                onReroute={handleReroute}
-                onAdd={handleAdd}
-                issueEntities={mode === 'edit' ? issueEntities : undefined}
-              />
-            ) : (
-              <PsFactorySandtable
-                suites={master.suites}
-                rooms={master.rooms}
-                stations={master.cipStations}
-                pipelines={master.pipelines}
-                equipment={master.cipEquipment}
-                mode={mode}
-                selected={cipFocus}
-                onSelect={setCipFocus}
-                issueEntities={mode === 'edit' ? issueEntities : undefined}
-              />
-            )}
+            <PsCipTopology
+              stations={master.cipStations}
+              pipelines={master.pipelines}
+              equipment={master.cipEquipment}
+              mode={mode}
+              selected={cipFocus}
+              onSelect={setCipFocus}
+              onReroute={handleReroute}
+              onAdd={handleAdd}
+              issueEntities={mode === 'edit' ? issueEntities : undefined}
+            />
 
             <div className="psrm-view-label psrm-mt">CIP 站清单</div>
             <div className="psrm-card-grid">

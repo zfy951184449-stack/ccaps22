@@ -8,6 +8,10 @@ from utils.logger import get_logger
 
 logger = get_logger("Callback")
 
+# 求解期积压队列上限：后端长时间不可用时，发送失败的进度/日志会回灌待重试（见 flush）。
+# 带上限防无界增长——超限丢最旧、保最新（最新心跳/日志足以刷新 updated_at 维持 reaper 判活）。
+MAX_PENDING_BUFFER = 200
+
 class APICallback(cp_model.CpSolverSolutionCallback):
     """
     CP-SAT Solution Callback that pushes progress to Backend API.
@@ -261,16 +265,26 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         self._send_now(status, progress, metrics, message, log_line, type)
 
     def flush(self):
-        """由 monitor 线程每秒调用:把求解期积压的进度/日志实际发出去(节流,最新解只发一条)。"""
+        """由 monitor 线程每秒调用:把求解期积压的进度/日志实际发出去(节流,最新解只发一条)。
+
+        发送失败(后端 401/500/抖动)不再永久丢弃心跳/日志——回灌 _pending 待下次 flush 重试,
+        以保证 updated_at 持续刷新、后端 reaper 判活可靠。一旦本轮出现失败即停止继续发(避免逐条
+        timeout 叠加拖死 monitor 线程),整批回灌并裁剪到 MAX_PENDING_BUFFER。"""
         with self._lock:
             sol = self._latest_solution
             self._latest_solution = None
             pend = self._pending
             self._pending = []
+        # 解只保留最新一帧,发失败也不回灌(下一个解会刷新),故不计入 failed
         if sol is not None:
             self._send_now(sol[0], metrics=sol[1], log_line=sol[2], type="SOLUTION")
+        failed = []
         for args in pend:
-            self._send_now(*args)
+            if failed or not self._send_now(*args):
+                failed.append(args)
+        if failed:
+            with self._lock:
+                self._pending = (failed + self._pending)[-MAX_PENDING_BUFFER:]
 
     def begin_deferred(self):
         """进入求解期:推送/日志改为写内存(由 monitor flush)。"""
@@ -282,7 +296,8 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         self.flush()
 
     def _send_now(self, status, progress=None, metrics=None, message=None, log_line=None, type="STATUS"):
-        """Sends POST request to backend with retry logic."""
+        """Sends POST request to backend with retry logic. Returns True on success, False on failure
+        （失败时由 flush 回灌重试,不再静默丢弃）。"""
         max_retries = 2
         retry_delay = 0.5  # 500ms
 
@@ -303,17 +318,19 @@ class APICallback(cp_model.CpSolverSolutionCallback):
         for attempt in range(max_retries + 1):
             try:
                 requests.post(self.api_url, json=payload, headers=self._auth_headers(), timeout=2)
-                return  # Success, exit
+                return True  # Success, exit
             except requests.exceptions.Timeout:
                 if attempt < max_retries:
                     logger.warning(f"Push timeout (attempt {attempt + 1}/{max_retries + 1}), retrying in {retry_delay}s...")
                     time.sleep(retry_delay)
                 else:
                     logger.error(f"Failed to push progress after {max_retries + 1} attempts: Timeout")
+                    return False
             except Exception as e:
-                # For non-timeout errors, fail immediately
+                # For non-timeout errors, fail immediately（回灌待重试,不丢弃）
                 logger.error(f"Failed to push progress: {e}")
-                return
+                return False
+        return False
             
     def poll_server_stop(self):
         """Check if server requested stop."""
@@ -367,7 +384,12 @@ class APICallback(cp_model.CpSolverSolutionCallback):
                    f"填充率: {metrics.get('fill_rate', 0)}%")
         
         logger.info(f"📤 Pushing final result to backend: {final_status}")
-        
+
+        # 先落 result_summary（/callback/result 内部 saveResults→updateRunStatus 原子地「先存结果再置终态」），
+        # 再发 FINAL 进度帧。此前顺序相反：FINAL 帧先把状态打成 COMPLETED，若紧接着 result POST 失败，
+        # run 会停在「COMPLETED 但无结果」。调换后终态翻转总是伴随结果落库。
+        self._push_result_summary(result)
+
         self.push_progress(
             status=final_status,
             progress=100,
@@ -376,9 +398,6 @@ class APICallback(cp_model.CpSolverSolutionCallback):
             log_line=log_msg,
             type="FINAL"
         )
-        
-        # Also push the full result for result_summary
-        self._push_result_summary(result)
     
     def _push_result_summary(self, result: dict):
         """

@@ -35,10 +35,11 @@ async function insertRun(overrides: Record<string, any> = {}): Promise<number> {
         `INSERT INTO scheduling_runs
              (run_key, run_code, status, stage, period_start, period_end,
               window_start, window_end, target_batch_ids, summary_json, solver_progress)
-         VALUES (?, ?, 'COMPLETED', 'DONE', ?, ?, ?, ?, '[]', '{}', ?)`,
+         VALUES (?, ?, ?, 'DONE', ?, ?, ?, ?, '[]', '{}', ?)`,
         [
             runKey,
             overrides.run_code ?? runCode,
+            overrides.status ?? 'COMPLETED',
             D, D, D, D,
             JSON.stringify(overrides.solver_progress ?? base),
         ],
@@ -95,7 +96,8 @@ afterAll(async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 describe('B4 — updateSolveProgressV5 回调落 DB + V5 viz', () => {
     test('RUNNING 回调后 solver_progress 含 progress / status，DB 已更新', async () => {
-        const runId = await insertRun();
+        // 非终态起点（QUEUED）→ RUNNING 帧应正常落地（终态守卫只拦「终态→RUNNING」）。
+        const runId = await insertRun({ status: 'QUEUED' });
 
         const [req, res, captured] = makeReqRes(
             {},
@@ -122,6 +124,31 @@ describe('B4 — updateSolveProgressV5 回调落 DB + V5 viz', () => {
         // V4 字段不丢
         expect(sp.progress).toBe(42);
         expect(sp.message).toBe('求解中');
+    });
+
+    test('终态守卫：COMPLETED run 收到迟到 RUNNING 帧不被打回 RUNNING（日志/进度仍合并）', async () => {
+        const runId = await insertRun({ status: 'COMPLETED' });
+
+        const [req, res, captured] = makeReqRes(
+            {},
+            { run_id: runId, status: 'RUNNING', progress: 17, message: '迟到心跳' },
+        );
+
+        await updateSolveProgressV5(req, res);
+        expect(captured.json?.success).toBe(true);
+
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            'SELECT status, solver_progress FROM scheduling_runs WHERE id = ?',
+            [runId],
+        );
+        // 状态不得被迟到帧复活
+        expect(rows[0].status).toBe('COMPLETED');
+        // 但进度/消息照常合并
+        const sp = typeof rows[0].solver_progress === 'string'
+            ? JSON.parse(rows[0].solver_progress)
+            : rows[0].solver_progress;
+        expect(sp.progress).toBe(17);
+        expect(sp.message).toBe('迟到心跳');
     });
 
     test('NEW_INCUMBENT 回调后 convergence 增一点，含 wall_time 键', async () => {

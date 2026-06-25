@@ -28,6 +28,7 @@ import EquipmentStateMachinePage from './pages/EquipmentStateMachinePage';
 import DerivableLibraryPage from './pages/DerivableLibraryPage';
 import PsResourceMasterPage from './pages/PsResourceMasterPage';
 import PsFactorySandtablePage from './pages/PsFactorySandtablePage';
+import ProdCipTopologyPage from './pages/ProdCipTopologyPage';
 import EquipmentManagementPage from './pages/EquipmentManagementPage';
 import RosterLeadershipCockpitPage from './pages/roster/RosterLeadershipCockpitPage';
 import RosterExceptionRepairPage from './pages/roster/RosterExceptionRepairPage';
@@ -245,6 +246,14 @@ const AppLayout: React.FC = () => (
             element={
               <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
                 <PsFactorySandtablePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/prod/cip-topology"
+            element={
+              <ProtectedRoute allowAnonymousInShadow requiredPermission="APS_TEMPLATE_READ">
+                <ProdCipTopologyPage />
               </ProtectedRoute>
             }
           />

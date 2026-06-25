@@ -455,53 +455,6 @@
   cursor: grabbing;
 }
 
-/* ── 工厂数字沙盘 ── */
-.psrm-sandtable {
-  border: 1px solid var(--wx-blue-100);
-  border-radius: 10px;
-  padding: 12px 16px;
-  background: var(--wx-bg, #ffffff);
-  overflow-x: auto;
-}
-
-.psrm-sand-cap {
-  font-size: 11px;
-  color: var(--wx-text-secondary, var(--wx-blue-700));
-  margin-bottom: 6px;
-}
-
-.psrm-sand-sw {
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-  display: inline-block;
-}
-
-.psrm-sand-sw.blue {
-  background: var(--wx-blue-100);
-  border: 1px solid var(--wx-blue-300);
-}
-
-.psrm-sand-sw.amber {
-  background: var(--wx-amber-100);
-  border: 1px solid var(--wx-amber-500);
-}
-
-.psrm-sand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.psrm-sand-dot.green {
-  background: var(--wx-green-500);
-}
-
-.psrm-sand-dot.amber {
-  background: var(--wx-amber-500);
-}
-
 /* ── 编辑抽屉 ── */
 .psrm-drawer-body {
   display: flex;

@@ -29,6 +29,9 @@ const SEARCH_HISTORY_MAX = 60;
 const LOG_MAX = 1000;
 
 const TERMINAL_STATUSES = new Set(['COMPLETED', 'APPLIED', 'FAILED', 'INFEASIBLE']);
+// 收到 FAILED 后保持监听这么久再关闭连接：reaper 可能先于 solver 真正完成把状态写成 FAILED，
+// 这段窗口内若后端恢复为 COMPLETED（结果回调 / SSE 5s 轮询）即可纠正显示，避免永久锁死在失败。
+const FAILED_GRACE_MS = 12000;
 
 // ── 辅助函数 ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +97,7 @@ export function useSolveStreamV5(
   const evtSourceRef = useRef<EventSource | null>(null);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const failedGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open || runId === null) {
@@ -161,6 +165,10 @@ export function useSolveStreamV5(
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
+      }
+      if (failedGraceTimerRef.current) {
+        clearTimeout(failedGraceTimerRef.current);
+        failedGraceTimerRef.current = null;
       }
     }
 
@@ -320,9 +328,8 @@ export function useSolveStreamV5(
         return next;
       });
 
-      // terminal 状态 → 关闭连接
+      // terminal 状态 → 关闭连接（FAILED 例外：延迟关闭以容纳 reaper→真完成的纠正）
       if (dataStatus && TERMINAL_STATUSES.has(dataStatus)) {
-        closeConnection();
         setState(prev => ({
           ...prev,
           metrics: {
@@ -330,6 +337,18 @@ export function useSolveStreamV5(
             elapsed: fmtElapsed(Date.now() - startTimeRef.current),
           },
         }));
+        if (dataStatus === 'FAILED') {
+          // 不立刻永久关闭：保持监听一小段时间，若后端随后恢复为 COMPLETED 即可纠正显示。
+          if (!failedGraceTimerRef.current) {
+            failedGraceTimerRef.current = setTimeout(() => {
+              failedGraceTimerRef.current = null;
+              closeConnection();
+            }, FAILED_GRACE_MS);
+          }
+        } else {
+          // COMPLETED/APPLIED/INFEASIBLE 是权威终态，立即关闭
+          closeConnection();
+        }
       }
     }
 
