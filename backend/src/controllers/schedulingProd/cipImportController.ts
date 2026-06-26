@@ -78,7 +78,7 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
 
   const stations = readSheet(wb, '站', { 站编码: 'code', 站名称: 'name', 组织编码: 'org_code', 容量: 'capacity', 备注: 'note' });
   const rooms = readSheet(wb, '房间', { 房间编码: 'code', 房间名称: 'name', 组织编码: 'org_code', 洁净级别: 'cleanroom_class', 备注: 'note' });
-  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', 清洗方式: 'cleaning_mode', 房间编码: 'room_code', 组织编码: 'org_code', CIP站编码: 'station_code', 备注: 'note' });
+  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', 清洗方式: 'cleaning_mode', 上级设备编码: 'parent_code', 房间编码: 'room_code', 组织编码: 'org_code', CIP站编码: 'station_code', 备注: 'note' });
   const pipelines = readSheet(wb, '管线', { 管线编码: 'code', 管线名称: 'name', 起点设备编码: 'from_code', 终点设备编码: 'to_code', CIP站编码: 'station_code', 备注: 'note' });
   const shelfLives = readSheet(wb, '物料效期', { 物料: 'material', 类别: 'category', 效期: 'shelf_life_hours', 起算基准: 'basis', 备注: 'note' });
 
@@ -117,6 +117,8 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
     if (e.data.room_code && !roomCodes.has(e.data.room_code)) errors.push({ sheet: '设备', row: e.row, reason: `房间编码不存在:${e.data.room_code}` });
     if (e.data.org_code && !orgIdByCode.has(e.data.org_code)) errors.push({ sheet: '设备', row: e.row, reason: `team 编码不存在(只认 team 层级):${e.data.org_code}` });
     if (e.data.station_code && !stationCodes.has(e.data.station_code)) errors.push({ sheet: '设备', row: e.row, reason: `CIP站编码不存在:${e.data.station_code}` });
+    if (e.data.parent_code && !equipmentCodes.has(e.data.parent_code)) errors.push({ sheet: '设备', row: e.row, reason: `上级设备编码不存在:${e.data.parent_code}` });
+    if (e.data.parent_code && e.data.parent_code === e.data.code) errors.push({ sheet: '设备', row: e.row, reason: `上级设备不能是自己:${e.data.code}` });
   });
   pipelines.forEach((p) => {
     reqd('管线', p, [['code', '管线编码'], ['name', '管线名称'], ['from_code', '起点设备编码'], ['to_code', '终点设备编码'], ['station_code', 'CIP站编码']]);
@@ -178,6 +180,12 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
 
     const [eqRows] = await conn.execute<RowDataPacket[]>('SELECT id, code FROM ps_cip_equipment WHERE facility_code = ?', [facility]);
     const eqIdByCode = new Map<string, number>(eqRows.map((r) => [r.code, r.id]));
+
+    // 上级设备(自引用)第二趟:此刻所有设备已有 id,按编码回填 parent(表为准:有则连,空则断)。
+    for (const e of equipment) {
+      const parentId = e.data.parent_code ? eqIdByCode.get(e.data.parent_code) ?? null : null;
+      await conn.execute('UPDATE ps_cip_equipment SET parent_equipment_id = ? WHERE facility_code = ? AND code = ?', [parentId, facility, e.data.code]);
+    }
 
     for (const p of pipelines) {
       const fromId = eqIdByCode.get(p.data.from_code);

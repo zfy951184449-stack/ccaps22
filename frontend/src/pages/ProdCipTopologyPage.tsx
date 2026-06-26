@@ -100,6 +100,7 @@ const ProdCipTopologyPage: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<ImportRowError[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const editingIdRef = useRef<number | null>(null); // 正在编辑的设备 id —— 上级设备下拉据此排除自己
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -138,6 +139,16 @@ const ProdCipTopologyPage: React.FC = () => {
   const roomCode = useCallback((id: number | null) => rooms.find((r) => r.id === id)?.code ?? '—', [rooms]);
   const roomOrg = useCallback((id: number | null) => rooms.find((r) => r.id === id)?.org_unit_id ?? null, [rooms]);
   const orgName = useCallback((id: number | null) => orgUnits.find((u) => u.id === id)?.name ?? null, [orgUnits]);
+  const equipById = useCallback((id: number | null) => equipment.find((e) => e.id === id) ?? null, [equipment]);
+  // 子设备留空时沿父链继承房间/组织(读侧派生,深度保护防环)
+  const effRoomId = useCallback((row: CipEquipmentRow | null, depth = 0): number | null => {
+    if (!row || depth > 8) return null;
+    return row.room_id ?? effRoomId(equipById(row.parent_equipment_id), depth + 1);
+  }, [equipById]);
+  const effOrgId = useCallback((row: CipEquipmentRow | null, depth = 0): number | null => {
+    if (!row || depth > 8) return null;
+    return row.org_unit_id ?? roomOrg(row.room_id) ?? effOrgId(equipById(row.parent_equipment_id), depth + 1);
+  }, [equipById, roomOrg]);
 
   // ── 每类的字段定义 ──
   const FIELDS: Record<ProdEntity, FieldDef[]> = useMemo(() => ({
@@ -161,8 +172,9 @@ const ProdCipTopologyPage: React.FC = () => {
       { key: 'type', label: '类型', type: 'select', required: true, options: () => EQUIP_TYPES },
       { key: 'cleaning_mode', label: '清洗方式', type: 'select', required: true, defaultValue: 'cip', options: () => CLEANING_MODES, help: '仅「CIP 在线清洗」才归 CIP 站;一次性/COP/其他走各自策略' },
       { key: 'cip_station_id', label: 'CIP 站', type: 'select', options: () => stationOpts, help: '这台设备由哪个站清洗', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
-      { key: 'room_id', label: '房间', type: 'select', options: () => roomOpts, help: '这台设备在哪个房间' },
-      { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '留空随房间的 team' },
+      { key: 'parent_equipment_id', label: '上级设备', type: 'select', options: () => equipmentOpts.filter((o) => o.value !== editingIdRef.current), help: 'pou 等使用点可挂到母设备/skid 下;留空=顶层设备(房间/组织留空则随上级)' },
+      { key: 'room_id', label: '房间', type: 'select', options: () => roomOpts, help: '这台设备在哪个房间(留空随上级设备)' },
+      { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '留空随房间/上级设备的 team' },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
     pipelines: [
@@ -215,8 +227,21 @@ const ProdCipTopologyPage: React.FC = () => {
       { title: '类型', dataIndex: 'type', width: 100, render: (v: string) => EQUIP_TYPES.find((t) => t.value === v)?.label ?? v },
       { title: '清洗方式', dataIndex: 'cleaning_mode', width: 120, render: (v: string) => <WxbTag color={v === 'cip' ? 'green' : 'neutral'}>{CLEANING_MODES.find((m) => m.value === v)?.label ?? v}</WxbTag> },
       { title: 'CIP 站', dataIndex: 'cip_station_id', width: 110, render: (v: number | null) => v ? <WxbTag color="green">{stationCode(v)}</WxbTag> : '—' },
-      { title: '房间', dataIndex: 'room_id', width: 100, render: (v: number | null) => (v ? roomCode(v) : '—') },
-      { title: '归属 team', key: 'org', width: 130, render: (_: unknown, r: CipEquipmentRow) => orgName(r.org_unit_id ?? roomOrg(r.room_id)) || '—' },
+      { title: '上级设备', dataIndex: 'parent_equipment_id', width: 110, render: (v: number | null) => v ? <code>{equipmentCode(v)}</code> : '—' },
+      { title: '房间', key: 'room', width: 130, render: (_: unknown, r: CipEquipmentRow) => {
+        const rid = effRoomId(r);
+        if (!rid) return '—';
+        return r.room_id == null
+          ? <span style={{ color: 'var(--wx-text-secondary, #94a3b8)' }} title="随上级设备">{roomCode(rid)} ·随上级</span>
+          : roomCode(rid);
+      } },
+      { title: '归属 team', key: 'org', width: 140, render: (_: unknown, r: CipEquipmentRow) => {
+        const oid = effOrgId(r);
+        if (!oid) return '—';
+        return (r.org_unit_id == null && roomOrg(r.room_id) == null)
+          ? <span style={{ color: 'var(--wx-text-secondary, #94a3b8)' }} title="随上级设备">{orgName(oid)} ·随上级</span>
+          : (orgName(oid) || '—');
+      } },
       actionsCol('equipment'),
     ],
     pipelines: [
@@ -244,12 +269,14 @@ const ProdCipTopologyPage: React.FC = () => {
       : shelfLives;
 
   const openCreate = (entity: ProdEntity) => {
+    editingIdRef.current = null;
     const init: Record<string, any> = {};
     FIELDS[entity].forEach((f) => { if (f.defaultValue !== undefined) init[f.key] = f.defaultValue; });
     setForm(init);
     setDrawer({ entity, id: null });
   };
   const openEdit = (entity: ProdEntity, row: any) => {
+    editingIdRef.current = row.id ?? null;
     const init: Record<string, any> = {};
     FIELDS[entity].forEach((f) => { init[f.key] = row[f.key]; });
     setForm(init);

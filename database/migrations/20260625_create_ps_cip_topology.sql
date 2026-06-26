@@ -16,6 +16,9 @@
 --   · 房间 ps_room(物理位置)归属一个组织单元(软链 organization_units,排班 team 即在该表);
 --     设备挂 room_id + 可选 org_unit_id(留空随房间)。组织绑定让排产→排班共用同一套组织。
 --     suite / 产线 等更高层级本期不做。
+--   · 设备可成树:parent_equipment_id 自引用 —— pou 等「使用点/端口」做成母设备(罐/skid/配液系统)
+--     的子设备;留空=顶层设备。子设备房间/组织留空则沿父链继承(读侧派生,不落冗余列)。
+--     parent 不影响「谁洗它」与尖峰计算,纯属设备身份的层级归并。
 --   · 暂不做备用站;capacity = 站可并行清洗的对象数,通常 1。
 --   · ps_* 表族独立于通用 resources 表(后者要喂 V4 排班,不污染);
 --     设备身份不重复录入 —— 通过可空 resource_id 软链回 resources.id,
@@ -73,6 +76,7 @@ CREATE TABLE IF NOT EXISTS ps_cip_equipment (
   cip_station_id INT          DEFAULT NULL            COMMENT '由哪个 CIP 站清洗(仅清洗方式=cip 时有效)',
   room_id        INT          DEFAULT NULL            COMMENT '所在房间',
   org_unit_id    INT          DEFAULT NULL            COMMENT '归属组织单元(软链 organization_units.id,留空则随所在房间)',
+  parent_equipment_id INT     DEFAULT NULL            COMMENT '上级设备(自引用;pou 等使用点挂到母设备/skid/配液系统;留空=顶层。房间/组织留空时沿父链继承)',
   resource_id    INT          DEFAULT NULL            COMMENT '软链 resources.id(设备身份不重录,可空后填)',
   note           VARCHAR(255) DEFAULT NULL            COMMENT '备注',
   created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -82,10 +86,12 @@ CREATE TABLE IF NOT EXISTS ps_cip_equipment (
   KEY idx_ps_cip_equipment_station (cip_station_id),
   KEY idx_ps_cip_equipment_room (room_id),
   KEY idx_ps_cip_equipment_org (org_unit_id),
+  KEY idx_ps_cip_equipment_parent (parent_equipment_id),
   KEY idx_ps_cip_equipment_resource (resource_id),
   CONSTRAINT fk_ps_cip_equipment_station FOREIGN KEY (cip_station_id) REFERENCES ps_cip_station(id),
-  CONSTRAINT fk_ps_cip_equipment_room FOREIGN KEY (room_id) REFERENCES ps_room(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='排产·CIP 设备/罐(清洗对象 → 站 + 房间)';
+  CONSTRAINT fk_ps_cip_equipment_room FOREIGN KEY (room_id) REFERENCES ps_room(id),
+  CONSTRAINT fk_ps_cip_equipment_parent FOREIGN KEY (parent_equipment_id) REFERENCES ps_cip_equipment(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='排产·CIP 设备/罐(清洗对象 → 站 + 房间;可自引用成树)';
 
 -- ---- 3. 管线:设备-设备的连接,本身是清洗对象,直接归属一个 CIP 站 ----
 CREATE TABLE IF NOT EXISTS ps_pipeline (

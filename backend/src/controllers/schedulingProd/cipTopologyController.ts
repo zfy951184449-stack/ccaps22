@@ -31,9 +31,9 @@ const ENTITIES: Record<string, EntityConfig> = {
   },
   equipment: {
     table: 'ps_cip_equipment',
-    columns: ['facility_code', 'code', 'name', 'type', 'cleaning_mode', 'cip_station_id', 'room_id', 'org_unit_id', 'resource_id', 'note'],
+    columns: ['facility_code', 'code', 'name', 'type', 'cleaning_mode', 'cip_station_id', 'room_id', 'org_unit_id', 'parent_equipment_id', 'resource_id', 'note'],
     required: ['facility_code', 'code', 'name'],
-    nullable: ['cip_station_id', 'room_id', 'org_unit_id', 'resource_id', 'note'],
+    nullable: ['cip_station_id', 'room_id', 'org_unit_id', 'parent_equipment_id', 'resource_id', 'note'],
   },
   pipelines: {
     table: 'ps_pipeline',
@@ -140,6 +140,10 @@ export async function updateEntity(req: Request, res: Response): Promise<void> {
       return;
     }
     const data = pickColumns(c, (req.body || {}) as Record<string, unknown>);
+    if (req.params.entity === 'equipment' && data.parent_equipment_id != null && Number(data.parent_equipment_id) === id) {
+      res.status(400).json({ success: false, error: '上级设备不能是自己' });
+      return;
+    }
     const cols = Object.keys(data);
     if (!cols.length) {
       res.status(400).json({ success: false, error: '无可更新字段' });

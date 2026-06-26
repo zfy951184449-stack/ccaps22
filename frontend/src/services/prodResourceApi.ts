@@ -45,6 +45,7 @@ export interface CipEquipmentRow {
   cip_station_id: number | null;
   room_id: number | null;
   org_unit_id: number | null;
+  parent_equipment_id: number | null;
   resource_id: number | null;
   note: string | null;
 }
