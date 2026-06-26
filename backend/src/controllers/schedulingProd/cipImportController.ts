@@ -78,8 +78,8 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
 
   const stations = readSheet(wb, '站', { 站编码: 'code', 站名称: 'name', 组织编码: 'org_code', 容量: 'capacity', 备注: 'note' });
   const rooms = readSheet(wb, '房间', { 房间编码: 'code', 房间名称: 'name', 组织编码: 'org_code', 洁净级别: 'cleanroom_class', 备注: 'note' });
-  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', 清洗方式: 'cleaning_mode', 上级设备编码: 'parent_code', 房间编码: 'room_code', 组织编码: 'org_code', CIP站编码: 'station_code', 备注: 'note' });
-  const pipelines = readSheet(wb, '管线', { 管线编码: 'code', 管线名称: 'name', 起点设备编码: 'from_code', 终点设备编码: 'to_code', CIP站编码: 'station_code', 备注: 'note' });
+  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', 清洗方式: 'cleaning_mode', 上级设备编码: 'parent_code', CIP时长: 'cip_minutes', SIP时长: 'sip_minutes', DHT: 'dht_hours', CHT: 'cht_hours', 房间编码: 'room_code', 组织编码: 'org_code', CIP站编码: 'station_code', 备注: 'note' });
+  const pipelines = readSheet(wb, '管线', { 管线编码: 'code', 管线名称: 'name', 起点设备编码: 'from_code', 终点设备编码: 'to_code', CIP站编码: 'station_code', CIP时长: 'cip_minutes', DHT: 'dht_hours', CHT: 'cht_hours', 备注: 'note' });
   const shelfLives = readSheet(wb, '物料效期', { 物料: 'material', 类别: 'category', 效期: 'shelf_life_hours', 起算基准: 'basis', 备注: 'note' });
 
   const errors: ImportError[] = [];
@@ -119,12 +119,16 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
     if (e.data.station_code && !stationCodes.has(e.data.station_code)) errors.push({ sheet: '设备', row: e.row, reason: `CIP站编码不存在:${e.data.station_code}` });
     if (e.data.parent_code && !equipmentCodes.has(e.data.parent_code)) errors.push({ sheet: '设备', row: e.row, reason: `上级设备编码不存在:${e.data.parent_code}` });
     if (e.data.parent_code && e.data.parent_code === e.data.code) errors.push({ sheet: '设备', row: e.row, reason: `上级设备不能是自己:${e.data.code}` });
+    ([['cip_minutes', 'CIP时长(分钟)'], ['sip_minutes', 'SIP时长(分钟)'], ['dht_hours', 'DHT(小时)'], ['cht_hours', 'CHT(小时)']] as Array<[string, string]>)
+      .forEach(([f, label]) => { if (e.data[f] && !/^\d+$/.test(e.data[f])) errors.push({ sheet: '设备', row: e.row, reason: `${label}须为非负整数:${e.data[f]}` }); });
   });
   pipelines.forEach((p) => {
     reqd('管线', p, [['code', '管线编码'], ['name', '管线名称'], ['from_code', '起点设备编码'], ['to_code', '终点设备编码'], ['station_code', 'CIP站编码']]);
     if (p.data.from_code && !equipmentCodes.has(p.data.from_code)) errors.push({ sheet: '管线', row: p.row, reason: `起点设备不存在:${p.data.from_code}` });
     if (p.data.to_code && !equipmentCodes.has(p.data.to_code)) errors.push({ sheet: '管线', row: p.row, reason: `终点设备不存在:${p.data.to_code}` });
     if (p.data.station_code && !stationCodes.has(p.data.station_code)) errors.push({ sheet: '管线', row: p.row, reason: `CIP站编码不存在:${p.data.station_code}` });
+    ([['cip_minutes', 'CIP时长(分钟)'], ['dht_hours', 'DHT(小时)'], ['cht_hours', 'CHT(小时)']] as Array<[string, string]>)
+      .forEach(([f, label]) => { if (p.data[f] && !/^\d+$/.test(p.data[f])) errors.push({ sheet: '管线', row: p.row, reason: `${label}须为非负整数:${p.data[f]}` }); });
   });
   shelfLives.forEach((s) => {
     reqd('物料效期', s, [['material', '物料'], ['category', '类别'], ['shelf_life_hours', '效期(小时)']]);
@@ -171,10 +175,14 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
       const roomId = e.data.room_code ? rmIdByCode.get(e.data.room_code) ?? null : null;
       const orgId = e.data.org_code ? orgIdByCode.get(e.data.org_code) ?? null : null;
       const cleaningMode = e.data.cleaning_mode ? CLEAN_MODE_MAP[e.data.cleaning_mode] : 'cip';
+      const eCipMin = e.data.cip_minutes ? Number(e.data.cip_minutes) : null;
+      const eSipMin = e.data.sip_minutes ? Number(e.data.sip_minutes) : null;
+      const eDht = e.data.dht_hours ? Number(e.data.dht_hours) : null;
+      const eCht = e.data.cht_hours ? Number(e.data.cht_hours) : null;
       await conn.execute(
-        `INSERT INTO ps_cip_equipment (facility_code, code, name, type, cleaning_mode, cip_station_id, room_id, org_unit_id, note) VALUES (?,?,?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type), cleaning_mode=VALUES(cleaning_mode), cip_station_id=VALUES(cip_station_id), room_id=VALUES(room_id), org_unit_id=VALUES(org_unit_id), note=VALUES(note)`,
-        [facility, e.data.code, e.data.name, TYPE_MAP[e.data.type], cleaningMode, stationId, roomId, orgId, e.data.note || null],
+        `INSERT INTO ps_cip_equipment (facility_code, code, name, type, cleaning_mode, cip_station_id, cip_duration_minutes, sip_duration_minutes, dht_hours, cht_hours, room_id, org_unit_id, note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type), cleaning_mode=VALUES(cleaning_mode), cip_station_id=VALUES(cip_station_id), cip_duration_minutes=VALUES(cip_duration_minutes), sip_duration_minutes=VALUES(sip_duration_minutes), dht_hours=VALUES(dht_hours), cht_hours=VALUES(cht_hours), room_id=VALUES(room_id), org_unit_id=VALUES(org_unit_id), note=VALUES(note)`,
+        [facility, e.data.code, e.data.name, TYPE_MAP[e.data.type], cleaningMode, stationId, eCipMin, eSipMin, eDht, eCht, roomId, orgId, e.data.note || null],
       );
     }
 
@@ -194,10 +202,13 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
       if (fromId === undefined || toId === undefined || stationId === undefined) {
         throw new Error(`管线 ${p.data.code} 引用未解析(起点/终点/站)`);
       }
+      const pCipMin = p.data.cip_minutes ? Number(p.data.cip_minutes) : null;
+      const pDht = p.data.dht_hours ? Number(p.data.dht_hours) : null;
+      const pCht = p.data.cht_hours ? Number(p.data.cht_hours) : null;
       await conn.execute(
-        `INSERT INTO ps_pipeline (facility_code, code, name, from_equipment_id, to_equipment_id, cip_station_id, note) VALUES (?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), from_equipment_id=VALUES(from_equipment_id), to_equipment_id=VALUES(to_equipment_id), cip_station_id=VALUES(cip_station_id), note=VALUES(note)`,
-        [facility, p.data.code, p.data.name, fromId, toId, stationId, p.data.note || null],
+        `INSERT INTO ps_pipeline (facility_code, code, name, from_equipment_id, to_equipment_id, cip_station_id, cip_duration_minutes, dht_hours, cht_hours, note) VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), from_equipment_id=VALUES(from_equipment_id), to_equipment_id=VALUES(to_equipment_id), cip_station_id=VALUES(cip_station_id), cip_duration_minutes=VALUES(cip_duration_minutes), dht_hours=VALUES(dht_hours), cht_hours=VALUES(cht_hours), note=VALUES(note)`,
+        [facility, p.data.code, p.data.name, fromId, toId, stationId, pCipMin, pDht, pCht, p.data.note || null],
       );
     }
 

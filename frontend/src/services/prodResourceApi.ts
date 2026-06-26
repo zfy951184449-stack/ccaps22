@@ -43,6 +43,10 @@ export interface CipEquipmentRow {
   type: string;
   cleaning_mode: string;
   cip_station_id: number | null;
+  cip_duration_minutes: number | null;
+  sip_duration_minutes: number | null;
+  dht_hours: number | null;
+  cht_hours: number | null;
   room_id: number | null;
   org_unit_id: number | null;
   parent_equipment_id: number | null;
@@ -58,6 +62,9 @@ export interface PipelineRow {
   from_equipment_id: number;
   to_equipment_id: number;
   cip_station_id: number;
+  cip_duration_minutes: number | null;
+  dht_hours: number | null;
+  cht_hours: number | null;
   note: string | null;
 }
 

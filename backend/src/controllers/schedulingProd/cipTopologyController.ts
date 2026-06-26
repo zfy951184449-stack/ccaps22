@@ -31,15 +31,15 @@ const ENTITIES: Record<string, EntityConfig> = {
   },
   equipment: {
     table: 'ps_cip_equipment',
-    columns: ['facility_code', 'code', 'name', 'type', 'cleaning_mode', 'cip_station_id', 'room_id', 'org_unit_id', 'parent_equipment_id', 'resource_id', 'note'],
+    columns: ['facility_code', 'code', 'name', 'type', 'cleaning_mode', 'cip_station_id', 'cip_duration_minutes', 'sip_duration_minutes', 'dht_hours', 'cht_hours', 'room_id', 'org_unit_id', 'parent_equipment_id', 'resource_id', 'note'],
     required: ['facility_code', 'code', 'name'],
-    nullable: ['cip_station_id', 'room_id', 'org_unit_id', 'parent_equipment_id', 'resource_id', 'note'],
+    nullable: ['cip_station_id', 'cip_duration_minutes', 'sip_duration_minutes', 'dht_hours', 'cht_hours', 'room_id', 'org_unit_id', 'parent_equipment_id', 'resource_id', 'note'],
   },
   pipelines: {
     table: 'ps_pipeline',
-    columns: ['facility_code', 'code', 'name', 'from_equipment_id', 'to_equipment_id', 'cip_station_id', 'note'],
+    columns: ['facility_code', 'code', 'name', 'from_equipment_id', 'to_equipment_id', 'cip_station_id', 'cip_duration_minutes', 'dht_hours', 'cht_hours', 'note'],
     required: ['facility_code', 'code', 'name', 'from_equipment_id', 'to_equipment_id', 'cip_station_id'],
-    nullable: ['note'],
+    nullable: ['cip_duration_minutes', 'dht_hours', 'cht_hours', 'note'],
   },
   'shelf-life': {
     table: 'ps_shelf_life',

@@ -149,6 +149,15 @@ const ProdCipTopologyPage: React.FC = () => {
     if (!row || depth > 8) return null;
     return row.org_unit_id ?? roomOrg(row.room_id) ?? effOrgId(equipById(row.parent_equipment_id), depth + 1);
   }, [equipById, roomOrg]);
+  // 清洗时序常数的紧凑展示(单位随值:分钟/小时)
+  const cleanParams = (r: { cip_duration_minutes: number | null; sip_duration_minutes?: number | null; dht_hours: number | null; cht_hours: number | null }): string => {
+    const p: string[] = [];
+    if (r.cip_duration_minutes != null) p.push(`CIP ${r.cip_duration_minutes}分`);
+    if (r.sip_duration_minutes != null) p.push(`SIP ${r.sip_duration_minutes}分`);
+    if (r.dht_hours != null) p.push(`DHT ${r.dht_hours}时`);
+    if (r.cht_hours != null) p.push(`CHT ${r.cht_hours}时`);
+    return p.length ? p.join(' · ') : '—';
+  };
 
   // ── 每类的字段定义 ──
   const FIELDS: Record<ProdEntity, FieldDef[]> = useMemo(() => ({
@@ -172,6 +181,10 @@ const ProdCipTopologyPage: React.FC = () => {
       { key: 'type', label: '类型', type: 'select', required: true, options: () => EQUIP_TYPES },
       { key: 'cleaning_mode', label: '清洗方式', type: 'select', required: true, defaultValue: 'cip', options: () => CLEANING_MODES, help: '仅「CIP 在线清洗」才归 CIP 站;一次性/COP/其他走各自策略' },
       { key: 'cip_station_id', label: 'CIP 站', type: 'select', options: () => stationOpts, help: '这台设备由哪个站清洗', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'cip_duration_minutes', label: 'CIP 时长(分钟)', type: 'number', min: 0, help: 'CIP 清洗一次要多久,单位分钟', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'sip_duration_minutes', label: 'SIP 时长(分钟)', type: 'number', min: 0, help: '需要 SIP 灭菌才填,单位分钟;不做留空', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'dht_hours', label: 'DHT 脏停放(小时)', type: 'number', min: 0, help: '变脏后必须几小时内开始 CIP,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'cht_hours', label: 'CHT 洁净有效期(小时)', type: 'number', min: 0, help: '洗完几小时内必须被用,否则重洗,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
       { key: 'parent_equipment_id', label: '上级设备', type: 'select', options: () => equipmentOpts.filter((o) => o.value !== editingIdRef.current), help: 'pou 等使用点可挂到母设备/skid 下;留空=顶层设备(房间/组织留空则随上级)' },
       { key: 'room_id', label: '房间', type: 'select', options: () => roomOpts, help: '这台设备在哪个房间(留空随上级设备)' },
       { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '留空随房间/上级设备的 team' },
@@ -183,6 +196,9 @@ const ProdCipTopologyPage: React.FC = () => {
       { key: 'from_equipment_id', label: '起点设备', type: 'select', required: true, options: () => equipmentOpts, help: '管线连接的两台设备之一' },
       { key: 'to_equipment_id', label: '终点设备', type: 'select', required: true, options: () => equipmentOpts },
       { key: 'cip_station_id', label: 'CIP 站', type: 'select', required: true, options: () => stationOpts, help: '这条管线由哪个站清洗' },
+      { key: 'cip_duration_minutes', label: 'CIP 时长(分钟)', type: 'number', min: 0, help: '这条管线 CIP 一次要多久,单位分钟' },
+      { key: 'dht_hours', label: 'DHT 脏停放(小时)', type: 'number', min: 0, help: '变脏后必须几小时内开始 CIP,单位小时' },
+      { key: 'cht_hours', label: 'CHT 洁净有效期(小时)', type: 'number', min: 0, help: '洗完几小时内必须被用,单位小时' },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
     'shelf-life': [
@@ -227,6 +243,7 @@ const ProdCipTopologyPage: React.FC = () => {
       { title: '类型', dataIndex: 'type', width: 100, render: (v: string) => EQUIP_TYPES.find((t) => t.value === v)?.label ?? v },
       { title: '清洗方式', dataIndex: 'cleaning_mode', width: 120, render: (v: string) => <WxbTag color={v === 'cip' ? 'green' : 'neutral'}>{CLEANING_MODES.find((m) => m.value === v)?.label ?? v}</WxbTag> },
       { title: 'CIP 站', dataIndex: 'cip_station_id', width: 110, render: (v: number | null) => v ? <WxbTag color="green">{stationCode(v)}</WxbTag> : '—' },
+      { title: '清洗参数', key: 'cleanp', width: 210, render: (_: unknown, r: CipEquipmentRow) => <span style={{ fontSize: 12, color: 'var(--wx-text-secondary, #64748b)' }}>{cleanParams(r)}</span> },
       { title: '上级设备', dataIndex: 'parent_equipment_id', width: 110, render: (v: number | null) => v ? <code>{equipmentCode(v)}</code> : '—' },
       { title: '房间', key: 'room', width: 130, render: (_: unknown, r: CipEquipmentRow) => {
         const rid = effRoomId(r);
@@ -250,6 +267,7 @@ const ProdCipTopologyPage: React.FC = () => {
       { title: '起点', dataIndex: 'from_equipment_id', render: (v: number) => equipmentCode(v) },
       { title: '终点', dataIndex: 'to_equipment_id', render: (v: number) => equipmentCode(v) },
       { title: 'CIP 站', dataIndex: 'cip_station_id', render: (v: number) => <WxbTag color="green">{stationCode(v)}</WxbTag> },
+      { title: '清洗参数', key: 'cleanp', width: 190, render: (_: unknown, r: PipelineRow) => <span style={{ fontSize: 12, color: 'var(--wx-text-secondary, #64748b)' }}>{cleanParams(r)}</span> },
       actionsCol('pipelines'),
     ],
     'shelf-life': [
