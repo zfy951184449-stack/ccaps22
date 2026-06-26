@@ -56,7 +56,8 @@
 ## 6. 更新流程(已全自动)
 - **开发机**:改代码 → `git push`(到 `main`)。
 - **目标机**:`autoupdate` 每 5 分钟拉 `main`,有新版自动 `update.sh`:**只重建改动到的区域**(前端没改跳过),重启服务,自检。
-- **护栏**:① migration 含**改/删既有结构或数据**(改表/删表/删索引/`UPDATE`/`DELETE`)→ **暂停 + 弹通知**,需人工跑 SQL 后 `./deploy/update.sh`;**纯 INSERT 配置种子**与**幂等建新表**(`CREATE TABLE IF NOT EXISTS`)属安全新增,自动应用、不暂停;② 构建/自检失败 → **自动回滚**上版 + 弹通知;③ mkdir 锁防并发。
+- **护栏**:① migration 含**改/删既有结构或数据**(删表/删列/`MODIFY`/`CHANGE`/`RENAME`/`UPDATE`/`DELETE`,或非 `ADD` 的 ALTER)→ **暂停 + 弹通知**,需人工跑 SQL 后 `./deploy/update.sh`;**安全新增自动应用、不暂停** = 纯 INSERT 配置种子 + 幂等建新表(`CREATE TABLE IF NOT EXISTS`)+ **纯新增的 `ALTER … ADD`(加列/索引/约束;须配 `information_schema` 幂等守卫:列已存在则 `DO 0`,参考 `database/migrations/20260626_reconcile_ps_cip_columns.sql`)**;② 构建/自检失败 → **自动回滚**上版 + 弹通知;③ mkdir 锁防并发。
+  - ⚠️ **放宽护栏的提交不能与首个 ALTER 迁移同提交**:`auto-update.sh` 在 `git pull` 前用**工作区(旧)** `lib.sh` 预检新 migration,旧护栏把 ALTER 判危险会**暂停整条自动更新**。故须分两波:先推「放宽 `sql_is_risky`」让目标机拉到(新护栏落盘),下一波再推 ALTER 迁移,届时预检走新护栏才自动放行。
 - **重启目标机后**:登录一次桌面 → px + 服务 + 自动更新全自动恢复。
 
 ## 7. 已知坑 / 教训
