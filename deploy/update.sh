@@ -7,7 +7,8 @@
 #   2) export http_proxy=http://127.0.0.1:3128 https_proxy=http://127.0.0.1:3128
 #   3) cd ~/ccaps22 && ./deploy/update.sh
 #
-# 数据库结构变更(migration)不会自动跑,只提示——避免误改生产数据。
+# 改/删既有结构或数据的 migration 不会自动跑,只提示——避免误改生产数据;
+# 纯 INSERT 配置种子与幂等建新表(CREATE TABLE IF NOT EXISTS)属安全新增,会自动应用。
 # 出问题想回滚:脚本开头会打印旧版本号,可 `git reset --hard <旧版本> && ./deploy/update.sh`。
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -86,7 +87,7 @@ else
   log_info "求解器 V5 无改动,跳过"
 fi
 
-# 5) 数据库 migration 只提示、不自动跑 ──────────────────────────
+# 5) 数据库 migration:安全新增(纯 INSERT / 幂等建新表)自动跑,改/删既有结构或数据只提示 ──
 log_step "4/6 数据库 migration"
 RISKY=""; SAFE=""
 for m in $(printf '%s\n' "${CHANGED}" | grep '^database/migrations/.*\.sql$' || true); do
@@ -102,7 +103,7 @@ if [ -n "${RISKY}" ]; then
 fi
 if [ -n "${SAFE}" ]; then
   for m in ${SAFE}; do
-    log_info "执行纯新增配置种子: ${m}"
+    log_info "执行安全新增 migration(纯 INSERT / 幂等建新表): ${m}"
     run_sql_file "${PROJECT_ROOT}/${m}" && log_pass "已跑 ${m}" || log_warn "跑 ${m} 失败(看上面报错)"
   done
 fi

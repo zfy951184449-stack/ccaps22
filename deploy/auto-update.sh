@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────
 # 无人值守自动更新(由 local.mfg8aps.autoupdate LaunchAgent 每 5 分钟调用)。
-# 护栏:① 含数据库 migration → 暂停等人工;② 更新或自检失败 → 自动回滚上个版本;
+# 护栏:① 含改/删既有结构或数据的 migration → 暂停等人工(纯 INSERT、幂等建新表照常自动跑);② 更新或自检失败 → 自动回滚上个版本;
 #       ③ mkdir 原子锁防并发;④ 全程写日志 + macOS 通知。
 # 走 px(git/构建经本地代理)。运行时服务本地通信,不受影响。
 # ──────────────────────────────────────────────────────────────
@@ -38,8 +38,8 @@ NEW="$(git rev-parse --short origin/main)"
 
 logts "发现新版本 ${OLD} → ${NEW}"
 
-# 2. 护栏:只在 migration 含【结构变更】(建表/改表/删表)时暂停提醒;
-#    纯数据 migration(INSERT 等)一概不碰数据库、照常更新代码。
+# 2. 护栏:只在 migration 含【改/删既有结构或数据】(改表/删表/删索引/UPDATE/DELETE)时暂停提醒;
+#    幂等建新表(CREATE TABLE IF NOT EXISTS)与纯 INSERT 配置种子属安全新增,照常更新并由 update.sh 自动应用。
 NEW_MIGS="$(git diff --name-only "${OLD}" "origin/main" | grep '^database/migrations/.*\.sql$' || true)"
 for m in ${NEW_MIGS}; do
   if git show "origin/main:${m}" 2>/dev/null | sql_is_risky; then
@@ -48,7 +48,7 @@ for m in ${NEW_MIGS}; do
     exit 0
   fi
 done
-# 无危险操作(纯 INSERT 配置种子/无 migration)→ 继续;update.sh 会自动跑纯 INSERT
+# 无危险操作(纯 INSERT 配置种子 / 幂等建新表 / 无 migration)→ 继续;update.sh 会自动应用这些安全 migration
 
 # 3. 执行更新(update.sh 内部 pull→按需构建→重启→自检),并确认后端健康
 if bash "${DEPLOY_DIR}/update.sh" >>"${LOG}" 2>&1 \

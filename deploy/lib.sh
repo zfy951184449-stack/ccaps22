@@ -76,11 +76,27 @@ wait_for_url() {
   log_block "${name} 启动超时 (${url}) —— 看日志 ${LOG_DIR}"; return 1
 }
 
-# 判断一段 SQL(从 stdin 读)是否含【危险操作】:去掉 -- 注释行后,看有没有
-# 结构变更(CREATE/ALTER/DROP/TRUNCATE/RENAME)或 改/删现有数据(UPDATE/DELETE)。
-# 纯 INSERT/REPLACE(配置种子)→ 返回 false(安全,可自动跑)。
+# 判断一段 SQL(从 stdin 读)是否【需人工】。返回 0=危险(自动更新暂停,等人工),
+# 1=安全(可无人值守自动应用)。安全白名单 = 严格新增(见 OPERATIONS.md §6):
+#   · 纯 INSERT 配置种子;
+#   · 幂等建新表 CREATE TABLE IF NOT EXISTS —— 只新增、不碰既有数据,且幂等(回滚重跑也不报错)。
+# 危险(暂停)= 任何 ALTER/DROP/TRUNCATE/RENAME/UPDATE/DELETE(动到既有结构或数据),
+#   以及非「CREATE TABLE IF NOT EXISTS」的 CREATE(裸建表无幂等保护 / 建索引·视图·触发器…)。
+# 判定偏保守:拿不准一律按危险暂停(误暂停=人工跑一下,误放行=无人值守改坏生产库)。
 sql_is_risky() {
-  grep -v '^[[:space:]]*--' | grep -iqE '\b(CREATE|ALTER|DROP|TRUNCATE|RENAME|UPDATE|DELETE)[[:space:]]'
+  local sql
+  # 去整行 -- 注释 → 压平成单行(兼容跨行 DDL)→ 统一大写(简化匹配,不影响真正执行的原文)
+  sql="$(grep -v '^[[:space:]]*--' | tr '\n' ' ' | tr '[:lower:]' '[:upper:]')"
+  # 先抹掉外键引用动作 / 时间戳列里的 ON DELETE、ON UPDATE —— 它们是建表里的良性词,不算改删
+  sql="$(printf '%s' "${sql}" | sed -E 's/[[:<:]]ON[[:space:]]+(DELETE|UPDATE)[[:>:]]/ /g')"
+  # 1) 改/删既有结构或数据的动词 → 危险
+  printf '%s' "${sql}" | grep -qE '\b(ALTER|DROP|TRUNCATE|RENAME|UPDATE|DELETE)[[:space:]]' && return 0
+  # 2) 存在非「CREATE TABLE IF NOT EXISTS」的 CREATE(裸建表/建索引/视图/触发器…)→ 危险
+  local n_create n_safe
+  n_create="$(printf '%s' "${sql}" | grep -oE '\bCREATE\b' | wc -l | tr -d ' ' || true)"
+  n_safe="$(printf '%s' "${sql}"   | grep -oE '\bCREATE[[:space:]]+TABLE[[:space:]]+IF[[:space:]]+NOT[[:space:]]+EXISTS\b' | wc -l | tr -d ' ' || true)"
+  [ "${n_create:-0}" != "${n_safe:-0}" ] && return 0
+  return 1
 }
 
 # 用 backend/.env 的 DB 账号跑一个 SQL 文件(只给纯 INSERT 配置种子用)
