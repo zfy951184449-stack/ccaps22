@@ -28,6 +28,9 @@ const CATEGORY_MAP: Record<string, string> = {
 const BASIS_MAP: Record<string, string> = {
   产出后: 'after_produced', 配制后: 'after_prepared', 清洗后: 'after_clean',
 };
+const CLEAN_MODE_MAP: Record<string, string> = {
+  CIP: 'cip', cip: 'cip', 一次性: 'single-use', COP: 'cop', cop: 'cop', 其他: 'other',
+};
 
 interface ImportError { sheet: string; row: number; reason: string }
 
@@ -73,8 +76,9 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
     return;
   }
 
-  const stations = readSheet(wb, '站', { 站编码: 'code', 站名称: 'name', 部门: 'department', 容量: 'capacity', 备注: 'note' });
-  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', CIP站编码: 'station_code', 备注: 'note' });
+  const stations = readSheet(wb, '站', { 站编码: 'code', 站名称: 'name', 组织编码: 'org_code', 容量: 'capacity', 备注: 'note' });
+  const rooms = readSheet(wb, '房间', { 房间编码: 'code', 房间名称: 'name', 组织编码: 'org_code', 洁净级别: 'cleanroom_class', 备注: 'note' });
+  const equipment = readSheet(wb, '设备', { 设备编码: 'code', 设备名称: 'name', 类型: 'type', 清洗方式: 'cleaning_mode', 房间编码: 'room_code', 组织编码: 'org_code', CIP站编码: 'station_code', 备注: 'note' });
   const pipelines = readSheet(wb, '管线', { 管线编码: 'code', 管线名称: 'name', 起点设备编码: 'from_code', 终点设备编码: 'to_code', CIP站编码: 'station_code', 备注: 'note' });
   const shelfLives = readSheet(wb, '物料效期', { 物料: 'material', 类别: 'category', 效期: 'shelf_life_hours', 起算基准: 'basis', 备注: 'note' });
 
@@ -83,8 +87,14 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
   // 已有 + 本次工作簿的编码集合,供引用校验
   const [exStations] = await pool.execute<RowDataPacket[]>('SELECT code FROM ps_cip_station WHERE facility_code = ?', [facility]);
   const [exEquip] = await pool.execute<RowDataPacket[]>('SELECT code FROM ps_cip_equipment WHERE facility_code = ?', [facility]);
+  const [exRooms] = await pool.execute<RowDataPacket[]>('SELECT code FROM ps_room WHERE facility_code = ?', [facility]);
   const stationCodes = new Set<string>([...exStations.map((r) => r.code), ...stations.map((s) => s.data.code).filter(Boolean)]);
   const equipmentCodes = new Set<string>([...exEquip.map((r) => r.code), ...equipment.map((e) => e.data.code).filter(Boolean)]);
+  const roomCodes = new Set<string>([...exRooms.map((r) => r.code), ...rooms.map((r) => r.data.code).filter(Boolean)]);
+  const CLEANROOM = new Set(['A', 'B', 'C', 'D', 'CNC']);
+  // 归属 team:只认 TEAM 层级(组织树的 organization_units),按 unit_code 解析(全局)
+  const [orgRows] = await pool.execute<RowDataPacket[]>("SELECT id, unit_code FROM organization_units WHERE unit_type = 'TEAM' AND unit_code IS NOT NULL AND unit_code <> ''");
+  const orgIdByCode = new Map<string, number>(orgRows.map((r) => [String(r.unit_code), r.id]));
 
   const reqd = (sheet: string, item: { row: number; data: Record<string, string> }, fields: Array<[string, string]>) => {
     for (const [f, label] of fields) if (!item.data[f]) errors.push({ sheet, row: item.row, reason: `缺必填:${label}` });
@@ -93,10 +103,19 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
   stations.forEach((s) => {
     reqd('站', s, [['code', '站编码'], ['name', '站名称']]);
     if (s.data.capacity && !/^\d+$/.test(s.data.capacity)) errors.push({ sheet: '站', row: s.row, reason: `容量须为整数:${s.data.capacity}` });
+    if (s.data.org_code && !orgIdByCode.has(s.data.org_code)) errors.push({ sheet: '站', row: s.row, reason: `team 编码不存在(只认 team 层级):${s.data.org_code}` });
+  });
+  rooms.forEach((r) => {
+    reqd('房间', r, [['code', '房间编码'], ['name', '房间名称']]);
+    if (r.data.cleanroom_class && !CLEANROOM.has(r.data.cleanroom_class)) errors.push({ sheet: '房间', row: r.row, reason: `洁净级别不在可选项(A/B/C/D/CNC):${r.data.cleanroom_class}` });
+    if (r.data.org_code && !orgIdByCode.has(r.data.org_code)) errors.push({ sheet: '房间', row: r.row, reason: `team 编码不存在(只认 team 层级):${r.data.org_code}` });
   });
   equipment.forEach((e) => {
     reqd('设备', e, [['code', '设备编码'], ['name', '设备名称'], ['type', '类型']]);
     if (e.data.type && !TYPE_MAP[e.data.type]) errors.push({ sheet: '设备', row: e.row, reason: `类型不在可选项:${e.data.type}` });
+    if (e.data.cleaning_mode && !CLEAN_MODE_MAP[e.data.cleaning_mode]) errors.push({ sheet: '设备', row: e.row, reason: `清洗方式不在可选项:${e.data.cleaning_mode}` });
+    if (e.data.room_code && !roomCodes.has(e.data.room_code)) errors.push({ sheet: '设备', row: e.row, reason: `房间编码不存在:${e.data.room_code}` });
+    if (e.data.org_code && !orgIdByCode.has(e.data.org_code)) errors.push({ sheet: '设备', row: e.row, reason: `team 编码不存在(只认 team 层级):${e.data.org_code}` });
     if (e.data.station_code && !stationCodes.has(e.data.station_code)) errors.push({ sheet: '设备', row: e.row, reason: `CIP站编码不存在:${e.data.station_code}` });
   });
   pipelines.forEach((p) => {
@@ -122,22 +141,38 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
     await conn.beginTransaction();
 
     for (const s of stations) {
+      const orgId = s.data.org_code ? orgIdByCode.get(s.data.org_code) ?? null : null;
       await conn.execute(
-        `INSERT INTO ps_cip_station (facility_code, code, name, department, capacity, note) VALUES (?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), department=VALUES(department), capacity=VALUES(capacity), note=VALUES(note)`,
-        [facility, s.data.code, s.data.name, s.data.department || null, s.data.capacity ? Number(s.data.capacity) : 1, s.data.note || null],
+        `INSERT INTO ps_cip_station (facility_code, code, name, org_unit_id, capacity, note) VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), org_unit_id=VALUES(org_unit_id), capacity=VALUES(capacity), note=VALUES(note)`,
+        [facility, s.data.code, s.data.name, orgId, s.data.capacity ? Number(s.data.capacity) : 1, s.data.note || null],
       );
     }
 
     const [stRows] = await conn.execute<RowDataPacket[]>('SELECT id, code FROM ps_cip_station WHERE facility_code = ?', [facility]);
     const stIdByCode = new Map<string, number>(stRows.map((r) => [r.code, r.id]));
 
+    for (const r of rooms) {
+      const orgId = r.data.org_code ? orgIdByCode.get(r.data.org_code) ?? null : null;
+      await conn.execute(
+        `INSERT INTO ps_room (facility_code, code, name, org_unit_id, cleanroom_class, note) VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), org_unit_id=VALUES(org_unit_id), cleanroom_class=VALUES(cleanroom_class), note=VALUES(note)`,
+        [facility, r.data.code, r.data.name, orgId, r.data.cleanroom_class || null, r.data.note || null],
+      );
+    }
+
+    const [rmRows] = await conn.execute<RowDataPacket[]>('SELECT id, code FROM ps_room WHERE facility_code = ?', [facility]);
+    const rmIdByCode = new Map<string, number>(rmRows.map((r) => [r.code, r.id]));
+
     for (const e of equipment) {
       const stationId = e.data.station_code ? stIdByCode.get(e.data.station_code) ?? null : null;
+      const roomId = e.data.room_code ? rmIdByCode.get(e.data.room_code) ?? null : null;
+      const orgId = e.data.org_code ? orgIdByCode.get(e.data.org_code) ?? null : null;
+      const cleaningMode = e.data.cleaning_mode ? CLEAN_MODE_MAP[e.data.cleaning_mode] : 'cip';
       await conn.execute(
-        `INSERT INTO ps_cip_equipment (facility_code, code, name, type, cip_station_id, note) VALUES (?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type), cip_station_id=VALUES(cip_station_id), note=VALUES(note)`,
-        [facility, e.data.code, e.data.name, TYPE_MAP[e.data.type], stationId, e.data.note || null],
+        `INSERT INTO ps_cip_equipment (facility_code, code, name, type, cleaning_mode, cip_station_id, room_id, org_unit_id, note) VALUES (?,?,?,?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), type=VALUES(type), cleaning_mode=VALUES(cleaning_mode), cip_station_id=VALUES(cip_station_id), room_id=VALUES(room_id), org_unit_id=VALUES(org_unit_id), note=VALUES(note)`,
+        [facility, e.data.code, e.data.name, TYPE_MAP[e.data.type], cleaningMode, stationId, roomId, orgId, e.data.note || null],
       );
     }
 
@@ -170,7 +205,7 @@ export async function importWorkbook(req: Request, res: Response): Promise<void>
     await conn.commit();
     res.json({
       success: true,
-      data: { summary: { stations: stations.length, equipment: equipment.length, pipelines: pipelines.length, shelfLives: shelfLives.length } },
+      data: { summary: { stations: stations.length, rooms: rooms.length, equipment: equipment.length, pipelines: pipelines.length, shelfLives: shelfLives.length } },
     });
   } catch (err) {
     await conn.rollback();

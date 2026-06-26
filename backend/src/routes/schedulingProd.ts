@@ -9,6 +9,7 @@ import {
   createEntity,
   deleteEntity,
   listEntity,
+  listOrgUnits,
   updateEntity,
 } from '../controllers/schedulingProd/cipTopologyController';
 import { downloadTemplate, importWorkbook } from '../controllers/schedulingProd/cipImportController';
@@ -19,6 +20,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 
 // CIP 容量尖峰分析(调引擎)
 router.post('/v1/cip-peak', requirePermission('APS_TEMPLATE_READ'), postCipPeak);
+
+// 组织单元清单(部门/team/组),供「归属组织」下拉
+router.get('/org-units', requirePermission('APS_TEMPLATE_READ'), listOrgUnits);
 
 // CIP 拓扑 Excel 模板下载 / 批量导入
 router.get('/cip/template', downloadTemplate);

@@ -1,6 +1,6 @@
 /**
  * 排产资源主数据 · CIP 拓扑(真平台,用户自录,无 mock)。
- * 四类:CIP 站 / 设备 / 管线 / 物料效期 —— 增删改查直连后端 /api/prod/cip/:entity。
+ * 五类:CIP 站 / 房间 / 设备 / 管线 / 物料效期 —— 增删改查直连后端 /api/prod/cip/:entity。
  * 录入的真实拓扑供排产引擎做 CIP 容量落点(对标 Day5 尖峰)。
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,6 +28,8 @@ import {
   type ImportRowError,
   type PipelineRow,
   type ProdEntity,
+  type RoomRow,
+  type OrgUnitRow,
   type ShelfLifeRow,
 } from '../services/prodResourceApi';
 
@@ -43,6 +45,7 @@ interface FieldDef {
   min?: number;
   defaultValue?: unknown;
   options?: () => Opt[];
+  showIf?: (form: Record<string, any>) => boolean;
 }
 
 const EQUIP_TYPES: Opt[] = [
@@ -52,6 +55,19 @@ const EQUIP_TYPES: Opt[] = [
   { label: '超滤 skid', value: 'ufdf-skid' },
   { label: '转移', value: 'transfer' },
   { label: '其他', value: 'other' },
+];
+const CLEANING_MODES: Opt[] = [
+  { label: 'CIP 在线清洗', value: 'cip' },
+  { label: '一次性(免洗)', value: 'single-use' },
+  { label: '离线 COP', value: 'cop' },
+  { label: '其他', value: 'other' },
+];
+const CLEANROOM_CLASSES: Opt[] = [
+  { label: 'A', value: 'A' },
+  { label: 'B', value: 'B' },
+  { label: 'C', value: 'C' },
+  { label: 'D', value: 'D' },
+  { label: 'CNC(非控)', value: 'CNC' },
 ];
 const SHELF_CATEGORIES: Opt[] = [
   { label: '培养基', value: 'media' },
@@ -71,9 +87,11 @@ const ProdCipTopologyPage: React.FC = () => {
   const [facility, setFacility] = useState('F1');
   const [activeTab, setActiveTab] = useState<ProdEntity>('stations');
   const [stations, setStations] = useState<CipStationRow[]>([]);
+  const [rooms, setRooms] = useState<RoomRow[]>([]);
   const [pipelines, setPipelines] = useState<PipelineRow[]>([]);
   const [equipment, setEquipment] = useState<CipEquipmentRow[]>([]);
   const [shelfLives, setShelfLives] = useState<ShelfLifeRow[]>([]);
+  const [orgUnits, setOrgUnits] = useState<OrgUnitRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [drawer, setDrawer] = useState<{ entity: ProdEntity; id: number | null } | null>(null);
@@ -86,16 +104,20 @@ const ProdCipTopologyPage: React.FC = () => {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, p, e, sl] = await Promise.all([
+      const [s, rm, p, e, sl, org] = await Promise.all([
         prodResourceApi.list<CipStationRow>('stations', facility),
+        prodResourceApi.list<RoomRow>('rooms', facility),
         prodResourceApi.list<PipelineRow>('pipelines', facility),
         prodResourceApi.list<CipEquipmentRow>('equipment', facility),
         prodResourceApi.list<ShelfLifeRow>('shelf-life', facility),
+        prodResourceApi.listOrgUnits(),
       ]);
       setStations(s);
+      setRooms(rm);
       setPipelines(p);
       setEquipment(e);
       setShelfLives(sl);
+      setOrgUnits(org);
     } catch (err) {
       wxbToast.error(`加载失败:${(err as Error).message}`);
     } finally {
@@ -109,23 +131,38 @@ const ProdCipTopologyPage: React.FC = () => {
 
   const stationOpts = useMemo<Opt[]>(() => stations.map((s) => ({ label: `${s.code} ${s.name}`, value: s.id })), [stations]);
   const equipmentOpts = useMemo<Opt[]>(() => equipment.map((e) => ({ label: `${e.code} ${e.name}`, value: e.id })), [equipment]);
+  const roomOpts = useMemo<Opt[]>(() => rooms.map((r) => ({ label: `${r.code} ${r.name}`, value: r.id })), [rooms]);
+  const orgOpts = useMemo<Opt[]>(() => orgUnits.filter((o) => o.type === 'TEAM').map((o) => ({ label: o.name, value: o.id })), [orgUnits]);
   const stationCode = useCallback((id: number | null) => stations.find((s) => s.id === id)?.code ?? '—', [stations]);
   const equipmentCode = useCallback((id: number | null) => equipment.find((e) => e.id === id)?.code ?? '—', [equipment]);
+  const roomCode = useCallback((id: number | null) => rooms.find((r) => r.id === id)?.code ?? '—', [rooms]);
+  const roomOrg = useCallback((id: number | null) => rooms.find((r) => r.id === id)?.org_unit_id ?? null, [rooms]);
+  const orgName = useCallback((id: number | null) => orgUnits.find((u) => u.id === id)?.name ?? null, [orgUnits]);
 
   // ── 每类的字段定义 ──
   const FIELDS: Record<ProdEntity, FieldDef[]> = useMemo(() => ({
     stations: [
       { key: 'code', label: '站编码', type: 'text', required: true, placeholder: '如 CIP-S1' },
       { key: 'name', label: '名称', type: 'text', required: true },
-      { key: 'department', label: '部门', type: 'text' },
+      { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '这个 CIP 站归哪个 team' },
       { key: 'capacity', label: '容量', type: 'number', required: true, min: 1, defaultValue: 1, help: '可并行清洗的对象数,通常为 1' },
+      { key: 'note', label: '备注', type: 'textarea' },
+    ],
+    rooms: [
+      { key: 'code', label: '房间编码', type: 'text', required: true, placeholder: '如 R-1501' },
+      { key: 'name', label: '名称', type: 'text', required: true },
+      { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '排班同一套 team;里面设备默认随它' },
+      { key: 'cleanroom_class', label: '洁净级别', type: 'select', options: () => CLEANROOM_CLASSES },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
     equipment: [
       { key: 'code', label: '设备编码', type: 'text', required: true, placeholder: '如 PT1810 / pouA' },
       { key: 'name', label: '名称', type: 'text', required: true },
       { key: 'type', label: '类型', type: 'select', required: true, options: () => EQUIP_TYPES },
-      { key: 'cip_station_id', label: 'CIP 站', type: 'select', options: () => stationOpts, help: '这台设备由哪个站清洗(端点设备可空)' },
+      { key: 'cleaning_mode', label: '清洗方式', type: 'select', required: true, defaultValue: 'cip', options: () => CLEANING_MODES, help: '仅「CIP 在线清洗」才归 CIP 站;一次性/COP/其他走各自策略' },
+      { key: 'cip_station_id', label: 'CIP 站', type: 'select', options: () => stationOpts, help: '这台设备由哪个站清洗', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'room_id', label: '房间', type: 'select', options: () => roomOpts, help: '这台设备在哪个房间' },
+      { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '留空随房间的 team' },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
     pipelines: [
@@ -143,7 +180,7 @@ const ProdCipTopologyPage: React.FC = () => {
       { key: 'basis', label: '起算基准', type: 'select', required: true, defaultValue: 'after_produced', options: () => SHELF_BASIS },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
-  }), [stationOpts, equipmentOpts]);
+  }), [stationOpts, equipmentOpts, roomOpts, orgOpts]);
 
   const actionsCol = (entity: ProdEntity) => ({
     title: '操作', key: 'actions', width: 130,
@@ -161,15 +198,25 @@ const ProdCipTopologyPage: React.FC = () => {
     stations: [
       { title: '站编码', dataIndex: 'code', width: 120, render: (v: string) => <code>{v}</code> },
       { title: '名称', dataIndex: 'name' },
-      { title: '部门', dataIndex: 'department', render: (v: string) => v || '—' },
+      { title: '归属 team', dataIndex: 'org_unit_id', render: (v: number | null) => orgName(v) || '—' },
       { title: '容量', dataIndex: 'capacity', width: 70 },
       actionsCol('stations'),
+    ],
+    rooms: [
+      { title: '房间', dataIndex: 'code', width: 120, render: (v: string) => <code>{v}</code> },
+      { title: '名称', dataIndex: 'name' },
+      { title: '归属 team', dataIndex: 'org_unit_id', render: (v: number | null) => orgName(v) || '—' },
+      { title: '洁净级别', dataIndex: 'cleanroom_class', width: 100, render: (v: string | null) => v ? <WxbTag color="blue">{v}</WxbTag> : '—' },
+      actionsCol('rooms'),
     ],
     equipment: [
       { title: '设备', dataIndex: 'code', width: 130, render: (v: string) => <code>{v}</code> },
       { title: '名称', dataIndex: 'name' },
-      { title: '类型', dataIndex: 'type', width: 110, render: (v: string) => EQUIP_TYPES.find((t) => t.value === v)?.label ?? v },
-      { title: 'CIP 站', dataIndex: 'cip_station_id', render: (v: number | null) => v ? <WxbTag color="green">{stationCode(v)}</WxbTag> : '—' },
+      { title: '类型', dataIndex: 'type', width: 100, render: (v: string) => EQUIP_TYPES.find((t) => t.value === v)?.label ?? v },
+      { title: '清洗方式', dataIndex: 'cleaning_mode', width: 120, render: (v: string) => <WxbTag color={v === 'cip' ? 'green' : 'neutral'}>{CLEANING_MODES.find((m) => m.value === v)?.label ?? v}</WxbTag> },
+      { title: 'CIP 站', dataIndex: 'cip_station_id', width: 110, render: (v: number | null) => v ? <WxbTag color="green">{stationCode(v)}</WxbTag> : '—' },
+      { title: '房间', dataIndex: 'room_id', width: 100, render: (v: number | null) => (v ? roomCode(v) : '—') },
+      { title: '归属 team', key: 'org', width: 130, render: (_: unknown, r: CipEquipmentRow) => orgName(r.org_unit_id ?? roomOrg(r.room_id)) || '—' },
       actionsCol('equipment'),
     ],
     pipelines: [
@@ -190,7 +237,11 @@ const ProdCipTopologyPage: React.FC = () => {
   };
 
   const dataFor = (entity: ProdEntity): any[] =>
-    entity === 'stations' ? stations : entity === 'pipelines' ? pipelines : entity === 'equipment' ? equipment : shelfLives;
+    entity === 'stations' ? stations
+      : entity === 'rooms' ? rooms
+      : entity === 'pipelines' ? pipelines
+      : entity === 'equipment' ? equipment
+      : shelfLives;
 
   const openCreate = (entity: ProdEntity) => {
     const init: Record<string, any> = {};
@@ -232,7 +283,7 @@ const ProdCipTopologyPage: React.FC = () => {
     setImportErrors(null);
     try {
       const { summary } = await prodResourceApi.importWorkbook(facility, f);
-      wxbToast.success(`导入完成:站 ${summary.stations} · 设备 ${summary.equipment} · 管线 ${summary.pipelines} · 效期 ${summary.shelfLives}`);
+      wxbToast.success(`导入完成:站 ${summary.stations} · 房间 ${summary.rooms} · 设备 ${summary.equipment} · 管线 ${summary.pipelines} · 效期 ${summary.shelfLives}`);
       loadAll();
     } catch (err: any) {
       const data = err?.response?.data;
@@ -246,13 +297,17 @@ const ProdCipTopologyPage: React.FC = () => {
   const submit = async () => {
     if (!drawer) return;
     const fields = FIELDS[drawer.entity];
-    const missing = fields.filter((f) => f.required && (form[f.key] === undefined || form[f.key] === '' || form[f.key] === null));
+    const visible = fields.filter((f) => !f.showIf || f.showIf(form));
+    const missing = visible.filter((f) => f.required && (form[f.key] === undefined || form[f.key] === '' || form[f.key] === null));
     if (missing.length) {
       wxbToast.error(`请填写:${missing.map((f) => f.label).join('、')}`);
       return;
     }
     const payload: Record<string, unknown> = { facility_code: facility };
-    fields.forEach((f) => { payload[f.key] = form[f.key] ?? null; });
+    fields.forEach((f) => {
+      const shown = !f.showIf || f.showIf(form);
+      payload[f.key] = shown ? (form[f.key] ?? null) : null;
+    });
     setSaving(true);
     try {
       if (drawer.id == null) {
@@ -297,14 +352,14 @@ const ProdCipTopologyPage: React.FC = () => {
     <span>{label}<span style={{ marginLeft: 6, color: 'var(--wx-text-secondary, #94a3b8)', fontSize: 12 }}>{n}</span></span>
   );
 
-  const drawerTitle = drawer ? `${drawer.id == null ? '新增' : '编辑'} · ${({ stations: 'CIP 站', pipelines: '管线', equipment: '设备', 'shelf-life': '物料效期' } as Record<ProdEntity, string>)[drawer.entity]}` : '';
+  const drawerTitle = drawer ? `${drawer.id == null ? '新增' : '编辑'} · ${({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '物料效期' } as Record<ProdEntity, string>)[drawer.entity]}` : '';
 
   return (
     <WxbPageShell size="full" gap="lg">
       <WxbPageHeader
         eyebrow="排产 · 资源主数据(平台 · 自录入)"
         title="CIP 拓扑维护"
-        description="录入真实的 CIP 站 / 设备 / 管线 / 物料效期。设备与管线都是清洗对象,各自直接归属一个 CIP 站(管线 = 设备-设备的连接)。录入的真数据供排产引擎做 CIP 容量落点。可下载模板批量导入。"
+        description="录入真实的 CIP 站 / 房间 / 设备 / 管线 / 物料效期。设备与管线是清洗对象,各自归属一个 CIP 站(管线 = 设备-设备的连接);房间/设备归属 team(与排班同一套 team,留空随房间)。可下载模板批量导入。"
         meta={
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
             设施
@@ -319,6 +374,7 @@ const ProdCipTopologyPage: React.FC = () => {
           onChange={(k) => setActiveTab(k as ProdEntity)}
           items={[
             { key: 'stations', label: tabLabel('CIP 站', stations.length) },
+            { key: 'rooms', label: tabLabel('房间', rooms.length) },
             { key: 'equipment', label: tabLabel('设备', equipment.length) },
             { key: 'pipelines', label: tabLabel('管线', pipelines.length) },
             { key: 'shelf-life', label: tabLabel('物料效期', shelfLives.length) },
@@ -329,7 +385,7 @@ const ProdCipTopologyPage: React.FC = () => {
           <WxbButton variant="ghost" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>{importing ? '导入中…' : '导入 Excel'}</WxbButton>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={onPickFile} />
           <WxbButton variant="primary" size="sm" onClick={() => openCreate(activeTab)}>
-            新增{({ stations: 'CIP 站', pipelines: '管线', equipment: '设备', 'shelf-life': '效期' } as Record<ProdEntity, string>)[activeTab]}
+            新增{({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '效期' } as Record<ProdEntity, string>)[activeTab]}
           </WxbButton>
         </div>
       </div>
@@ -357,7 +413,7 @@ const ProdCipTopologyPage: React.FC = () => {
       >
         {drawer && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {FIELDS[drawer.entity].map((f) => (
+            {FIELDS[drawer.entity].filter((f) => !f.showIf || f.showIf(form)).map((f) => (
               <div key={f.key}>
                 {renderField(f)}
                 {f.type !== 'switch' && f.help ? (

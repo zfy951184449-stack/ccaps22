@@ -4,14 +4,32 @@
  */
 import api from './api';
 
-export type ProdEntity = 'stations' | 'pipelines' | 'equipment' | 'shelf-life';
+export type ProdEntity = 'stations' | 'rooms' | 'pipelines' | 'equipment' | 'shelf-life';
+
+export interface RoomRow {
+  id: number;
+  facility_code: string;
+  code: string;
+  name: string;
+  org_unit_id: number | null;
+  cleanroom_class: string | null;
+  note: string | null;
+}
+
+export interface OrgUnitRow {
+  id: number;
+  code: string | null;
+  name: string;
+  type: string; // DEPARTMENT / TEAM / GROUP / SHIFT
+  parent_id: number | null;
+}
 
 export interface CipStationRow {
   id: number;
   facility_code: string;
   code: string;
   name: string;
-  department: string | null;
+  org_unit_id: number | null;
   capacity: number;
   resource_id: number | null;
   note: string | null;
@@ -23,7 +41,10 @@ export interface CipEquipmentRow {
   code: string;
   name: string;
   type: string;
+  cleaning_mode: string;
   cip_station_id: number | null;
+  room_id: number | null;
+  org_unit_id: number | null;
   resource_id: number | null;
   note: string | null;
 }
@@ -67,11 +88,15 @@ export const prodResourceApi = {
   async remove(entity: ProdEntity, id: number): Promise<void> {
     await api.delete(`/prod/cip/${entity}/${id}`);
   },
+  async listOrgUnits(): Promise<OrgUnitRow[]> {
+    const res = await api.get('/prod/org-units');
+    return (res.data?.data ?? []) as OrgUnitRow[];
+  },
   templateUrl: '/api/prod/cip/template',
   async importWorkbook(
     facilityCode: string,
     file: File,
-  ): Promise<{ summary: { stations: number; pipelines: number; equipment: number; shelfLives: number } }> {
+  ): Promise<{ summary: { stations: number; rooms: number; pipelines: number; equipment: number; shelfLives: number } }> {
     const fd = new FormData();
     fd.append('facilityCode', facilityCode);
     fd.append('file', file);

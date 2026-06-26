@@ -19,15 +19,21 @@ interface EntityConfig {
 const ENTITIES: Record<string, EntityConfig> = {
   stations: {
     table: 'ps_cip_station',
-    columns: ['facility_code', 'code', 'name', 'department', 'capacity', 'resource_id', 'note'],
+    columns: ['facility_code', 'code', 'name', 'org_unit_id', 'capacity', 'resource_id', 'note'],
     required: ['facility_code', 'code', 'name'],
-    nullable: ['department', 'resource_id', 'note'],
+    nullable: ['org_unit_id', 'resource_id', 'note'],
+  },
+  rooms: {
+    table: 'ps_room',
+    columns: ['facility_code', 'code', 'name', 'org_unit_id', 'cleanroom_class', 'note'],
+    required: ['facility_code', 'code', 'name'],
+    nullable: ['org_unit_id', 'cleanroom_class', 'note'],
   },
   equipment: {
     table: 'ps_cip_equipment',
-    columns: ['facility_code', 'code', 'name', 'type', 'cip_station_id', 'resource_id', 'note'],
+    columns: ['facility_code', 'code', 'name', 'type', 'cleaning_mode', 'cip_station_id', 'room_id', 'org_unit_id', 'resource_id', 'note'],
     required: ['facility_code', 'code', 'name'],
-    nullable: ['cip_station_id', 'resource_id', 'note'],
+    nullable: ['cip_station_id', 'room_id', 'org_unit_id', 'resource_id', 'note'],
   },
   pipelines: {
     table: 'ps_pipeline',
@@ -62,6 +68,18 @@ function pickColumns(cfgEntity: EntityConfig, body: Record<string, unknown>): Re
 async function readRow(table: string, id: number): Promise<RowDataPacket | null> {
   const [rows] = await pool.execute<RowDataPacket[]>(`SELECT * FROM ${table} WHERE id = ?`, [id]);
   return rows[0] ?? null;
+}
+
+/** 组织单元(部门/team/组)扁平清单,供前端「归属组织」下拉。排班的 team 即在该表。 */
+export async function listOrgUnits(_req: Request, res: Response): Promise<void> {
+  try {
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      "SELECT id, unit_code AS code, unit_name AS name, unit_type AS type, parent_id FROM organization_units WHERE is_active = 1 ORDER BY unit_type, sort_order, id",
+    );
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
 }
 
 export async function listEntity(req: Request, res: Response): Promise<void> {
