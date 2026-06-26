@@ -14,6 +14,7 @@ import {
   WxbPageHeader,
   WxbPageShell,
   WxbPopconfirm,
+  WxbSegmented,
   WxbSelect,
   WxbSwitch,
   WxbTabs,
@@ -21,6 +22,7 @@ import {
   WxbTextarea,
   wxbToast,
 } from '../components/wxb-ui';
+import ProdCipTopologyGraph from '../components/ProdCipTopology/ProdCipTopologyGraph';
 import {
   prodResourceApi,
   type CipEquipmentRow,
@@ -85,6 +87,7 @@ const SHELF_BASIS: Opt[] = [
 
 const ProdCipTopologyPage: React.FC = () => {
   const [facility, setFacility] = useState('F1');
+  const [view, setView] = useState<'table' | 'graph'>('table');
   const [activeTab, setActiveTab] = useState<ProdEntity>('stations');
   const [stations, setStations] = useState<CipStationRow[]>([]);
   const [rooms, setRooms] = useState<RoomRow[]>([]);
@@ -300,6 +303,13 @@ const ProdCipTopologyPage: React.FC = () => {
     setForm(init);
     setDrawer({ entity, id: row.id });
   };
+  // 拓扑图点节点 → 打开该对象编辑(并切到对应表格 tab)
+  const openById = (entity: ProdEntity, id: number) => {
+    const row = (dataFor(entity) as Array<{ id: number }>).find((r) => r.id === id);
+    if (!row) return;
+    setActiveTab(entity);
+    openEdit(entity, row);
+  };
 
   const handleDelete = async (entity: ProdEntity, id: number) => {
     try {
@@ -414,34 +424,56 @@ const ProdCipTopologyPage: React.FC = () => {
       />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <WxbTabs
-          activeKey={activeTab}
-          onChange={(k) => setActiveTab(k as ProdEntity)}
-          items={[
-            { key: 'stations', label: tabLabel('CIP 站', stations.length) },
-            { key: 'rooms', label: tabLabel('房间', rooms.length) },
-            { key: 'equipment', label: tabLabel('设备', equipment.length) },
-            { key: 'pipelines', label: tabLabel('管线', pipelines.length) },
-            { key: 'shelf-life', label: tabLabel('物料效期', shelfLives.length) },
-          ]}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <WxbSegmented
+            value={view}
+            onChange={(v) => setView(v as 'table' | 'graph')}
+            options={[{ label: '表格维护', value: 'table' }, { label: '拓扑总览', value: 'graph' }]}
+          />
+          {view === 'table' && (
+            <WxbTabs
+              activeKey={activeTab}
+              onChange={(k) => setActiveTab(k as ProdEntity)}
+              items={[
+                { key: 'stations', label: tabLabel('CIP 站', stations.length) },
+                { key: 'rooms', label: tabLabel('房间', rooms.length) },
+                { key: 'equipment', label: tabLabel('设备', equipment.length) },
+                { key: 'pipelines', label: tabLabel('管线', pipelines.length) },
+                { key: 'shelf-life', label: tabLabel('物料效期', shelfLives.length) },
+              ]}
+            />
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <WxbButton variant="ghost" size="sm" onClick={downloadTemplate}>下载模板</WxbButton>
           <WxbButton variant="ghost" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>{importing ? '导入中…' : '导入 Excel'}</WxbButton>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={onPickFile} />
-          <WxbButton variant="primary" size="sm" onClick={() => openCreate(activeTab)}>
-            新增{({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '效期' } as Record<ProdEntity, string>)[activeTab]}
-          </WxbButton>
+          {view === 'table' && (
+            <WxbButton variant="primary" size="sm" onClick={() => openCreate(activeTab)}>
+              新增{({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '效期' } as Record<ProdEntity, string>)[activeTab]}
+            </WxbButton>
+          )}
         </div>
       </div>
 
-      <WxbDataTable
-        rowKey="id"
-        loading={loading}
-        columns={COLUMNS[activeTab]}
-        dataSource={dataFor(activeTab)}
-        pagination={false}
-      />
+      {view === 'table' ? (
+        <WxbDataTable
+          rowKey="id"
+          loading={loading}
+          columns={COLUMNS[activeTab]}
+          dataSource={dataFor(activeTab)}
+          pagination={false}
+        />
+      ) : (
+        <ProdCipTopologyGraph
+          stations={stations}
+          rooms={rooms}
+          equipment={equipment}
+          pipelines={pipelines}
+          orgUnits={orgUnits}
+          onPick={openById}
+        />
+      )}
 
       <WxbDrawer
         open={!!drawer}
