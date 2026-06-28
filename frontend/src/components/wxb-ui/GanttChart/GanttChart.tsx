@@ -297,6 +297,14 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
     setUndoToast(data);
   }, []);
 
+  // Undo stack state (forwarded from GanttCanvas) — drives the visible toolbar undo button.
+  const [undoState, setUndoState] = useState<{ undoCount: number; undo: () => void }>({ undoCount: 0, undo: () => {} });
+  const handleUndoStateChange = useCallback((s: { undoCount: number; undo: () => void }) => {
+    setUndoState(s);
+  }, []);
+  // Only surface the undo button on an editable gantt (drag/resize handlers wired, not read-only).
+  const isEditable = !readOnly && !!(onTaskDragEnd || onGroupDragEnd || onTasksDragEnd || onTaskResizeEnd);
+
   // ===== Share Color Map (Union-Find transitive closure) =====
   const shareColorMap = useMemo(() => buildShareColorMap(links, tasks), [links, tasks]);
 
@@ -584,6 +592,9 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
         onFullscreenToggle={handleFullscreenToggle}
         onViewModeChange={onViewModeChange}
         extraContent={toolbarExtraContent}
+        showUndo={isEditable}
+        undoCount={undoState.undoCount}
+        onUndo={undoState.undo}
       />
 
       {/* Body: Sidebar + Canvas */}
@@ -634,6 +645,7 @@ const WxbGanttChart: React.FC<WxbGanttChartProps> = ({
           onTooltipHide={handleTooltipHide}
           onContextMenu={handleContextMenu}
           onUndoToast={handleUndoToast}
+          onUndoStateChange={handleUndoStateChange}
           highlightedLinkIds={highlightedLinkIds}
           shareColorMap={shareColorMap}
           onShareHover={handleShareHover}

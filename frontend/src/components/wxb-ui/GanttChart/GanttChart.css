@@ -76,6 +76,36 @@
   outline-offset: 1px;
 }
 
+.wxb-gantt-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wxb-gantt-toolbar-btn:disabled:hover {
+  background: var(--wx-bg, #fff);
+  border-color: var(--wx-border, #E4EAF1);
+  color: var(--wx-fg-2, #3A4A5C);
+}
+
+/* Undo button: icon + label + count badge. */
+.wxb-gantt-toolbar-undo {
+  gap: 4px;
+  padding: 0 10px;
+}
+
+.wxb-gantt-toolbar-undo-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--wx-blue-600, #1F6FEB);
+  color: #fff;
+  font: 600 10px var(--wx-font-mono, "JetBrains Mono", monospace);
+}
+
 .wxb-gantt-toolbar-label {
   font: 500 11px var(--wx-font-mono, "JetBrains Mono", monospace);
   color: var(--wx-fg-3, #5A6B7E);

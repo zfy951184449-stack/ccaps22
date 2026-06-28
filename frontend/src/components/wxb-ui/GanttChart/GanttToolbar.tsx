@@ -18,6 +18,12 @@ interface GanttToolbarProps {
    *  A flex spacer keeps the built-in view/zoom/fullscreen controls right-aligned.
    *  When omitted, the toolbar renders exactly as before. */
   extraContent?: React.ReactNode;
+  /** Show the visible undo button (editable gantts only). */
+  showUndo?: boolean;
+  /** Number of drags that can be undone; the button disables at 0 and shows the count. */
+  undoCount?: number;
+  /** Rewind the most-recent drag (same as Ctrl+Z / the cascade toast). */
+  onUndo?: () => void;
 }
 
 const VIEW_MODES: { key: ViewMode; label: string }[] = [
@@ -29,6 +35,7 @@ const VIEW_MODES: { key: ViewMode; label: string }[] = [
 
 const GanttToolbar: React.FC<GanttToolbarProps> = ({
   dayWidth, viewMode, dispatch, enableFullscreen, isFullscreen, onFullscreenToggle, onViewModeChange, extraContent,
+  showUndo = false, undoCount = 0, onUndo,
 }) => {
   const handleViewChange = useCallback((mode: ViewMode) => {
     dispatch({ type: 'SET_VIEW', mode });
@@ -54,6 +61,27 @@ const GanttToolbar: React.FC<GanttToolbarProps> = ({
           <div className="wxb-gantt-toolbar-extra">{extraContent}</div>
           <div className="wxb-gantt-toolbar-spacer" />
         </>
+      )}
+
+      {/* Undo — visible affordance for the drag undo stack (also Ctrl+Z). */}
+      {showUndo && (
+        <div className="wxb-gantt-toolbar-group">
+          <button
+            type="button"
+            className="wxb-gantt-toolbar-btn wxb-gantt-toolbar-undo"
+            onClick={onUndo}
+            disabled={undoCount === 0}
+            title={undoCount > 0 ? `撤销上一步拖动 · 还可撤销 ${undoCount} 步（Ctrl+Z）` : '没有可撤销的拖动'}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 14 4 9l5-5" />
+              <path d="M4 9h11a5 5 0 0 1 0 10h-1" />
+            </svg>
+            <span>撤销</span>
+            {undoCount > 0 && <span className="wxb-gantt-toolbar-undo-count">{undoCount}</span>}
+          </button>
+        </div>
       )}
 
       {/* View mode buttons */}

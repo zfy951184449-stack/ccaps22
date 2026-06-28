@@ -67,6 +67,8 @@ interface GanttCanvasProps {
     context?: GanttContextActionContext,
   ) => void;
   onUndoToast?: (data: { message: string; onUndo: () => void } | null) => void;
+  /** Forwards the undo stack state up so the toolbar can render a visible undo button. */
+  onUndoStateChange?: (state: { undoCount: number; undo: () => void }) => void;
   highlightedLinkIds?: string[];
   /** Per-task share-component color map from Union-Find */
   shareColorMap?: Map<string, { peers: Set<string>; color: string }>;
@@ -81,7 +83,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   showGrid, showToday, showProgress, showHeatmap, collapseEmptyNightShifts, readOnly, clampDragToWindow = true, zoomRange,
   personnelPeaks,
   onTaskClick, onTaskDoubleClick, onTaskDragEnd, onTaskResizeEnd, onGroupDragEnd, onTasksDragEnd,
-  onTooltipShow, onTooltipHide, onContextMenu, onUndoToast,
+  onTooltipShow, onTooltipHide, onContextMenu, onUndoToast, onUndoStateChange,
   highlightedLinkIds,
   shareColorMap,
   onShareHover,
@@ -242,7 +244,7 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
 
   const {
     startDrag, startGroupDrag, startResize, dragState,
-    undoToast,
+    undoToast, undo, undoCount,
   }: UseGanttDragResult = useGanttDrag({
     hourWidth,
     startHour: effectiveStartHour,
@@ -274,6 +276,11 @@ const GanttCanvas: React.FC<GanttCanvasProps> = ({
   useEffect(() => {
     if (onUndoToast) onUndoToast(undoToast);
   }, [undoToast, onUndoToast]);
+
+  // Forward undo stack state to parent (drives the toolbar undo button + count)
+  useEffect(() => {
+    if (onUndoStateChange) onUndoStateChange({ undoCount, undo });
+  }, [undoCount, undo, onUndoStateChange]);
 
   // Resize observer
   useEffect(() => {

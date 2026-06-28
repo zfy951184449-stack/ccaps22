@@ -70,6 +70,10 @@ export interface UseGanttDragResult {
   cancelDrag: () => void;
   undoToast: UndoToastData | null;
   dismissToast: () => void;
+  /** Rewind the most-recent drag (same action as Ctrl+Z and the cascade toast). */
+  undo: () => void;
+  /** Number of drags currently on the undo stack (0 = nothing to undo). Reactive. */
+  undoCount: number;
 }
 
 /**
@@ -118,6 +122,7 @@ export function useGanttDrag({
   const undoStack = useRef<UndoEntry[]>([]);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [undoToast, setUndoToast] = useState<UndoToastData | null>(null);
+  const [undoCount, setUndoCount] = useState(0);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafId = useRef(0);
 
@@ -135,6 +140,23 @@ export function useGanttDrag({
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setUndoToast(null);
   }, []);
+
+  // ===== Undo (shared by Ctrl+Z, the cascade toast, and the toolbar button) =====
+  // Pops the most-recent drag and restores every affected task to its pre-drag
+  // start/end. Re-uses the consumer's persist handlers so the backend is rewound
+  // too — prefers the atomic batch handler when more than one task moved.
+  const performUndo = useCallback(() => {
+    const entry = undoStack.current.pop();
+    setUndoCount(undoStack.current.length);
+    if (!entry) return;
+    const { restorations } = entry;
+    if (restorations.length > 1 && onTasksDragEnd) {
+      onTasksDragEnd(restorations.map(r => ({ taskId: r.taskId, newStart: r.start, newEnd: r.end })));
+    } else if (onDragEnd) {
+      for (const r of restorations) onDragEnd(r.taskId, r.start, r.end);
+    }
+    dismissToast();
+  }, [onDragEnd, onTasksDragEnd, dismissToast]);
 
   // ===== Mouse Move Handler =====
   const handleMouseMove = useCallback((e: MouseEvent) => {
@@ -258,6 +280,7 @@ export function useGanttDrag({
         restorations,
       });
       if (undoStack.current.length > MAX_UNDO) undoStack.current.shift();
+      setUndoCount(undoStack.current.length);
     };
 
     if (state.isGroupDrag) {
@@ -286,15 +309,8 @@ export function useGanttDrag({
       dismissToast();
       const toastData: UndoToastData = {
         message: `已移动 "${label}" 下 ${affectedCount} 个任务 ${sign}${deltaHours.toFixed(1)}h`,
-        onUndo: () => {
-          // Restore by re-invoking the cascade handler with the reverse offset.
-          // The handler shifts current positions, so -deltaHours undoes the move.
-          const entry = undoStack.current.pop();
-          if (entry) {
-            onGroupDragEnd(state.primaryId, -deltaHours, state.affectedTaskIds);
-          }
-          dismissToast();
-        },
+        // Shares the single undo path so the toolbar button's count stays in sync.
+        onUndo: performUndo,
       };
       setUndoToast(toastData);
       toastTimer.current = setTimeout(() => setUndoToast(null), 3000);
@@ -356,7 +372,7 @@ export function useGanttDrag({
     }
 
     cleanup();
-  }, [cleanup, handleMouseMove, onDragEnd, onTaskResizeEnd, onGroupDragEnd, onTasksDragEnd, dismissToast]);
+  }, [cleanup, handleMouseMove, onDragEnd, onTaskResizeEnd, onGroupDragEnd, onTasksDragEnd, dismissToast, performUndo]);
 
   // ===== Start Single Task Drag =====
   const startDrag = useCallback((
@@ -518,29 +534,14 @@ export function useGanttDrag({
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        const entry = undoStack.current[undoStack.current.length - 1];
-        if (!entry) return;
+        if (undoStack.current.length === 0) return;
         e.preventDefault();
-        undoStack.current.pop();
-
-        if (entry.type === 'task' && onDragEnd) {
-          for (const r of entry.restorations) {
-            onDragEnd(r.taskId, r.start, r.end);
-          }
-        } else if (entry.type === 'group' && onGroupDragEnd) {
-          // Calculate reverse delta from restorations
-          // Just fire the restorations via onDragEnd
-          if (onDragEnd) {
-            for (const r of entry.restorations) {
-              onDragEnd(r.taskId, r.start, r.end);
-            }
-          }
-        }
+        performUndo();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onDragEnd, onGroupDragEnd]);
+  }, [performUndo]);
 
   // ===== Cleanup on unmount =====
   useEffect(() => {
@@ -561,5 +562,7 @@ export function useGanttDrag({
     cancelDrag,
     undoToast,
     dismissToast,
+    undo: performUndo,
+    undoCount,
   };
 }
