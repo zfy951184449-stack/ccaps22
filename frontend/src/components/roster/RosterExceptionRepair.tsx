@@ -1,20 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ColumnsType } from 'antd/es/table';
-import type { TableRowSelection } from 'antd/es/table/interface';
 import dayjs from 'dayjs';
 import { employeeApi } from '../../services/api';
 import {
   rosterExceptionApi,
   ImpactedAssignmentDto,
   ImpactedShiftPlanDto,
-  ReplacementCandidateDto,
   RosterExceptionApplyResponse,
   RosterExceptionPreviewResponse,
   RosterRepairMode,
   RosterVacancyDto,
   SolverRepairAssignmentChangeDto,
   SolverRepairProposalDto,
-  SolverRepairUncoveredVacancyDto,
 } from '../../services/rosterExceptionApi';
 import type { Employee } from '../../types';
 import {
@@ -22,6 +19,7 @@ import {
   WxbButton,
   WxbCheckbox,
   WxbDataTable,
+  WxbCollapse,
   WxbDivider,
   WxbEmpty,
   WxbInput,
@@ -40,7 +38,7 @@ import {
   WxbTooltip,
   useWxbToast,
 } from '../../components/wxb-ui';
-import './RosterExceptionRepairPage.css';
+import './RosterExceptionRepair.css';
 
 const DEFAULT_REASON_CODE = 'TEMP_UNAVAILABLE';
 const ALL_TEAM_SCOPE = 'ALL';
@@ -61,7 +59,6 @@ type FeedbackToastApi = {
 type ImpactedRoleDetailRow = ImpactedAssignmentDto & {
   vacancy?: RosterVacancyDto;
   requiredQualificationNames: string[];
-  viableCandidateCount: number;
 };
 type ShiftCalendarDay = {
   key: string;
@@ -278,12 +275,6 @@ const proposalStatusLabel = (status?: string | null) => {
   if (status === 'SOLVER_FAILED') return 'solver 失败';
   if (status === 'INFEASIBLE') return '不可行';
   return status ?? '等待生成';
-};
-
-const recommendationTag = (level: ReplacementCandidateDto['recommendationLevel']) => {
-  if (level === 'RECOMMENDED') return <WxbTag color="green">推荐</WxbTag>;
-  if (level === 'POSSIBLE') return <WxbTag color="amber">可考虑</WxbTag>;
-  return <WxbTag color="red">高风险</WxbTag>;
 };
 
 const warningLabel = (warning: string) => {
@@ -576,7 +567,12 @@ const ShiftPlanCalendar: React.FC<{ shifts: ImpactedShiftPlanDto[] }> = ({ shift
   );
 };
 
-const RosterExceptionRepairPage: React.FC = () => {
+export interface RosterExceptionRepairProps {
+  /** 在 V4/V5 求解器界面 tab 内嵌入时为 true：隐藏页面级 header、收紧外层间距 */
+  embedded?: boolean;
+}
+
+const RosterExceptionRepair: React.FC<RosterExceptionRepairProps> = ({ embedded = false }) => {
   const requestSeqRef = useRef(0);
   const activePreviewAbortRef = useRef<AbortController | null>(null);
   const [feedbackToast, feedbackToastContextHolder] = useWxbToast();
@@ -586,7 +582,7 @@ const RosterExceptionRepairPage: React.FC = () => {
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
   const [windowStart, setWindowStart] = useState('');
   const [windowEnd, setWindowEnd] = useState('');
-  const [reasonCode, setReasonCode] = useState(DEFAULT_REASON_CODE);
+  const [reasonCode, setReasonCode] = useState('');
   const [repairMode, setRepairMode] = useState<RosterRepairMode>('MINIMAL_CHANGE');
   const [protectLockedAssignments, setProtectLockedAssignments] = useState(true);
   const [allowOvertimeSuggestions, setAllowOvertimeSuggestions] = useState(false);
@@ -594,7 +590,6 @@ const RosterExceptionRepairPage: React.FC = () => {
   const [activeRequest, setActiveRequest] = useState<PreviewRequestKind | null>(null);
   const [previewStartedAt, setPreviewStartedAt] = useState<number | null>(null);
   const [previewElapsedSec, setPreviewElapsedSec] = useState(0);
-  const [selectedChangeIds, setSelectedChangeIds] = useState<React.Key[]>([]);
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
   const [applyLoading, setApplyLoading] = useState(false);
   const [applySummary, setApplySummary] = useState<RosterExceptionApplyResponse | null>(null);
@@ -640,22 +635,6 @@ const RosterExceptionRepairPage: React.FC = () => {
     return () => window.clearInterval(intervalId);
   }, [activeRequest, previewStartedAt]);
 
-  useEffect(() => {
-    const applyable = preview?.solverRepairProposal.assignmentChanges
-      .filter((change) => change.canApply)
-      .map((change) => change.changeId) ?? [];
-    setSelectedChangeIds(applyable);
-  }, [preview]);
-
-  const candidatesByVacancy = useMemo(() => {
-    const map = new Map<string, ReplacementCandidateDto[]>();
-    preview?.replacementCandidates.forEach((candidate) => {
-      if (!map.has(candidate.vacancyId)) map.set(candidate.vacancyId, []);
-      map.get(candidate.vacancyId)!.push(candidate);
-    });
-    return map;
-  }, [preview?.replacementCandidates]);
-
   const impactedRoleRows = useMemo<ImpactedRoleDetailRow[]>(() => {
     if (!preview) return [];
     const vacancyById = new Map(preview.vacancies.map((vacancy) => [vacancy.vacancyId, vacancy]));
@@ -663,21 +642,13 @@ const RosterExceptionRepairPage: React.FC = () => {
     return preview.impactedAssignments.map((assignment) => {
       const vacancyId = `vacancy-${assignment.assignmentId}-${assignment.positionNumber}`;
       const vacancy = vacancyById.get(vacancyId);
-      const viableCandidateCount = (candidatesByVacancy.get(vacancyId) ?? []).filter((candidate) =>
-        candidate.sameDepartment
-        && candidate.recommendationLevel !== 'RISKY'
-        && !candidate.hasTimeConflict
-        && !candidate.hasUnavailabilityConflict,
-      ).length;
-
       return {
         ...assignment,
         vacancy,
         requiredQualificationNames: vacancy?.requiredQualificationNames ?? [],
-        viableCandidateCount,
       };
     });
-  }, [candidatesByVacancy, preview]);
+  }, [preview]);
 
   const teamOptions = useMemo(() => {
     const countByScope = new Map<string, { label: string; count: number }>();
@@ -725,14 +696,27 @@ const RosterExceptionRepairPage: React.FC = () => {
     && preview.summary.impactedAssignmentCount > 0
     && !previewLoading,
   );
+  // 不可用员工名单 —— 用于把变更分成「直接顶替」(不可用者原岗被回填) 与「连带重排」(其他人被牵动)。
+  const unavailableIds = useMemo(
+    () => new Set((preview?.employees ?? []).map((employee) => employee.employeeId)),
+    [preview?.employees],
+  );
+  const allChanges = proposal?.assignmentChanges ?? [];
+  const directChanges = allChanges.filter((change) => unavailableIds.has(change.originalEmployeeId));
+  const knockOnChanges = allChanges.filter((change) => !unavailableIds.has(change.originalEmployeeId));
+  const allChangeIds = allChanges.map((change) => change.changeId);
+  const applyableChangeCount = allChanges.filter((change) => change.canApply).length;
+  const changedCount = proposal?.changedAssignmentCount ?? 0;
+  const uncoveredCount = proposal?.uncoveredVacancyCount ?? 0;
+  const affectedSlotCount = directChanges.length + uncoveredCount;
+
+  // 应用 = 全有或全无：发送方案全部 changeId，不允许樱桃式挑选(防双占)。
   const applyDisabledReason = !proposal || !hasSolverProposal
     ? '先查看影响并生成 Solver 修复方案'
     : !proposal.applyAllowed
-      ? proposal.applyDisabledReason ?? 'proposal 没有可应用的 assignment-only 变更'
-      : selectedChangeIds.length === 0
-        ? '请选择至少一条可应用人员变更'
-        : '';
-  const canApply = Boolean(hasSolverProposal && proposal?.applyAllowed && selectedChangeIds.length > 0 && !applyLoading);
+      ? proposal.applyDisabledReason ?? '方案没有可应用的人员变更'
+      : '';
+  const canApply = Boolean(hasSolverProposal && proposal?.applyAllowed && !applyLoading);
 
   const clearPreviewState = () => {
     requestSeqRef.current += 1;
@@ -743,7 +727,6 @@ const RosterExceptionRepairPage: React.FC = () => {
     setPreviewElapsedSec(0);
     setPreview(null);
     setApplySummary(null);
-    setSelectedChangeIds([]);
     setOperationFeedback(null);
     setError(null);
   };
@@ -822,7 +805,7 @@ const RosterExceptionRepairPage: React.FC = () => {
     try {
       const result = await rosterExceptionApi.applySelectedProposal(
         preview,
-        selectedChangeIds.map(String),
+        allChangeIds,
         reasonCode.trim() || DEFAULT_REASON_CODE,
       );
       setApplySummary(result);
@@ -853,21 +836,16 @@ const RosterExceptionRepairPage: React.FC = () => {
       title: '影响状态',
       key: 'impactState',
       width: 130,
-      render: (_, item) => {
-        if (item.vacancy?.hardToCoverReason === 'PROTECTED_LOCKED_ASSIGNMENT') {
-          return <WxbTag color="red">锁定保护</WxbTag>;
-        }
-        return item.viableCandidateCount > 0
-          ? <WxbTag color="green">有候选</WxbTag>
-          : <WxbTag color="amber">待 solver</WxbTag>;
-      },
+      render: (_, item) => (item.vacancy?.hardToCoverReason === 'PROTECTED_LOCKED_ASSIGNMENT'
+        ? <WxbTag color="red">锁定保护</WxbTag>
+        : <WxbTag color="neutral">待修复</WxbTag>),
     },
   ];
 
   const changeColumns: ColumnsType<SolverRepairAssignmentChangeDto> = [
     { title: '工序', key: 'operation', render: (_, item) => `${item.batchCode} / ${item.operationName}` },
     {
-      title: '原员工 / 新建议员工',
+      title: '原 → 新员工',
       key: 'beforeAfter',
       render: (_, item) => (
         <div className="roster-exception-before-after">
@@ -877,74 +855,43 @@ const RosterExceptionRepairPage: React.FC = () => {
         </div>
       ),
     },
-    { title: '岗位', key: 'role', width: 120, render: (_, item) => `${item.role} #${item.positionNumber}` },
+    { title: '岗位', key: 'role', width: 110, render: (_, item) => `${item.role} #${item.positionNumber}` },
     {
-      title: '部门边界',
-      key: 'departmentBoundary',
-      width: 180,
-      render: (_, item) => (
-        <div className="roster-exception-before-after">
-          <span>{item.originalDepartmentName ?? 'DATA GAP'}</span>
-          <span className="roster-exception-arrow">-&gt;</span>
-          <span>{item.proposedDepartmentName ?? 'DATA GAP'}</span>
-          {booleanTag(item.sameDepartment, '同 Team', '跨部门阻止', 'green', 'red')}
-        </div>
-      ),
-    },
-    { title: '资质', dataIndex: 'requiredQualificationNames', key: 'requiredQualificationNames', render: joinNames },
-    { title: '新员工资质', dataIndex: 'proposedEmployeeHasQualification', key: 'proposedEmployeeHasQualification', render: (value) => booleanTag(value, '满足', '不足', 'green', 'red') },
-    { title: '新员工在班', dataIndex: 'proposedEmployeeOnShift', key: 'proposedEmployeeOnShift', render: (value) => booleanTag(value, '在班', '无班次', 'green', 'amber') },
-    { title: '冲突', dataIndex: 'hasTimeConflict', key: 'hasTimeConflict', render: (value) => booleanTag(value, '有', '无', 'red', 'green') },
-    { title: '加班风险', dataIndex: 'hasOvertimeRisk', key: 'hasOvertimeRisk', render: (value) => booleanTag(value, '有', '无', 'amber', 'green') },
-    {
-      title: '应用状态',
-      key: 'applyState',
-      width: 130,
-      render: (_, item) => item.canApply
-        ? <WxbTag color="green">可应用</WxbTag>
-        : <WxbTag color="red">{item.applyBlockReason ?? '不可应用'}</WxbTag>,
+      title: '校验',
+      key: 'check',
+      render: (_, item) => {
+        const flags: string[] = [];
+        if (!item.sameDepartment) flags.push(item.proposedDepartmentName ? '跨部门' : '部门缺失');
+        if (!item.proposedEmployeeHasQualification) flags.push('资质不足');
+        if (!item.proposedShiftCode) flags.push('无对应班次');
+        if (item.hasTimeConflict) flags.push('时间冲突');
+        if (!item.canApply && item.applyBlockReason && flags.length === 0) flags.push(item.applyBlockReason);
+        if (flags.length === 0) {
+          return <WxbTag color="green">同部门 · 资质 · 在班</WxbTag>;
+        }
+        return (
+          <div className="roster-exception-check-flags">
+            {flags.map((flag) => <WxbTag key={flag} color="red">{flag}</WxbTag>)}
+          </div>
+        );
+      },
     },
   ];
-
-  const uncoveredColumns: ColumnsType<SolverRepairUncoveredVacancyDto> = [
-    { title: '批次', dataIndex: 'batchCode', key: 'batchCode', width: 120 },
-    { title: '工序', dataIndex: 'operationName', key: 'operationName' },
-    { title: '岗位', key: 'role', width: 120, render: (_, item) => `${item.role} #${item.positionNumber}` },
-    { title: '开始', dataIndex: 'plannedStart', key: 'plannedStart', render: formatDateTime },
-    { title: '结束', dataIndex: 'plannedEnd', key: 'plannedEnd', render: formatDateTime },
-    { title: '资质要求', dataIndex: 'requiredQualificationNames', key: 'requiredQualificationNames', render: joinNames },
-    { title: '原因', dataIndex: 'reason', key: 'reason' },
-  ];
-
-  const candidateColumns: ColumnsType<ReplacementCandidateDto> = [
-    { title: '候选人', key: 'employee', render: (_, item) => `${item.employeeName} (${item.employeeCode})` },
-    { title: '部门(Team)', key: 'department', width: 140, render: (_, item) => item.departmentName ?? 'DATA GAP' },
-    { title: '部门边界', dataIndex: 'sameDepartment', key: 'sameDepartment', width: 110, render: (value) => booleanTag(value, '同 Team', '跨部门', 'green', 'red') },
-    { title: '推荐等级', dataIndex: 'recommendationLevel', key: 'recommendationLevel', render: recommendationTag },
-    { title: '资质匹配', dataIndex: 'qualificationMatch', key: 'qualificationMatch', render: (value) => booleanTag(value, '满足', '不足', 'green', 'red') },
-    { title: '同班次', dataIndex: 'sameShift', key: 'sameShift', render: (value) => booleanTag(value, '同班', '否') },
-    { title: '时间冲突', dataIndex: 'hasTimeConflict', key: 'hasTimeConflict', render: (value) => booleanTag(value, '是', '否', 'red', 'green') },
-    { title: '不可用冲突', dataIndex: 'hasUnavailabilityConflict', key: 'hasUnavailabilityConflict', render: (value) => booleanTag(value, '是', '否', 'red', 'green') },
-    { title: '窗口任务数', dataIndex: 'currentAssignmentCountInWindow', key: 'currentAssignmentCountInWindow', width: 110 },
-    { title: '分数', dataIndex: 'score', key: 'score', width: 80 },
-  ];
-
-  const rowSelection: TableRowSelection<SolverRepairAssignmentChangeDto> = {
-    selectedRowKeys: selectedChangeIds,
-    onChange: (keys) => setSelectedChangeIds(keys),
-    getCheckboxProps: (record) => ({
-      disabled: !record.canApply,
-    }),
-  };
 
   return (
-    <WxbPageShell size="full" gap="lg" className="roster-exception-page">
+    <WxbPageShell
+      size="full"
+      gap="lg"
+      className={embedded ? 'roster-exception-page roster-exception-page--embedded' : 'roster-exception-page'}
+    >
       {feedbackToastContextHolder}
-      <WxbPageHeader
-        eyebrow="排班异常修复"
-        title="异常排班快速修复"
-        meta={<WxbTag color="blue">Solver 修复方案</WxbTag>}
-      />
+      {!embedded && (
+        <WxbPageHeader
+          eyebrow="排班异常修复"
+          title="异常排班快速修复"
+          meta={<WxbTag color="blue">Solver 修复方案</WxbTag>}
+        />
+      )}
 
       <WxbPageSection title="异常录入" description="选择人员临时不可用时间窗和局部修复策略。">
         <div className="roster-exception-form">
@@ -1157,30 +1104,21 @@ const RosterExceptionRepairPage: React.FC = () => {
       </WxbPageSection>
 
       {!preview && (
-        <WxbPageSection title="影响分析 / Solver 修复方案">
-          <WxbEmpty description="尚未查看影响。先查看影响范围，再生成 solver repair proposal。" />
-          <WxbButton type="button" disabled>
-            应用已选方案
-          </WxbButton>
+        <WxbPageSection title="修复方案">
+          <WxbEmpty description="选择不可用人员与时间窗后，点「生成修复方案」生成一份最小重排方案。" />
         </WxbPageSection>
       )}
 
-      {preview && proposal && (
+      {preview && proposal && (!hasSolverProposal ? (
         <>
           <WxbPageGrid minItemWidth="170px" mode="auto-fit">
-            <WxbKpiCard title={hasSolverProposal ? '方案状态' : '影响状态'} value={proposalStatusLabel(proposal.status)} />
-            <WxbKpiCard title={hasSolverProposal ? '覆盖率' : '受影响人员分配'} value={hasSolverProposal ? `${proposal.coverageRate}%` : preview.summary.impactedAssignmentCount} />
-            <WxbKpiCard title={hasSolverProposal ? '原分配仍有效' : '受影响班次计划'} value={hasSolverProposal ? proposal.originalAssignmentStillValidCount : preview.summary.impactedShiftPlanCount} />
+            <WxbKpiCard title="影响状态" value={proposalStatusLabel(proposal.status)} />
+            <WxbKpiCard title="受影响人员分配" value={preview.summary.impactedAssignmentCount} />
+            <WxbKpiCard title="受影响班次计划" value={preview.summary.impactedShiftPlanCount} />
+            <WxbKpiCard title="释放岗位需求" value={preview.summary.vacancyCount} />
           </WxbPageGrid>
 
           <WxbPageSection title="影响分析" description="真实 shift plans，以及每条受影响人员分配释放出的岗位 demand。">
-            <div className="roster-exception-impact-grid">
-              <WxbKpiCard title="受影响班次计划" value={preview.summary.impactedShiftPlanCount} />
-              <WxbKpiCard title="受影响人员分配" value={preview.summary.impactedAssignmentCount} />
-              <WxbKpiCard title="释放岗位需求" value={preview.summary.vacancyCount} />
-              <WxbKpiCard title="是否影响锁定分配" value={preview.impactedAssignments.some((item) => item.isLocked) ? '是' : '否'} />
-            </div>
-            <WxbDivider />
             <ShiftPlanCalendar shifts={preview.impactedShiftPlans} />
             <WxbDivider />
             <WxbDataTable
@@ -1193,78 +1131,72 @@ const RosterExceptionRepairPage: React.FC = () => {
             />
           </WxbPageSection>
 
-          <WxbPageSection
-            title="Solver 修复方案"
-            description={hasSolverProposal
-              ? `调用方式：${proposal.solverInvocation.called ? proposal.solverInvocation.endpoint : '未调用，缺少可求解 demand'} · request ${proposal.solverRequestId ?? '-'}`
-              : '已先完成影响分析；确认影响范围后再生成 solver_v4 repair proposal。'}
-          >
-            <div className="roster-exception-proposal-bar">
-              {proposalStatusTag(proposal.status)}
-              <WxbTag color={proposal.solverInvocation.called ? 'green' : 'amber'}>
-                {proposal.solverInvocation.called ? '已调用 solver_v4' : '未调用 solver_v4'}
-              </WxbTag>
-              <WxbTag color="blue">{repairModeLabel(proposal.repairMode)}</WxbTag>
-              <WxbTag color="green">同 Team 边界</WxbTag>
-              <WxbTag color="neutral">solver 状态 {proposal.solverStatus ?? '-'}</WxbTag>
-            </div>
-            <p className="roster-exception-strategy">{proposal.localRepairStrategy}</p>
-            {!hasSolverProposal && (
-              <WxbEmpty description="影响范围已显示。点击上方“生成修复方案”后才会调用 solver_v4 并返回人员变更 proposal。" />
-            )}
-            {proposal.supervisorAttentionItems.length > 0 && (
-              <div className="roster-exception-warning-list">
-                {proposal.supervisorAttentionItems.map((item) => (
-                  <WxbAlert key={item} title="主管关注项">{item}</WxbAlert>
-                ))}
-              </div>
-            )}
-            {proposal.capabilityGaps.length > 0 && (
-              <div className="roster-exception-gap-list">
-                {proposal.capabilityGaps.map((gap) => (
-                  <WxbAlert key={gap.code} title={`solver 能力边界 · ${gap.code}`}>
-                    {gap.message}
-                  </WxbAlert>
-                ))}
-              </div>
-            )}
-            <div className="roster-exception-apply-row">
-              <WxbButton
-                type="button"
-                onClick={() => setApplyConfirmOpen(true)}
-                disabled={!canApply}
-              >
-                应用已选方案
-              </WxbButton>
-              <span className="roster-exception-apply-note">
-                {canApply
-                  ? `已选择 ${selectedChangeIds.length} 条 assignment-only 人员替换`
-                  : applyDisabledReason}
-              </span>
-            </div>
-          </WxbPageSection>
+          <WxbAlert title="下一步">影响范围已显示。点「生成修复方案」调用 solver_v4 生成一份最小重排方案。</WxbAlert>
+        </>
+      ) : (
+        <>
+          {proposal.status === 'INFEASIBLE' ? (
+            <WxbAlert variant="error" title="无法生成可行方案">
+              求解器未能为本次不可用生成可行的修复方案；下方诊断可查看求解信息。
+            </WxbAlert>
+          ) : proposal.status === 'READY' ? (
+            <p className="roster-exception-strategy">
+              为覆盖 {affectedSlotCount} 个受影响岗位，本方案共调整 {changedCount} 处人员安排（直接顶替 {directChanges.length} · 连带调整 {knockOnChanges.length}），全部岗位已覆盖。
+            </p>
+          ) : (
+            <WxbAlert variant="warning" title="修复方案总览">
+              为覆盖 <strong>{affectedSlotCount}</strong> 个受影响岗位，本方案共调整 <strong>{changedCount}</strong> 处人员安排（直接顶替 {directChanges.length} · 连带调整 {knockOnChanges.length}），仍有 <strong>{uncoveredCount}</strong> 个岗位无法覆盖。
+            </WxbAlert>
+          )}
 
-          <WxbPageSection title="人员变更对照">
+          {proposal.supervisorAttentionItems.length > 0 && (
+            <div className="roster-exception-warning-list">
+              {proposal.supervisorAttentionItems.map((item) => (
+                <WxbAlert key={item} title="主管关注项">{item}</WxbAlert>
+              ))}
+            </div>
+          )}
+
+          <WxbPageSection title={`直接顶替 (${directChanges.length})`} description="不可用人员原本占的岗位，被替补回填。">
             <WxbDataTable
               rowKey="changeId"
-              rowSelection={rowSelection}
               columns={changeColumns}
-              dataSource={proposal.assignmentChanges}
+              dataSource={directChanges}
               pagination={{ pageSize: 8 }}
               density="compact"
-              emptyState={{ description: 'proposal 中没有人员变更' }}
+              emptyState={{ description: '没有可直接顶替的变更（这些岗位可能落入下方“无法覆盖”）' }}
             />
           </WxbPageSection>
 
-          <WxbPageSection title="未覆盖岗位">
+          <WxbPageSection
+            title={`连带调整 (${knockOnChanges.length})`}
+            description="这些人未被标记不可用，是为了腾出岗位、保住覆盖而被连带调动。"
+          >
             <WxbDataTable
-              rowKey="vacancyId"
-              columns={uncoveredColumns}
-              dataSource={proposal.uncoveredVacancies}
-              pagination={false}
+              rowKey="changeId"
+              columns={changeColumns}
+              dataSource={knockOnChanges}
+              pagination={{ pageSize: 8 }}
               density="compact"
-              emptyState={{ description: 'proposal 没有未覆盖岗位' }}
+              emptyState={{ description: '无连带调整，其他人保持原样' }}
             />
+          </WxbPageSection>
+
+          <WxbPageSection
+            title={`无法覆盖 (${uncoveredCount})`}
+            description={uncoveredCount > 0 ? '当天可用人手不足，这些岗位需另行报增援。' : undefined}
+          >
+            {uncoveredCount > 0 ? (
+              <div className="roster-exception-uncovered-chips">
+                {proposal.uncoveredVacancies.map((vacancy) => (
+                  <WxbTag key={vacancy.vacancyId} color="red">
+                    {vacancy.batchCode} / {vacancy.operationName} #{vacancy.positionNumber}
+                  </WxbTag>
+                ))}
+              </div>
+            ) : (
+              <WxbEmpty description="全部受影响岗位均已覆盖" />
+            )}
           </WxbPageSection>
 
           {applySummary && (
@@ -1274,42 +1206,94 @@ const RosterExceptionRepairPage: React.FC = () => {
                 <WxbKpiCard title="已跳过" value={applySummary.skippedCount} />
                 <WxbKpiCard title="写入字段" value={applySummary.writeBoundary.wrote.join(', ')} />
               </div>
+              {applySummary.appliedChanges.length > 0 && (
+                <ul className="roster-exception-receipt-list">
+                  {applySummary.appliedChanges.map((applied) => {
+                    const change = allChanges.find((item) => item.changeId === applied.changeId);
+                    return (
+                      <li key={applied.changeId}>
+                        {change
+                          ? `${change.batchCode}/${change.operationName} #${change.positionNumber}：${change.originalEmployeeName} → ${change.proposedEmployeeName}`
+                          : `分配 ${applied.assignmentId}：员工 ${applied.before.employeeId ?? '-'} → ${applied.after.employeeId ?? '-'}`}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {applySummary.skippedChanges.length > 0 && (
+                <WxbAlert variant="warning" title={`${applySummary.skippedChanges.length} 处被跳过`}>
+                  {applySummary.skippedChanges.map((skipped) => {
+                    const change = allChanges.find((item) => item.changeId === skipped.changeId);
+                    return (
+                      <div key={skipped.changeId}>
+                        {change ? `${change.originalEmployeeName} → ${change.proposedEmployeeName}` : skipped.changeId}：{skipped.reason}
+                      </div>
+                    );
+                  })}
+                </WxbAlert>
+              )}
               <WxbAlert title="写入边界">
                 应用只更新受影响 batch_personnel_assignments 的 employee_id / shift_plan_id；未写入 batch_operation_plans、scheduling_results、employee_shift_plans 或 database schema。
               </WxbAlert>
             </WxbPageSection>
           )}
 
-          <WxbPageSection title="候选人诊断">
-            <WxbDataTable
-              rowKey={(candidate) => `${candidate.vacancyId}-${candidate.employeeId}`}
-              columns={candidateColumns}
-              dataSource={preview.replacementCandidates}
-              pagination={{ pageSize: 8 }}
-              density="compact"
-              emptyState={{ description: '暂无替补候选人诊断数据' }}
-            />
-          </WxbPageSection>
+          <WxbCollapse
+            className="roster-exception-diagnostic"
+            items={[{
+              key: 'diagnostic',
+              label: '影响详情与求解诊断',
+              children: (
+                <>
+                  <div className="roster-exception-impact-grid">
+                    <WxbKpiCard title="受影响班次计划" value={preview.summary.impactedShiftPlanCount} />
+                    <WxbKpiCard title="受影响人员分配" value={preview.summary.impactedAssignmentCount} />
+                    <WxbKpiCard title="释放岗位需求" value={preview.summary.vacancyCount} />
+                    <WxbKpiCard title="是否影响锁定分配" value={preview.impactedAssignments.some((item) => item.isLocked) ? '是' : '否'} />
+                  </div>
+                  <ShiftPlanCalendar shifts={preview.impactedShiftPlans} />
+                  <div className="roster-exception-proposal-bar">
+                    {proposalStatusTag(proposal.status)}
+                    <WxbTag color={proposal.solverInvocation.called ? 'green' : 'amber'}>
+                      {proposal.solverInvocation.called ? '已调用 solver_v4' : '未调用 solver_v4'}
+                    </WxbTag>
+                    <WxbTag color="blue">{repairModeLabel(proposal.repairMode)}</WxbTag>
+                    <WxbTag color="green">同 Team 边界</WxbTag>
+                    <WxbTag color="neutral">solver 状态 {proposal.solverStatus ?? '-'}</WxbTag>
+                  </div>
+                  <p className="roster-exception-strategy">{proposal.localRepairStrategy} · request {proposal.solverRequestId ?? '-'}</p>
+                  {proposal.capabilityGaps.map((gap) => (
+                    <WxbAlert key={gap.code} title={`solver 能力边界 · ${gap.code}`}>{gap.message}</WxbAlert>
+                  ))}
+                  {preview.warnings.map((warning) => (
+                    <WxbAlert key={warning} title={warning}>{warningLabel(warning)}</WxbAlert>
+                  ))}
+                </>
+              ),
+            }]}
+          />
 
-          <WxbPageSection title="风险提示">
-            {preview.warnings.length > 0 ? (
-              <div className="roster-exception-warning-list">
-                {preview.warnings.map((warning) => (
-                  <WxbAlert key={warning} title={warning}>
-                    {warningLabel(warning)}
-                  </WxbAlert>
-                ))}
-              </div>
-            ) : (
-              <WxbEmpty description="暂无 warning" />
-            )}
-          </WxbPageSection>
+          <div className="roster-exception-applybar">
+            <span className="roster-exception-applybar-note">
+              {canApply
+                ? `整套应用 ${changedCount} 处变更（可应用 ${applyableChangeCount}${applyableChangeCount < changedCount ? ` · 跳过 ${changedCount - applyableChangeCount}` : ''}）`
+                : applyDisabledReason}
+            </span>
+            <WxbButton
+              type="button"
+              variant="primary"
+              onClick={() => setApplyConfirmOpen(true)}
+              disabled={!canApply}
+            >
+              {canApply ? `整套应用 · ${changedCount} 处` : '整套应用'}
+            </WxbButton>
+          </div>
         </>
-      )}
+      ))}
 
       <WxbModal
         open={applyConfirmOpen}
-        title="确认应用已选人员替换"
+        title="确认应用完整修复方案"
         okText="确认应用"
         cancelText="返回检查"
         confirmLoading={applyLoading}
@@ -1317,7 +1301,13 @@ const RosterExceptionRepairPage: React.FC = () => {
         onCancel={() => setApplyConfirmOpen(false)}
       >
         <div className="roster-exception-confirm">
-          <p>将应用 {selectedChangeIds.length} 条 assignment-only 变更。</p>
+          <p>将整套应用本方案，共 {changedCount} 处变更（直接顶替 {directChanges.length} · 连带调整 {knockOnChanges.length}）。这是一份互相咬合的方案，只能整套应用，不能单独勾选某一条（否则会有人被排到两个岗）。</p>
+          {applyableChangeCount < changedCount && (
+            <p>其中 {changedCount - applyableChangeCount} 处因跨部门或排班失效被阻止，应用时将自动跳过，不影响其余变更。</p>
+          )}
+          {uncoveredCount > 0 && (
+            <p>仍有 {uncoveredCount} 个岗位无人可补，需另行报增援。</p>
+          )}
           <p>本操作只更新受影响 batch_personnel_assignments 的 employee_id / shift_plan_id，且 apply 前会再次校验同部门边界；不修改 operation 时间、生产计划或 scheduling_results。</p>
         </div>
       </WxbModal>
@@ -1325,4 +1315,4 @@ const RosterExceptionRepairPage: React.FC = () => {
   );
 };
 
-export default RosterExceptionRepairPage;
+export default RosterExceptionRepair;

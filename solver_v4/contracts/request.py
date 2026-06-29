@@ -114,6 +114,20 @@ class FrozenAssignment:
     employee_id: int
 
 @dataclass
+class BaselineShift:
+    """已发布排班表中的班次分配，作为「最小变更」目标的基线（窗口内软目标，非硬冻结）"""
+    employee_id: int
+    date: str
+    shift_id: int
+
+@dataclass
+class BaselineAssignment:
+    """已发布排班表中的操作人员分配，作为「最小变更」目标的基线（窗口内软目标，非硬冻结）"""
+    operation_plan_id: int
+    position_number: int
+    employee_id: int
+
+@dataclass
 class HistoricalShift:
     """历史班次记录，用于边界约束检查"""
     employee_id: int
@@ -189,6 +203,8 @@ class SolverRequest:
     solve_range: Optional[Dict[str, str]] = None  # {start_date, end_date} — 求解子区间
     frozen_shifts: List[FrozenShift] = field(default_factory=list)
     frozen_assignments: List[FrozenAssignment] = field(default_factory=list)
+    baseline_shifts: List[BaselineShift] = field(default_factory=list)
+    baseline_assignments: List[BaselineAssignment] = field(default_factory=list)
     config: Optional[Dict[str, Any]] = None
 
     @classmethod
@@ -251,6 +267,8 @@ class SolverRequest:
         maintenance_windows = [MaintenanceWindow(**window) for window in data.get("maintenance_windows", [])]
         frozen_shifts = [FrozenShift(**fs) for fs in data.get("frozen_shifts", [])]
         frozen_assignments = [FrozenAssignment(**fa) for fa in data.get("frozen_assignments", [])]
+        baseline_shifts = [BaselineShift(**bs) for bs in data.get("baseline_shifts", [])]
+        baseline_assignments = [BaselineAssignment(**ba) for ba in data.get("baseline_assignments", [])]
 
         return cls(
             request_id=data.get("request_id"),
@@ -271,5 +289,7 @@ class SolverRequest:
             solve_range=data.get("solve_range"),
             frozen_shifts=frozen_shifts,
             frozen_assignments=frozen_assignments,
+            baseline_shifts=baseline_shifts,
+            baseline_assignments=baseline_assignments,
             config=data.get("config")
         )

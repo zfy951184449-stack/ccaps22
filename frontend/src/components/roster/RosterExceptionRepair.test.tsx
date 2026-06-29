@@ -1,7 +1,7 @@
 import React from 'react';
 import { act } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import RosterExceptionRepairPage from './RosterExceptionRepairPage';
+import RosterExceptionRepair from './RosterExceptionRepair';
 import { employeeApi } from '../../services/api';
 import { rosterExceptionApi } from '../../services/rosterExceptionApi';
 
@@ -352,7 +352,7 @@ const setNativeInputValue = (input: HTMLInputElement, value: string) => {
   valueSetter?.call(input, value);
 };
 
-describe('RosterExceptionRepairPage', () => {
+describe('RosterExceptionRepair', () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -406,7 +406,7 @@ describe('RosterExceptionRepairPage', () => {
 
   const renderPage = async () => {
     await act(async () => {
-      root.render(<RosterExceptionRepairPage />);
+      root.render(<RosterExceptionRepair />);
     });
 
     await waitForCondition(() => document.body.textContent?.includes('异常排班快速修复') ?? false);
@@ -500,7 +500,7 @@ describe('RosterExceptionRepairPage', () => {
       }),
     );
     expect(document.body.textContent).toContain('影响已识别');
-    expect(document.body.textContent).toContain('未调用 solver_v4');
+    expect(document.body.textContent).toContain('下一步');
 
     const generateButton = getGenerateButton();
     expect(generateButton).toBeTruthy();
@@ -571,9 +571,9 @@ describe('RosterExceptionRepairPage', () => {
     await renderPage();
     await fillWindowAndPreview();
 
-    expect(document.body.textContent).toContain('方案状态');
-    expect(document.body.textContent).toContain('人员变更');
-    expect(document.body.textContent).toContain('未覆盖岗位');
+    expect(document.body.textContent).toContain('本方案共调整');
+    expect(document.body.textContent).toContain('直接顶替');
+    expect(document.body.textContent).toContain('无法覆盖');
   });
 
   it('merges impacted assignments and released demand into one detail row', async () => {
@@ -593,7 +593,7 @@ describe('RosterExceptionRepairPage', () => {
         && rowText.includes('OPERATOR #1')
         && rowText.includes('USP操作')
         && rowText.includes('USP')
-        && rowText.includes('有候选');
+        && rowText.includes('待修复');
     });
     expect(mergedImpactRow).toBeTruthy();
   });
@@ -603,27 +603,24 @@ describe('RosterExceptionRepairPage', () => {
     await fillWindowAndPreview();
 
     expect(document.body.textContent).toContain('B-001');
-    expect(document.body.textContent).toContain('USP操作');
+    expect(document.body.textContent).toContain('培养观察');
   });
 
-  it('shows replacement candidate recommendation level', async () => {
-    await renderPage();
-    await fillWindowAndPreview();
-
-    expect(document.body.textContent).toContain('李四');
-    expect(document.body.textContent).toContain('推荐');
-  });
-
-  it('shows solver proposal changes and enables selected apply', async () => {
+  it('groups solver changes into 直接顶替/连带调整 and enables 整套应用', async () => {
     await renderPage();
     await fillWindowAndPreview();
 
     expect(document.body.textContent).toContain('Solver 修复方案');
     expect(document.body.textContent).toContain('已调用 solver_v4');
-    expect(document.body.textContent).toContain('人员变更对照');
+    // 分组评审区：两组段头都应渲染(连带重排为空时仍显示段头)
+    expect(document.body.textContent).toContain('直接顶替');
+    expect(document.body.textContent).toContain('连带调整');
+    // 张三(123) 是不可用者 → 替补李四落入「直接顶替」组
+    expect(document.body.textContent).toContain('李四');
 
+    // 全有或全无：应用按钮为「整套应用」，不再依赖逐条勾选
     const applyButton = Array.from(document.querySelectorAll('button')).find((item) =>
-      item.textContent?.includes('应用已选方案') && !item.disabled,
+      item.textContent?.includes('整套应用') && !item.disabled,
     ) as HTMLButtonElement | undefined;
     expect(applyButton).toBeTruthy();
   });

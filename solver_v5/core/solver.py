@@ -507,6 +507,7 @@ class SolverV5:
         w3 = int(config.get("objective_weight_night_balance", 5))
         w4 = int(config.get("objective_weight_weekend_balance", 5))
         w5 = int(config.get("objective_weight_triple_salary", 10))
+        w_change = int(config.get("objective_weight_change", 0))
 
         # O2: Special Coverage Impact
         if special_cover_vars and req.special_shift_requirements:
@@ -571,6 +572,20 @@ class SolverV5:
                 objective_terms.append(w5 * expr5)
                 objective_desc.append(f"三倍薪日(×{w5})")
                 self.breakdown.register("triple_salary_count", expr5, weight=w5)
+
+        # O7.5: Minimize Change (最小变更 / 稳定性) — opt-in, default OFF.
+        # Gate-safe: disabled flag / weight 0 / empty baseline each reproduce old behavior.
+        # Weight MUST stay below coverage/vacancy priority (see design doc §6).
+        if (config.get("enable_minimize_change", False)
+                and w_change > 0
+                and (assignments or shift_assignments)):
+            from objectives.minimize_change import MinimizeChangeObjective
+            expr_change = MinimizeChangeObjective(logger=logger).build_expression(
+                self.model, assignments, shift_assignments, req)
+            if expr_change is not None and not isinstance(expr_change, int):
+                objective_terms.append(w_change * expr_change)
+                objective_desc.append(f"最小变更(×{w_change})")
+                self.breakdown.register("change_penalty", expr_change, weight=w_change)
 
         # O8: Leadership Coverage Soft Penalties
         if (config.get("enable_leadership_coverage", True)

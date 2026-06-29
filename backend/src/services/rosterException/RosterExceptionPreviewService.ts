@@ -1129,16 +1129,6 @@ export class RosterExceptionPreviewService {
       });
     }
 
-    const releasedAssignmentIds = new Set(releasableRows.map((row) => Number(row.assignment_id)));
-    const releasedPositionsByOperation = new Map<number, Set<number>>();
-    releasableRows.forEach((row) => {
-      const operationPlanId = Number(row.batch_operation_plan_id);
-      if (!releasedPositionsByOperation.has(operationPlanId)) {
-        releasedPositionsByOperation.set(operationPlanId, new Set<number>());
-      }
-      releasedPositionsByOperation.get(operationPlanId)!.add(Number(row.position_number ?? 1));
-    });
-
     const [existingAssignments, candidateShifts, employeeDepartmentById] = await Promise.all([
       this.fetchCandidateAssignments(localWindowStart, localWindowEnd),
       this.fetchCandidateShifts(localWindowStart, localWindowEnd),
@@ -1147,70 +1137,77 @@ export class RosterExceptionPreviewService {
     const existingAssignmentsByEmployee = this.groupByEmployee(existingAssignments);
     const candidateShiftsByEmployee = this.groupByEmployee(candidateShifts);
 
-    const capabilityGaps: SolverCapabilityGapDto[] = [{
-      code: 'IN_WINDOW_FREEZE_ADAPTER_SCOPE',
-      message: 'solver_v4 当前没有任意 in-window frozen assignment override；adapter 通过只释放受影响岗位、过滤既有冲突来冻结未受影响 assignment。',
-    }];
-    if (input.repairMode === 'MINIMAL_CHANGE') {
-      capabilityGaps.push({
-        code: 'MINIMIZE_CHANGE_OBJECTIVE_ADAPTER_SCOPE',
-        message: 'solver_v4 当前没有显式人员变更最小化目标；最小变更模式通过局部 demand scope 实现，只允许受影响 assignment 进入求解。',
-      });
-    }
+    const capabilityGaps: SolverCapabilityGapDto[] = [];
 
-    const localDemandRows = new Map(releasableRows.map((row) => [
-      this.requirementKey(Number(row.batch_operation_plan_id), Number(row.position_number ?? 1)),
-      row,
-    ]));
-    const localOperationDemands = (assembled.operation_demands ?? [])
-      .filter((demand) => releasedPositionsByOperation.has(Number(demand.operation_plan_id)))
-      .map((demand) => {
-        const releasedPositions = releasedPositionsByOperation.get(Number(demand.operation_plan_id)) ?? new Set<number>();
-        const positionQualifications = (demand.position_qualifications ?? [])
-          .filter((position) => releasedPositions.has(Number(position.position_number)))
-          .map((position) => {
-            const sourceRow = localDemandRows.get(this.requirementKey(
-              Number(demand.operation_plan_id),
-              Number(position.position_number),
-            ));
-            const opStart = dayjs(sourceRow?.planned_start_datetime ?? demand.planned_start);
-            const opEnd = dayjs(sourceRow?.planned_end_datetime ?? demand.planned_end);
-            return {
-              ...position,
-              candidate_employee_ids: this.filterSolverCandidates({
-                candidateEmployeeIds: position.candidate_employee_ids ?? [],
-                exceptionEmployeeIds,
-                sourceDepartmentId: sourceRow?.employee_department_id ? Number(sourceRow.employee_department_id) : null,
-                opStart,
-                opEnd,
-                releasedAssignmentIds,
-                existingAssignmentsByEmployee,
-                candidateShiftsByEmployee,
-                employeeDepartmentById,
-                protectDepartmentBoundary: input.protectDepartmentBoundary,
-                allowOvertimeSuggestions: input.allowOvertimeSuggestions,
-              }),
-            };
-          });
-
-        return {
-          ...demand,
-          required_people: positionQualifications.length,
-          position_qualifications: positionQualifications,
-        };
-      })
-      .filter((demand) => demand.position_qualifications.length > 0);
-
-    const localDemandKeys = new Set(localOperationDemands.flatMap((demand) =>
-      (demand.position_qualifications ?? []).map((position) =>
-        this.requirementKey(Number(demand.operation_plan_id), Number(position.position_number)),
-      ),
-    ));
-    const missingDemandRows = releasableRows.filter((row) =>
-      !localDemandKeys.has(this.requirementKey(Number(row.batch_operation_plan_id), Number(row.position_number ?? 1))),
+    // ── 全窗口求解 + 已发布基线 + 最小变更目标（取代旧的「缩窗假稳定」）─────────────────
+    // 把受影响批次的全部岗位交给 solver_v4（不再只给空岗），并把当前已发布排班作为基线软目标。
+    // solver_v4 在覆盖优先的前提下全局最小化相对原排班的变更（可做「挪 1 闲人 vs 调 1 再回填」的权衡）；
+    // 不可用人通过 employee_profiles[].unavailable_periods 被硬排除。
+    const allInWindowAssignmentIds = new Set(existingAssignments.map((row) => Number(row.assignment_id)));
+    const baselineRowByOpPos = new Map<string, AssignmentRow>();
+    existingAssignments.forEach((row) => {
+      baselineRowByOpPos.set(
+        this.requirementKey(Number(row.batch_operation_plan_id), Number(row.position_number ?? 1)),
+        row,
+      );
+    });
+    // 锁定岗位：保护开启时把候选锁成当前在岗人，solver 无法改动 → 与基线一致 → 不产生变更。
+    const lockedOpPosKeys = new Set(
+      input.protectLockedAssignments
+        ? existingAssignments
+            .filter((row) => this.isAssignmentLocked(row))
+            .map((row) => this.requirementKey(Number(row.batch_operation_plan_id), Number(row.position_number ?? 1)))
+        : [],
     );
 
-    if (!localOperationDemands.length) {
+    const fullOperationDemands = (assembled.operation_demands ?? []).map((demand) => {
+      const opStart = dayjs(demand.planned_start);
+      const opEnd = dayjs(demand.planned_end);
+      const positionQualifications = (demand.position_qualifications ?? []).map((position) => {
+        const key = this.requirementKey(Number(demand.operation_plan_id), Number(position.position_number));
+        const baselineRow = baselineRowByOpPos.get(key);
+        if (lockedOpPosKeys.has(key) && baselineRow) {
+          return { ...position, candidate_employee_ids: [Number(baselineRow.employee_id)] };
+        }
+        return {
+          ...position,
+          candidate_employee_ids: this.filterSolverCandidates({
+            candidateEmployeeIds: position.candidate_employee_ids ?? [],
+            exceptionEmployeeIds,
+            sourceDepartmentId: baselineRow?.employee_department_id ? Number(baselineRow.employee_department_id) : null,
+            opStart,
+            opEnd,
+            // 窗口内全部已发布 assignment 视为「可重排」，使当前在岗人不会与自己/同窗其他岗冲突，
+            // 从而允许 solver 做跨岗位的最小重排；窗口外的占用仍会被识别为冲突而排除。
+            releasedAssignmentIds: allInWindowAssignmentIds,
+            existingAssignmentsByEmployee,
+            candidateShiftsByEmployee,
+            employeeDepartmentById,
+            protectDepartmentBoundary: input.protectDepartmentBoundary,
+            allowOvertimeSuggestions: input.allowOvertimeSuggestions,
+          }),
+        };
+      });
+      return { ...demand, position_qualifications: positionQualifications };
+    });
+
+    // 求解范围内的 (operation, position) key 集合 —— 变更对比只在这个范围内做。
+    const solveScopeKeys = new Set<string>();
+    fullOperationDemands.forEach((demand) => {
+      (demand.position_qualifications ?? []).forEach((position) => {
+        solveScopeKeys.add(this.requirementKey(Number(demand.operation_plan_id), Number(position.position_number)));
+      });
+    });
+
+    const baselineAssignments = existingAssignments
+      .filter((row) => solveScopeKeys.has(this.requirementKey(Number(row.batch_operation_plan_id), Number(row.position_number ?? 1))))
+      .map((row) => ({
+        operation_plan_id: Number(row.batch_operation_plan_id),
+        position_number: Number(row.position_number ?? 1),
+        employee_id: Number(row.employee_id),
+      }));
+
+    if (!fullOperationDemands.length) {
       return base({
         status: 'DATA_GAP',
         uncoveredVacancies: [
@@ -1218,7 +1215,7 @@ export class RosterExceptionPreviewService {
           ...releasableRows.map((row) => this.mapUncoveredFromAssignment(row, input.requirementsByOperationPosition, 'DATA GAP: DataAssemblerV4 returned no matching operation demand')),
         ],
         capabilityGaps,
-        supervisorAttentionItems: ['DATA GAP: 真实 batch_operation_plans 未进入 solver_v4 operation_demands，未生成假 proposal。'],
+        supervisorAttentionItems: ['DATA GAP: 真实 batch_operation_plans 未进入 solver_v4 operation_demands，未生成 proposal。'],
         applyDisabledReason: 'No matching solver operation demands.',
       });
     }
@@ -1232,7 +1229,8 @@ export class RosterExceptionPreviewService {
         end_date: solveRange.end_date,
       },
       solve_range: undefined,
-      operation_demands: localOperationDemands,
+      operation_demands: fullOperationDemands,
+      baseline_assignments: baselineAssignments,
       special_shift_requirements: [],
       shift_definitions: [],
       shared_preferences: [],
@@ -1240,8 +1238,6 @@ export class RosterExceptionPreviewService {
       locked_shifts: [],
       frozen_assignments: [],
       frozen_shifts: [],
-      operation_resource_requirements: (assembled.operation_resource_requirements ?? [])
-        .filter((requirement) => releasedPositionsByOperation.has(Number(requirement.operation_plan_id))),
       employee_profiles: (assembled.employee_profiles ?? []).map((employee) => {
         if (!exceptionEmployeeIds.has(Number(employee.employee_id))) return employee;
         return {
@@ -1258,7 +1254,10 @@ export class RosterExceptionPreviewService {
       config: {
         ...(assembled.config ?? {}),
         allow_position_vacancy: true,
-        max_time_seconds: input.repairMode === 'MAX_COVERAGE' ? 30 : 15,
+        // 真正的最小变更目标（取代缩窗假稳定）。权重低于覆盖/缺岗，绝不为省改动而不补缺。
+        enable_minimize_change: true,
+        objective_weight_change: input.repairMode === 'MAX_COVERAGE' ? 50 : 500,
+        max_time_seconds: input.repairMode === 'MAX_COVERAGE' ? 45 : 30,
         enable_locked_operations: false,
         enable_locked_shifts: false,
         enable_standalone_tasks: false,
@@ -1328,7 +1327,7 @@ export class RosterExceptionPreviewService {
       });
     }
 
-    const solverAssignments = this.extractSolverAssignments(solverResult, releasableRows);
+    const solverAssignments = this.extractSolverAssignments(solverResult, existingAssignments);
     const solverAssignmentByOperationPosition = new Map(
       solverAssignments.map((assignment) => [
         this.requirementKey(assignment.operationPlanId, assignment.positionNumber),
@@ -1340,13 +1339,17 @@ export class RosterExceptionPreviewService {
     const assignmentChanges: SolverRepairAssignmentChangeDto[] = [];
     const uncoveredFromSolver: SolverRepairUncoveredVacancyDto[] = [];
 
-    for (const row of releasableRows) {
+    for (const row of existingAssignments) {
       const key = this.requirementKey(Number(row.batch_operation_plan_id), Number(row.position_number ?? 1));
+      if (!solveScopeKeys.has(key)) continue;     // 求解范围外的岗位 —— 原样不动
+      if (lockedOpPosKeys.has(key)) continue;     // 锁定岗位 —— 已固定为原人，跳过
       const solverAssignment = solverAssignmentByOperationPosition.get(key);
       if (!solverAssignment) {
         uncoveredFromSolver.push(this.mapUncoveredFromAssignment(row, input.requirementsByOperationPosition, 'SOLVER_UNCOVERED'));
         continue;
       }
+      // 与基线一致（solver 保持原样）→ 不是变更，跳过。只有真正改了人的岗位才进变更清单。
+      if (Number(solverAssignment.employeeId) === Number(row.employee_id)) continue;
 
       const employee = employeeById.get(Number(solverAssignment.employeeId));
       if (!employee) {
@@ -1363,7 +1366,7 @@ export class RosterExceptionPreviewService {
         solverAssignment.shiftId,
       );
       const conflicts = (existingAssignmentsByEmployee.get(Number(solverAssignment.employeeId)) ?? [])
-        .filter((assignment) => !releasedAssignmentIds.has(Number(assignment.assignment_id)))
+        .filter((assignment) => !allInWindowAssignmentIds.has(Number(assignment.assignment_id)))
         .some((assignment) => overlaps(opStart, opEnd, dayjs(assignment.planned_start_datetime), dayjs(assignment.planned_end_datetime)));
       const requirements = input.requirementsByOperationPosition.get(this.requirementKey(
         Number(row.operation_id),
@@ -1424,7 +1427,6 @@ export class RosterExceptionPreviewService {
 
     const uncoveredVacancies = [
       ...protectedUncovered,
-      ...missingDemandRows.map((row) => this.mapUncoveredFromAssignment(row, input.requirementsByOperationPosition, 'DATA GAP: missing solver demand')),
       ...uncoveredFromSolver,
     ];
     const solverStatus = String(solverResult?.status ?? 'UNKNOWN');

@@ -105,7 +105,6 @@ const navGroups: NavGroup[] = [
       { key: 'personnel-scheduling', icon: <ClockCircleOutlined />, label: '人员排班', path: '/personnel-scheduling', requiredPermission: 'ROSTER_SCHEDULE_READ' },
       { key: 'roster-triage', icon: <TeamOutlined />, label: '排班分诊台', path: '/roster/triage', requiredPermission: 'ROSTER_SCHEDULE_READ' },
       { key: 'roster-leadership-cockpit', icon: <DashboardOutlined />, label: '工厂人力韧性驾驶舱', path: '/roster/leadership-cockpit', requiredPermission: 'ROSTER_COCKPIT_READ' },
-      { key: 'roster-exceptions', icon: <ScheduleOutlined />, label: '异常排班快速修复', path: '/roster/exceptions', requiredPermission: 'ROSTER_EXCEPTION_PREVIEW' },
       { key: 'solver-v4', icon: <RocketOutlined />, label: 'V4 自动排班', path: '/solver-v4', requiredPermission: 'SOLVER_RUN_READ' },
       { key: 'solver-v5', icon: <ExperimentOutlined />, label: 'V5 自动排班（增强可视化）', path: '/solver-v5', requiredPermission: 'SOLVER_RUN_READ' },
       { key: 'shift-definitions', icon: <ScheduleOutlined />, label: '班次定义', path: '/shift-definitions', requiredPermission: 'MASTER_SHIFT_DEF_READ' },

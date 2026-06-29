@@ -18,8 +18,9 @@ from flask_cors import CORS
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from contracts.request import CipPeakRequest
+from contracts.request import CipPeakRequest, StateCheckRequest
 from core.timetable import analyze
+from core.statemachine import check_holds
 
 logging.basicConfig(
     level=logging.INFO,
@@ -71,6 +72,36 @@ def cip_peak_endpoint():
         return jsonify({"error": str(e), "type": "VALIDATION_ERROR"}), 400
     except Exception as e:  # noqa: BLE001
         logger.exception("cip-peak 内部错误: %s", e)
+        return jsonify({"error": str(e), "type": "INTERNAL_ERROR"}), 500
+
+
+@app.route("/api/prod/v1/state-check", methods=["POST"])
+def state_check_endpoint():
+    """
+    设备状态机·保持窗检测(规划期)。
+    入参:清洗对象的清洗链+保持窗、已定时的状态操作、转移规则(由后端组装)。
+    出参:保持窗超期清单(DHT/RHT/CHT/SHT)+ 计数。不改时间、不报增援(交上层 C16)。
+    """
+    try:
+        payload = request.get_json(silent=True)
+        if payload is None:
+            return jsonify({"error": "空请求体"}), 400
+
+        req = StateCheckRequest.from_dict(payload)
+        result = check_holds(req.objects, req.operations, req.transitions, day_hours=req.day_hours)
+        logger.info(
+            "state-check: objs=%d ops=%d violations=%d",
+            result["checked_objects"],
+            result["checked_operations"],
+            result["violation_count"],
+        )
+        return jsonify(result)
+
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error("state-check 校验错误: %s", e)
+        return jsonify({"error": str(e), "type": "VALIDATION_ERROR"}), 400
+    except Exception as e:  # noqa: BLE001
+        logger.exception("state-check 内部错误: %s", e)
         return jsonify({"error": str(e), "type": "INTERNAL_ERROR"}), 500
 
 

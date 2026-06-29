@@ -31,7 +31,6 @@ import PsFactorySandtablePage from './pages/PsFactorySandtablePage';
 import ProdCipTopologyPage from './pages/ProdCipTopologyPage';
 import EquipmentManagementPage from './pages/EquipmentManagementPage';
 import RosterLeadershipCockpitPage from './pages/roster/RosterLeadershipCockpitPage';
-import RosterExceptionRepairPage from './pages/roster/RosterExceptionRepairPage';
 import RosterTriagePage from './pages/roster-triage';
 import LoginPage from './pages/LoginPage';
 import RoleManagementPage from './pages/governance/RoleManagementPage';
@@ -73,6 +72,7 @@ const mvpRedirects: Record<string, string> = {
   '/maintenance-windows': '/batch-management-v4',
   '/business-rules-center': '/operations',
   '/platform-run-monitor': '/solver-v4',
+  '/roster/exceptions': '/solver-v4',
 };
 
 const AppLayout: React.FC = () => (
@@ -296,14 +296,6 @@ const AppLayout: React.FC = () => (
             element={
               <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_COCKPIT_READ">
                 <RosterLeadershipCockpitPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/roster/exceptions"
-            element={
-              <ProtectedRoute allowAnonymousInShadow requiredPermission="ROSTER_EXCEPTION_PREVIEW">
-                <RosterExceptionRepairPage />
               </ProtectedRoute>
             }
           />

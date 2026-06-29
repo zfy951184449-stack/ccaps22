@@ -9,6 +9,7 @@ import SolverConfigurationModal, { DEFAULT_SOLVER_CONFIG, SolverConfig } from '.
 import RunHistoryTab from './RunHistoryTab';
 import IntervalSolveTab from './IntervalSolveTab';
 import StandingDutyTab from './StandingDutyTab';
+import RosterExceptionRepair from '../roster/RosterExceptionRepair';
 import {
     DepartmentFilterValue,
     filterBatchesByDepartment,
@@ -393,6 +394,16 @@ const MonthlyBatchSelector: React.FC = () => {
                             </span>
                         ),
                         children: <RunHistoryTab />,
+                    },
+                    {
+                        key: 'exception-repair',
+                        label: (
+                            <span className="solver-v4-tab-label">
+                                <WxbIcon name="deviation" size={15} />
+                                异常修复
+                            </span>
+                        ),
+                        children: <RosterExceptionRepair embedded />,
                     },
                 ]}
             />

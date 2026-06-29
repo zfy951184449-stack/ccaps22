@@ -20,10 +20,13 @@
 --     的子设备;留空=顶层设备。子设备房间/组织留空则沿父链继承(读侧派生,不落冗余列)。
 --     parent 不影响「谁洗它」与尖峰计算,纯属设备身份的层级归并。
 --   · 清洗时序常数(单位写进列名,引擎按列名单位归一):
---     设备/管线带 cip_duration_minutes(CIP 时长·分钟),设备另带 sip_duration_minutes(SIP·分钟);
---     dht_hours(DHT 脏停放·小时)= 变脏后须在此时长内开始 CIP、cht_hours(CHT 洁净有效期·小时)= 洗完须
---     在此时长内被使用否则重洗,二者落 STN max-lag。时长用分钟(CIP/SIP 多 30–120 分),时效用小时(与
---     shelf_life_hours 一致)。全部可空,留空=该约束/时长不启用。
+--     三个动作时长·分钟:cip_duration_minutes(全清洗)/ rip_duration_minutes(淋洗在位,层析/UFDF
+--       常以 RIP+SIP 替代罐式 CIP)/ sip_duration_minutes(灭菌)。设备与管线均可带全套(管线即转移线在线灭菌)。
+--     四个状态保持窗·小时(脏→淋洗→洁净→无菌,均落 STN max-lag):
+--       dht_hours(DHT 脏停放)= 变脏后须在此窗内开始清洗;rht_hours(RHT 淋洗有效期)= RIP 完须在此窗内
+--       SIP/被用否则重洗;cht_hours(CHT 洁净有效期)= CIP 完须在此窗内被用否则重洗;sht_hours(SHT 无菌有效期)
+--       = SIP 完须在此窗内被用否则重灭菌。时长用分钟(多 30–120 分),时效用小时(与 shelf_life_hours 一致)。
+--     全部可空,留空=该约束/时长不启用。
 --   · 暂不做备用站;capacity = 站可并行清洗的对象数,通常 1。
 --   · ps_* 表族独立于通用 resources 表(后者要喂 V4 排班,不污染);
 --     设备身份不重复录入 —— 通过可空 resource_id 软链回 resources.id,
@@ -79,10 +82,13 @@ CREATE TABLE IF NOT EXISTS ps_cip_equipment (
   cleaning_mode  ENUM('cip','single-use','cop','other')
                               NOT NULL DEFAULT 'cip'   COMMENT '清洗方式/策略:cip在线 / single-use一次性免洗 / cop离线 / other',
   cip_station_id INT          DEFAULT NULL            COMMENT '由哪个 CIP 站清洗(仅清洗方式=cip 时有效)',
-  cip_duration_minutes INT    DEFAULT NULL            COMMENT 'CIP 清洗时长(分钟);留空=未定',
+  cip_duration_minutes INT    DEFAULT NULL            COMMENT 'CIP 全清洗时长(分钟);留空=未定',
+  rip_duration_minutes INT    DEFAULT NULL            COMMENT 'RIP 淋洗在位时长(分钟):层析/UFDF 常以 RIP+SIP 替代罐式 CIP;留空=不做',
   sip_duration_minutes INT    DEFAULT NULL            COMMENT 'SIP 灭菌时长(分钟);留空=不做 SIP',
-  dht_hours      INT          DEFAULT NULL            COMMENT 'DHT 脏停放时间(小时):变脏后须在此时长内开始 CIP,落 STN max-lag;留空=不约束',
-  cht_hours      INT          DEFAULT NULL            COMMENT 'CHT 洁净有效期(小时):洗完须在此时长内被使用否则重洗,落 STN max-lag;留空=不约束',
+  dht_hours      INT          DEFAULT NULL            COMMENT 'DHT 脏停放(小时):变脏后须在此窗内开始清洗,落 STN max-lag;留空=不约束',
+  rht_hours      INT          DEFAULT NULL            COMMENT 'RHT 淋洗有效期(小时):RIP 完须在此窗内 SIP/被用否则重洗,落 STN max-lag;留空=不约束',
+  cht_hours      INT          DEFAULT NULL            COMMENT 'CHT 洁净有效期(小时):CIP 完须在此窗内被用否则重洗,落 STN max-lag;留空=不约束',
+  sht_hours      INT          DEFAULT NULL            COMMENT 'SHT 无菌有效期(小时):SIP 完须在此窗内被用否则重灭菌,落 STN max-lag;留空=不约束',
   room_id        INT          DEFAULT NULL            COMMENT '所在房间',
   org_unit_id    INT          DEFAULT NULL            COMMENT '归属组织单元(软链 organization_units.id,留空则随所在房间)',
   parent_equipment_id INT     DEFAULT NULL            COMMENT '上级设备(自引用;pou 等使用点挂到母设备/skid/配液系统;留空=顶层。房间/组织留空时沿父链继承)',
@@ -111,9 +117,13 @@ CREATE TABLE IF NOT EXISTS ps_pipeline (
   from_equipment_id INT          NOT NULL             COMMENT '起点设备',
   to_equipment_id   INT          NOT NULL             COMMENT '终点设备',
   cip_station_id    INT          NOT NULL             COMMENT '由哪个 CIP 站清洗',
-  cip_duration_minutes INT       DEFAULT NULL         COMMENT 'CIP 清洗时长(分钟);留空=未定',
-  dht_hours         INT          DEFAULT NULL         COMMENT 'DHT 脏停放时间(小时):变脏后须在此时长内开始 CIP,落 STN max-lag;留空=不约束',
-  cht_hours         INT          DEFAULT NULL         COMMENT 'CHT 洁净有效期(小时):洗完须在此时长内被使用否则重洗;留空=不约束',
+  cip_duration_minutes INT       DEFAULT NULL         COMMENT 'CIP 全清洗时长(分钟);留空=未定',
+  rip_duration_minutes INT       DEFAULT NULL         COMMENT 'RIP 淋洗在位时长(分钟):转移线常 RIP+SIP;留空=不做',
+  sip_duration_minutes INT       DEFAULT NULL         COMMENT 'SIP 灭菌时长(分钟):转移线在线灭菌;留空=不做 SIP',
+  dht_hours         INT          DEFAULT NULL         COMMENT 'DHT 脏停放(小时):变脏后须在此窗内开始清洗,落 STN max-lag;留空=不约束',
+  rht_hours         INT          DEFAULT NULL         COMMENT 'RHT 淋洗有效期(小时):RIP 完须在此窗内 SIP/被用否则重洗;留空=不约束',
+  cht_hours         INT          DEFAULT NULL         COMMENT 'CHT 洁净有效期(小时):CIP 完须在此窗内被用否则重洗;留空=不约束',
+  sht_hours         INT          DEFAULT NULL         COMMENT 'SHT 无菌有效期(小时):SIP 完须在此窗内被用否则重灭菌;留空=不约束',
   note              VARCHAR(255) DEFAULT NULL         COMMENT '备注',
   created_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

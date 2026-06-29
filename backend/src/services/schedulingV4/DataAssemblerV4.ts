@@ -122,6 +122,10 @@ export interface V4SolverRequest {
     solve_range?: V4SchedulingWindow;
     frozen_shifts?: V4FrozenShift[];
     frozen_assignments?: V4FrozenAssignment[];
+    // Published-roster baseline for the「最小变更/稳定性」objective (window-internal soft target,
+    // NOT a hard freeze). Empty/omitted → solver objective contributes nothing (gate-safe).
+    baseline_shifts?: V4BaselineShift[];
+    baseline_assignments?: V4BaselineAssignment[];
     config?: any;
 }
 
@@ -132,6 +136,18 @@ interface V4FrozenShift {
 }
 
 interface V4FrozenAssignment {
+    operation_plan_id: number;
+    position_number: number;
+    employee_id: number;
+}
+
+export interface V4BaselineShift {
+    employee_id: number;
+    date: string;
+    shift_id: number;
+}
+
+export interface V4BaselineAssignment {
     operation_plan_id: number;
     position_number: number;
     employee_id: number;
@@ -1412,6 +1428,68 @@ export class DataAssemblerV4 {
                AND (DATE(bop.planned_start_datetime) < ? OR DATE(bop.planned_start_datetime) > ?)
                AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')`,
             [...batchIds, windowStart, windowEnd, solveStart, solveEnd]
+        );
+
+        return rows.map(row => ({
+            operation_plan_id: Number(row.operation_plan_id),
+            position_number: Number(row.position_number),
+            employee_id: Number(row.employee_id)
+        }));
+    }
+
+    /**
+     * Fetch the currently-published shift plans across the WHOLE window (incl. solve range).
+     * Unlike frozen (which pins outside-range shifts as hard constants), these become the
+     * baseline for the「最小变更」objective — a soft target the solver tries to keep.
+     */
+    static async fetchBaselineShifts(
+        windowStart: string,
+        windowEnd: string
+    ): Promise<V4BaselineShift[]> {
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                employee_id,
+                plan_date,
+                shift_id
+             FROM employee_shift_plans
+             WHERE plan_date BETWEEN ? AND ?
+               AND shift_id IS NOT NULL`,
+            [windowStart, windowEnd]
+        );
+
+        return rows.map(row => ({
+            employee_id: Number(row.employee_id),
+            date: dayjs(row.plan_date).format('YYYY-MM-DD'),
+            shift_id: Number(row.shift_id)
+        }));
+    }
+
+    /**
+     * Fetch the currently-published operation personnel assignments across the WHOLE window
+     * (incl. solve range). These become the baseline for the「最小变更」objective.
+     */
+    static async fetchBaselineAssignments(
+        batchIds: number[],
+        windowStart: string,
+        windowEnd: string
+    ): Promise<V4BaselineAssignment[]> {
+        if (!batchIds.length) {
+            return [];
+        }
+
+        const placeholders = batchIds.map(() => '?').join(',');
+        const [rows] = await pool.execute<RowDataPacket[]>(
+            `SELECT
+                bpa.batch_operation_plan_id AS operation_plan_id,
+                bpa.position_number,
+                bpa.employee_id
+             FROM batch_personnel_assignments bpa
+             JOIN batch_operation_plans bop ON bpa.batch_operation_plan_id = bop.id
+             JOIN production_batch_plans pbp ON pbp.id = bop.batch_plan_id
+             WHERE pbp.id IN (${placeholders})
+               AND DATE(bop.planned_start_datetime) BETWEEN ? AND ?
+               AND bpa.assignment_status IN ('PLANNED', 'CONFIRMED')`,
+            [...batchIds, windowStart, windowEnd]
         );
 
         return rows.map(row => ({

@@ -140,3 +140,190 @@ export interface CipPeakRequestBody {
   day_hours: number;
   origin?: string;
 }
+
+// ── 设备状态机 · 保持窗检测(P1,模板版)的组装 ───────────────────────
+// 设备/管线绑【状态机模板】(类型默认 ?? 设备覆盖);模板的转移规则带默认时序,设备同名列可覆盖。
+// 后端解析出「每个对象的有效模板 + 有效保持窗」,连同模板转移规则与已定时操作喂引擎(引擎不碰 DB)。
+
+/** 状态机模板(ps_sm_template)。 */
+export interface PsTemplateRow {
+  id: number;
+  code: string;
+  name: string;
+}
+
+/** 模板的一条转移规则(ps_sm_transition):默认时序 + 设备可覆盖列名。 */
+export interface PsTransitionRow {
+  template_id: number;
+  attribute: string;
+  from_state: string;
+  action: string;
+  to_state: string;
+  duration_minutes: number | null;
+  duration_col: string | null;
+  start_within_hours: number | null;
+  start_within_col: string | null;
+  produces_validity_hours: number | null;
+  produces_validity_col: string | null;
+  requires_json: unknown;
+}
+
+/** 设备类型(ps_equipment_type):name + 默认状态机模板。 */
+export interface PsEquipmentTypeRow {
+  id: number;
+  name: string;
+  sm_template_id: number | null;
+}
+
+/** 清洗对象状态行:绑定 + 七个可覆盖时序列(设备有 type_name;管线无)。 */
+export interface PsEquipmentStateRow {
+  code: string;
+  type_name?: string | null;
+  sm_template_id: number | null;
+  cip_duration_minutes: number | null;
+  rip_duration_minutes: number | null;
+  sip_duration_minutes: number | null;
+  dht_hours: number | null;
+  rht_hours: number | null;
+  cht_hours: number | null;
+  sht_hours: number | null;
+}
+
+export interface StateObjectSpec {
+  object_code: string;
+  template: string;
+  windows: Record<string, number | null>;
+}
+
+const OVERRIDE_COLS = [
+  'cip_duration_minutes', 'rip_duration_minutes', 'sip_duration_minutes',
+  'dht_hours', 'rht_hours', 'cht_hours', 'sht_hours',
+] as const;
+
+function instOverride(row: PsEquipmentStateRow, col: string): number | null {
+  if (!col || !(OVERRIDE_COLS as readonly string[]).includes(col)) return null;
+  const v = (row as unknown as Record<string, unknown>)[col];
+  return v == null ? null : Number(v);
+}
+
+/**
+ * 解析每个清洗对象的「有效模板 + 有效保持窗」:
+ *   有效模板 = 设备 sm_template_id ?? 其类型(type_name)的 sm_template_id;两者皆空 → 未绑,跳过。
+ *   有效窗   = 设备同名覆盖列(若填)?? 模板该转移的默认窗;留空 = 不约束。
+ */
+export function buildStateObjects(
+  equipment: PsEquipmentStateRow[],
+  pipelines: PsEquipmentStateRow[],
+  types: PsEquipmentTypeRow[],
+  templates: PsTemplateRow[],
+  transitions: PsTransitionRow[],
+): StateObjectSpec[] {
+  const templateById = new Map<number, PsTemplateRow>(templates.map((t) => [t.id, t]));
+  const typeTemplateByName = new Map<string, number | null>(types.map((t) => [t.name, t.sm_template_id]));
+  const transByTemplateId = new Map<number, PsTransitionRow[]>();
+  for (const tr of transitions) {
+    if (!transByTemplateId.has(tr.template_id)) transByTemplateId.set(tr.template_id, []);
+    transByTemplateId.get(tr.template_id)!.push(tr);
+  }
+
+  const out: StateObjectSpec[] = [];
+  const push = (r: PsEquipmentStateRow) => {
+    const templateId = r.sm_template_id ?? (r.type_name ? typeTemplateByName.get(r.type_name) ?? null : null);
+    if (templateId == null) return; // 未绑模板 → 无状态机,跳过
+    const tpl = templateById.get(templateId);
+    if (!tpl) return;
+    const windows: Record<string, number | null> = {};
+    for (const tr of transByTemplateId.get(templateId) ?? []) {
+      if (tr.start_within_col) windows[tr.start_within_col] = instOverride(r, tr.start_within_col) ?? tr.start_within_hours;
+      if (tr.produces_validity_col) windows[tr.produces_validity_col] = instOverride(r, tr.produces_validity_col) ?? tr.produces_validity_hours;
+    }
+    out.push({ object_code: r.code, template: tpl.code, windows });
+  };
+  equipment.forEach(push);
+  pipelines.forEach(push);
+  return out;
+}
+
+/** 转换模板转移规则为引擎契约(用模板编码作分组键;只传检测用得到的 *_col)。 */
+export function buildEngineTransitions(templates: PsTemplateRow[], transitions: PsTransitionRow[]): EngineTransition[] {
+  const codeById = new Map<number, string>(templates.map((t) => [t.id, t.code]));
+  return transitions
+    .filter((tr) => codeById.has(tr.template_id))
+    .map((tr) => ({
+      template: codeById.get(tr.template_id)!,
+      attribute: tr.attribute,
+      from_state: tr.from_state,
+      action: tr.action,
+      to_state: tr.to_state,
+      duration_col: tr.duration_col,
+      start_within_col: tr.start_within_col,
+      produces_validity_col: tr.produces_validity_col,
+      start_within_hours: tr.start_within_hours,
+      produces_validity_hours: tr.produces_validity_hours,
+      duration_minutes: tr.duration_minutes,
+      requires_json: tr.requires_json,
+    }));
+}
+
+/** 一道状态相关操作(已 placement 定时)。 */
+export interface StateOpInput {
+  opId: string;
+  objectCode: string;
+  action: string;
+  startHour: number;
+  endHour: number;
+}
+
+export interface EngineStateOp {
+  op_id: string;
+  object_code: string;
+  action: string;
+  start_hour: number;
+  end_hour: number;
+}
+
+/** 一条状态转移规则(喂引擎;模板编码作分组键)。 */
+export interface EngineTransition {
+  template: string;
+  attribute: string;
+  from_state: string;
+  action: string;
+  to_state: string;
+  duration_col: string | null;
+  start_within_col: string | null;
+  produces_validity_col: string | null;
+  // 转移自带默认窗值(自由建模:自定义转移无固定实例列时引擎据此约束)
+  start_within_hours: number | null;
+  produces_validity_hours: number | null;
+  duration_minutes: number | null;
+  requires_json?: unknown;
+}
+
+export interface StateCheckRequestBody {
+  objects: StateObjectSpec[];
+  operations: EngineStateOp[];
+  transitions: EngineTransition[];
+  day_hours: number;
+  origin?: string;
+}
+
+export function assembleStateCheckRequest(
+  objects: StateObjectSpec[],
+  ops: StateOpInput[],
+  transitions: EngineTransition[],
+  opts: AssembleOptions = {},
+): StateCheckRequestBody {
+  return {
+    objects,
+    operations: ops.map((o) => ({
+      op_id: o.opId,
+      object_code: o.objectCode,
+      action: String(o.action || '').toUpperCase(),
+      start_hour: o.startHour,
+      end_hour: o.endHour,
+    })),
+    transitions,
+    day_hours: opts.dayHours ?? 24,
+    origin: opts.origin,
+  };
+}

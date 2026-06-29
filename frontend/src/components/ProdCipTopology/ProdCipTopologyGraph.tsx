@@ -38,15 +38,6 @@ const PAD = 22; // 画布内边距
 const BAND_PAD = 16; // 泳道内边距
 const BAND_GAP = 14; // 泳道间距
 
-const TYPE_LABEL: Record<string, string> = {
-  reactor: '反应器',
-  'akta-skid': '层析 skid',
-  tank: '储罐',
-  'ufdf-skid': '超滤 skid',
-  transfer: '转移',
-  other: '其他',
-};
-
 type BandKind = 'station' | 'noncip' | 'unassigned';
 interface Band {
   key: string;
@@ -336,7 +327,7 @@ const ProdCipTopologyGraph: React.FC<Props> = ({ stations, rooms, equipment, pip
               const parentCode = e.parent_equipment_id != null ? equipById.get(e.parent_equipment_id)?.code ?? null : null;
               const title = [
                 `${e.code} ${e.name}`,
-                `类型:${TYPE_LABEL[e.type] ?? e.type}`,
+                `类型:${e.type_name ?? '—'}`,
                 params ? `清洗:${params}` : '清洗:—',
                 `房间:${roomCode ?? '—'}${rm.inherited && roomCode ? '(随上级)' : ''}`,
                 `team:${orgName(og.id) ?? '—'}${og.inherited && og.id != null ? '(随上级)' : ''}`,
@@ -350,7 +341,7 @@ const ProdCipTopologyGraph: React.FC<Props> = ({ stations, rooms, equipment, pip
                     {trunc(e.code, 13)}
                   </text>
                   <text x={p.x + NODE_W - 10} y={p.y + 19} fontSize={10} textAnchor="end" fill="var(--wx-text-secondary, #94a3b8)">
-                    {trunc(TYPE_LABEL[e.type] ?? e.type, 6)}
+                    {trunc(e.type_name ?? '', 6)}
                   </text>
                   <text x={p.x + 10} y={p.y + 35} fontSize={11} fill="var(--wx-text-secondary, #475569)">
                     {trunc(e.name, 16)}

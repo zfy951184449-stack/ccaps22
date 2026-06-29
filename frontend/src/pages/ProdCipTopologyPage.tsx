@@ -23,16 +23,19 @@ import {
   wxbToast,
 } from '../components/wxb-ui';
 import ProdCipTopologyGraph from '../components/ProdCipTopology/ProdCipTopologyGraph';
+import ProdStateMachineView from '../components/ProdCipTopology/ProdStateMachineView';
 import {
   prodResourceApi,
   type CipEquipmentRow,
   type CipStationRow,
+  type EquipmentTypeRow,
   type ImportRowError,
   type PipelineRow,
   type ProdEntity,
   type RoomRow,
   type OrgUnitRow,
   type ShelfLifeRow,
+  type SmTemplateRow,
 } from '../services/prodResourceApi';
 
 type FieldType = 'text' | 'number' | 'switch' | 'select' | 'textarea';
@@ -50,14 +53,6 @@ interface FieldDef {
   showIf?: (form: Record<string, any>) => boolean;
 }
 
-const EQUIP_TYPES: Opt[] = [
-  { label: '反应器', value: 'reactor' },
-  { label: '层析 skid', value: 'akta-skid' },
-  { label: '储罐', value: 'tank' },
-  { label: '超滤 skid', value: 'ufdf-skid' },
-  { label: '转移', value: 'transfer' },
-  { label: '其他', value: 'other' },
-];
 const CLEANING_MODES: Opt[] = [
   { label: 'CIP 在线清洗', value: 'cip' },
   { label: '一次性(免洗)', value: 'single-use' },
@@ -95,6 +90,10 @@ const ProdCipTopologyPage: React.FC = () => {
   const [equipment, setEquipment] = useState<CipEquipmentRow[]>([]);
   const [shelfLives, setShelfLives] = useState<ShelfLifeRow[]>([]);
   const [orgUnits, setOrgUnits] = useState<OrgUnitRow[]>([]);
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentTypeRow[]>([]);
+  const [smTemplates, setSmTemplates] = useState<SmTemplateRow[]>([]);
+  const [smView, setSmView] = useState<'templates' | 'binding' | 'graph'>('templates');
+  const [smSel, setSmSel] = useState<number | null>(null); // 转移图当前选中的模板(受控)
   const [loading, setLoading] = useState(false);
 
   const [drawer, setDrawer] = useState<{ entity: ProdEntity; id: number | null } | null>(null);
@@ -108,13 +107,15 @@ const ProdCipTopologyPage: React.FC = () => {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [s, rm, p, e, sl, org] = await Promise.all([
+      const [s, rm, p, e, sl, org, et, sm] = await Promise.all([
         prodResourceApi.list<CipStationRow>('stations', facility),
         prodResourceApi.list<RoomRow>('rooms', facility),
         prodResourceApi.list<PipelineRow>('pipelines', facility),
         prodResourceApi.list<CipEquipmentRow>('equipment', facility),
         prodResourceApi.list<ShelfLifeRow>('shelf-life', facility),
         prodResourceApi.listOrgUnits(),
+        prodResourceApi.list<EquipmentTypeRow>('equipment-types'), // 全局字典,不带 facility
+        prodResourceApi.list<SmTemplateRow>('sm-templates'), // 全局状态机模板库
       ]);
       setStations(s);
       setRooms(rm);
@@ -122,6 +123,8 @@ const ProdCipTopologyPage: React.FC = () => {
       setEquipment(e);
       setShelfLives(sl);
       setOrgUnits(org);
+      setEquipmentTypes(et);
+      setSmTemplates(sm);
     } catch (err) {
       wxbToast.error(`加载失败:${(err as Error).message}`);
     } finally {
@@ -137,6 +140,39 @@ const ProdCipTopologyPage: React.FC = () => {
   const equipmentOpts = useMemo<Opt[]>(() => equipment.map((e) => ({ label: `${e.code} ${e.name}`, value: e.id })), [equipment]);
   const roomOpts = useMemo<Opt[]>(() => rooms.map((r) => ({ label: `${r.code} ${r.name}`, value: r.id })), [rooms]);
   const orgOpts = useMemo<Opt[]>(() => orgUnits.filter((o) => o.type === 'TEAM').map((o) => ({ label: o.name, value: o.id })), [orgUnits]);
+  const equipTypeOpts = useMemo<Opt[]>(() =>
+    [...equipmentTypes]
+      .filter((t) => !!t.is_active)
+      .sort((a, b) => (a.sort_order - b.sort_order) || a.name.localeCompare(b.name))
+      .map((t) => ({ label: t.name, value: t.name })),
+  [equipmentTypes]);
+  const smTemplateOpts = useMemo<Opt[]>(() =>
+    [...smTemplates]
+      .filter((t) => !!t.is_active)
+      .sort((a, b) => (a.sort_order - b.sort_order) || a.code.localeCompare(b.code))
+      .map((t) => ({ label: `${t.name}(${t.code})`, value: t.id })),
+  [smTemplates]);
+  const templateName = useCallback((id: number | null) => {
+    if (id == null) return null;
+    const t = smTemplates.find((x) => x.id === id);
+    return t ? `${t.name}` : `#${id}`;
+  }, [smTemplates]);
+  const typeTemplateId = useCallback((typeName: string | null) => {
+    if (!typeName) return null;
+    return equipmentTypes.find((t) => t.name === typeName)?.sm_template_id ?? null;
+  }, [equipmentTypes]);
+  // 绑定总览:每台设备/管线的有效状态机模板(设备 ?? 类型默认)
+  const bindingRows = useMemo(() => {
+    const rows: Array<{ key: string; source: string; code: string; name: string; effId: number | null; inherited: boolean; entity: ProdEntity; id: number }> = [];
+    for (const e of equipment) {
+      const eff = e.sm_template_id ?? typeTemplateId(e.type_name);
+      rows.push({ key: `e${e.id}`, source: '设备', code: e.code, name: e.name, effId: eff, inherited: e.sm_template_id == null && eff != null, entity: 'equipment', id: e.id });
+    }
+    for (const p of pipelines) {
+      rows.push({ key: `p${p.id}`, source: '管线', code: p.code, name: p.name, effId: p.sm_template_id, inherited: false, entity: 'pipelines', id: p.id });
+    }
+    return rows;
+  }, [equipment, pipelines, typeTemplateId]);
   const stationCode = useCallback((id: number | null) => stations.find((s) => s.id === id)?.code ?? '—', [stations]);
   const equipmentCode = useCallback((id: number | null) => equipment.find((e) => e.id === id)?.code ?? '—', [equipment]);
   const roomCode = useCallback((id: number | null) => rooms.find((r) => r.id === id)?.code ?? '—', [rooms]);
@@ -152,13 +188,19 @@ const ProdCipTopologyPage: React.FC = () => {
     if (!row || depth > 8) return null;
     return row.org_unit_id ?? roomOrg(row.room_id) ?? effOrgId(equipById(row.parent_equipment_id), depth + 1);
   }, [equipById, roomOrg]);
-  // 清洗时序常数的紧凑展示(单位随值:分钟/小时)
-  const cleanParams = (r: { cip_duration_minutes: number | null; sip_duration_minutes?: number | null; dht_hours: number | null; cht_hours: number | null }): string => {
+  // 清洗时序常数的紧凑展示(3 动作时长·分 + 4 状态窗·时,单位随值)
+  const cleanParams = (r: {
+    cip_duration_minutes: number | null; rip_duration_minutes?: number | null; sip_duration_minutes?: number | null;
+    dht_hours: number | null; rht_hours?: number | null; cht_hours: number | null; sht_hours?: number | null;
+  }): string => {
     const p: string[] = [];
     if (r.cip_duration_minutes != null) p.push(`CIP ${r.cip_duration_minutes}分`);
+    if (r.rip_duration_minutes != null) p.push(`RIP ${r.rip_duration_minutes}分`);
     if (r.sip_duration_minutes != null) p.push(`SIP ${r.sip_duration_minutes}分`);
     if (r.dht_hours != null) p.push(`DHT ${r.dht_hours}时`);
+    if (r.rht_hours != null) p.push(`RHT ${r.rht_hours}时`);
     if (r.cht_hours != null) p.push(`CHT ${r.cht_hours}时`);
+    if (r.sht_hours != null) p.push(`SHT ${r.sht_hours}时`);
     return p.length ? p.join(' · ') : '—';
   };
 
@@ -181,13 +223,17 @@ const ProdCipTopologyPage: React.FC = () => {
     equipment: [
       { key: 'code', label: '设备编码', type: 'text', required: true, placeholder: '如 PT1810 / pouA' },
       { key: 'name', label: '名称', type: 'text', required: true },
-      { key: 'type', label: '类型', type: 'select', required: true, options: () => EQUIP_TYPES },
+      { key: 'type_name', label: '类型', type: 'select', required: true, options: () => equipTypeOpts, help: '取自「设备类型」字典;不够用就切到「设备类型」页签增改' },
       { key: 'cleaning_mode', label: '清洗方式', type: 'select', required: true, defaultValue: 'cip', options: () => CLEANING_MODES, help: '仅「CIP 在线清洗」才归 CIP 站;一次性/COP/其他走各自策略' },
       { key: 'cip_station_id', label: 'CIP 站', type: 'select', options: () => stationOpts, help: '这台设备由哪个站清洗', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
-      { key: 'cip_duration_minutes', label: 'CIP 时长(分钟)', type: 'number', min: 0, help: 'CIP 清洗一次要多久,单位分钟', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'cip_duration_minutes', label: 'CIP 时长(分钟)', type: 'number', min: 0, help: '全清洗一次要多久,单位分钟', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'rip_duration_minutes', label: 'RIP 时长(分钟)', type: 'number', min: 0, help: '淋洗在位(层析/UFDF 常以 RIP+SIP 替代罐式 CIP),单位分钟;不做留空', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
       { key: 'sip_duration_minutes', label: 'SIP 时长(分钟)', type: 'number', min: 0, help: '需要 SIP 灭菌才填,单位分钟;不做留空', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
-      { key: 'dht_hours', label: 'DHT 脏停放(小时)', type: 'number', min: 0, help: '变脏后必须几小时内开始 CIP,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
-      { key: 'cht_hours', label: 'CHT 洁净有效期(小时)', type: 'number', min: 0, help: '洗完几小时内必须被用,否则重洗,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'dht_hours', label: 'DHT 脏停放(小时)', type: 'number', min: 0, help: '变脏后必须几小时内开始清洗,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'rht_hours', label: 'RHT 淋洗有效期(小时)', type: 'number', min: 0, help: 'RIP 完几小时内必须 SIP/被用,否则重洗,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'cht_hours', label: 'CHT 洁净有效期(小时)', type: 'number', min: 0, help: 'CIP 完几小时内必须被用,否则重洗,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'sht_hours', label: 'SHT 无菌有效期(小时)', type: 'number', min: 0, help: 'SIP 完几小时内必须被用,否则重灭菌,单位小时', showIf: (f) => (f.cleaning_mode ?? 'cip') === 'cip' },
+      { key: 'sm_template_id', label: '状态机模板', type: 'select', options: () => smTemplateOpts, help: '这台设备走哪台清洗状态机;留空=随设备类型的默认模板。上面 7 个时长留空则用模板默认' },
       { key: 'parent_equipment_id', label: '上级设备', type: 'select', options: () => equipmentOpts.filter((o) => o.value !== editingIdRef.current), help: 'pou 等使用点可挂到母设备/skid 下;留空=顶层设备(房间/组织留空则随上级)' },
       { key: 'room_id', label: '房间', type: 'select', options: () => roomOpts, help: '这台设备在哪个房间(留空随上级设备)' },
       { key: 'org_unit_id', label: '归属 team', type: 'select', options: () => orgOpts, help: '留空随房间/上级设备的 team' },
@@ -199,9 +245,14 @@ const ProdCipTopologyPage: React.FC = () => {
       { key: 'from_equipment_id', label: '起点设备', type: 'select', required: true, options: () => equipmentOpts, help: '管线连接的两台设备之一' },
       { key: 'to_equipment_id', label: '终点设备', type: 'select', required: true, options: () => equipmentOpts },
       { key: 'cip_station_id', label: 'CIP 站', type: 'select', required: true, options: () => stationOpts, help: '这条管线由哪个站清洗' },
-      { key: 'cip_duration_minutes', label: 'CIP 时长(分钟)', type: 'number', min: 0, help: '这条管线 CIP 一次要多久,单位分钟' },
-      { key: 'dht_hours', label: 'DHT 脏停放(小时)', type: 'number', min: 0, help: '变脏后必须几小时内开始 CIP,单位小时' },
-      { key: 'cht_hours', label: 'CHT 洁净有效期(小时)', type: 'number', min: 0, help: '洗完几小时内必须被用,单位小时' },
+      { key: 'cip_duration_minutes', label: 'CIP 时长(分钟)', type: 'number', min: 0, help: '这条管线全清洗一次要多久,单位分钟' },
+      { key: 'rip_duration_minutes', label: 'RIP 时长(分钟)', type: 'number', min: 0, help: '淋洗在位(转移线常 RIP+SIP),单位分钟;不做留空' },
+      { key: 'sip_duration_minutes', label: 'SIP 时长(分钟)', type: 'number', min: 0, help: '转移线在线灭菌才填,单位分钟;不做留空' },
+      { key: 'dht_hours', label: 'DHT 脏停放(小时)', type: 'number', min: 0, help: '变脏后必须几小时内开始清洗,单位小时' },
+      { key: 'rht_hours', label: 'RHT 淋洗有效期(小时)', type: 'number', min: 0, help: 'RIP 完几小时内必须 SIP/被用,单位小时' },
+      { key: 'cht_hours', label: 'CHT 洁净有效期(小时)', type: 'number', min: 0, help: 'CIP 完几小时内必须被用,单位小时' },
+      { key: 'sht_hours', label: 'SHT 无菌有效期(小时)', type: 'number', min: 0, help: 'SIP 完几小时内必须被用,单位小时' },
+      { key: 'sm_template_id', label: '状态机模板', type: 'select', options: () => smTemplateOpts, help: '这条管线走哪台清洗状态机;留空=未绑(管线无类型默认)' },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
     'shelf-life': [
@@ -211,7 +262,21 @@ const ProdCipTopologyPage: React.FC = () => {
       { key: 'basis', label: '起算基准', type: 'select', required: true, defaultValue: 'after_produced', options: () => SHELF_BASIS },
       { key: 'note', label: '备注', type: 'textarea' },
     ],
-  }), [stationOpts, equipmentOpts, roomOpts, orgOpts]);
+    'equipment-types': [
+      { key: 'name', label: '类型名称', type: 'text', required: true, placeholder: '如 生物反应器 / 层析 skid' },
+      { key: 'sm_template_id', label: '默认状态机模板', type: 'select', options: () => smTemplateOpts, help: '该类型设备默认走哪台清洗状态机;单台设备可在自己那里改绑' },
+      { key: 'sort_order', label: '排序', type: 'number', min: 0, defaultValue: 0, help: '数字小的排在下拉更前面' },
+      { key: 'is_active', label: '启用', type: 'switch', defaultValue: true, help: '停用后:已用此类型的设备不受影响,但新建设备的下拉里不再出现' },
+      { key: 'note', label: '备注', type: 'textarea' },
+    ],
+    'sm-templates': [
+      { key: 'code', label: '模板编码', type: 'text', required: true, placeholder: '如 cip-sip / rip-sip' },
+      { key: 'name', label: '名称', type: 'text', required: true, placeholder: '如 罐式 CIP+SIP' },
+      { key: 'sort_order', label: '排序', type: 'number', min: 0, defaultValue: 0, help: '数字小的排在下拉更前面' },
+      { key: 'is_active', label: '启用', type: 'switch', defaultValue: true, help: '停用后:已绑设备不受影响,新建绑定下拉里不再出现' },
+      { key: 'note', label: '备注', type: 'textarea' },
+    ],
+  }), [stationOpts, equipmentOpts, roomOpts, orgOpts, equipTypeOpts, smTemplateOpts]);
 
   const actionsCol = (entity: ProdEntity) => ({
     title: '操作', key: 'actions', width: 130,
@@ -243,7 +308,7 @@ const ProdCipTopologyPage: React.FC = () => {
     equipment: [
       { title: '设备', dataIndex: 'code', width: 130, render: (v: string) => <code>{v}</code> },
       { title: '名称', dataIndex: 'name' },
-      { title: '类型', dataIndex: 'type', width: 100, render: (v: string) => EQUIP_TYPES.find((t) => t.value === v)?.label ?? v },
+      { title: '类型', dataIndex: 'type_name', width: 110, render: (v: string | null) => v || '—' },
       { title: '清洗方式', dataIndex: 'cleaning_mode', width: 120, render: (v: string) => <WxbTag color={v === 'cip' ? 'green' : 'neutral'}>{CLEANING_MODES.find((m) => m.value === v)?.label ?? v}</WxbTag> },
       { title: 'CIP 站', dataIndex: 'cip_station_id', width: 110, render: (v: number | null) => v ? <WxbTag color="green">{stationCode(v)}</WxbTag> : '—' },
       { title: '清洗参数', key: 'cleanp', width: 210, render: (_: unknown, r: CipEquipmentRow) => <span style={{ fontSize: 12, color: 'var(--wx-text-secondary, #64748b)' }}>{cleanParams(r)}</span> },
@@ -280,6 +345,22 @@ const ProdCipTopologyPage: React.FC = () => {
       { title: '起算', dataIndex: 'basis', width: 120, render: (v: string) => SHELF_BASIS.find((b) => b.value === v)?.label ?? v },
       actionsCol('shelf-life'),
     ],
+    'equipment-types': [
+      { title: '类型名称', dataIndex: 'name' },
+      { title: '默认状态机', dataIndex: 'sm_template_id', width: 160, render: (v: number | null) => v ? <WxbTag color="blue">{templateName(v)}</WxbTag> : <span style={{ color: 'var(--wx-text-secondary, #94a3b8)' }}>未设</span> },
+      { title: '排序', dataIndex: 'sort_order', width: 80 },
+      { title: '状态', dataIndex: 'is_active', width: 90, render: (v: number) => v ? <WxbTag color="green">启用</WxbTag> : <WxbTag color="neutral">停用</WxbTag> },
+      { title: '备注', dataIndex: 'note', render: (v: string | null) => v || '—' },
+      actionsCol('equipment-types'),
+    ],
+    'sm-templates': [
+      { title: '编码', dataIndex: 'code', width: 140, render: (v: string) => <code>{v}</code> },
+      { title: '名称', dataIndex: 'name' },
+      { title: '排序', dataIndex: 'sort_order', width: 80 },
+      { title: '状态', dataIndex: 'is_active', width: 90, render: (v: number) => v ? <WxbTag color="green">启用</WxbTag> : <WxbTag color="neutral">停用</WxbTag> },
+      { title: '备注', dataIndex: 'note', render: (v: string | null) => v || '—' },
+      actionsCol('sm-templates'),
+    ],
   };
 
   const dataFor = (entity: ProdEntity): any[] =>
@@ -287,6 +368,8 @@ const ProdCipTopologyPage: React.FC = () => {
       : entity === 'rooms' ? rooms
       : entity === 'pipelines' ? pipelines
       : entity === 'equipment' ? equipment
+      : entity === 'equipment-types' ? equipmentTypes
+      : entity === 'sm-templates' ? smTemplates
       : shelfLives;
 
   const openCreate = (entity: ProdEntity) => {
@@ -407,7 +490,7 @@ const ProdCipTopologyPage: React.FC = () => {
     <span>{label}<span style={{ marginLeft: 6, color: 'var(--wx-text-secondary, #94a3b8)', fontSize: 12 }}>{n}</span></span>
   );
 
-  const drawerTitle = drawer ? `${drawer.id == null ? '新增' : '编辑'} · ${({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '物料效期' } as Record<ProdEntity, string>)[drawer.entity]}` : '';
+  const drawerTitle = drawer ? `${drawer.id == null ? '新增' : '编辑'} · ${({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '物料效期', 'equipment-types': '设备类型', 'sm-templates': '状态机模板' } as Record<ProdEntity, string>)[drawer.entity]}` : '';
 
   return (
     <WxbPageShell size="full" gap="lg">
@@ -440,6 +523,8 @@ const ProdCipTopologyPage: React.FC = () => {
                 { key: 'equipment', label: tabLabel('设备', equipment.length) },
                 { key: 'pipelines', label: tabLabel('管线', pipelines.length) },
                 { key: 'shelf-life', label: tabLabel('物料效期', shelfLives.length) },
+                { key: 'equipment-types', label: tabLabel('设备类型', equipmentTypes.length) },
+                { key: 'sm-templates', label: tabLabel('状态机', smTemplates.length) },
               ]}
             />
           )}
@@ -448,23 +533,15 @@ const ProdCipTopologyPage: React.FC = () => {
           <WxbButton variant="ghost" size="sm" onClick={downloadTemplate}>下载模板</WxbButton>
           <WxbButton variant="ghost" size="sm" disabled={importing} onClick={() => fileRef.current?.click()}>{importing ? '导入中…' : '导入 Excel'}</WxbButton>
           <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={onPickFile} />
-          {view === 'table' && (
+          {view === 'table' && !(activeTab === 'sm-templates' && smView !== 'templates') && (
             <WxbButton variant="primary" size="sm" onClick={() => openCreate(activeTab)}>
-              新增{({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '效期' } as Record<ProdEntity, string>)[activeTab]}
+              新增{({ stations: 'CIP 站', rooms: '房间', pipelines: '管线', equipment: '设备', 'shelf-life': '效期', 'equipment-types': '设备类型', 'sm-templates': '状态机模板' } as Record<ProdEntity, string>)[activeTab]}
             </WxbButton>
           )}
         </div>
       </div>
 
-      {view === 'table' ? (
-        <WxbDataTable
-          rowKey="id"
-          loading={loading}
-          columns={COLUMNS[activeTab]}
-          dataSource={dataFor(activeTab)}
-          pagination={false}
-        />
-      ) : (
+      {view === 'graph' ? (
         <ProdCipTopologyGraph
           stations={stations}
           rooms={rooms}
@@ -472,6 +549,82 @@ const ProdCipTopologyPage: React.FC = () => {
           pipelines={pipelines}
           orgUnits={orgUnits}
           onPick={openById}
+        />
+      ) : activeTab === 'sm-templates' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <WxbSegmented
+            value={smView}
+            onChange={(v) => setSmView(v as 'templates' | 'binding' | 'graph')}
+            options={[{ label: '模板库', value: 'templates' }, { label: '绑定管理', value: 'binding' }, { label: '转移图', value: 'graph' }]}
+          />
+          {smView === 'templates' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 12, color: 'var(--wx-text-secondary, #64748b)' }}>
+                模板库管的是「有哪些状态机、叫什么」。状态机的逻辑(状态/转移/动作/前置/时长)在每行的「转移规则」里搭。
+              </div>
+              <WxbDataTable
+                rowKey="id"
+                loading={loading}
+                pagination={false}
+                dataSource={smTemplates}
+                columns={[
+                  ...COLUMNS['sm-templates'].slice(0, -1),
+                  {
+                    title: '操作', key: 'actions', width: 230,
+                    render: (_: unknown, row: SmTemplateRow) => (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <WxbButton variant="primary" size="sm" onClick={() => { setSmSel(row.id); setSmView('graph'); }}>转移规则</WxbButton>
+                        <WxbButton variant="ghost" size="sm" onClick={() => openEdit('sm-templates', row)}>编辑</WxbButton>
+                        <WxbPopconfirm title="确认删除?" onConfirm={() => handleDelete('sm-templates', row.id)}>
+                          <WxbButton variant="ghost" size="sm">删除</WxbButton>
+                        </WxbPopconfirm>
+                      </div>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+          )}
+          {smView === 'graph' && <ProdStateMachineView templates={smTemplates} selectedId={smSel} onSelectedIdChange={setSmSel} />}
+          {smView === 'binding' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--wx-text-secondary, #64748b)' }}>
+                每台设备/管线的有效状态机模板(设备自身绑定 ?? 设备类型默认)。绑定在「设备 / 管线」页签改;类型默认在「设备类型」页签改。
+              </div>
+              <WxbDataTable
+                rowKey="key"
+                loading={loading}
+                pagination={false}
+                columns={[
+                  { title: '来源', dataIndex: 'source', width: 80, render: (v: string) => <WxbTag color={v === '设备' ? 'blue' : 'neutral'}>{v}</WxbTag> },
+                  { title: '编码', dataIndex: 'code', width: 150, render: (v: string) => <code>{v}</code> },
+                  { title: '名称', dataIndex: 'name' },
+                  {
+                    title: '有效状态机', key: 'eff',
+                    render: (_: unknown, r: { effId: number | null; inherited: boolean }) =>
+                      r.effId != null
+                        ? (r.inherited
+                          ? <span style={{ color: 'var(--wx-text-secondary, #94a3b8)' }} title="随设备类型默认">{templateName(r.effId)} ·随类型</span>
+                          : <WxbTag color="blue">{templateName(r.effId)}</WxbTag>)
+                        : <WxbTag color="amber">未绑</WxbTag>,
+                  },
+                  {
+                    title: '操作', key: 'act', width: 90,
+                    render: (_: unknown, r: { entity: ProdEntity; id: number }) => <WxbButton variant="ghost" size="sm" onClick={() => openById(r.entity, r.id)}>去编辑</WxbButton>,
+                  },
+                ]}
+                dataSource={bindingRows}
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <WxbDataTable
+          rowKey="id"
+          loading={loading}
+          columns={COLUMNS[activeTab]}
+          dataSource={dataFor(activeTab)}
+          pagination={false}
         />
       )}
 

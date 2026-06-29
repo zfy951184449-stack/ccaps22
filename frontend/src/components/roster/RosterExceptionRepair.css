@@ -498,3 +498,48 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.roster-exception-uncovered-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wx-space-8);
+}
+
+.roster-exception-check-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roster-exception-receipt-list {
+  margin: var(--wx-space-12) 0;
+  padding-left: 18px;
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-13)/1.7 var(--wx-font-sans);
+}
+
+.roster-exception-diagnostic {
+  margin-top: var(--wx-space-12);
+}
+
+.roster-exception-applybar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wx-space-12);
+  margin-top: var(--wx-space-12);
+  padding: var(--wx-space-12) 16px;
+  background: var(--wx-bg);
+  border: 1px solid var(--wx-border);
+  border-radius: var(--wx-radius-8);
+}
+
+.roster-exception-applybar-note {
+  flex: 1;
+  min-width: 200px;
+  color: var(--wx-fg-2);
+  font: 400 var(--wx-fs-13)/1.4 var(--wx-font-sans);
+}
