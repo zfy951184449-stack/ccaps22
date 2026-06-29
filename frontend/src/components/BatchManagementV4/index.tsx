@@ -15,6 +15,8 @@ import BatchFilterBar from './BatchFilterBar';
 import CreateBatchModalV4 from './CreateBatchModalV4';
 import BulkCreateModalV4 from './BulkCreateModalV4';
 import RefreshFromTemplateModal from './RefreshFromTemplateModal';
+import BulkRefreshModal from './BulkRefreshModal';
+import BulkReplaceTemplateModal from './BulkReplaceTemplateModal';
 import { batchPlanApi, mfgTemplatePackageApi, processTemplateApi } from '../../services/api';
 import type { BatchPlan, BatchTemplateSummary, MfgTemplatePackageSummary, ProcessTemplate } from '../../types';
 import './BatchManagementV4.css';
@@ -43,6 +45,8 @@ const BatchManagementV4: React.FC = () => {
     const [bulkModalVisible, setBulkModalVisible] = React.useState(false);
     const [editingBatch, setEditingBatch] = React.useState<BatchPlan | null>(null);
     const [refreshTarget, setRefreshTarget] = React.useState<BatchPlan | null>(null);
+    const [bulkRefreshVisible, setBulkRefreshVisible] = React.useState(false);
+    const [bulkReplaceTemplateVisible, setBulkReplaceTemplateVisible] = React.useState(false);
 
     const [selectedBatchIds, setSelectedBatchIds] = React.useState<number[]>([]);
     const [selectedTemplateIds, setSelectedTemplateIds] = React.useState<number[]>([]);
@@ -276,6 +280,30 @@ const BatchManagementV4: React.FC = () => {
         );
     }, [runBulkMutation, selectedTableBatches]);
 
+    const selectedDraftBatches = useMemo(() => (
+        selectedTableBatches.filter((batch) => batch.plan_status === 'DRAFT')
+    ), [selectedTableBatches]);
+
+    const handleBulkRefresh = useCallback(() => {
+        setBulkRefreshVisible(true);
+    }, []);
+
+    const handleBulkRefreshApplied = useCallback(() => {
+        setBulkRefreshVisible(false);
+        setSelectedTableRowKeys([]);
+        loadData();
+    }, [loadData]);
+
+    const handleBulkReplaceTemplate = useCallback(() => {
+        setBulkReplaceTemplateVisible(true);
+    }, []);
+
+    const handleBulkReplaceTemplateApplied = useCallback(() => {
+        setBulkReplaceTemplateVisible(false);
+        setSelectedTableRowKeys([]);
+        loadData();
+    }, [loadData]);
+
     const handleBulkDelete = useCallback(() => {
         void runBulkMutation(
             selectedTableBatches,
@@ -344,6 +372,8 @@ const BatchManagementV4: React.FC = () => {
                             onBulkActivate={handleBulkActivate}
                             onBulkDeactivate={handleBulkDeactivate}
                             onBulkDelete={handleBulkDelete}
+                            onBulkRefresh={handleBulkRefresh}
+                            onBulkReplaceTemplate={handleBulkReplaceTemplate}
                         />
                     ) : (
                         <div className="batch-management-v4__empty">
@@ -397,6 +427,21 @@ const BatchManagementV4: React.FC = () => {
                 visible={!!refreshTarget}
                 onClose={() => setRefreshTarget(null)}
                 onApplied={handleRefreshApplied}
+            />
+
+            <BulkRefreshModal
+                visible={bulkRefreshVisible}
+                batches={selectedDraftBatches}
+                onClose={() => setBulkRefreshVisible(false)}
+                onApplied={handleBulkRefreshApplied}
+            />
+
+            <BulkReplaceTemplateModal
+                visible={bulkReplaceTemplateVisible}
+                batches={selectedDraftBatches}
+                templates={templateSummaries}
+                onClose={() => setBulkReplaceTemplateVisible(false)}
+                onApplied={handleBulkReplaceTemplateApplied}
             />
 
             <WxbModal

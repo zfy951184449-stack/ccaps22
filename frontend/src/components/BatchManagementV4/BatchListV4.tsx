@@ -25,6 +25,8 @@ interface BatchListV4Props {
     onBulkActivate: () => void;
     onBulkDeactivate: () => void;
     onBulkDelete: () => void;
+    onBulkRefresh: () => void;
+    onBulkReplaceTemplate: () => void;
 }
 
 const getStatusConfig = (status: BatchPlan['plan_status'] | string) => {
@@ -53,6 +55,8 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
     onBulkActivate,
     onBulkDeactivate,
     onBulkDelete,
+    onBulkRefresh,
+    onBulkReplaceTemplate,
 }) => {
     const columns = useMemo<ColumnsType<BatchPlan>>(() => [
         {
@@ -79,6 +83,12 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
         {
             title: '计划日期',
             key: 'dates',
+            defaultSortOrder: 'ascend',
+            sorter: (a, b) => {
+                const da = a.day0_date || a.planned_start_date;
+                const db = b.day0_date || b.planned_start_date;
+                return da < db ? -1 : da > db ? 1 : 0;
+            },
             render: (_, record) => (
                 <span className="batch-list-v4__date">
                     <WxbIcon name="hold-time" size={14} />
@@ -190,6 +200,22 @@ const BatchListV4: React.FC<BatchListV4Props> = ({
                         ),
                         disabled: selectedActivatedCount === 0,
                         onClick: onBulkDeactivate,
+                    },
+                    {
+                        key: 'refresh',
+                        label: (
+                            <span><WxbIcon name="recipe" size={13} /> 批量刷新</span>
+                        ),
+                        disabled: selectedDraftCount === 0,
+                        onClick: onBulkRefresh,
+                    },
+                    {
+                        key: 'replace-template',
+                        label: (
+                            <span><WxbIcon name="process-template" size={13} /> 批量替换模版</span>
+                        ),
+                        disabled: selectedDraftCount === 0,
+                        onClick: onBulkReplaceTemplate,
                     },
                     {
                         key: 'delete',

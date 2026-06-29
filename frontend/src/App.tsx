@@ -5,7 +5,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParam
 import { fluentDesignTokens } from './styles/fluentDesignTokens';
 import './App.css';
 import TopNavigation from './components/Navigation/TopNavigation';
-import Dashboard from './components/Dashboard';
 import OperationsOverviewPage from './pages/OperationsOverviewPage';
 import OrganizationWorkbenchPage from './pages/OrganizationWorkbenchPage';
 import QualificationsPage from './pages/QualificationsPage';
@@ -56,17 +55,17 @@ const ProcessTemplateLegacyRedirect: React.FC = () => {
 
 const mvpRedirects: Record<string, string> = {
   '/batch-management': '/batch-management-v4',
-  '/task-pool': '/dashboard',
-  '/schedule-overview': '/dashboard',
+  '/task-pool': '/operations-overview',
+  '/schedule-overview': '/operations-overview',
   '/special-shift-windows': '/personnel-scheduling',
   '/auto-scheduling': '/solver-v4',
   '/modular-scheduling': '/solver-v4',
   '/scheduling-v3': '/solver-v4',
   '/operation-constraints': '/operations',
-  '/system-monitor': '/dashboard',
-  '/system-settings': '/dashboard',
+  '/system-monitor': '/operations-overview',
+  '/system-settings': '/operations-overview',
   '/auto-scheduling-debug': '/solver-v4',
-  '/platform-overview': '/dashboard',
+  '/platform-overview': '/operations-overview',
   '/resource-center': '/organization-workbench',
   '/project-planning-center': '/batch-management-v4',
   '/maintenance-windows': '/batch-management-v4',
@@ -107,19 +106,11 @@ const AppLayout: React.FC = () => (
         <Routes>
           <Route
             path="/"
-            element={
-              <ProtectedRoute allowAnonymousInShadow requiredPermission="SYSTEM_DASHBOARD_READ">
-                <Dashboard />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/operations-overview" replace />}
           />
           <Route
             path="/dashboard"
-            element={
-              <ProtectedRoute allowAnonymousInShadow requiredPermission="SYSTEM_DASHBOARD_READ">
-                <Dashboard />
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/operations-overview" replace />}
           />
           <Route
             path="/operations-overview"
@@ -372,7 +363,7 @@ const AppLayout: React.FC = () => (
               element={<Navigate to={target} replace />}
             />
           ))}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/operations-overview" replace />} />
         </Routes>
       </Content>
     </Layout>

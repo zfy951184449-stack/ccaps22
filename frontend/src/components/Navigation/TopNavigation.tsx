@@ -47,14 +47,6 @@ type NavGroup = {
 
 const navGroups: NavGroup[] = [
   {
-    key: 'dashboard',
-    label: '调度中心',
-    subtitle: 'Overview',
-    path: '/dashboard',
-    icon: <DashboardOutlined />,
-    requiredPermission: 'SYSTEM_DASHBOARD_READ',
-  },
-  {
     key: 'operations-overview',
     label: '运营总览',
     subtitle: 'Ops Overview',
@@ -144,10 +136,6 @@ const navGroups: NavGroup[] = [
 const normalize = (value: string) => value.trim().toLowerCase();
 
 const matchesPath = (pathname: string, path: string) => {
-  if (path === '/dashboard') {
-    return pathname === '/' || pathname === '/dashboard';
-  }
-
   return pathname === path || pathname.startsWith(`${path}/`);
 };
 
@@ -377,9 +365,9 @@ export default function TopNavigation() {
         ref={navRef}
       >
         <button
-          aria-label="返回调度中心"
+          aria-label="返回运营总览"
           className="wxb-topnav-logo"
-          onClick={() => handleNavigate('/dashboard')}
+          onClick={() => handleNavigate('/operations-overview')}
           type="button"
         >
           <span className="wxb-topnav-mark">
