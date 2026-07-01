@@ -42,6 +42,29 @@
   width: 132px;
 }
 
+.matrix-filter-control-qualification {
+  width: 220px;
+}
+
+.matrix-filter-control-qualification .wxb-select.ant-select-multiple .ant-select-selector {
+  height: auto !important;
+  min-height: 36px;
+  padding: var(--wx-space-2) var(--wx-space-8) !important;
+}
+
+.matrix-filter-control-qualification .ant-select-selection-overflow {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.matrix-filter-control-qualification .ant-select-selection-item {
+  max-width: 118px;
+}
+
+.matrix-filter-control-qualification .ant-select-selection-item:not(:first-child):not(:last-child) {
+  display: none;
+}
+
 .matrix-switch-control {
   display: inline-flex;
   min-height: 32px;
@@ -364,7 +387,8 @@
   }
 
   .matrix-filter-control,
-  .matrix-filter-control-team {
+  .matrix-filter-control-team,
+  .matrix-filter-control-qualification {
     width: 100%;
   }
 

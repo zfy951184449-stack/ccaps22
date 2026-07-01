@@ -165,6 +165,7 @@ const QualificationMatrix: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string | undefined>();
   const [teamFilter, setTeamFilter] = useState<string | undefined>();
+  const [selectedQualificationIds, setSelectedQualificationIds] = useState<number[]>([]);
   const [showEmptyRows, setShowEmptyRows] = useState(true);
   const [compactView, setCompactView] = useState(true);
   const [employeeColumnLimit, setEmployeeColumnLimit] = useState(baseEmployeeColumnLimit);
@@ -174,6 +175,7 @@ const QualificationMatrix: React.FC = () => {
   const [keyboardCell, setKeyboardCell] = useState<{ employeeId: number; qualificationId: number } | null>(null);
   const [pendingLevel, setPendingLevel] = useState<number>(3);
   const [cellLoading, setCellLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const employeeColumnWidth = isNarrowViewport ? 48 : compactView ? 44 : 52;
   const qualificationColumnWidth = isNarrowViewport ? 132 : compactView ? 160 : 180;
 
@@ -227,6 +229,10 @@ const QualificationMatrix: React.FC = () => {
   );
 
   const normalizedSearch = searchText.trim().toLowerCase();
+  const selectedQualificationIdSet = useMemo(
+    () => new Set(selectedQualificationIds),
+    [selectedQualificationIds],
+  );
 
   const filteredEmployees = useMemo(() => employees.filter((employee) => {
     const matchesSearch = !normalizedSearch
@@ -236,17 +242,28 @@ const QualificationMatrix: React.FC = () => {
     const matchesTeam = !teamFilter || employee.team_name === teamFilter;
 
     if (!showEmptyRows) {
-      const hasQualifications = matrixData.some((item) => item.employee_id === employee.id);
+      const hasQualifications = matrixData.some((item) =>
+        item.employee_id === employee.id
+        && (!selectedQualificationIdSet.size || selectedQualificationIdSet.has(item.qualification_id)),
+      );
       if (!hasQualifications) return false;
     }
 
     return matchesSearch && matchesDepartment && matchesTeam;
-  }), [departmentFilter, employees, matrixData, normalizedSearch, teamFilter, showEmptyRows]);
+  }), [
+    departmentFilter,
+    employees,
+    matrixData,
+    normalizedSearch,
+    selectedQualificationIdSet,
+    teamFilter,
+    showEmptyRows,
+  ]);
 
   useEffect(() => {
     setEmployeeColumnLimit(baseEmployeeColumnLimit);
     setEditingCell(null);
-  }, [baseEmployeeColumnLimit, departmentFilter, normalizedSearch, teamFilter, showEmptyRows]);
+  }, [baseEmployeeColumnLimit, departmentFilter, normalizedSearch, selectedQualificationIds, teamFilter, showEmptyRows]);
 
   useEffect(() => {
     if (teamFilter && !teams.includes(teamFilter)) {
@@ -259,7 +276,21 @@ const QualificationMatrix: React.FC = () => {
     [employeeColumnLimit, filteredEmployees],
   );
 
-  const filteredQualifications = qualifications;
+  const filteredQualifications = useMemo(() => {
+    if (!selectedQualificationIdSet.size) return qualifications;
+    return qualifications.filter((qualification) => selectedQualificationIdSet.has(qualification.id));
+  }, [qualifications, selectedQualificationIdSet]);
+
+  useEffect(() => {
+    if (!selectedQualificationIds.length) return;
+
+    const availableIds = new Set(qualifications.map((qualification) => qualification.id));
+    const validIds = selectedQualificationIds.filter((id) => availableIds.has(id));
+
+    if (validIds.length !== selectedQualificationIds.length) {
+      setSelectedQualificationIds(validIds);
+    }
+  }, [qualifications, selectedQualificationIds]);
 
   useEffect(() => {
     const pageCount = Math.max(1, Math.ceil(filteredQualifications.length / qualificationPageSize));
@@ -328,6 +359,46 @@ const QualificationMatrix: React.FC = () => {
   const getMatrixItem = useCallback((employeeId: number, qualificationId: number): MatrixData | null => {
     return matrixMap.get(`${employeeId}-${qualificationId}`) || null;
   }, [matrixMap]);
+
+  const handleExport = useCallback(async () => {
+    if (!filteredEmployees.length || !filteredQualifications.length) {
+      wxbToast.warning('暂无可导出的资质矩阵');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const { exportQualificationMatrixToExcel } = await import('../utils/exportQualificationMatrixExcel');
+      exportQualificationMatrixToExcel({
+        employees: filteredEmployees,
+        qualifications: filteredQualifications,
+        matrixData,
+        filters: {
+          searchText,
+          department: departmentFilter,
+          team: teamFilter,
+          qualifications: selectedQualificationIds.length
+            ? filteredQualifications.map((qualification) => qualification.qualification_name)
+            : undefined,
+          showEmptyRows,
+        },
+      });
+      wxbToast.success(`已导出 ${filteredQualifications.length} 项资质 / ${filteredEmployees.length} 名员工`);
+    } catch {
+      wxbToast.error('资质矩阵导出失败');
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    departmentFilter,
+    filteredEmployees,
+    filteredQualifications,
+    matrixData,
+    searchText,
+    selectedQualificationIds.length,
+    showEmptyRows,
+    teamFilter,
+  ]);
 
   const totalEmployees = statistics?.totalStats.total_employees ?? employees.length;
   const totalQualifications = statistics?.totalStats.total_qualifications ?? qualifications.length;
@@ -674,6 +745,30 @@ const QualificationMatrix: React.FC = () => {
                   onChange={(value) => setTeamFilter(value ? String(value) : undefined)}
                 />
               </div>
+              <div className="matrix-filter-control matrix-filter-control-qualification">
+                <WxbSelect
+                  mode="multiple"
+                  placeholder="全部资质"
+                  value={selectedQualificationIds}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  maxTagCount={1}
+                  maxTagPlaceholder={(omittedValues) => (omittedValues.length ? `+${omittedValues.length} 项` : null)}
+                  options={qualifications.map((qualification) => ({
+                    label: qualification.qualification_name,
+                    value: qualification.id,
+                  }))}
+                  onChange={(values) => {
+                    const nextIds = Array.isArray(values)
+                      ? values.map((value) => Number(value)).filter(Number.isFinite)
+                      : [];
+                    setSelectedQualificationIds(nextIds);
+                    setQualificationCurrentPage(1);
+                    setEditingCell(null);
+                  }}
+                />
+              </div>
               <label className="matrix-switch-control">
                 <span>显示空行</span>
                 <WxbSwitch
@@ -711,10 +806,12 @@ const QualificationMatrix: React.FC = () => {
                 type="button"
                 variant="secondary"
                 size="sm"
-                onClick={() => wxbToast.info('导出功能开发中')}
+                disabled={loading || exporting || !filteredEmployees.length || !filteredQualifications.length}
+                aria-busy={exporting}
+                onClick={handleExport}
               >
                 <MatrixIcon name="download" />
-                导出
+                {exporting ? '导出中' : '导出'}
               </WxbButton>
             </>
           )}
