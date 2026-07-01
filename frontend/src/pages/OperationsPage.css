@@ -187,10 +187,6 @@
     flex-wrap: wrap;
 }
 
-.operations-qualified-size {
-    flex: 0 0 auto;
-}
-
 .operations-qualified-tabs .wxb-tabs-nav {
     overflow-x: auto;
 }
@@ -290,6 +286,65 @@
 .operations-qualified-footer {
     display: flex;
     justify-content: flex-end;
+}
+
+.operations-qualified-resizable-shell {
+    position: relative;
+    max-width: calc(100vw - 64px);
+}
+
+.operations-qualified-resize-handle {
+    position: absolute;
+    z-index: 2;
+    display: block;
+    background: transparent;
+    touch-action: none;
+}
+
+.operations-qualified-resize-handle:focus-visible {
+    outline: 2px solid var(--wx-blue-500);
+    outline-offset: 2px;
+}
+
+.operations-qualified-resize-handle--right {
+    top: var(--wx-space-16);
+    right: calc(var(--wx-space-6) * -1);
+    bottom: var(--wx-space-16);
+    width: var(--wx-space-12);
+    cursor: ew-resize;
+}
+
+.operations-qualified-resize-handle--bottom {
+    right: var(--wx-space-16);
+    bottom: calc(var(--wx-space-6) * -1);
+    left: var(--wx-space-16);
+    height: var(--wx-space-12);
+    cursor: ns-resize;
+}
+
+.operations-qualified-resize-handle--corner {
+    right: calc(var(--wx-space-8) * -1);
+    bottom: calc(var(--wx-space-8) * -1);
+    width: 22px;
+    height: 22px;
+    cursor: nwse-resize;
+}
+
+.operations-qualified-resize-handle--corner::after {
+    position: absolute;
+    right: var(--wx-space-6);
+    bottom: var(--wx-space-6);
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid var(--wx-blue-500);
+    border-bottom: 2px solid var(--wx-blue-500);
+    border-bottom-right-radius: var(--wx-radius-4);
+    content: "";
+}
+
+.operations-qualified-modal-is-resizing,
+.operations-qualified-modal-is-resizing * {
+    user-select: none;
 }
 
 .operations-qualification-editor {

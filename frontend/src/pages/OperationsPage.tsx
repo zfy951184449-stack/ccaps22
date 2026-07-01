@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import type { WxbDataTableProps } from '../components/wxb-ui/DataTable/DataTable';
 import { WxbBadge } from '../components/wxb-ui/Badge/Badge';
@@ -17,7 +17,6 @@ import {
 } from '../components/wxb-ui/PageLayout/PageLayout';
 import { WxbPopconfirm } from '../components/wxb-ui/Popconfirm/Popconfirm';
 import { WxbSearchInput } from '../components/wxb-ui/SearchInput/SearchInput';
-import { WxbSegmented } from '../components/wxb-ui/Segmented/Segmented';
 import { WxbSelect } from '../components/wxb-ui/Select/Select';
 import { WxbSpinner } from '../components/wxb-ui/Spinner/Spinner';
 import { WxbTabs } from '../components/wxb-ui/Tabs/Tabs';
@@ -123,7 +122,20 @@ interface OperationFormState {
 
 type FormErrors = Partial<Record<keyof OperationFormState, string>>;
 
-type QualifiedModalSize = 'standard' | 'wide' | 'large';
+interface QualifiedModalDimensions {
+    width: number;
+    height: number;
+}
+
+type QualifiedModalResizeMode = 'right' | 'bottom' | 'corner';
+
+interface QualifiedModalResizeState {
+    mode: QualifiedModalResizeMode;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+}
 
 const DEFAULT_FORM_STATE: OperationFormState = {
     operation_name: '',
@@ -137,26 +149,20 @@ const ALL_KEY = 'all';
 const UNASSIGNED_TYPE_KEY = 'unassigned';
 const QUALIFICATION_LEVEL_MIN = 1;
 const QUALIFICATION_LEVEL_MAX = 5;
-const QUALIFIED_MODAL_WIDTH: Record<QualifiedModalSize, number> = {
-    standard: 860,
-    wide: 1060,
-    large: 1240,
-};
-const QUALIFIED_TABLE_SCROLL_Y: Record<QualifiedModalSize, number> = {
-    standard: 360,
-    wide: 460,
-    large: 560,
-};
-const QUALIFIED_MODAL_SIZE_OPTIONS = [
-    { value: 'standard', label: '标准' },
-    { value: 'wide', label: '宽屏' },
-    { value: 'large', label: '大屏' },
-];
+const QUALIFIED_MODAL_DEFAULT_DIMENSIONS: QualifiedModalDimensions = { width: 1060, height: 760 };
+const QUALIFIED_MODAL_MIN_DIMENSIONS: QualifiedModalDimensions = { width: 760, height: 620 };
+const QUALIFIED_MODAL_MAX_DIMENSIONS: QualifiedModalDimensions = { width: 1320, height: 980 };
+const QUALIFIED_TABLE_FIXED_HEIGHT = 400;
+const QUALIFIED_TABLE_MIN_SCROLL_Y = 260;
+const QUALIFIED_TABLE_MIN_SCROLL_X = 760;
 
 const toFiniteNumber = (value: unknown, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+const clampValue = (value: number, min: number, max: number) =>
+    Math.min(max, Math.max(min, value));
 
 const normalizeQualificationLevel = (value: unknown, fallback = QUALIFICATION_LEVEL_MIN) => {
     const parsed = toFiniteNumber(value, fallback);
@@ -316,12 +322,16 @@ const OperationsPage: React.FC = () => {
     const [qualifiedDetailsError, setQualifiedDetailsError] = useState(false);
     const [qualifiedDetailsActivePosition, setQualifiedDetailsActivePosition] = useState('1');
     const [qualificationOptions, setQualificationOptions] = useState<QualificationOption[]>([]);
-    const [qualifiedModalSize, setQualifiedModalSize] = useState<QualifiedModalSize>('standard');
+    const [qualifiedModalDimensions, setQualifiedModalDimensions] = useState<QualifiedModalDimensions>(
+        QUALIFIED_MODAL_DEFAULT_DIMENSIONS,
+    );
+    const [qualifiedModalResizing, setQualifiedModalResizing] = useState(false);
     const [editingPersonnelId, setEditingPersonnelId] = useState<number | null>(null);
     const [qualificationDrafts, setQualificationDrafts] = useState<Record<number, EmployeeQualificationDraft[]>>({});
     const [draftAddQualificationId, setDraftAddQualificationId] = useState<string | null>(null);
     const [draftAddLevel, setDraftAddLevel] = useState(3);
     const [savingQualificationEmployeeId, setSavingQualificationEmployeeId] = useState<number | null>(null);
+    const qualifiedModalResizeRef = useRef<QualifiedModalResizeState | null>(null);
 
     const operationTypeById = useMemo(() => {
         const map = new Map<number, OperationType>();
@@ -536,6 +546,116 @@ const OperationsPage: React.FC = () => {
         setDraftAddQualificationId(null);
         setSavingQualificationEmployeeId(null);
     }, []);
+
+    const getQualifiedModalBounds = useCallback(() => {
+        if (typeof window === 'undefined') {
+            return {
+                maxWidth: QUALIFIED_MODAL_MAX_DIMENSIONS.width,
+                maxHeight: QUALIFIED_MODAL_MAX_DIMENSIONS.height,
+            };
+        }
+
+        return {
+            maxWidth: Math.max(
+                QUALIFIED_MODAL_MIN_DIMENSIONS.width,
+                Math.min(QUALIFIED_MODAL_MAX_DIMENSIONS.width, window.innerWidth - 64),
+            ),
+            maxHeight: Math.max(
+                QUALIFIED_MODAL_MIN_DIMENSIONS.height,
+                Math.min(QUALIFIED_MODAL_MAX_DIMENSIONS.height, window.innerHeight - 80),
+            ),
+        };
+    }, []);
+
+    const clampQualifiedModalDimensions = useCallback((dimensions: QualifiedModalDimensions) => {
+        const { maxWidth, maxHeight } = getQualifiedModalBounds();
+
+        return {
+            width: clampValue(dimensions.width, QUALIFIED_MODAL_MIN_DIMENSIONS.width, maxWidth),
+            height: clampValue(dimensions.height, QUALIFIED_MODAL_MIN_DIMENSIONS.height, maxHeight),
+        };
+    }, [getQualifiedModalBounds]);
+
+    useEffect(() => {
+        if (!qualifiedDetailsOperation) return;
+        setQualifiedModalDimensions((current) => clampQualifiedModalDimensions(current));
+    }, [clampQualifiedModalDimensions, qualifiedDetailsOperation]);
+
+    useEffect(() => {
+        if (!qualifiedModalResizing) return undefined;
+
+        document.body.classList.add('operations-qualified-modal-is-resizing');
+
+        const handlePointerMove = (event: PointerEvent) => {
+            const resizeState = qualifiedModalResizeRef.current;
+            if (!resizeState) return;
+
+            const deltaX = event.clientX - resizeState.startX;
+            const deltaY = event.clientY - resizeState.startY;
+
+            setQualifiedModalDimensions(clampQualifiedModalDimensions({
+                width: resizeState.mode === 'right' || resizeState.mode === 'corner'
+                    ? resizeState.startWidth + deltaX
+                    : resizeState.startWidth,
+                height: resizeState.mode === 'bottom' || resizeState.mode === 'corner'
+                    ? resizeState.startHeight + deltaY
+                    : resizeState.startHeight,
+            }));
+        };
+
+        const handlePointerUp = () => {
+            qualifiedModalResizeRef.current = null;
+            setQualifiedModalResizing(false);
+        };
+
+        window.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerUp, { once: true });
+
+        return () => {
+            document.body.classList.remove('operations-qualified-modal-is-resizing');
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+        };
+    }, [clampQualifiedModalDimensions, qualifiedModalResizing]);
+
+    const beginQualifiedModalResize = useCallback((
+        event: React.PointerEvent<HTMLElement>,
+        mode: QualifiedModalResizeMode,
+    ) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        qualifiedModalResizeRef.current = {
+            mode,
+            startX: event.clientX,
+            startY: event.clientY,
+            startWidth: qualifiedModalDimensions.width,
+            startHeight: qualifiedModalDimensions.height,
+        };
+        setQualifiedModalResizing(true);
+    }, [qualifiedModalDimensions]);
+
+    const handleQualifiedModalResizeKeyDown = useCallback((
+        event: React.KeyboardEvent<HTMLElement>,
+        mode: QualifiedModalResizeMode,
+    ) => {
+        const step = event.shiftKey ? 40 : 20;
+        let widthDelta = 0;
+        let heightDelta = 0;
+
+        if ((mode === 'right' || mode === 'corner') && event.key === 'ArrowRight') widthDelta = step;
+        if ((mode === 'right' || mode === 'corner') && event.key === 'ArrowLeft') widthDelta = -step;
+        if ((mode === 'bottom' || mode === 'corner') && event.key === 'ArrowDown') heightDelta = step;
+        if ((mode === 'bottom' || mode === 'corner') && event.key === 'ArrowUp') heightDelta = -step;
+
+        if (widthDelta === 0 && heightDelta === 0) return;
+
+        event.preventDefault();
+        setQualifiedModalDimensions((current) => clampQualifiedModalDimensions({
+            width: current.width + widthDelta,
+            height: current.height + heightDelta,
+        }));
+    }, [clampQualifiedModalDimensions]);
 
     const qualificationSelectOptions = useMemo(
         () => qualificationOptions.map((qualification) => ({
@@ -915,6 +1035,11 @@ const OperationsPage: React.FC = () => {
         ) ?? qualifiedDetails?.positions[0] ?? null,
         [qualifiedDetails, qualifiedDetailsActivePosition],
     );
+
+    const qualifiedPersonnelTableScroll = useMemo(() => ({
+        x: Math.max(QUALIFIED_TABLE_MIN_SCROLL_X, qualifiedModalDimensions.width - 180),
+        y: Math.max(QUALIFIED_TABLE_MIN_SCROLL_Y, qualifiedModalDimensions.height - QUALIFIED_TABLE_FIXED_HEIGHT),
+    }), [qualifiedModalDimensions]);
 
     const qualifiedPersonnelColumns: WxbDataTableProps<QualifiedPersonnel>['columns'] = useMemo(() => [
         {
@@ -1389,9 +1514,40 @@ const OperationsPage: React.FC = () => {
                 title={qualifiedDetailsOperation ? `合格人员 - ${qualifiedDetailsOperation.operation_name}` : '合格人员'}
                 open={qualifiedDetailsOperation !== null}
                 onCancel={closeQualifiedPersonnelDetails}
-                width={QUALIFIED_MODAL_WIDTH[qualifiedModalSize]}
-                className={`operations-qualified-modal operations-qualified-modal--${qualifiedModalSize}`}
+                width={qualifiedModalDimensions.width}
+                className={`operations-qualified-modal${qualifiedModalResizing ? ' operations-qualified-modal--resizing' : ''}`}
                 destroyOnClose
+                modalRender={(modal) => (
+                    <div className="operations-qualified-resizable-shell">
+                        {modal}
+                        <span
+                            className="operations-qualified-resize-handle operations-qualified-resize-handle--right"
+                            role="separator"
+                            aria-label="拖拽调整弹窗宽度"
+                            aria-orientation="vertical"
+                            tabIndex={0}
+                            onPointerDown={(event) => beginQualifiedModalResize(event, 'right')}
+                            onKeyDown={(event) => handleQualifiedModalResizeKeyDown(event, 'right')}
+                        />
+                        <span
+                            className="operations-qualified-resize-handle operations-qualified-resize-handle--bottom"
+                            role="separator"
+                            aria-label="拖拽调整弹窗高度"
+                            aria-orientation="horizontal"
+                            tabIndex={0}
+                            onPointerDown={(event) => beginQualifiedModalResize(event, 'bottom')}
+                            onKeyDown={(event) => handleQualifiedModalResizeKeyDown(event, 'bottom')}
+                        />
+                        <span
+                            className="operations-qualified-resize-handle operations-qualified-resize-handle--corner"
+                            role="separator"
+                            aria-label="拖拽调整弹窗宽度和高度"
+                            tabIndex={0}
+                            onPointerDown={(event) => beginQualifiedModalResize(event, 'corner')}
+                            onKeyDown={(event) => handleQualifiedModalResizeKeyDown(event, 'corner')}
+                        />
+                    </div>
+                )}
                 footer={(
                     <div className="operations-qualified-footer">
                         <WxbButton type="button" variant="secondary" onClick={closeQualifiedPersonnelDetails}>
@@ -1430,13 +1586,6 @@ const OperationsPage: React.FC = () => {
                                 />
                                 <span className="operations-muted">{qualifiedDetails.operation_name}</span>
                             </span>
-                            <WxbSegmented
-                                size="sm"
-                                value={qualifiedModalSize}
-                                options={QUALIFIED_MODAL_SIZE_OPTIONS}
-                                onChange={(value) => setQualifiedModalSize(value as QualifiedModalSize)}
-                                className="operations-qualified-size"
-                            />
                         </div>
 
                         <WxbTabs
@@ -1489,7 +1638,7 @@ const OperationsPage: React.FC = () => {
                                     density="compact"
                                     pagination={false}
                                     emptyState={{ description: '暂无合格人员' }}
-                                    scroll={{ x: 860, y: QUALIFIED_TABLE_SCROLL_Y[qualifiedModalSize] }}
+                                    scroll={qualifiedPersonnelTableScroll}
                                     expandable={{
                                         expandedRowKeys: editingPersonnelId ? [editingPersonnelId] : [],
                                         expandedRowRender: (record) =>
