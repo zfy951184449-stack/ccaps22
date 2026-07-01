@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import type { WxbDataTableProps } from './wxb-ui/DataTable/DataTable';
 import { employeeQualificationApi } from '../services/api';
@@ -10,7 +10,6 @@ import {
   WxbPageSection,
   WxbPageShell,
   WxbPopover,
-  WxbProgress,
   WxbSegmented,
   WxbSelect,
   WxbSpinner,
@@ -27,7 +26,10 @@ interface Employee {
   id: number;
   employee_code: string;
   employee_name: string;
+  department_id?: number | null;
   department: string;
+  team_id?: number | null;
+  team_name?: string | null;
   position: string;
 }
 
@@ -89,7 +91,30 @@ interface EmployeeQualificationRecord {
 
 const LEVEL_OPTIONS = [1, 2, 3, 4, 5];
 const LEVEL_SEGMENT_OPTIONS = LEVEL_OPTIONS.map((level) => ({ label: `${level}级`, value: String(level) }));
-const DEFAULT_EMPLOYEE_COLUMN_LIMIT = 12;
+const DEFAULT_EMPLOYEE_COLUMN_LIMIT = 24;
+const MOBILE_EMPLOYEE_COLUMN_LIMIT = 4;
+const MOBILE_MATRIX_MEDIA_QUERY = '(max-width: 768px)';
+const DEFAULT_QUALIFICATION_PAGE_SIZE = 20;
+
+const getMatrixCellKey = (employeeId: number, qualificationId: number) => `${employeeId}-${qualificationId}`;
+
+const useMediaQuery = (query: string) => {
+  const getInitialValue = () => (
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches
+  );
+  const [matches, setMatches] = useState(getInitialValue);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = () => setMatches(mediaQuery.matches);
+
+    handleChange();
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [query]);
+
+  return matches;
+};
 
 const getApiErrorMessage = (error: unknown, fallback: string) => {
   const apiError = error as { response?: { data?: { error?: string } } };
@@ -99,15 +124,6 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
 const toFiniteNumber = (value: unknown, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const formatPercent = (value: number) => `${Math.round(value)}%`;
-
-const getProgressStatus = (value: number): 'normal' | 'success' | 'warning' | 'error' => {
-  if (value >= 80) return 'success';
-  if (value >= 50) return 'normal';
-  if (value >= 20) return 'warning';
-  return 'error';
 };
 
 const MatrixIcon: React.FC<{ name: MatrixIconName }> = ({ name }) => {
@@ -137,6 +153,9 @@ const MatrixIcon: React.FC<{ name: MatrixIconName }> = ({ name }) => {
 };
 
 const QualificationMatrix: React.FC = () => {
+  const isNarrowViewport = useMediaQuery(MOBILE_MATRIX_MEDIA_QUERY);
+  const baseEmployeeColumnLimit = isNarrowViewport ? MOBILE_EMPLOYEE_COLUMN_LIMIT : DEFAULT_EMPLOYEE_COLUMN_LIMIT;
+  const cellButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -145,13 +164,18 @@ const QualificationMatrix: React.FC = () => {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [searchText, setSearchText] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string | undefined>();
-  const [levelFilter, setLevelFilter] = useState<string | undefined>();
+  const [teamFilter, setTeamFilter] = useState<string | undefined>();
   const [showEmptyRows, setShowEmptyRows] = useState(true);
   const [compactView, setCompactView] = useState(true);
-  const [employeeColumnLimit, setEmployeeColumnLimit] = useState(DEFAULT_EMPLOYEE_COLUMN_LIMIT);
+  const [employeeColumnLimit, setEmployeeColumnLimit] = useState(baseEmployeeColumnLimit);
+  const [qualificationCurrentPage, setQualificationCurrentPage] = useState(1);
+  const [qualificationPageSize, setQualificationPageSize] = useState(DEFAULT_QUALIFICATION_PAGE_SIZE);
   const [editingCell, setEditingCell] = useState<{ employeeId: number; qualificationId: number } | null>(null);
+  const [keyboardCell, setKeyboardCell] = useState<{ employeeId: number; qualificationId: number } | null>(null);
   const [pendingLevel, setPendingLevel] = useState<number>(3);
   const [cellLoading, setCellLoading] = useState(false);
+  const employeeColumnWidth = isNarrowViewport ? 48 : compactView ? 44 : 52;
+  const qualificationColumnWidth = isNarrowViewport ? 132 : compactView ? 160 : 180;
 
   const fetchMatrixData = useCallback(async () => {
     setLoading(true);
@@ -192,6 +216,16 @@ const QualificationMatrix: React.FC = () => {
     [employees],
   );
 
+  const teams = useMemo(
+    () => Array.from(new Set(
+      employees
+        .filter((employee) => !departmentFilter || employee.department === departmentFilter)
+        .map((employee) => employee.team_name)
+        .filter(Boolean),
+    )) as string[],
+    [departmentFilter, employees],
+  );
+
   const normalizedSearch = searchText.trim().toLowerCase();
 
   const filteredEmployees = useMemo(() => employees.filter((employee) => {
@@ -199,48 +233,101 @@ const QualificationMatrix: React.FC = () => {
       || employee.employee_name.toLowerCase().includes(normalizedSearch)
       || employee.employee_code.toLowerCase().includes(normalizedSearch);
     const matchesDepartment = !departmentFilter || employee.department === departmentFilter;
+    const matchesTeam = !teamFilter || employee.team_name === teamFilter;
 
     if (!showEmptyRows) {
       const hasQualifications = matrixData.some((item) => item.employee_id === employee.id);
       if (!hasQualifications) return false;
     }
 
-    return matchesSearch && matchesDepartment;
-  }), [departmentFilter, employees, matrixData, normalizedSearch, showEmptyRows]);
+    return matchesSearch && matchesDepartment && matchesTeam;
+  }), [departmentFilter, employees, matrixData, normalizedSearch, teamFilter, showEmptyRows]);
 
   useEffect(() => {
-    setEmployeeColumnLimit(DEFAULT_EMPLOYEE_COLUMN_LIMIT);
-  }, [departmentFilter, normalizedSearch, showEmptyRows]);
+    setEmployeeColumnLimit(baseEmployeeColumnLimit);
+    setEditingCell(null);
+  }, [baseEmployeeColumnLimit, departmentFilter, normalizedSearch, teamFilter, showEmptyRows]);
+
+  useEffect(() => {
+    if (teamFilter && !teams.includes(teamFilter)) {
+      setTeamFilter(undefined);
+    }
+  }, [teamFilter, teams]);
 
   const displayedEmployees = useMemo(
     () => filteredEmployees.slice(0, employeeColumnLimit),
     [employeeColumnLimit, filteredEmployees],
   );
 
-  const filteredQualifications = useMemo(() => qualifications.filter((qualification) => {
-    if (!levelFilter) return true;
+  const filteredQualifications = qualifications;
 
-    const selectedLevel = Number(levelFilter);
-    return matrixData.some(
-      (item) => item.qualification_id === qualification.id && item.qualification_level === selectedLevel,
+  useEffect(() => {
+    const pageCount = Math.max(1, Math.ceil(filteredQualifications.length / qualificationPageSize));
+    if (qualificationCurrentPage > pageCount) {
+      setQualificationCurrentPage(pageCount);
+    }
+  }, [filteredQualifications.length, qualificationCurrentPage, qualificationPageSize]);
+
+  useEffect(() => {
+    if (!keyboardCell) return;
+
+    const employeeVisible = displayedEmployees.some((employee) => employee.id === keyboardCell.employeeId);
+    const qualificationVisible = filteredQualifications.some(
+      (qualification) => qualification.id === keyboardCell.qualificationId,
     );
-  }), [levelFilter, matrixData, qualifications]);
+
+    if (!employeeVisible || !qualificationVisible) {
+      setKeyboardCell(null);
+    }
+  }, [displayedEmployees, filteredQualifications, keyboardCell]);
+
+  const firstCellKey = useMemo(() => {
+    const firstEmployee = displayedEmployees[0];
+    const firstQualification = filteredQualifications[0];
+    return firstEmployee && firstQualification ? getMatrixCellKey(firstEmployee.id, firstQualification.id) : null;
+  }, [displayedEmployees, filteredQualifications]);
+
+  const keyboardCellKey = keyboardCell
+    ? getMatrixCellKey(keyboardCell.employeeId, keyboardCell.qualificationId)
+    : null;
+  const activeRovingCellKey = keyboardCellKey || firstCellKey;
+
+  const focusMatrixCell = useCallback((employeeId: number, qualificationId: number) => {
+    const key = getMatrixCellKey(employeeId, qualificationId);
+    setKeyboardCell({ employeeId, qualificationId });
+    window.requestAnimationFrame(() => {
+      cellButtonRefs.current.get(key)?.focus();
+    });
+  }, []);
+
+  const moveMatrixFocus = useCallback((
+    employeeId: number,
+    qualificationId: number,
+    employeeDelta: number,
+    qualificationDelta: number,
+  ) => {
+    const employeeIndex = displayedEmployees.findIndex((employee) => employee.id === employeeId);
+    const qualificationIndex = filteredQualifications.findIndex((qualification) => qualification.id === qualificationId);
+    if (employeeIndex < 0 || qualificationIndex < 0) return;
+
+    const nextEmployee = displayedEmployees[Math.max(0, Math.min(
+      displayedEmployees.length - 1,
+      employeeIndex + employeeDelta,
+    ))];
+    const nextQualification = filteredQualifications[Math.max(0, Math.min(
+      filteredQualifications.length - 1,
+      qualificationIndex + qualificationDelta,
+    ))];
+
+    if (!nextEmployee || !nextQualification) return;
+    if (nextEmployee.id === employeeId && nextQualification.id === qualificationId) return;
+
+    focusMatrixCell(nextEmployee.id, nextQualification.id);
+  }, [displayedEmployees, filteredQualifications, focusMatrixCell]);
 
   const getMatrixItem = useCallback((employeeId: number, qualificationId: number): MatrixData | null => {
     return matrixMap.get(`${employeeId}-${qualificationId}`) || null;
   }, [matrixMap]);
-
-  const getEmployeeCompleteness = useCallback((employeeId: number): number => {
-    if (!statistics) return 0;
-    const employee = statistics.employeeCompleteness.find((item) => item.id === employeeId);
-    return employee ? toFiniteNumber(employee.completeness_percentage) : 0;
-  }, [statistics]);
-
-  const getQualificationCoverage = useCallback((qualificationId: number): number => {
-    if (!statistics) return 0;
-    const qualification = statistics.qualificationCoverage.find((item) => item.id === qualificationId);
-    return qualification ? toFiniteNumber(qualification.coverage_percentage) : 0;
-  }, [statistics]);
 
   const totalEmployees = statistics?.totalStats.total_employees ?? employees.length;
   const totalQualifications = statistics?.totalStats.total_qualifications ?? qualifications.length;
@@ -252,24 +339,15 @@ const QualificationMatrix: React.FC = () => {
       title: '资质信息',
       dataIndex: 'qualification_info',
       key: 'qualification_info',
-      width: compactView ? 220 : 240,
+      width: qualificationColumnWidth,
       fixed: 'left',
       render: (_: unknown, qualification: Qualification) => {
-        const coverage = getQualificationCoverage(qualification.id);
-
         return (
           <div className="matrix-qualification-cell">
             <div className="matrix-qualification-name">{qualification.qualification_name}</div>
             <div className="matrix-qualification-meta">
               <span>资质ID: {qualification.id}</span>
-              <span>{formatPercent(coverage)}</span>
             </div>
-            <WxbProgress
-              className="matrix-qualification-progress"
-              percent={coverage}
-              status={getProgressStatus(coverage)}
-              showInfo={false}
-            />
           </div>
         );
       },
@@ -278,13 +356,11 @@ const QualificationMatrix: React.FC = () => {
       title: (
         <div className="matrix-employee-header">
           <div className="matrix-employee-name">{employee.employee_name}</div>
-          <div className="matrix-employee-code">{employee.employee_code}</div>
-          <div className="matrix-employee-score">{formatPercent(getEmployeeCompleteness(employee.id))}</div>
         </div>
       ),
       dataIndex: `employee_${employee.id}`,
       key: `employee_${employee.id}`,
-      width: compactView ? 62 : 78,
+      width: employeeColumnWidth,
       align: 'center' as const,
       render: (_: unknown, qualification: Qualification) => {
         const matrixItem = getMatrixItem(employee.id, qualification.id);
@@ -451,6 +527,8 @@ const QualificationMatrix: React.FC = () => {
         const tooltipTitle = level === null
           ? `${employee.employee_name} 未获得 ${qualification.qualification_name} 资质`
           : `${employee.employee_name} - ${qualification.qualification_name}: ${level}级`;
+        const cellKey = getMatrixCellKey(employee.id, qualification.id);
+        const isRovingCell = cellKey === activeRovingCellKey;
 
         return (
           <WxbPopover
@@ -466,14 +544,58 @@ const QualificationMatrix: React.FC = () => {
             }}
           >
             <WxbTooltip title={tooltipTitle}>
-              <div
-                role="button"
-                tabIndex={0}
+              <WxbButton
+                type="button"
+                variant="ghost"
+                size={isNarrowViewport ? 'lg' : 'md'}
+                tabIndex={isRovingCell ? 0 : -1}
                 className={cellClassName}
                 aria-label={tooltipTitle}
+                aria-expanded={isActiveCell}
+                ref={(node) => {
+                  if (node) {
+                    cellButtonRefs.current.set(cellKey, node);
+                  } else {
+                    cellButtonRefs.current.delete(cellKey);
+                  }
+                }}
+                onClick={() => {
+                  setKeyboardCell({ employeeId: employee.id, qualificationId: qualification.id });
+                  handleOpenEditor();
+                }}
+                onFocus={() => setKeyboardCell({ employeeId: employee.id, qualificationId: qualification.id })}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
+                  if (event.key === 'ArrowLeft') {
                     event.preventDefault();
+                    moveMatrixFocus(employee.id, qualification.id, -1, 0);
+                  } else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    moveMatrixFocus(employee.id, qualification.id, 1, 0);
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    moveMatrixFocus(employee.id, qualification.id, 0, -1);
+                  } else if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    moveMatrixFocus(employee.id, qualification.id, 0, 1);
+                  } else if (event.key === 'Home') {
+                    event.preventDefault();
+                    const targetEmployee = displayedEmployees[0];
+                    const targetQualification = event.ctrlKey ? filteredQualifications[0] : qualification;
+                    if (targetEmployee && targetQualification) {
+                      focusMatrixCell(targetEmployee.id, targetQualification.id);
+                    }
+                  } else if (event.key === 'End') {
+                    event.preventDefault();
+                    const targetEmployee = displayedEmployees[displayedEmployees.length - 1];
+                    const targetQualification = event.ctrlKey
+                      ? filteredQualifications[filteredQualifications.length - 1]
+                      : qualification;
+                    if (targetEmployee && targetQualification) {
+                      focusMatrixCell(targetEmployee.id, targetQualification.id);
+                    }
+                  } else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setKeyboardCell({ employeeId: employee.id, qualificationId: qualification.id });
                     handleOpenEditor();
                   }
                 }}
@@ -485,7 +607,7 @@ const QualificationMatrix: React.FC = () => {
                 ) : (
                   <span className="matrix-cell-value">{level}</span>
                 )}
-              </div>
+              </WxbButton>
             </WxbTooltip>
           </WxbPopover>
         );
@@ -536,16 +658,20 @@ const QualificationMatrix: React.FC = () => {
                   value={departmentFilter}
                   allowClear
                   options={departments.map((department) => ({ label: department, value: department }))}
-                  onChange={(value) => setDepartmentFilter(value ? String(value) : undefined)}
+                  onChange={(value) => {
+                    setDepartmentFilter(value ? String(value) : undefined);
+                    setTeamFilter(undefined);
+                  }}
                 />
               </div>
-              <div className="matrix-filter-control matrix-filter-control-level">
+              <div className="matrix-filter-control matrix-filter-control-team">
                 <WxbSelect
-                  placeholder="资质等级"
-                  value={levelFilter}
+                  placeholder="全部班组"
+                  value={teamFilter}
                   allowClear
-                  options={LEVEL_OPTIONS.map((level) => ({ label: `${level}级`, value: String(level) }))}
-                  onChange={(value) => setLevelFilter(value ? String(value) : undefined)}
+                  disabled={teams.length === 0}
+                  options={teams.map((team) => ({ label: team, value: team }))}
+                  onChange={(value) => setTeamFilter(value ? String(value) : undefined)}
                 />
               </div>
               <label className="matrix-switch-control">
@@ -576,7 +702,7 @@ const QualificationMatrix: React.FC = () => {
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={() => setEmployeeColumnLimit((current) => current + DEFAULT_EMPLOYEE_COLUMN_LIMIT)}
+                  onClick={() => setEmployeeColumnLimit((current) => current + baseEmployeeColumnLimit)}
                 >
                   更多员工
                 </WxbButton>
@@ -614,15 +740,26 @@ const QualificationMatrix: React.FC = () => {
             ),
           } : undefined}
           pagination={{
+            current: qualificationCurrentPage,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 项资质`,
-            pageSize: 20,
+            pageSize: qualificationPageSize,
             pageSizeOptions: ['10', '20', '50', '100'],
+            onChange: (page, nextPageSize) => {
+              const safePageSize = nextPageSize || DEFAULT_QUALIFICATION_PAGE_SIZE;
+              const pageSizeChanged = safePageSize !== qualificationPageSize;
+
+              setQualificationPageSize(safePageSize);
+              setQualificationCurrentPage(pageSizeChanged ? 1 : page);
+            },
           }}
           scroll={{
-            x: Math.max(820, 240 + displayedEmployees.length * (compactView ? 62 : 78)),
-            y: 'calc(100vh - 340px)',
+            x: Math.max(
+              isNarrowViewport ? 420 : 820,
+              qualificationColumnWidth + displayedEmployees.length * employeeColumnWidth,
+            ),
+            y: isNarrowViewport ? 'calc(100vh - 420px)' : 'calc(100vh - 340px)',
           }}
         />
       </WxbPageSection>

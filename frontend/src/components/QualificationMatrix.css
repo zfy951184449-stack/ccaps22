@@ -1,5 +1,6 @@
 .qualification-matrix-page {
   min-width: 0;
+  overflow-x: clip;
 }
 
 .qualification-matrix-section .wxb-page-section-body {
@@ -34,11 +35,11 @@
 }
 
 .matrix-filter-control {
-  width: 128px;
+  width: 120px;
 }
 
-.matrix-filter-control-level {
-  width: 112px;
+.matrix-filter-control-team {
+  width: 132px;
 }
 
 .matrix-switch-control {
@@ -89,12 +90,15 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: var(--wx-space-4);
+  gap: var(--wx-space-2);
 }
 
 .matrix-qualification-name {
+  display: block;
   color: var(--wx-fg-1);
   font: 600 var(--wx-fs-12)/1.3 var(--wx-font-sans);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .matrix-qualification-meta {
@@ -106,17 +110,9 @@
   font: 400 11px/1.25 var(--wx-font-sans);
 }
 
-.matrix-qualification-progress {
-  width: 100%;
-}
-
-.matrix-qualification-progress .wxb-progress-track {
-  height: 4px;
-}
-
 .matrix-employee-header {
   display: flex;
-  min-height: 88px;
+  min-height: 74px;
   align-items: center;
   justify-content: flex-end;
   flex-direction: column;
@@ -126,26 +122,19 @@
 }
 
 .matrix-employee-name {
-  min-height: 48px;
+  min-height: 56px;
   color: var(--wx-fg-1);
   font: 600 11px/1.12 var(--wx-font-sans);
   writing-mode: vertical-rl;
   text-orientation: mixed;
 }
 
-.matrix-employee-code,
-.matrix-employee-score {
-  max-width: 58px;
-  overflow-wrap: anywhere;
-  color: var(--wx-fg-3);
-  font: 600 9px/1.12 var(--wx-font-mono);
-}
-
-.matrix-cell {
+.matrix-cell.wxb-btn {
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 28px;
+  min-width: 0;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -157,15 +146,19 @@
   transition: background-color 160ms ease, box-shadow 160ms ease;
 }
 
-.matrix-cell:hover,
-.matrix-cell:focus-visible,
-.matrix-cell.is-active {
+.matrix-cell.wxb-btn:hover,
+.matrix-cell.wxb-btn:focus-visible,
+.matrix-cell.wxb-btn.is-active {
   background: var(--wx-blue-50);
   box-shadow: inset 0 0 0 1px var(--wx-blue-300);
 }
 
-.matrix-cell.is-compact {
-  min-height: 22px;
+.matrix-cell.wxb-btn:focus-visible {
+  outline: none;
+}
+
+.matrix-cell.wxb-btn.is-compact {
+  min-height: 32px;
 }
 
 .matrix-cell-empty {
@@ -271,13 +264,147 @@
   flex-wrap: wrap;
 }
 
+.qualification-matrix-table .ant-pagination {
+  align-items: center;
+  gap: var(--wx-space-6);
+}
+
+.qualification-matrix-table .ant-pagination-options {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--wx-space-8);
+}
+
+.qualification-matrix-table .ant-pagination-options-size-changer {
+  min-width: 100px;
+}
+
+.qualification-matrix-table .ant-pagination-options-size-changer:not(.ant-select-disabled) {
+  cursor: pointer;
+}
+
+.qualification-matrix-table .ant-pagination-options-size-changer:not(.ant-select-disabled) .ant-select-selector {
+  height: 32px;
+  border-color: var(--wx-blue-300);
+  background: var(--wx-blue-50);
+  box-shadow: inset 0 0 0 1px var(--wx-blue-100);
+  cursor: pointer;
+}
+
+.qualification-matrix-table .ant-pagination-options-size-changer:not(.ant-select-disabled):hover .ant-select-selector,
+.qualification-matrix-table .ant-pagination-options-size-changer.ant-select-focused .ant-select-selector,
+.qualification-matrix-table .ant-pagination-options-size-changer.ant-select-open .ant-select-selector {
+  border-color: var(--wx-blue-600);
+  box-shadow: 0 0 0 2px var(--wx-blue-100);
+}
+
+.qualification-matrix-table .ant-pagination-options-size-changer .ant-select-selection-item {
+  color: var(--wx-blue-800);
+  font-weight: 600;
+}
+
+.qualification-matrix-table .ant-pagination-options-size-changer .ant-select-arrow {
+  color: var(--wx-blue-700);
+}
+
+.qualification-matrix-table .ant-pagination-options-quick-jumper input {
+  border-color: var(--wx-border);
+}
+
+.qualification-matrix-table .ant-pagination-options-quick-jumper input:hover,
+.qualification-matrix-table .ant-pagination-options-quick-jumper input:focus {
+  border-color: var(--wx-blue-600);
+  box-shadow: 0 0 0 2px var(--wx-blue-100);
+}
+
 @media (max-width: 768px) {
-  .qualification-matrix-filter .wxb-page-toolbar {
+  .qualification-matrix-page {
+    gap: var(--wx-space-12);
+  }
+
+  .qualification-matrix-page .wxb-page-header {
+    gap: var(--wx-space-10);
+  }
+
+  .qualification-matrix-page .wxb-page-title {
+    font-size: 22px;
+  }
+
+  .qualification-matrix-section.wxb-page-section-framed {
+    padding: var(--wx-space-6);
+  }
+
+  .qualification-matrix-filter.wxb-page-toolbar {
+    min-height: 0;
+    padding: var(--wx-space-8);
+  }
+
+  .qualification-matrix-filter .wxb-page-toolbar-left,
+  .qualification-matrix-filter .wxb-page-toolbar-right,
+  .qualification-matrix-filter .wxb-page-toolbar-filters,
+  .qualification-matrix-filter .wxb-page-toolbar-summary,
+  .qualification-matrix-filter .wxb-page-toolbar-actions {
+    gap: var(--wx-space-6);
+  }
+
+  .qualification-matrix-filter .wxb-page-toolbar,
+  .qualification-matrix-filter.wxb-page-toolbar {
     align-items: stretch;
   }
 
-  .matrix-filter-control,
-  .matrix-filter-control-level {
+  .qualification-matrix-filter .wxb-filter-bar-search {
+    --wxb-filter-search-width: 100%;
+  }
+
+  .qualification-matrix-filter .wxb-filter-bar-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
+    gap: var(--wx-space-8);
+  }
+
+  .matrix-filter-control,
+  .matrix-filter-control-team {
+    width: 100%;
+  }
+
+  .matrix-switch-control {
+    min-height: 36px;
+    justify-content: space-between;
+  }
+
+  .qualification-matrix-filter .wxb-page-toolbar-actions {
+    width: auto;
+  }
+
+  .matrix-employee-header {
+    min-height: 66px;
+  }
+
+  .matrix-employee-name {
+    min-height: 50px;
+  }
+
+  .matrix-cell.wxb-btn,
+  .matrix-cell.wxb-btn.is-compact {
+    min-height: 44px;
+  }
+
+  .matrix-cell-editor {
+    min-width: min(280px, calc(100vw - 64px));
+  }
+
+  .qualification-matrix-table .ant-pagination {
+    justify-content: flex-start;
+    row-gap: var(--wx-space-8);
+  }
+
+  .qualification-matrix-table .ant-pagination-total-text {
+    width: 100%;
+  }
+
+  .qualification-matrix-table .ant-pagination-options {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

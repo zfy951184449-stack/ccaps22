@@ -14,6 +14,9 @@
   position: relative;
   z-index: 1001;
   display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 64px;
   align-items: center;
   gap: 16px;
@@ -66,6 +69,7 @@
 
 .wxb-topnav-logo {
   display: inline-flex;
+  flex: 0 0 auto;
   height: 40px;
   min-width: 190px;
   align-items: center;
@@ -146,13 +150,23 @@
 .wxb-topnav-links {
   position: relative;
   display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   align-items: center;
   gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.wxb-topnav-links::-webkit-scrollbar {
+  display: none;
 }
 
 .wxb-topnav-menu-wrap {
   position: relative;
   display: inline-flex;
+  flex: 0 0 auto;
 }
 
 .wxb-topnav-pill {
@@ -175,6 +189,7 @@
   position: relative;
   z-index: 1;
   display: inline-flex;
+  flex: 0 0 auto;
   height: 44px;
   align-items: center;
   gap: 8px;
@@ -344,6 +359,7 @@
 
 .wxb-topnav-right {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 10px;
 }

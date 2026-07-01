@@ -200,7 +200,7 @@ const normalizeEquipmentText = (field: 'equipment_class' | 'equipment_model', va
   return trimmed;
 };
 
-const assertNodeSubtype = (nodeClass: ResourceNodeClass, rawSubtype: unknown): string | null => {
+export const assertNodeSubtype = (nodeClass: ResourceNodeClass, rawSubtype: unknown): string | null => {
   const subtype = normalizeNodeSubtype(rawSubtype);
 
   if (nodeClass === 'SITE' || nodeClass === 'LINE' || nodeClass === 'EQUIPMENT_UNIT') {
@@ -231,7 +231,7 @@ const assertNodeSubtype = (nodeClass: ResourceNodeClass, rawSubtype: unknown): s
   throw new Error('Unsupported node_class');
 };
 
-const assertEquipmentAttributes = (
+export const assertEquipmentAttributes = (
   nodeClass: ResourceNodeClass,
   attrs: {
     equipmentSystemType: unknown;
@@ -273,7 +273,7 @@ const assertEquipmentAttributes = (
   };
 };
 
-const assertParentChildRule = (
+export const assertParentChildRule = (
   parentNode: Pick<ResourceNodeRecord, 'node_class' | 'node_subtype'> | null,
   childClass: ResourceNodeClass,
   childSubtype: string | null,

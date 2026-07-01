@@ -688,14 +688,6 @@ const RosterExceptionRepair: React.FC<RosterExceptionRepairProps> = ({ embedded 
     return [dayjs(windowStart), dayjs(windowEnd)] as any;
   }, [windowEnd, windowStart]);
   const canAnalyzeImpact = Boolean(selectedEmployeeIds.length > 0 && windowStart && windowEnd && !previewLoading);
-  const canGenerateProposal = Boolean(
-    selectedEmployeeIds.length > 0
-    && windowStart
-    && windowEnd
-    && preview
-    && preview.summary.impactedAssignmentCount > 0
-    && !previewLoading,
-  );
   // 不可用员工名单 —— 用于把变更分成「直接顶替」(不可用者原岗被回填) 与「连带重排」(其他人被牵动)。
   const unavailableIds = useMemo(
     () => new Set((preview?.employees ?? []).map((employee) => employee.employeeId)),
@@ -896,35 +888,7 @@ const RosterExceptionRepair: React.FC<RosterExceptionRepairProps> = ({ embedded 
       <WxbPageSection title="异常录入" description="选择人员临时不可用时间窗和局部修复策略。">
         <div className="roster-exception-form">
           <WxbSelect
-            label="异常类型"
-            value="EMPLOYEE_UNAVAILABLE"
-            disabled
-            options={[{ label: '人员临时不可用', value: 'EMPLOYEE_UNAVAILABLE' }]}
-          />
-          <WxbSelect
-            label="Team 筛选"
-            placeholder="全部 Team"
-            showSearch
-            optionFilterProp="label"
-            loading={employeesLoading}
-            value={selectedTeamScope}
-            options={teamOptions}
-            onChange={(value) => {
-              const nextScope = String(value ?? ALL_TEAM_SCOPE);
-              const nextSelectedIds = nextScope === ALL_TEAM_SCOPE
-                ? selectedEmployeeIds
-                : selectedEmployeeIds.filter((employeeId) => {
-                  const employee = employees.find((item) => getEmployeeId(item) === Number(employeeId));
-                  return Boolean(employee && getEmployeeTeamScopeKey(employee) === nextScope);
-                });
-              setSelectedTeamScope(nextScope);
-              setSelectedEmployeeIds(nextSelectedIds);
-              clearPreviewState();
-            }}
-            notFoundContent={employeesLoading ? <WxbSpinner size={16} tip="加载中" /> : <WxbEmpty description="暂无 Team" />}
-          />
-          <WxbSelect
-            label="员工（可多选）"
+            label="不可用员工（可多选）"
             placeholder="选择一名或多名真实员工"
             mode="multiple"
             maxTagCount="responsive"
@@ -958,9 +922,32 @@ const RosterExceptionRepair: React.FC<RosterExceptionRepairProps> = ({ embedded 
               clearPreviewState();
             }}
           />
+          <WxbSelect
+            label="Team 筛选"
+            placeholder="全部 Team"
+            showSearch
+            optionFilterProp="label"
+            loading={employeesLoading}
+            value={selectedTeamScope}
+            options={teamOptions}
+            onChange={(value) => {
+              const nextScope = String(value ?? ALL_TEAM_SCOPE);
+              const nextSelectedIds = nextScope === ALL_TEAM_SCOPE
+                ? selectedEmployeeIds
+                : selectedEmployeeIds.filter((employeeId) => {
+                  const employee = employees.find((item) => getEmployeeId(item) === Number(employeeId));
+                  return Boolean(employee && getEmployeeTeamScopeKey(employee) === nextScope);
+                });
+              setSelectedTeamScope(nextScope);
+              setSelectedEmployeeIds(nextSelectedIds);
+              clearPreviewState();
+            }}
+            notFoundContent={employeesLoading ? <WxbSpinner size={16} tip="加载中" /> : <WxbEmpty description="暂无 Team" />}
+          />
           <WxbInput
-            label="原因"
+            label="原因（选填）"
             value={reasonCode}
+            placeholder="如：病假、调休、培训"
             onChange={(event) => setReasonCode(event.target.value)}
           />
         </div>
@@ -978,61 +965,64 @@ const RosterExceptionRepair: React.FC<RosterExceptionRepairProps> = ({ embedded 
                 { label: '最大覆盖', value: 'MAX_COVERAGE' },
               ]}
             />
+            <span className="roster-exception-control-hint">
+              {repairMode === 'MINIMAL_CHANGE'
+                ? '尽量少动其他人，结果最接近原排班。'
+                : '宁可多调动几个人，尽量多补上缺口。'}
+            </span>
           </div>
-          <WxbCheckbox checked={protectLockedAssignments} onChange={(checked) => {
-            setProtectLockedAssignments(checked);
-            clearPreviewState();
-          }}>
-            保护锁定 assignment
-          </WxbCheckbox>
-          <WxbCheckbox checked disabled>
-            同 Team 替换
-          </WxbCheckbox>
-          <WxbCheckbox checked={allowOvertimeSuggestions} onChange={(checked) => {
-            setAllowOvertimeSuggestions(checked);
-            clearPreviewState();
-          }}>
-            允许加班建议
-          </WxbCheckbox>
-          <WxbCheckbox checked disabled>
-            只预览不写入
-          </WxbCheckbox>
-          <WxbButton
-            type="button"
-            variant="secondary"
-            onClick={handleAnalyzeImpact}
-            disabled={!canAnalyzeImpact}
-            aria-busy={activeRequest === 'IMPACT_ONLY' || undefined}
-          >
-            {activeRequest === 'IMPACT_ONLY' ? (
-              <span className="roster-exception-action-content">
-                <WxbSpinner size={14} />
-                <span>正在查看影响</span>
-              </span>
-            ) : preview ? '重新查看影响' : '查看影响'}
-          </WxbButton>
-          <WxbButton
-            type="button"
-            onClick={handleGenerateProposal}
-            disabled={!canGenerateProposal}
-            aria-busy={activeRequest === 'SOLVER_REPAIR' || undefined}
-          >
-            {activeRequest === 'SOLVER_REPAIR' ? (
-              <span className="roster-exception-action-content">
-                <WxbSpinner size={14} />
-                <span>正在生成方案</span>
-              </span>
-            ) : hasSolverProposal ? '重新生成修复方案' : '生成修复方案'}
-          </WxbButton>
-          <span className="roster-exception-action-hint">
-            {preview
-              ? preview.summary.impactedAssignmentCount > 0
-                ? `已显示 ${selectedEmployeeCount} 名员工的影响范围，确认后再生成 solver proposal。`
-                : '当前时间窗没有受影响人员分配，无需生成方案。'
-              : selectedEmployeeCount > 1
-                ? `已选择 ${selectedEmployeeCount} 名员工；先查看影响，再生成修复方案。`
-                : '先查看影响，再生成修复方案。'}
-          </span>
+          <div className="roster-exception-options">
+            <WxbCheckbox checked={protectLockedAssignments} onChange={(checked) => {
+              setProtectLockedAssignments(checked);
+              clearPreviewState();
+            }}>
+              保护锁定班次
+            </WxbCheckbox>
+            <WxbCheckbox checked={allowOvertimeSuggestions} onChange={(checked) => {
+              setAllowOvertimeSuggestions(checked);
+              clearPreviewState();
+            }}>
+              允许加班补缺
+            </WxbCheckbox>
+          </div>
+          <p className="roster-exception-constraint-note">
+            修复只在同部门内调人，且仅生成方案预览，确认后才写库。
+          </p>
+          <div className="roster-exception-actions">
+            <WxbButton
+              type="button"
+              variant="primary"
+              onClick={handleGenerateProposal}
+              disabled={!canAnalyzeImpact}
+              aria-busy={activeRequest === 'SOLVER_REPAIR' || undefined}
+            >
+              {activeRequest === 'SOLVER_REPAIR' ? (
+                <span className="roster-exception-action-content">
+                  <WxbSpinner size={14} />
+                  <span>正在生成方案</span>
+                </span>
+              ) : hasSolverProposal ? '重新生成修复方案' : '生成修复方案'}
+            </WxbButton>
+            <WxbButton
+              type="button"
+              variant="secondary"
+              onClick={handleAnalyzeImpact}
+              disabled={!canAnalyzeImpact}
+              aria-busy={activeRequest === 'IMPACT_ONLY' || undefined}
+            >
+              {activeRequest === 'IMPACT_ONLY' ? (
+                <span className="roster-exception-action-content">
+                  <WxbSpinner size={14} />
+                  <span>正在查看影响</span>
+                </span>
+              ) : '仅查看影响'}
+            </WxbButton>
+            <span className="roster-exception-action-hint">
+              {canAnalyzeImpact
+                ? '将生成一份最小重排方案供你评审，确认后再应用。'
+                : '请先选择不可用员工与不可用时间窗。'}
+            </span>
+          </div>
         </div>
         {previewLoading && (
           <div className="roster-exception-progress-panel" role="status" aria-live="polite">

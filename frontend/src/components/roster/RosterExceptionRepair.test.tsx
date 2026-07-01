@@ -474,9 +474,9 @@ describe('RosterExceptionRepair', () => {
     await renderPage();
 
     expect(document.body.textContent).toContain('异常排班快速修复');
-    expect(document.body.textContent).toContain('先查看影响');
+    expect(document.body.textContent).toContain('生成修复方案');
     expect(document.body.textContent).toContain('Team 筛选');
-    expect(document.body.textContent).toContain('同 Team 替换');
+    expect(document.body.textContent).toContain('修复模式');
   });
 
   it('views impact analysis before generating a solver repair proposal', async () => {
@@ -521,10 +521,10 @@ describe('RosterExceptionRepair', () => {
     expect(document.body.textContent).toContain('锁定');
   });
 
-  it('can generate solver repair proposal only after impact analysis', async () => {
+  it('generates a solver repair proposal directly, without a separate impact step', async () => {
     await renderPage();
     await fillWindowFields();
-    expect(getGenerateButton()?.disabled).toBe(true);
+    expect(getGenerateButton()?.disabled).toBe(false);
 
     await fillWindowAndPreview();
 

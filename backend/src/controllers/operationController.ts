@@ -1,5 +1,172 @@
 import { Request, Response } from 'express';
+import { RowDataPacket } from 'mysql2';
 import pool from '../config/database';
+
+interface OperationQualificationRequirementRow extends RowDataPacket {
+  operation_id: number;
+  position_number: number;
+  qualification_id: number;
+  qualification_name: string;
+  min_level: number;
+  is_mandatory: number;
+}
+
+interface EmployeeQualificationRow extends RowDataPacket {
+  employee_qualification_id: number | null;
+  employee_id: number;
+  employee_code: string;
+  employee_name: string;
+  department_name: string | null;
+  team_name: string | null;
+  unit_name: string | null;
+  position_name: string | null;
+  qualification_id: number | null;
+  qualification_name: string | null;
+  qualification_level: number | null;
+}
+
+interface EmployeeQualificationSummary {
+  id: number | null;
+  qualification_id: number;
+  qualification_name: string;
+  qualification_level: number;
+}
+
+interface QualifiedEmployee {
+  employee_id: number;
+  employee_code: string;
+  employee_name: string;
+  department_name: string | null;
+  team_name: string | null;
+  unit_name: string | null;
+  position_name: string | null;
+  qualifications: EmployeeQualificationSummary[];
+}
+
+const buildQualifiedEmployees = (rows: EmployeeQualificationRow[]): QualifiedEmployee[] => {
+  const employees = new Map<number, QualifiedEmployee>();
+
+  rows.forEach((row) => {
+    const employeeId = Number(row.employee_id);
+    if (!Number.isFinite(employeeId)) return;
+
+    if (!employees.has(employeeId)) {
+      employees.set(employeeId, {
+        employee_id: employeeId,
+        employee_code: row.employee_code,
+        employee_name: row.employee_name,
+        department_name: row.department_name ?? null,
+        team_name: row.team_name ?? null,
+        unit_name: row.unit_name ?? null,
+        position_name: row.position_name ?? null,
+        qualifications: [],
+      });
+    }
+
+    const qualificationId = row.qualification_id === null ? null : Number(row.qualification_id);
+    const qualificationLevel = row.qualification_level === null ? null : Number(row.qualification_level);
+    const employeeQualificationId =
+      row.employee_qualification_id === null || row.employee_qualification_id === undefined
+        ? null
+        : Number(row.employee_qualification_id);
+    if (qualificationId && qualificationLevel && row.qualification_name) {
+      employees.get(employeeId)!.qualifications.push({
+        id: Number.isFinite(employeeQualificationId) ? employeeQualificationId : null,
+        qualification_id: qualificationId,
+        qualification_name: row.qualification_name,
+        qualification_level: qualificationLevel,
+      });
+    }
+  });
+
+  return Array.from(employees.values());
+};
+
+const fetchActiveEmployeesWithQualifications = async (): Promise<QualifiedEmployee[]> => {
+  const [rows] = await pool.execute<EmployeeQualificationRow[]>(
+    `
+      SELECT
+        e.id AS employee_id,
+        e.employee_code,
+        e.employee_name,
+        CASE
+          WHEN u1.unit_type = 'DEPARTMENT' THEN u1.unit_name
+          WHEN u1.unit_type = 'TEAM' AND u2.unit_type = 'DEPARTMENT' THEN u2.unit_name
+          WHEN u1.unit_type IN ('GROUP', 'SHIFT') AND u3.unit_type = 'DEPARTMENT' THEN u3.unit_name
+          ELSE NULL
+        END AS department_name,
+        CASE
+          WHEN u1.unit_type = 'TEAM' THEN u1.unit_name
+          WHEN u1.unit_type IN ('GROUP', 'SHIFT') AND u2.unit_type = 'TEAM' THEN u2.unit_name
+          ELSE NULL
+        END AS team_name,
+        u1.unit_name AS unit_name,
+        r.role_name AS position_name,
+        eq.id AS employee_qualification_id,
+        eq.qualification_id,
+        q.qualification_name,
+        eq.qualification_level
+      FROM employees e
+      LEFT JOIN organization_units u1 ON u1.id = e.unit_id
+      LEFT JOIN organization_units u2 ON u2.id = u1.parent_id
+      LEFT JOIN organization_units u3 ON u3.id = u2.parent_id
+      LEFT JOIN employee_roles r ON r.id = e.primary_role_id
+      LEFT JOIN employee_qualifications eq ON eq.employee_id = e.id
+      LEFT JOIN qualifications q ON q.id = eq.qualification_id
+      WHERE COALESCE(e.employment_status, 'ACTIVE') = 'ACTIVE'
+      ORDER BY e.employee_code, e.employee_name, q.qualification_name
+    `,
+  );
+
+  return buildQualifiedEmployees(rows);
+};
+
+const groupRequirementsByOperationAndPosition = (rows: OperationQualificationRequirementRow[]) => {
+  const grouped = new Map<number, Map<number, OperationQualificationRequirementRow[]>>();
+
+  rows.forEach((row) => {
+    const operationId = Number(row.operation_id);
+    const positionNumber = Number(row.position_number);
+    if (!Number.isFinite(operationId) || !Number.isFinite(positionNumber)) return;
+
+    if (!grouped.has(operationId)) {
+      grouped.set(operationId, new Map());
+    }
+    const byPosition = grouped.get(operationId)!;
+    if (!byPosition.has(positionNumber)) {
+      byPosition.set(positionNumber, []);
+    }
+    byPosition.get(positionNumber)!.push(row);
+  });
+
+  return grouped;
+};
+
+const getMandatoryRequirements = (requirements: OperationQualificationRequirementRow[]) =>
+  requirements.filter((requirement) => Number(requirement.is_mandatory) === 1);
+
+const isEmployeeQualifiedForPosition = (
+  employee: QualifiedEmployee,
+  requirements: OperationQualificationRequirementRow[],
+) => {
+  const mandatoryRequirements = getMandatoryRequirements(requirements);
+  if (mandatoryRequirements.length === 0) {
+    return requirements.length > 0;
+  }
+
+  return mandatoryRequirements.every((requirement) => {
+    const requiredLevel = Number(requirement.min_level || 1);
+    return employee.qualifications.some((qualification) =>
+      qualification.qualification_id === Number(requirement.qualification_id)
+      && qualification.qualification_level >= requiredLevel
+    );
+  });
+};
+
+const getQualifiedEmployeesForPosition = (
+  employees: QualifiedEmployee[],
+  requirements: OperationQualificationRequirementRow[],
+) => employees.filter((employee) => isEmployeeQualifiedForPosition(employee, requirements));
 
 // 生成下一个操作编码
 const generateNextOperationCode = async (): Promise<string> => {
@@ -249,60 +416,113 @@ export const getOperationStatistics = async (req: Request, res: Response) => {
 // 获取各操作按位置的合格人数
 export const getQualifiedPersonnelByOperation = async (req: Request, res: Response) => {
   try {
-    // 获取每个操作的每个位置需要的资质及合格人数
-    const [rows] = await pool.execute(`
+    const [rows] = await pool.execute<OperationQualificationRequirementRow[]>(`
       SELECT 
         oqr.operation_id,
         oqr.position_number,
         oqr.qualification_id,
         q.qualification_name,
         oqr.min_level,
-        COUNT(DISTINCT CASE WHEN eq.qualification_level >= oqr.min_level THEN eq.employee_id END) as qualified_count
+        oqr.is_mandatory
       FROM operation_qualification_requirements oqr
       JOIN qualifications q ON oqr.qualification_id = q.id
-      LEFT JOIN employee_qualifications eq ON oqr.qualification_id = eq.qualification_id
-      GROUP BY oqr.operation_id, oqr.position_number, oqr.qualification_id, q.qualification_name, oqr.min_level
-      ORDER BY oqr.operation_id, oqr.position_number
+      ORDER BY oqr.operation_id, oqr.position_number, oqr.is_mandatory DESC, q.qualification_name
     `);
 
-    // 按操作分组
-    const operationMap: { [key: number]: { [position: number]: { requirements: any[], minQualified: number } } } = {};
-
-    (rows as any[]).forEach(row => {
-      if (!operationMap[row.operation_id]) {
-        operationMap[row.operation_id] = {};
-      }
-      if (!operationMap[row.operation_id][row.position_number]) {
-        operationMap[row.operation_id][row.position_number] = { requirements: [], minQualified: Infinity };
-      }
-
-      operationMap[row.operation_id][row.position_number].requirements.push({
-        qualification_id: row.qualification_id,
-        qualification_name: row.qualification_name,
-        min_level: row.min_level,
-        qualified_count: row.qualified_count
-      });
-
-      // 取各资质合格人数的最小值作为该位置的有效合格人数
-      operationMap[row.operation_id][row.position_number].minQualified =
-        Math.min(operationMap[row.operation_id][row.position_number].minQualified, row.qualified_count);
-    });
+    const employees = await fetchActiveEmployeesWithQualifications();
+    const groupedRequirements = groupRequirementsByOperationAndPosition(rows);
 
     // 转换为简化格式：operation_id -> [position1_count, position2_count, ...]
     const result: { [key: number]: number[] } = {};
-    for (const opId in operationMap) {
-      const positions = operationMap[Number(opId)];
+    groupedRequirements.forEach((positions, opId) => {
       const positionCounts: number[] = [];
-      const maxPosition = Math.max(...Object.keys(positions).map(Number));
+      const maxPosition = Math.max(...Array.from(positions.keys()));
       for (let i = 1; i <= maxPosition; i++) {
-        positionCounts.push(positions[i]?.minQualified === Infinity ? 0 : positions[i]?.minQualified || 0);
+        const requirements = positions.get(i) || [];
+        positionCounts.push(getQualifiedEmployeesForPosition(employees, requirements).length);
       }
-      result[Number(opId)] = positionCounts;
-    }
+      result[opId] = positionCounts;
+    });
 
     res.json(result);
   } catch (error) {
     console.error('Error fetching qualified personnel:', error);
     res.status(500).json({ error: 'Failed to fetch qualified personnel' });
+  }
+};
+
+// 获取单个操作按位置的合格人员明细
+export const getQualifiedPersonnelDetailsByOperation = async (req: Request, res: Response) => {
+  try {
+    const operationId = Number(req.params.id);
+    if (!Number.isFinite(operationId) || operationId <= 0) {
+      return res.status(400).json({ error: 'Invalid operation id' });
+    }
+
+    const [operationRows] = await pool.execute<RowDataPacket[]>(
+      `SELECT id, operation_code, operation_name, required_people
+       FROM operations
+       WHERE id = ?`,
+      [operationId],
+    );
+
+    if (operationRows.length === 0) {
+      return res.status(404).json({ error: 'Operation not found' });
+    }
+
+    const operation = operationRows[0];
+    const requiredPeople = Number(operation.required_people || 1);
+
+    const [requirementRows] = await pool.execute<OperationQualificationRequirementRow[]>(
+      `
+        SELECT
+          oqr.operation_id,
+          oqr.position_number,
+          oqr.qualification_id,
+          q.qualification_name,
+          oqr.min_level,
+          oqr.is_mandatory
+        FROM operation_qualification_requirements oqr
+        JOIN qualifications q ON q.id = oqr.qualification_id
+        WHERE oqr.operation_id = ?
+          AND oqr.position_number BETWEEN 1 AND ?
+        ORDER BY oqr.position_number, oqr.is_mandatory DESC, q.qualification_name
+      `,
+      [operationId, requiredPeople],
+    );
+
+    const employees = await fetchActiveEmployeesWithQualifications();
+    const requirementsByPosition =
+      groupRequirementsByOperationAndPosition(requirementRows).get(operationId)
+      || new Map<number, OperationQualificationRequirementRow[]>();
+
+    const positions = Array.from({ length: requiredPeople }, (_, index) => {
+      const positionNumber = index + 1;
+      const requirements = requirementsByPosition.get(positionNumber) || [];
+      const personnel = getQualifiedEmployeesForPosition(employees, requirements);
+
+      return {
+        position_number: positionNumber,
+        qualified_count: personnel.length,
+        requirements: requirements.map((requirement) => ({
+          qualification_id: Number(requirement.qualification_id),
+          qualification_name: requirement.qualification_name,
+          min_level: Number(requirement.min_level || 1),
+          is_mandatory: Number(requirement.is_mandatory) === 1,
+        })),
+        personnel,
+      };
+    });
+
+    res.json({
+      operation_id: Number(operation.id),
+      operation_code: operation.operation_code,
+      operation_name: operation.operation_name,
+      required_people: requiredPeople,
+      positions,
+    });
+  } catch (error) {
+    console.error('Error fetching qualified personnel details:', error);
+    res.status(500).json({ error: 'Failed to fetch qualified personnel details' });
   }
 };

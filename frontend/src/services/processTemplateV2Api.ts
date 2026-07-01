@@ -426,6 +426,33 @@ const mapResource = (data: any): Resource => ({
     : undefined,
 });
 
+/* ── 资源节点 Excel 导入 ── */
+export interface ResourceNodeImportRow {
+  row: number;
+  nodeCode: string;
+  nodeName: string;
+  nodeClass: string;
+  parentCode: string | null;
+  status: 'create' | 'skip' | 'error' | 'created' | 'skipped';
+  skipReason: string | null;
+  errors: string[];
+}
+
+export interface ResourceNodeImportResult {
+  dry_run: boolean;
+  can_import: boolean;
+  summary: {
+    total: number;
+    toCreate?: number;
+    toSkip?: number;
+    errors?: number;
+    created?: number;
+    skipped?: number;
+    failed?: number;
+  };
+  rows: ResourceNodeImportRow[];
+}
+
 export const processTemplateV2Api = {
   listTemplates: async (teamId?: string) => {
     const response = await client.get('/process-templates', {
@@ -661,6 +688,18 @@ export const processTemplateV2Api = {
   },
   clearResourceNodeTreeForRebuild: async () => {
     await client.post('/resource-nodes/rebuild/clear', { confirm: true });
+  },
+  previewResourceNodeImport: async (file: File): Promise<ResourceNodeImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await client.post('/resource-nodes/import/preview', formData);
+    return response.data?.data as ResourceNodeImportResult;
+  },
+  importResourceNodes: async (file: File): Promise<ResourceNodeImportResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await client.post('/resource-nodes/import', formData);
+    return response.data?.data as ResourceNodeImportResult;
   },
   getTemplateScheduleBinding: async (scheduleId: number): Promise<TemplateResourceBindingResponse> => {
     const response = await client.get(`/template-stage-operations/${scheduleId}/resource-binding`);

@@ -483,6 +483,13 @@ img{display:block;max-width:100%}
 .fs{display:inline-flex;align-items:center;gap:.45rem;color:var(--ink-2);background:none;border:none;cursor:pointer;font-family:var(--sans);font-size:.82rem;}
 .fs:hover{color:var(--ink);}
 .fs svg{width:15px;height:15px;}
+.model-meta{display:flex;align-items:center;gap:.28rem;margin:.65rem 0 .1rem;}
+.ml-node{background:#f4f6f8;border:1px solid #d8dbe0;border-radius:6px;padding:.18rem .46rem;font-size:.76rem;font-weight:600;color:var(--ink);}
+.ml-arr{font-size:.78rem;color:var(--ink-3);line-height:1;}
+.model-stat{display:flex;align-items:baseline;gap:.45rem;margin:.55rem 0 .45rem;}
+.ms-num{font-size:clamp(2.6rem,4.2vw,4.6rem);font-weight:700;color:var(--accent);line-height:1;letter-spacing:-.03em;}
+.ms-h{font-size:clamp(1.5rem,2.4vw,2.6rem);font-weight:600;margin-left:.04em;}
+.ms-lab{font-size:.85rem;color:var(--ink-2);font-weight:500;align-self:flex-end;padding-bottom:.22rem;}
 
 @media (prefers-reduced-motion: reduce){
   .copyswap .copy,.frameswap .frame,.foldview,.batchview,.asm-chain,.asm-card,.asm-conn,.tpl-card,.tpl-chip,.batch-card,.task-card,.pnode,.pyr-head,.pyr,.s-split,.pyr-links,.qpage,.qpage-head,.qop-node,.qpos,.qual,.q-links{transition:none !important;}
@@ -506,6 +513,17 @@ img{display:block;max-width:100%}
             <div class="lines">
               <p class="line">所有工艺操作<b>标准化、建库</b>，固化为<b>可复用的工艺模板</b>。</p>
               <p class="line"><b>上游 · 下游 · 配液</b>三段工艺<span class="g">全部打通</span>。</p>
+            </div>
+            <div class="model-meta">
+              <span class="ml-node">模版</span>
+              <span class="ml-arr">→</span>
+              <span class="ml-node">阶段</span>
+              <span class="ml-arr">→</span>
+              <span class="ml-node">操作</span>
+            </div>
+            <div class="model-stat">
+              <span class="ms-num">4<span class="ms-h">h</span></span>
+              <span class="ms-lab">完整建模一个部门全工艺</span>
             </div>
             <div class="cover-band">
               <span class="cov-pill cov-mix"><i></i>配液</span>

@@ -11,18 +11,48 @@ export const getQualificationMatrix = async (req: Request, res: Response) => {
         e.employee_name,
         COALESCE(
           CASE
+            WHEN u1.unit_type = 'DEPARTMENT' THEN u1.id
+            WHEN u2.unit_type = 'DEPARTMENT' THEN u2.id
+            WHEN u3.unit_type = 'DEPARTMENT' THEN u3.id
+            WHEN u4.unit_type = 'DEPARTMENT' THEN u4.id
+            ELSE NULL
+          END,
+          NULL
+        ) AS department_id,
+        COALESCE(
+          CASE
             WHEN u1.unit_type = 'DEPARTMENT' THEN u1.unit_name
-            WHEN u1.unit_type = 'TEAM' AND u2.unit_type = 'DEPARTMENT' THEN u2.unit_name
-            WHEN u1.unit_type IN ('GROUP', 'SHIFT') AND u3.unit_type = 'DEPARTMENT' THEN u3.unit_name
+            WHEN u2.unit_type = 'DEPARTMENT' THEN u2.unit_name
+            WHEN u3.unit_type = 'DEPARTMENT' THEN u3.unit_name
+            WHEN u4.unit_type = 'DEPARTMENT' THEN u4.unit_name
             ELSE NULL
           END,
           ''
         ) AS department,
+        COALESCE(
+          CASE
+            WHEN u1.unit_type = 'TEAM' THEN u1.id
+            WHEN u2.unit_type = 'TEAM' THEN u2.id
+            WHEN u3.unit_type = 'TEAM' THEN u3.id
+            ELSE NULL
+          END,
+          NULL
+        ) AS team_id,
+        COALESCE(
+          CASE
+            WHEN u1.unit_type = 'TEAM' THEN u1.unit_name
+            WHEN u2.unit_type = 'TEAM' THEN u2.unit_name
+            WHEN u3.unit_type = 'TEAM' THEN u3.unit_name
+            ELSE NULL
+          END,
+          ''
+        ) AS team_name,
         COALESCE(r.role_name, '') AS position
       FROM employees e
       LEFT JOIN organization_units u1 ON u1.id = e.unit_id
       LEFT JOIN organization_units u2 ON u2.id = u1.parent_id
       LEFT JOIN organization_units u3 ON u3.id = u2.parent_id
+      LEFT JOIN organization_units u4 ON u4.id = u3.parent_id
       LEFT JOIN employee_roles r ON r.id = e.primary_role_id
       ORDER BY e.employee_name
     `);

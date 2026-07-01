@@ -4,8 +4,8 @@
 
 .roster-exception-form {
   display: grid;
-  grid-template-columns: repeat(5, minmax(180px, 1fr));
-  gap: var(--wx-space-12);
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--wx-space-20) var(--wx-space-24);
   align-items: end;
 }
 
@@ -18,11 +18,32 @@
 }
 
 .roster-exception-controls {
+  display: grid;
+  gap: var(--wx-space-20);
+  margin-top: var(--wx-space-24);
+  padding-top: var(--wx-space-20);
+  border-top: 1px solid var(--wx-border);
+}
+
+.roster-exception-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--wx-space-24);
+}
+
+.roster-exception-control-hint,
+.roster-exception-constraint-note {
+  margin: 0;
+  color: var(--wx-fg-3);
+  font: 400 var(--wx-fs-13)/1.6 var(--wx-font-sans);
+}
+
+.roster-exception-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--wx-space-12);
-  margin-top: var(--wx-space-16);
+  margin-top: var(--wx-space-8);
 }
 
 .roster-exception-action-content {

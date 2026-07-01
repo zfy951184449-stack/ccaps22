@@ -1,0 +1,1756 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - navigation "主导航" [ref=e5]:
+      - button "返回运营总览" [ref=e6] [cursor=pointer]:
+        - generic [ref=e9]: MFG8 APS
+      - generic [ref=e10]:
+        - button "area-chart 运营总览" [ref=e12] [cursor=pointer]:
+          - img "area-chart" [ref=e14]:
+            - img [ref=e15]
+          - generic [ref=e18]: 运营总览
+        - button "clock-circle 我的排班" [ref=e19] [cursor=pointer]:
+          - img "clock-circle" [ref=e21]:
+            - img [ref=e22]
+          - generic [ref=e26]: 我的排班
+        - button "setting 基础数据 down" [ref=e28] [cursor=pointer]:
+          - img "setting" [ref=e30]:
+            - img [ref=e31]
+          - generic [ref=e34]: 基础数据
+          - img "down" [ref=e35]:
+            - img [ref=e36]
+        - button "project 生产计划 down" [ref=e39] [cursor=pointer]:
+          - img "project" [ref=e41]:
+            - img [ref=e42]
+          - generic [ref=e45]: 生产计划
+          - img "down" [ref=e46]:
+            - img [ref=e47]
+        - button "apartment 人员与排班 down" [ref=e50] [cursor=pointer]:
+          - img "apartment" [ref=e52]:
+            - img [ref=e53]
+          - generic [ref=e56]: 人员与排班
+          - img "down" [ref=e57]:
+            - img [ref=e58]
+        - button "safety 权限治理 down" [ref=e61] [cursor=pointer]:
+          - img "safety" [ref=e63]:
+            - img [ref=e64]
+          - generic [ref=e68]: 权限治理
+          - img "down" [ref=e69]:
+            - img [ref=e70]
+        - button "rocket UI 组件库 down" [ref=e73] [cursor=pointer]:
+          - img "rocket" [ref=e75]:
+            - img [ref=e76]
+          - generic [ref=e79]: UI 组件库
+          - img "down" [ref=e80]:
+            - img [ref=e81]
+      - generic [ref=e83]:
+        - generic [ref=e84]:
+          - combobox "搜索页面" [ref=e85]
+          - img "search":
+            - img
+          - generic: Ctrl K
+        - button "通知" [ref=e86] [cursor=pointer]:
+          - img "bell" [ref=e87]:
+            - img [ref=e88]
+        - button "当前用户" [ref=e91] [cursor=pointer]: APS
+  - main [ref=e93]:
+    - generic [ref=e94]:
+      - generic "资质矩阵" [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]: Master Data
+          - generic [ref=e98]:
+            - heading "资质矩阵" [level=1] [ref=e99]
+            - generic [ref=e100]:
+              - generic [ref=e102]: 58 员工
+              - generic [ref=e104]: 52 资质
+              - generic [ref=e106]: 1185 分配
+              - generic [ref=e108]: 均级 3.3
+          - paragraph [ref=e109]: 按员工与资质维护等级，供资质匹配、人员排班和求解约束复用。
+        - button "刷新" [ref=e111] [cursor=pointer]:
+          - img [ref=e112]
+          - text: 刷新
+      - generic [ref=e118]:
+        - generic [ref=e119]:
+          - generic [ref=e121]:
+            - generic [ref=e123]:
+              - img
+              - textbox "搜索员工姓名或工号" [ref=e124]
+            - generic [ref=e125]:
+              - generic [ref=e128] [cursor=pointer]:
+                - generic [ref=e129]:
+                  - combobox [ref=e131]
+                  - generic: 全部部门
+                - generic:
+                  - img:
+                    - img
+              - generic [ref=e134] [cursor=pointer]:
+                - generic [ref=e135]:
+                  - combobox [ref=e137]
+                  - generic: 全部班组
+                - generic:
+                  - img:
+                    - img
+              - generic [ref=e138]:
+                - generic [ref=e139]: 显示空行
+                - switch "显示空行" [checked] [ref=e140] [cursor=pointer]
+              - generic [ref=e141]:
+                - generic [ref=e142]: 紧凑视图
+                - switch "紧凑视图" [checked] [ref=e143] [cursor=pointer]
+          - generic [ref=e144]:
+            - generic [ref=e145]:
+              - generic [ref=e146]: 共 52 项资质
+              - text: 显示 24/58 名员工
+            - generic [ref=e147]:
+              - button "更多员工" [ref=e148] [cursor=pointer]
+              - button "导出" [ref=e149] [cursor=pointer]:
+                - img [ref=e150]
+                - text: 导出
+        - generic [ref=e154]:
+          - generic [ref=e156]:
+            - table [ref=e158]:
+              - rowgroup [ref=e185]:
+                - row "资质信息 任春慧 刘卫宝 刘启航 刘天畅 刘家荣 单继元 周永鹏 孙维艳 孟江泽 宋健健 封瑞敏 庞梦宇 张亚妮 张伟红 张凯 张嘉辉 张宇琪 张展展 张彬 张志兴 张紫烁 张艳 徐帅杭 曹思豪" [ref=e186]:
+                  - columnheader "资质信息" [ref=e187]
+                  - columnheader "任春慧" [ref=e188]:
+                    - generic [ref=e190]: 任春慧
+                  - columnheader "刘卫宝" [ref=e191]:
+                    - generic [ref=e193]: 刘卫宝
+                  - columnheader "刘启航" [ref=e194]:
+                    - generic [ref=e196]: 刘启航
+                  - columnheader "刘天畅" [ref=e197]:
+                    - generic [ref=e199]: 刘天畅
+                  - columnheader "刘家荣" [ref=e200]:
+                    - generic [ref=e202]: 刘家荣
+                  - columnheader "单继元" [ref=e203]:
+                    - generic [ref=e205]: 单继元
+                  - columnheader "周永鹏" [ref=e206]:
+                    - generic [ref=e208]: 周永鹏
+                  - columnheader "孙维艳" [ref=e209]:
+                    - generic [ref=e211]: 孙维艳
+                  - columnheader "孟江泽" [ref=e212]:
+                    - generic [ref=e214]: 孟江泽
+                  - columnheader "宋健健" [ref=e215]:
+                    - generic [ref=e217]: 宋健健
+                  - columnheader "封瑞敏" [ref=e218]:
+                    - generic [ref=e220]: 封瑞敏
+                  - columnheader "庞梦宇" [ref=e221]:
+                    - generic [ref=e223]: 庞梦宇
+                  - columnheader "张亚妮" [ref=e224]:
+                    - generic [ref=e226]: 张亚妮
+                  - columnheader "张伟红" [ref=e227]:
+                    - generic [ref=e229]: 张伟红
+                  - columnheader "张凯" [ref=e230]:
+                    - generic [ref=e232]: 张凯
+                  - columnheader "张嘉辉" [ref=e233]:
+                    - generic [ref=e235]: 张嘉辉
+                  - columnheader "张宇琪" [ref=e236]:
+                    - generic [ref=e238]: 张宇琪
+                  - columnheader "张展展" [ref=e239]:
+                    - generic [ref=e241]: 张展展
+                  - columnheader "张彬" [ref=e242]:
+                    - generic [ref=e244]: 张彬
+                  - columnheader "张志兴" [ref=e245]:
+                    - generic [ref=e247]: 张志兴
+                  - columnheader "张紫烁" [ref=e248]:
+                    - generic [ref=e250]: 张紫烁
+                  - columnheader "张艳" [ref=e251]:
+                    - generic [ref=e253]: 张艳
+                  - columnheader "徐帅杭" [ref=e254]:
+                    - generic [ref=e256]: 徐帅杭
+                  - columnheader "曹思豪" [ref=e257]:
+                    - generic [ref=e259]: 曹思豪
+            - table [ref=e261]:
+              - rowgroup [ref=e288]:
+                - row [ref=e289]:
+                  - cell [ref=e290]
+                  - cell [ref=e291]
+                  - cell [ref=e292]
+                  - cell [ref=e293]
+                  - cell [ref=e294]
+                  - cell [ref=e295]
+                  - cell [ref=e296]
+                  - cell [ref=e297]
+                  - cell [ref=e298]
+                  - cell [ref=e299]
+                  - cell [ref=e300]
+                  - cell [ref=e301]
+                  - cell [ref=e302]
+                  - cell [ref=e303]
+                  - cell [ref=e304]
+                  - cell [ref=e305]
+                  - cell [ref=e306]
+                  - cell [ref=e307]
+                  - cell [ref=e308]
+                  - cell [ref=e309]
+                  - cell [ref=e310]
+                  - cell [ref=e311]
+                  - cell [ref=e312]
+                  - cell [ref=e313]
+                  - cell [ref=e314]
+                - 'row "1229样品间门禁 资质ID: 215 任春慧 未获得 1229样品间门禁 资质 刘卫宝 - 1229样品间门禁: 5级 刘启航 未获得 1229样品间门禁 资质 刘天畅 未获得 1229样品间门禁 资质 刘家荣 未获得 1229样品间门禁 资质 单继元 未获得 1229样品间门禁 资质 周永鹏 未获得 1229样品间门禁 资质 孙维艳 - 1229样品间门禁: 5级 孟江泽 未获得 1229样品间门禁 资质 宋健健 未获得 1229样品间门禁 资质 封瑞敏 未获得 1229样品间门禁 资质 庞梦宇 - 1229样品间门禁: 5级 张亚妮 未获得 1229样品间门禁 资质 张伟红 未获得 1229样品间门禁 资质 张凯 未获得 1229样品间门禁 资质 张嘉辉 未获得 1229样品间门禁 资质 张宇琪 - 1229样品间门禁: 5级 张展展 未获得 1229样品间门禁 资质 张彬 未获得 1229样品间门禁 资质 张志兴 未获得 1229样品间门禁 资质 张紫烁 未获得 1229样品间门禁 资质 张艳 未获得 1229样品间门禁 资质 徐帅杭 未获得 1229样品间门禁 资质 曹思豪 未获得 1229样品间门禁 资质" [ref=e315]':
+                  - 'cell "1229样品间门禁 资质ID: 215" [ref=e316]':
+                    - generic [ref=e317]:
+                      - generic [ref=e318]: 1229样品间门禁
+                      - generic [ref=e320]: "资质ID: 215"
+                  - cell "任春慧 未获得 1229样品间门禁 资质" [ref=e321]:
+                    - button "任春慧 未获得 1229样品间门禁 资质" [ref=e322] [cursor=pointer]:
+                      - generic [ref=e323]: "-"
+                  - 'cell "刘卫宝 - 1229样品间门禁: 5级" [ref=e324]':
+                    - 'button "刘卫宝 - 1229样品间门禁: 5级" [ref=e325] [cursor=pointer]':
+                      - generic [ref=e326]: "5"
+                  - cell "刘启航 未获得 1229样品间门禁 资质" [ref=e327]:
+                    - button "刘启航 未获得 1229样品间门禁 资质" [ref=e328] [cursor=pointer]:
+                      - generic [ref=e329]: "-"
+                  - cell "刘天畅 未获得 1229样品间门禁 资质" [ref=e330]:
+                    - button "刘天畅 未获得 1229样品间门禁 资质" [ref=e331] [cursor=pointer]:
+                      - generic [ref=e332]: "-"
+                  - cell "刘家荣 未获得 1229样品间门禁 资质" [ref=e333]:
+                    - button "刘家荣 未获得 1229样品间门禁 资质" [ref=e334] [cursor=pointer]:
+                      - generic [ref=e335]: "-"
+                  - cell "单继元 未获得 1229样品间门禁 资质" [ref=e336]:
+                    - button "单继元 未获得 1229样品间门禁 资质" [ref=e337] [cursor=pointer]:
+                      - generic [ref=e338]: "-"
+                  - cell "周永鹏 未获得 1229样品间门禁 资质" [ref=e339]:
+                    - button "周永鹏 未获得 1229样品间门禁 资质" [ref=e340] [cursor=pointer]:
+                      - generic [ref=e341]: "-"
+                  - 'cell "孙维艳 - 1229样品间门禁: 5级" [ref=e342]':
+                    - 'button "孙维艳 - 1229样品间门禁: 5级" [ref=e343] [cursor=pointer]':
+                      - generic [ref=e344]: "5"
+                  - cell "孟江泽 未获得 1229样品间门禁 资质" [ref=e345]:
+                    - button "孟江泽 未获得 1229样品间门禁 资质" [ref=e346] [cursor=pointer]:
+                      - generic [ref=e347]: "-"
+                  - cell "宋健健 未获得 1229样品间门禁 资质" [ref=e348]:
+                    - button "宋健健 未获得 1229样品间门禁 资质" [ref=e349] [cursor=pointer]:
+                      - generic [ref=e350]: "-"
+                  - cell "封瑞敏 未获得 1229样品间门禁 资质" [ref=e351]:
+                    - button "封瑞敏 未获得 1229样品间门禁 资质" [ref=e352] [cursor=pointer]:
+                      - generic [ref=e353]: "-"
+                  - 'cell "庞梦宇 - 1229样品间门禁: 5级" [ref=e354]':
+                    - 'button "庞梦宇 - 1229样品间门禁: 5级" [ref=e355] [cursor=pointer]':
+                      - generic [ref=e356]: "5"
+                  - cell "张亚妮 未获得 1229样品间门禁 资质" [ref=e357]:
+                    - button "张亚妮 未获得 1229样品间门禁 资质" [ref=e358] [cursor=pointer]:
+                      - generic [ref=e359]: "-"
+                  - cell "张伟红 未获得 1229样品间门禁 资质" [ref=e360]:
+                    - button "张伟红 未获得 1229样品间门禁 资质" [ref=e361] [cursor=pointer]:
+                      - generic [ref=e362]: "-"
+                  - cell "张凯 未获得 1229样品间门禁 资质" [ref=e363]:
+                    - button "张凯 未获得 1229样品间门禁 资质" [ref=e364] [cursor=pointer]:
+                      - generic [ref=e365]: "-"
+                  - cell "张嘉辉 未获得 1229样品间门禁 资质" [ref=e366]:
+                    - button "张嘉辉 未获得 1229样品间门禁 资质" [ref=e367] [cursor=pointer]:
+                      - generic [ref=e368]: "-"
+                  - 'cell "张宇琪 - 1229样品间门禁: 5级" [ref=e369]':
+                    - 'button "张宇琪 - 1229样品间门禁: 5级" [ref=e370] [cursor=pointer]':
+                      - generic [ref=e371]: "5"
+                  - cell "张展展 未获得 1229样品间门禁 资质" [ref=e372]:
+                    - button "张展展 未获得 1229样品间门禁 资质" [ref=e373] [cursor=pointer]:
+                      - generic [ref=e374]: "-"
+                  - cell "张彬 未获得 1229样品间门禁 资质" [ref=e375]:
+                    - button "张彬 未获得 1229样品间门禁 资质" [ref=e376] [cursor=pointer]:
+                      - generic [ref=e377]: "-"
+                  - cell "张志兴 未获得 1229样品间门禁 资质" [ref=e378]:
+                    - button "张志兴 未获得 1229样品间门禁 资质" [ref=e379] [cursor=pointer]:
+                      - generic [ref=e380]: "-"
+                  - cell "张紫烁 未获得 1229样品间门禁 资质" [ref=e381]:
+                    - button "张紫烁 未获得 1229样品间门禁 资质" [ref=e382] [cursor=pointer]:
+                      - generic [ref=e383]: "-"
+                  - cell "张艳 未获得 1229样品间门禁 资质" [ref=e384]:
+                    - button "张艳 未获得 1229样品间门禁 资质" [ref=e385] [cursor=pointer]:
+                      - generic [ref=e386]: "-"
+                  - cell "徐帅杭 未获得 1229样品间门禁 资质" [ref=e387]:
+                    - button "徐帅杭 未获得 1229样品间门禁 资质" [ref=e388] [cursor=pointer]:
+                      - generic [ref=e389]: "-"
+                  - cell "曹思豪 未获得 1229样品间门禁 资质" [ref=e390]:
+                    - button "曹思豪 未获得 1229样品间门禁 资质" [ref=e391] [cursor=pointer]:
+                      - generic [ref=e392]: "-"
+                - row [ref=e393]:
+                  - 'cell "APAC-QA-Computerized System Basic Training 资质ID: 211" [ref=e394]':
+                    - generic [ref=e395]:
+                      - generic [ref=e396]: APAC-QA-Computerized System Basic Training
+                      - generic [ref=e398]: "资质ID: 211"
+                  - 'cell "任春慧 - APAC-QA-Computerized System Basic Training: 1级" [ref=e399]':
+                    - 'button "任春慧 - APAC-QA-Computerized System Basic Training: 1级" [ref=e400] [cursor=pointer]':
+                      - generic [ref=e401]: "1"
+                  - 'cell "刘卫宝 - APAC-QA-Computerized System Basic Training: 1级" [ref=e402]':
+                    - 'button "刘卫宝 - APAC-QA-Computerized System Basic Training: 1级" [ref=e403] [cursor=pointer]':
+                      - generic [ref=e404]: "1"
+                  - 'cell "刘启航 - APAC-QA-Computerized System Basic Training: 1级" [ref=e405]':
+                    - 'button "刘启航 - APAC-QA-Computerized System Basic Training: 1级" [ref=e406] [cursor=pointer]':
+                      - generic [ref=e407]: "1"
+                  - 'cell "刘天畅 - APAC-QA-Computerized System Basic Training: 1级" [ref=e408]':
+                    - 'button "刘天畅 - APAC-QA-Computerized System Basic Training: 1级" [ref=e409] [cursor=pointer]':
+                      - generic [ref=e410]: "1"
+                  - cell "刘家荣 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e411]:
+                    - button "刘家荣 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e412] [cursor=pointer]:
+                      - generic [ref=e413]: "-"
+                  - cell "单继元 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e414]:
+                    - button "单继元 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e415] [cursor=pointer]:
+                      - generic [ref=e416]: "-"
+                  - cell "周永鹏 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e417]:
+                    - button "周永鹏 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e418] [cursor=pointer]:
+                      - generic [ref=e419]: "-"
+                  - 'cell "孙维艳 - APAC-QA-Computerized System Basic Training: 3级" [ref=e420]':
+                    - 'button "孙维艳 - APAC-QA-Computerized System Basic Training: 3级" [ref=e421] [cursor=pointer]':
+                      - generic [ref=e422]: "3"
+                  - 'cell "孟江泽 - APAC-QA-Computerized System Basic Training: 3级" [ref=e423]':
+                    - 'button "孟江泽 - APAC-QA-Computerized System Basic Training: 3级" [ref=e424] [cursor=pointer]':
+                      - generic [ref=e425]: "3"
+                  - cell "宋健健 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e426]:
+                    - button "宋健健 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e427] [cursor=pointer]:
+                      - generic [ref=e428]: "-"
+                  - cell "封瑞敏 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e429]:
+                    - button "封瑞敏 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e430] [cursor=pointer]:
+                      - generic [ref=e431]: "-"
+                  - 'cell "庞梦宇 - APAC-QA-Computerized System Basic Training: 3级" [ref=e432]':
+                    - 'button "庞梦宇 - APAC-QA-Computerized System Basic Training: 3级" [ref=e433] [cursor=pointer]':
+                      - generic [ref=e434]: "3"
+                  - cell "张亚妮 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e435]:
+                    - button "张亚妮 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e436] [cursor=pointer]:
+                      - generic [ref=e437]: "-"
+                  - 'cell "张伟红 - APAC-QA-Computerized System Basic Training: 3级" [ref=e438]':
+                    - 'button "张伟红 - APAC-QA-Computerized System Basic Training: 3级" [ref=e439] [cursor=pointer]':
+                      - generic [ref=e440]: "3"
+                  - cell "张凯 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e441]:
+                    - button "张凯 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e442] [cursor=pointer]:
+                      - generic [ref=e443]: "-"
+                  - 'cell "张嘉辉 - APAC-QA-Computerized System Basic Training: 3级" [ref=e444]':
+                    - 'button "张嘉辉 - APAC-QA-Computerized System Basic Training: 3级" [ref=e445] [cursor=pointer]':
+                      - generic [ref=e446]: "3"
+                  - 'cell "张宇琪 - APAC-QA-Computerized System Basic Training: 3级" [ref=e447]':
+                    - 'button "张宇琪 - APAC-QA-Computerized System Basic Training: 3级" [ref=e448] [cursor=pointer]':
+                      - generic [ref=e449]: "3"
+                  - cell "张展展 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e450]:
+                    - button "张展展 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e451] [cursor=pointer]:
+                      - generic [ref=e452]: "-"
+                  - cell "张彬 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e453]:
+                    - button "张彬 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e454] [cursor=pointer]:
+                      - generic [ref=e455]: "-"
+                  - cell "张志兴 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e456]:
+                    - button "张志兴 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e457] [cursor=pointer]:
+                      - generic [ref=e458]: "-"
+                  - cell "张紫烁 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e459]:
+                    - button "张紫烁 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e460] [cursor=pointer]:
+                      - generic [ref=e461]: "-"
+                  - 'cell "张艳 - APAC-QA-Computerized System Basic Training: 3级" [ref=e462]':
+                    - 'button "张艳 - APAC-QA-Computerized System Basic Training: 3级" [ref=e463] [cursor=pointer]':
+                      - generic [ref=e464]: "3"
+                  - cell "徐帅杭 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e465]:
+                    - button "徐帅杭 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e466] [cursor=pointer]:
+                      - generic [ref=e467]: "-"
+                  - cell "曹思豪 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e468]:
+                    - button "曹思豪 未获得 APAC-QA-Computerized System Basic Training 资质" [ref=e469] [cursor=pointer]:
+                      - generic [ref=e470]: "-"
+                - 'row "APAC-QC-LIMS All Users 资质ID: 208 任春慧 - APAC-QC-LIMS All Users: 3级 刘卫宝 - APAC-QC-LIMS All Users: 4级 刘启航 - APAC-QC-LIMS All Users: 3级 刘天畅 - APAC-QC-LIMS All Users: 3级 刘家荣 未获得 APAC-QC-LIMS All Users 资质 单继元 未获得 APAC-QC-LIMS All Users 资质 周永鹏 - APAC-QC-LIMS All Users: 2级 孙维艳 - APAC-QC-LIMS All Users: 4级 孟江泽 - APAC-QC-LIMS All Users: 2级 宋健健 未获得 APAC-QC-LIMS All Users 资质 封瑞敏 未获得 APAC-QC-LIMS All Users 资质 庞梦宇 - APAC-QC-LIMS All Users: 3级 张亚妮 未获得 APAC-QC-LIMS All Users 资质 张伟红 - APAC-QC-LIMS All Users: 3级 张凯 未获得 APAC-QC-LIMS All Users 资质 张嘉辉 - APAC-QC-LIMS All Users: 3级 张宇琪 - APAC-QC-LIMS All Users: 4级 张展展 未获得 APAC-QC-LIMS All Users 资质 张彬 未获得 APAC-QC-LIMS All Users 资质 张志兴 未获得 APAC-QC-LIMS All Users 资质 张紫烁 未获得 APAC-QC-LIMS All Users 资质 张艳 - APAC-QC-LIMS All Users: 3级 徐帅杭 未获得 APAC-QC-LIMS All Users 资质 曹思豪 未获得 APAC-QC-LIMS All Users 资质" [ref=e471]':
+                  - 'cell "APAC-QC-LIMS All Users 资质ID: 208" [ref=e472]':
+                    - generic [ref=e473]:
+                      - generic [ref=e474]: APAC-QC-LIMS All Users
+                      - generic [ref=e476]: "资质ID: 208"
+                  - 'cell "任春慧 - APAC-QC-LIMS All Users: 3级" [ref=e477]':
+                    - 'button "任春慧 - APAC-QC-LIMS All Users: 3级" [ref=e478] [cursor=pointer]':
+                      - generic [ref=e479]: "3"
+                  - 'cell "刘卫宝 - APAC-QC-LIMS All Users: 4级" [ref=e480]':
+                    - 'button "刘卫宝 - APAC-QC-LIMS All Users: 4级" [ref=e481] [cursor=pointer]':
+                      - generic [ref=e482]: "4"
+                  - 'cell "刘启航 - APAC-QC-LIMS All Users: 3级" [ref=e483]':
+                    - 'button "刘启航 - APAC-QC-LIMS All Users: 3级" [ref=e484] [cursor=pointer]':
+                      - generic [ref=e485]: "3"
+                  - 'cell "刘天畅 - APAC-QC-LIMS All Users: 3级" [ref=e486]':
+                    - 'button "刘天畅 - APAC-QC-LIMS All Users: 3级" [ref=e487] [cursor=pointer]':
+                      - generic [ref=e488]: "3"
+                  - cell "刘家荣 未获得 APAC-QC-LIMS All Users 资质" [ref=e489]:
+                    - button "刘家荣 未获得 APAC-QC-LIMS All Users 资质" [ref=e490] [cursor=pointer]:
+                      - generic [ref=e491]: "-"
+                  - cell "单继元 未获得 APAC-QC-LIMS All Users 资质" [ref=e492]:
+                    - button "单继元 未获得 APAC-QC-LIMS All Users 资质" [ref=e493] [cursor=pointer]:
+                      - generic [ref=e494]: "-"
+                  - 'cell "周永鹏 - APAC-QC-LIMS All Users: 2级" [ref=e495]':
+                    - 'button "周永鹏 - APAC-QC-LIMS All Users: 2级" [ref=e496] [cursor=pointer]':
+                      - generic [ref=e497]: "2"
+                  - 'cell "孙维艳 - APAC-QC-LIMS All Users: 4级" [ref=e498]':
+                    - 'button "孙维艳 - APAC-QC-LIMS All Users: 4级" [ref=e499] [cursor=pointer]':
+                      - generic [ref=e500]: "4"
+                  - 'cell "孟江泽 - APAC-QC-LIMS All Users: 2级" [ref=e501]':
+                    - 'button "孟江泽 - APAC-QC-LIMS All Users: 2级" [ref=e502] [cursor=pointer]':
+                      - generic [ref=e503]: "2"
+                  - cell "宋健健 未获得 APAC-QC-LIMS All Users 资质" [ref=e504]:
+                    - button "宋健健 未获得 APAC-QC-LIMS All Users 资质" [ref=e505] [cursor=pointer]:
+                      - generic [ref=e506]: "-"
+                  - cell "封瑞敏 未获得 APAC-QC-LIMS All Users 资质" [ref=e507]:
+                    - button "封瑞敏 未获得 APAC-QC-LIMS All Users 资质" [ref=e508] [cursor=pointer]:
+                      - generic [ref=e509]: "-"
+                  - 'cell "庞梦宇 - APAC-QC-LIMS All Users: 3级" [ref=e510]':
+                    - 'button "庞梦宇 - APAC-QC-LIMS All Users: 3级" [ref=e511] [cursor=pointer]':
+                      - generic [ref=e512]: "3"
+                  - cell "张亚妮 未获得 APAC-QC-LIMS All Users 资质" [ref=e513]:
+                    - button "张亚妮 未获得 APAC-QC-LIMS All Users 资质" [ref=e514] [cursor=pointer]:
+                      - generic [ref=e515]: "-"
+                  - 'cell "张伟红 - APAC-QC-LIMS All Users: 3级" [ref=e516]':
+                    - 'button "张伟红 - APAC-QC-LIMS All Users: 3级" [ref=e517] [cursor=pointer]':
+                      - generic [ref=e518]: "3"
+                  - cell "张凯 未获得 APAC-QC-LIMS All Users 资质" [ref=e519]:
+                    - button "张凯 未获得 APAC-QC-LIMS All Users 资质" [ref=e520] [cursor=pointer]:
+                      - generic [ref=e521]: "-"
+                  - 'cell "张嘉辉 - APAC-QC-LIMS All Users: 3级" [ref=e522]':
+                    - 'button "张嘉辉 - APAC-QC-LIMS All Users: 3级" [ref=e523] [cursor=pointer]':
+                      - generic [ref=e524]: "3"
+                  - 'cell "张宇琪 - APAC-QC-LIMS All Users: 4级" [ref=e525]':
+                    - 'button "张宇琪 - APAC-QC-LIMS All Users: 4级" [ref=e526] [cursor=pointer]':
+                      - generic [ref=e527]: "4"
+                  - cell "张展展 未获得 APAC-QC-LIMS All Users 资质" [ref=e528]:
+                    - button "张展展 未获得 APAC-QC-LIMS All Users 资质" [ref=e529] [cursor=pointer]:
+                      - generic [ref=e530]: "-"
+                  - cell "张彬 未获得 APAC-QC-LIMS All Users 资质" [ref=e531]:
+                    - button "张彬 未获得 APAC-QC-LIMS All Users 资质" [ref=e532] [cursor=pointer]:
+                      - generic [ref=e533]: "-"
+                  - cell "张志兴 未获得 APAC-QC-LIMS All Users 资质" [ref=e534]:
+                    - button "张志兴 未获得 APAC-QC-LIMS All Users 资质" [ref=e535] [cursor=pointer]:
+                      - generic [ref=e536]: "-"
+                  - cell "张紫烁 未获得 APAC-QC-LIMS All Users 资质" [ref=e537]:
+                    - button "张紫烁 未获得 APAC-QC-LIMS All Users 资质" [ref=e538] [cursor=pointer]:
+                      - generic [ref=e539]: "-"
+                  - 'cell "张艳 - APAC-QC-LIMS All Users: 3级" [ref=e540]':
+                    - 'button "张艳 - APAC-QC-LIMS All Users: 3级" [ref=e541] [cursor=pointer]':
+                      - generic [ref=e542]: "3"
+                  - cell "徐帅杭 未获得 APAC-QC-LIMS All Users 资质" [ref=e543]:
+                    - button "徐帅杭 未获得 APAC-QC-LIMS All Users 资质" [ref=e544] [cursor=pointer]:
+                      - generic [ref=e545]: "-"
+                  - cell "曹思豪 未获得 APAC-QC-LIMS All Users 资质" [ref=e546]:
+                    - button "曹思豪 未获得 APAC-QC-LIMS All Users 资质" [ref=e547] [cursor=pointer]:
+                      - generic [ref=e548]: "-"
+                - row [ref=e549]:
+                  - 'cell "APAC-QC-LIMS EM Management 资质ID: 210" [ref=e550]':
+                    - generic [ref=e551]:
+                      - generic [ref=e552]: APAC-QC-LIMS EM Management
+                      - generic [ref=e554]: "资质ID: 210"
+                  - cell "任春慧 未获得 APAC-QC-LIMS EM Management 资质" [ref=e555]:
+                    - button "任春慧 未获得 APAC-QC-LIMS EM Management 资质" [ref=e556] [cursor=pointer]:
+                      - generic [ref=e557]: "-"
+                  - cell "刘卫宝 未获得 APAC-QC-LIMS EM Management 资质" [ref=e558]:
+                    - button "刘卫宝 未获得 APAC-QC-LIMS EM Management 资质" [ref=e559] [cursor=pointer]:
+                      - generic [ref=e560]: "-"
+                  - cell "刘启航 未获得 APAC-QC-LIMS EM Management 资质" [ref=e561]:
+                    - button "刘启航 未获得 APAC-QC-LIMS EM Management 资质" [ref=e562] [cursor=pointer]:
+                      - generic [ref=e563]: "-"
+                  - cell "刘天畅 未获得 APAC-QC-LIMS EM Management 资质" [ref=e564]:
+                    - button "刘天畅 未获得 APAC-QC-LIMS EM Management 资质" [ref=e565] [cursor=pointer]:
+                      - generic [ref=e566]: "-"
+                  - cell "刘家荣 未获得 APAC-QC-LIMS EM Management 资质" [ref=e567]:
+                    - button "刘家荣 未获得 APAC-QC-LIMS EM Management 资质" [ref=e568] [cursor=pointer]:
+                      - generic [ref=e569]: "-"
+                  - cell "单继元 未获得 APAC-QC-LIMS EM Management 资质" [ref=e570]:
+                    - button "单继元 未获得 APAC-QC-LIMS EM Management 资质" [ref=e571] [cursor=pointer]:
+                      - generic [ref=e572]: "-"
+                  - cell "周永鹏 未获得 APAC-QC-LIMS EM Management 资质" [ref=e573]:
+                    - button "周永鹏 未获得 APAC-QC-LIMS EM Management 资质" [ref=e574] [cursor=pointer]:
+                      - generic [ref=e575]: "-"
+                  - cell "孙维艳 未获得 APAC-QC-LIMS EM Management 资质" [ref=e576]:
+                    - button "孙维艳 未获得 APAC-QC-LIMS EM Management 资质" [ref=e577] [cursor=pointer]:
+                      - generic [ref=e578]: "-"
+                  - cell "孟江泽 未获得 APAC-QC-LIMS EM Management 资质" [ref=e579]:
+                    - button "孟江泽 未获得 APAC-QC-LIMS EM Management 资质" [ref=e580] [cursor=pointer]:
+                      - generic [ref=e581]: "-"
+                  - cell "宋健健 未获得 APAC-QC-LIMS EM Management 资质" [ref=e582]:
+                    - button "宋健健 未获得 APAC-QC-LIMS EM Management 资质" [ref=e583] [cursor=pointer]:
+                      - generic [ref=e584]: "-"
+                  - cell "封瑞敏 未获得 APAC-QC-LIMS EM Management 资质" [ref=e585]:
+                    - button "封瑞敏 未获得 APAC-QC-LIMS EM Management 资质" [ref=e586] [cursor=pointer]:
+                      - generic [ref=e587]: "-"
+                  - cell "庞梦宇 未获得 APAC-QC-LIMS EM Management 资质" [ref=e588]:
+                    - button "庞梦宇 未获得 APAC-QC-LIMS EM Management 资质" [ref=e589] [cursor=pointer]:
+                      - generic [ref=e590]: "-"
+                  - cell "张亚妮 未获得 APAC-QC-LIMS EM Management 资质" [ref=e591]:
+                    - button "张亚妮 未获得 APAC-QC-LIMS EM Management 资质" [ref=e592] [cursor=pointer]:
+                      - generic [ref=e593]: "-"
+                  - cell "张伟红 未获得 APAC-QC-LIMS EM Management 资质" [ref=e594]:
+                    - button "张伟红 未获得 APAC-QC-LIMS EM Management 资质" [ref=e595] [cursor=pointer]:
+                      - generic [ref=e596]: "-"
+                  - cell "张凯 未获得 APAC-QC-LIMS EM Management 资质" [ref=e597]:
+                    - button "张凯 未获得 APAC-QC-LIMS EM Management 资质" [ref=e598] [cursor=pointer]:
+                      - generic [ref=e599]: "-"
+                  - cell "张嘉辉 未获得 APAC-QC-LIMS EM Management 资质" [ref=e600]:
+                    - button "张嘉辉 未获得 APAC-QC-LIMS EM Management 资质" [ref=e601] [cursor=pointer]:
+                      - generic [ref=e602]: "-"
+                  - 'cell "张宇琪 - APAC-QC-LIMS EM Management: 3级" [ref=e603]':
+                    - 'button "张宇琪 - APAC-QC-LIMS EM Management: 3级" [ref=e604] [cursor=pointer]':
+                      - generic [ref=e605]: "3"
+                  - cell "张展展 未获得 APAC-QC-LIMS EM Management 资质" [ref=e606]:
+                    - button "张展展 未获得 APAC-QC-LIMS EM Management 资质" [ref=e607] [cursor=pointer]:
+                      - generic [ref=e608]: "-"
+                  - cell "张彬 未获得 APAC-QC-LIMS EM Management 资质" [ref=e609]:
+                    - button "张彬 未获得 APAC-QC-LIMS EM Management 资质" [ref=e610] [cursor=pointer]:
+                      - generic [ref=e611]: "-"
+                  - cell "张志兴 未获得 APAC-QC-LIMS EM Management 资质" [ref=e612]:
+                    - button "张志兴 未获得 APAC-QC-LIMS EM Management 资质" [ref=e613] [cursor=pointer]:
+                      - generic [ref=e614]: "-"
+                  - cell "张紫烁 未获得 APAC-QC-LIMS EM Management 资质" [ref=e615]:
+                    - button "张紫烁 未获得 APAC-QC-LIMS EM Management 资质" [ref=e616] [cursor=pointer]:
+                      - generic [ref=e617]: "-"
+                  - cell "张艳 未获得 APAC-QC-LIMS EM Management 资质" [ref=e618]:
+                    - button "张艳 未获得 APAC-QC-LIMS EM Management 资质" [ref=e619] [cursor=pointer]:
+                      - generic [ref=e620]: "-"
+                  - cell "徐帅杭 未获得 APAC-QC-LIMS EM Management 资质" [ref=e621]:
+                    - button "徐帅杭 未获得 APAC-QC-LIMS EM Management 资质" [ref=e622] [cursor=pointer]:
+                      - generic [ref=e623]: "-"
+                  - cell "曹思豪 未获得 APAC-QC-LIMS EM Management 资质" [ref=e624]:
+                    - button "曹思豪 未获得 APAC-QC-LIMS EM Management 资质" [ref=e625] [cursor=pointer]:
+                      - generic [ref=e626]: "-"
+                - row [ref=e627]:
+                  - 'cell "APAC-QC-LIMS Sample Management 资质ID: 209" [ref=e628]':
+                    - generic [ref=e629]:
+                      - generic [ref=e630]: APAC-QC-LIMS Sample Management
+                      - generic [ref=e632]: "资质ID: 209"
+                  - 'cell "任春慧 - APAC-QC-LIMS Sample Management: 3级" [ref=e633]':
+                    - 'button "任春慧 - APAC-QC-LIMS Sample Management: 3级" [ref=e634] [cursor=pointer]':
+                      - generic [ref=e635]: "3"
+                  - 'cell "刘卫宝 - APAC-QC-LIMS Sample Management: 4级" [ref=e636]':
+                    - 'button "刘卫宝 - APAC-QC-LIMS Sample Management: 4级" [ref=e637] [cursor=pointer]':
+                      - generic [ref=e638]: "4"
+                  - 'cell "刘启航 - APAC-QC-LIMS Sample Management: 3级" [ref=e639]':
+                    - 'button "刘启航 - APAC-QC-LIMS Sample Management: 3级" [ref=e640] [cursor=pointer]':
+                      - generic [ref=e641]: "3"
+                  - 'cell "刘天畅 - APAC-QC-LIMS Sample Management: 3级" [ref=e642]':
+                    - 'button "刘天畅 - APAC-QC-LIMS Sample Management: 3级" [ref=e643] [cursor=pointer]':
+                      - generic [ref=e644]: "3"
+                  - cell "刘家荣 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e645]:
+                    - button "刘家荣 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e646] [cursor=pointer]:
+                      - generic [ref=e647]: "-"
+                  - cell "单继元 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e648]:
+                    - button "单继元 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e649] [cursor=pointer]:
+                      - generic [ref=e650]: "-"
+                  - 'cell "周永鹏 - APAC-QC-LIMS Sample Management: 1级" [ref=e651]':
+                    - 'button "周永鹏 - APAC-QC-LIMS Sample Management: 1级" [ref=e652] [cursor=pointer]':
+                      - generic [ref=e653]: "1"
+                  - 'cell "孙维艳 - APAC-QC-LIMS Sample Management: 4级" [ref=e654]':
+                    - 'button "孙维艳 - APAC-QC-LIMS Sample Management: 4级" [ref=e655] [cursor=pointer]':
+                      - generic [ref=e656]: "4"
+                  - 'cell "孟江泽 - APAC-QC-LIMS Sample Management: 1级" [ref=e657]':
+                    - 'button "孟江泽 - APAC-QC-LIMS Sample Management: 1级" [ref=e658] [cursor=pointer]':
+                      - generic [ref=e659]: "1"
+                  - cell "宋健健 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e660]:
+                    - button "宋健健 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e661] [cursor=pointer]:
+                      - generic [ref=e662]: "-"
+                  - cell "封瑞敏 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e663]:
+                    - button "封瑞敏 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e664] [cursor=pointer]:
+                      - generic [ref=e665]: "-"
+                  - 'cell "庞梦宇 - APAC-QC-LIMS Sample Management: 3级" [ref=e666]':
+                    - 'button "庞梦宇 - APAC-QC-LIMS Sample Management: 3级" [ref=e667] [cursor=pointer]':
+                      - generic [ref=e668]: "3"
+                  - cell "张亚妮 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e669]:
+                    - button "张亚妮 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e670] [cursor=pointer]:
+                      - generic [ref=e671]: "-"
+                  - 'cell "张伟红 - APAC-QC-LIMS Sample Management: 3级" [ref=e672]':
+                    - 'button "张伟红 - APAC-QC-LIMS Sample Management: 3级" [ref=e673] [cursor=pointer]':
+                      - generic [ref=e674]: "3"
+                  - cell "张凯 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e675]:
+                    - button "张凯 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e676] [cursor=pointer]:
+                      - generic [ref=e677]: "-"
+                  - 'cell "张嘉辉 - APAC-QC-LIMS Sample Management: 1级" [ref=e678]':
+                    - 'button "张嘉辉 - APAC-QC-LIMS Sample Management: 1级" [ref=e679] [cursor=pointer]':
+                      - generic [ref=e680]: "1"
+                  - 'cell "张宇琪 - APAC-QC-LIMS Sample Management: 1级" [ref=e681]':
+                    - 'button "张宇琪 - APAC-QC-LIMS Sample Management: 1级" [ref=e682] [cursor=pointer]':
+                      - generic [ref=e683]: "1"
+                  - cell "张展展 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e684]:
+                    - button "张展展 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e685] [cursor=pointer]:
+                      - generic [ref=e686]: "-"
+                  - cell "张彬 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e687]:
+                    - button "张彬 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e688] [cursor=pointer]:
+                      - generic [ref=e689]: "-"
+                  - cell "张志兴 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e690]:
+                    - button "张志兴 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e691] [cursor=pointer]:
+                      - generic [ref=e692]: "-"
+                  - cell "张紫烁 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e693]:
+                    - button "张紫烁 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e694] [cursor=pointer]:
+                      - generic [ref=e695]: "-"
+                  - 'cell "张艳 - APAC-QC-LIMS Sample Management: 3级" [ref=e696]':
+                    - 'button "张艳 - APAC-QC-LIMS Sample Management: 3级" [ref=e697] [cursor=pointer]':
+                      - generic [ref=e698]: "3"
+                  - cell "徐帅杭 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e699]:
+                    - button "徐帅杭 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e700] [cursor=pointer]:
+                      - generic [ref=e701]: "-"
+                  - cell "曹思豪 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e702]:
+                    - button "曹思豪 未获得 APAC-QC-LIMS Sample Management 资质" [ref=e703] [cursor=pointer]:
+                      - generic [ref=e704]: "-"
+                - 'row "buffer-all 资质ID: 254 任春慧 未获得 buffer-all 资质 刘卫宝 未获得 buffer-all 资质 刘启航 未获得 buffer-all 资质 刘天畅 未获得 buffer-all 资质 刘家荣 未获得 buffer-all 资质 单继元 未获得 buffer-all 资质 周永鹏 未获得 buffer-all 资质 孙维艳 未获得 buffer-all 资质 孟江泽 未获得 buffer-all 资质 宋健健 未获得 buffer-all 资质 封瑞敏 未获得 buffer-all 资质 庞梦宇 未获得 buffer-all 资质 张亚妮 - buffer-all: 3级 张伟红 未获得 buffer-all 资质 张凯 - buffer-all: 3级 张嘉辉 未获得 buffer-all 资质 张宇琪 未获得 buffer-all 资质 张展展 未获得 buffer-all 资质 张彬 未获得 buffer-all 资质 张志兴 未获得 buffer-all 资质 张紫烁 - buffer-all: 3级 张艳 未获得 buffer-all 资质 徐帅杭 - buffer-all: 3级 曹思豪 - buffer-all: 3级" [ref=e705]':
+                  - 'cell "buffer-all 资质ID: 254" [ref=e706]':
+                    - generic [ref=e707]:
+                      - generic [ref=e708]: buffer-all
+                      - generic [ref=e710]: "资质ID: 254"
+                  - cell "任春慧 未获得 buffer-all 资质" [ref=e711]:
+                    - button "任春慧 未获得 buffer-all 资质" [ref=e712] [cursor=pointer]:
+                      - generic [ref=e713]: "-"
+                  - cell "刘卫宝 未获得 buffer-all 资质" [ref=e714]:
+                    - button "刘卫宝 未获得 buffer-all 资质" [ref=e715] [cursor=pointer]:
+                      - generic [ref=e716]: "-"
+                  - cell "刘启航 未获得 buffer-all 资质" [ref=e717]:
+                    - button "刘启航 未获得 buffer-all 资质" [ref=e718] [cursor=pointer]:
+                      - generic [ref=e719]: "-"
+                  - cell "刘天畅 未获得 buffer-all 资质" [ref=e720]:
+                    - button "刘天畅 未获得 buffer-all 资质" [ref=e721] [cursor=pointer]:
+                      - generic [ref=e722]: "-"
+                  - cell "刘家荣 未获得 buffer-all 资质" [ref=e723]:
+                    - button "刘家荣 未获得 buffer-all 资质" [ref=e724] [cursor=pointer]:
+                      - generic [ref=e725]: "-"
+                  - cell "单继元 未获得 buffer-all 资质" [ref=e726]:
+                    - button "单继元 未获得 buffer-all 资质" [ref=e727] [cursor=pointer]:
+                      - generic [ref=e728]: "-"
+                  - cell "周永鹏 未获得 buffer-all 资质" [ref=e729]:
+                    - button "周永鹏 未获得 buffer-all 资质" [ref=e730] [cursor=pointer]:
+                      - generic [ref=e731]: "-"
+                  - cell "孙维艳 未获得 buffer-all 资质" [ref=e732]:
+                    - button "孙维艳 未获得 buffer-all 资质" [ref=e733] [cursor=pointer]:
+                      - generic [ref=e734]: "-"
+                  - cell "孟江泽 未获得 buffer-all 资质" [ref=e735]:
+                    - button "孟江泽 未获得 buffer-all 资质" [ref=e736] [cursor=pointer]:
+                      - generic [ref=e737]: "-"
+                  - cell "宋健健 未获得 buffer-all 资质" [ref=e738]:
+                    - button "宋健健 未获得 buffer-all 资质" [ref=e739] [cursor=pointer]:
+                      - generic [ref=e740]: "-"
+                  - cell "封瑞敏 未获得 buffer-all 资质" [ref=e741]:
+                    - button "封瑞敏 未获得 buffer-all 资质" [ref=e742] [cursor=pointer]:
+                      - generic [ref=e743]: "-"
+                  - cell "庞梦宇 未获得 buffer-all 资质" [ref=e744]:
+                    - button "庞梦宇 未获得 buffer-all 资质" [ref=e745] [cursor=pointer]:
+                      - generic [ref=e746]: "-"
+                  - 'cell "张亚妮 - buffer-all: 3级" [ref=e747]':
+                    - 'button "张亚妮 - buffer-all: 3级" [ref=e748] [cursor=pointer]':
+                      - generic [ref=e749]: "3"
+                  - cell "张伟红 未获得 buffer-all 资质" [ref=e750]:
+                    - button "张伟红 未获得 buffer-all 资质" [ref=e751] [cursor=pointer]:
+                      - generic [ref=e752]: "-"
+                  - 'cell "张凯 - buffer-all: 3级" [ref=e753]':
+                    - 'button "张凯 - buffer-all: 3级" [ref=e754] [cursor=pointer]':
+                      - generic [ref=e755]: "3"
+                  - cell "张嘉辉 未获得 buffer-all 资质" [ref=e756]:
+                    - button "张嘉辉 未获得 buffer-all 资质" [ref=e757] [cursor=pointer]:
+                      - generic [ref=e758]: "-"
+                  - cell "张宇琪 未获得 buffer-all 资质" [ref=e759]:
+                    - button "张宇琪 未获得 buffer-all 资质" [ref=e760] [cursor=pointer]:
+                      - generic [ref=e761]: "-"
+                  - cell "张展展 未获得 buffer-all 资质" [ref=e762]:
+                    - button "张展展 未获得 buffer-all 资质" [ref=e763] [cursor=pointer]:
+                      - generic [ref=e764]: "-"
+                  - cell "张彬 未获得 buffer-all 资质" [ref=e765]:
+                    - button "张彬 未获得 buffer-all 资质" [ref=e766] [cursor=pointer]:
+                      - generic [ref=e767]: "-"
+                  - cell "张志兴 未获得 buffer-all 资质" [ref=e768]:
+                    - button "张志兴 未获得 buffer-all 资质" [ref=e769] [cursor=pointer]:
+                      - generic [ref=e770]: "-"
+                  - 'cell "张紫烁 - buffer-all: 3级" [ref=e771]':
+                    - 'button "张紫烁 - buffer-all: 3级" [ref=e772] [cursor=pointer]':
+                      - generic [ref=e773]: "3"
+                  - cell "张艳 未获得 buffer-all 资质" [ref=e774]:
+                    - button "张艳 未获得 buffer-all 资质" [ref=e775] [cursor=pointer]:
+                      - generic [ref=e776]: "-"
+                  - 'cell "徐帅杭 - buffer-all: 3级" [ref=e777]':
+                    - 'button "徐帅杭 - buffer-all: 3级" [ref=e778] [cursor=pointer]':
+                      - generic [ref=e779]: "3"
+                  - 'cell "曹思豪 - buffer-all: 3级" [ref=e780]':
+                    - 'button "曹思豪 - buffer-all: 3级" [ref=e781] [cursor=pointer]':
+                      - generic [ref=e782]: "3"
+                - row [ref=e783]:
+                  - 'cell "CNMFG-Bioreactors（Hyclone） 资质ID: 195" [ref=e784]':
+                    - generic [ref=e785]:
+                      - generic [ref=e786]: CNMFG-Bioreactors（Hyclone）
+                      - generic [ref=e788]: "资质ID: 195"
+                  - 'cell "任春慧 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e789]':
+                    - 'button "任春慧 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e790] [cursor=pointer]':
+                      - generic [ref=e791]: "3"
+                  - 'cell "刘卫宝 - CNMFG-Bioreactors（Hyclone）: 5级" [ref=e792]':
+                    - 'button "刘卫宝 - CNMFG-Bioreactors（Hyclone）: 5级" [ref=e793] [cursor=pointer]':
+                      - generic [ref=e794]: "5"
+                  - 'cell "刘启航 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e795]':
+                    - 'button "刘启航 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e796] [cursor=pointer]':
+                      - generic [ref=e797]: "4"
+                  - 'cell "刘天畅 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e798]':
+                    - 'button "刘天畅 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e799] [cursor=pointer]':
+                      - generic [ref=e800]: "4"
+                  - cell "刘家荣 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e801]:
+                    - button "刘家荣 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e802] [cursor=pointer]:
+                      - generic [ref=e803]: "-"
+                  - cell "单继元 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e804]:
+                    - button "单继元 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e805] [cursor=pointer]:
+                      - generic [ref=e806]: "-"
+                  - cell "周永鹏 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e807]:
+                    - button "周永鹏 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e808] [cursor=pointer]:
+                      - generic [ref=e809]: "-"
+                  - 'cell "孙维艳 - CNMFG-Bioreactors（Hyclone）: 2级" [ref=e810]':
+                    - 'button "孙维艳 - CNMFG-Bioreactors（Hyclone）: 2级" [ref=e811] [cursor=pointer]':
+                      - generic [ref=e812]: "2"
+                  - 'cell "孟江泽 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e813]':
+                    - 'button "孟江泽 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e814] [cursor=pointer]':
+                      - generic [ref=e815]: "4"
+                  - cell "宋健健 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e816]:
+                    - button "宋健健 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e817] [cursor=pointer]:
+                      - generic [ref=e818]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e819]:
+                    - button "封瑞敏 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e820] [cursor=pointer]:
+                      - generic [ref=e821]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e822]':
+                    - 'button "庞梦宇 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e823] [cursor=pointer]':
+                      - generic [ref=e824]: "3"
+                  - cell "张亚妮 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e825]:
+                    - button "张亚妮 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e826] [cursor=pointer]:
+                      - generic [ref=e827]: "-"
+                  - 'cell "张伟红 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e828]':
+                    - 'button "张伟红 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e829] [cursor=pointer]':
+                      - generic [ref=e830]: "3"
+                  - cell "张凯 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e831]:
+                    - button "张凯 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e832] [cursor=pointer]:
+                      - generic [ref=e833]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e834]':
+                    - 'button "张嘉辉 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e835] [cursor=pointer]':
+                      - generic [ref=e836]: "3"
+                  - 'cell "张宇琪 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e837]':
+                    - 'button "张宇琪 - CNMFG-Bioreactors（Hyclone）: 3级" [ref=e838] [cursor=pointer]':
+                      - generic [ref=e839]: "3"
+                  - cell "张展展 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e840]:
+                    - button "张展展 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e841] [cursor=pointer]:
+                      - generic [ref=e842]: "-"
+                  - cell "张彬 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e843]:
+                    - button "张彬 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e844] [cursor=pointer]:
+                      - generic [ref=e845]: "-"
+                  - cell "张志兴 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e846]:
+                    - button "张志兴 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e847] [cursor=pointer]:
+                      - generic [ref=e848]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e849]:
+                    - button "张紫烁 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e850] [cursor=pointer]:
+                      - generic [ref=e851]: "-"
+                  - 'cell "张艳 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e852]':
+                    - 'button "张艳 - CNMFG-Bioreactors（Hyclone）: 4级" [ref=e853] [cursor=pointer]':
+                      - generic [ref=e854]: "4"
+                  - cell "徐帅杭 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e855]:
+                    - button "徐帅杭 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e856] [cursor=pointer]:
+                      - generic [ref=e857]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e858]:
+                    - button "曹思豪 未获得 CNMFG-Bioreactors（Hyclone） 资质" [ref=e859] [cursor=pointer]:
+                      - generic [ref=e860]: "-"
+                - row [ref=e861]:
+                  - 'cell "CNMFG-Cell Bank Management 资质ID: 193" [ref=e862]':
+                    - generic [ref=e863]:
+                      - generic [ref=e864]: CNMFG-Cell Bank Management
+                      - generic [ref=e866]: "资质ID: 193"
+                  - cell "任春慧 未获得 CNMFG-Cell Bank Management 资质" [ref=e867]:
+                    - button "任春慧 未获得 CNMFG-Cell Bank Management 资质" [ref=e868] [cursor=pointer]:
+                      - generic [ref=e869]: "-"
+                  - 'cell "刘卫宝 - CNMFG-Cell Bank Management: 2级" [ref=e870]':
+                    - 'button "刘卫宝 - CNMFG-Cell Bank Management: 2级" [ref=e871] [cursor=pointer]':
+                      - generic [ref=e872]: "2"
+                  - cell "刘启航 未获得 CNMFG-Cell Bank Management 资质" [ref=e873]:
+                    - button "刘启航 未获得 CNMFG-Cell Bank Management 资质" [ref=e874] [cursor=pointer]:
+                      - generic [ref=e875]: "-"
+                  - cell "刘天畅 未获得 CNMFG-Cell Bank Management 资质" [ref=e876]:
+                    - button "刘天畅 未获得 CNMFG-Cell Bank Management 资质" [ref=e877] [cursor=pointer]:
+                      - generic [ref=e878]: "-"
+                  - cell "刘家荣 未获得 CNMFG-Cell Bank Management 资质" [ref=e879]:
+                    - button "刘家荣 未获得 CNMFG-Cell Bank Management 资质" [ref=e880] [cursor=pointer]:
+                      - generic [ref=e881]: "-"
+                  - cell "单继元 未获得 CNMFG-Cell Bank Management 资质" [ref=e882]:
+                    - button "单继元 未获得 CNMFG-Cell Bank Management 资质" [ref=e883] [cursor=pointer]:
+                      - generic [ref=e884]: "-"
+                  - 'cell "周永鹏 - CNMFG-Cell Bank Management: 1级" [ref=e885]':
+                    - 'button "周永鹏 - CNMFG-Cell Bank Management: 1级" [ref=e886] [cursor=pointer]':
+                      - generic [ref=e887]: "1"
+                  - cell "孙维艳 未获得 CNMFG-Cell Bank Management 资质" [ref=e888]:
+                    - button "孙维艳 未获得 CNMFG-Cell Bank Management 资质" [ref=e889] [cursor=pointer]:
+                      - generic [ref=e890]: "-"
+                  - cell "孟江泽 未获得 CNMFG-Cell Bank Management 资质" [ref=e891]:
+                    - button "孟江泽 未获得 CNMFG-Cell Bank Management 资质" [ref=e892] [cursor=pointer]:
+                      - generic [ref=e893]: "-"
+                  - cell "宋健健 未获得 CNMFG-Cell Bank Management 资质" [ref=e894]:
+                    - button "宋健健 未获得 CNMFG-Cell Bank Management 资质" [ref=e895] [cursor=pointer]:
+                      - generic [ref=e896]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Cell Bank Management 资质" [ref=e897]:
+                    - button "封瑞敏 未获得 CNMFG-Cell Bank Management 资质" [ref=e898] [cursor=pointer]:
+                      - generic [ref=e899]: "-"
+                  - cell "庞梦宇 未获得 CNMFG-Cell Bank Management 资质" [ref=e900]:
+                    - button "庞梦宇 未获得 CNMFG-Cell Bank Management 资质" [ref=e901] [cursor=pointer]:
+                      - generic [ref=e902]: "-"
+                  - cell "张亚妮 未获得 CNMFG-Cell Bank Management 资质" [ref=e903]:
+                    - button "张亚妮 未获得 CNMFG-Cell Bank Management 资质" [ref=e904] [cursor=pointer]:
+                      - generic [ref=e905]: "-"
+                  - cell "张伟红 未获得 CNMFG-Cell Bank Management 资质" [ref=e906]:
+                    - button "张伟红 未获得 CNMFG-Cell Bank Management 资质" [ref=e907] [cursor=pointer]:
+                      - generic [ref=e908]: "-"
+                  - cell "张凯 未获得 CNMFG-Cell Bank Management 资质" [ref=e909]:
+                    - button "张凯 未获得 CNMFG-Cell Bank Management 资质" [ref=e910] [cursor=pointer]:
+                      - generic [ref=e911]: "-"
+                  - cell "张嘉辉 未获得 CNMFG-Cell Bank Management 资质" [ref=e912]:
+                    - button "张嘉辉 未获得 CNMFG-Cell Bank Management 资质" [ref=e913] [cursor=pointer]:
+                      - generic [ref=e914]: "-"
+                  - cell "张宇琪 未获得 CNMFG-Cell Bank Management 资质" [ref=e915]:
+                    - button "张宇琪 未获得 CNMFG-Cell Bank Management 资质" [ref=e916] [cursor=pointer]:
+                      - generic [ref=e917]: "-"
+                  - cell "张展展 未获得 CNMFG-Cell Bank Management 资质" [ref=e918]:
+                    - button "张展展 未获得 CNMFG-Cell Bank Management 资质" [ref=e919] [cursor=pointer]:
+                      - generic [ref=e920]: "-"
+                  - cell "张彬 未获得 CNMFG-Cell Bank Management 资质" [ref=e921]:
+                    - button "张彬 未获得 CNMFG-Cell Bank Management 资质" [ref=e922] [cursor=pointer]:
+                      - generic [ref=e923]: "-"
+                  - cell "张志兴 未获得 CNMFG-Cell Bank Management 资质" [ref=e924]:
+                    - button "张志兴 未获得 CNMFG-Cell Bank Management 资质" [ref=e925] [cursor=pointer]:
+                      - generic [ref=e926]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Cell Bank Management 资质" [ref=e927]:
+                    - button "张紫烁 未获得 CNMFG-Cell Bank Management 资质" [ref=e928] [cursor=pointer]:
+                      - generic [ref=e929]: "-"
+                  - 'cell "张艳 - CNMFG-Cell Bank Management: 5级" [ref=e930]':
+                    - 'button "张艳 - CNMFG-Cell Bank Management: 5级" [ref=e931] [cursor=pointer]':
+                      - generic [ref=e932]: "5"
+                  - cell "徐帅杭 未获得 CNMFG-Cell Bank Management 资质" [ref=e933]:
+                    - button "徐帅杭 未获得 CNMFG-Cell Bank Management 资质" [ref=e934] [cursor=pointer]:
+                      - generic [ref=e935]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Cell Bank Management 资质" [ref=e936]:
+                    - button "曹思豪 未获得 CNMFG-Cell Bank Management 资质" [ref=e937] [cursor=pointer]:
+                      - generic [ref=e938]: "-"
+                - row [ref=e939]:
+                  - 'cell "CNMFG-Cell Passage in Wave 资质ID: 194" [ref=e940]':
+                    - generic [ref=e941]:
+                      - generic [ref=e942]: CNMFG-Cell Passage in Wave
+                      - generic [ref=e944]: "资质ID: 194"
+                  - 'cell "任春慧 - CNMFG-Cell Passage in Wave: 5级" [ref=e945]':
+                    - 'button "任春慧 - CNMFG-Cell Passage in Wave: 5级" [ref=e946] [cursor=pointer]':
+                      - generic [ref=e947]: "5"
+                  - 'cell "刘卫宝 - CNMFG-Cell Passage in Wave: 4级" [ref=e948]':
+                    - 'button "刘卫宝 - CNMFG-Cell Passage in Wave: 4级" [ref=e949] [cursor=pointer]':
+                      - generic [ref=e950]: "4"
+                  - 'cell "刘启航 - CNMFG-Cell Passage in Wave: 1级" [ref=e951]':
+                    - 'button "刘启航 - CNMFG-Cell Passage in Wave: 1级" [ref=e952] [cursor=pointer]':
+                      - generic [ref=e953]: "1"
+                  - 'cell "刘天畅 - CNMFG-Cell Passage in Wave: 1级" [ref=e954]':
+                    - 'button "刘天畅 - CNMFG-Cell Passage in Wave: 1级" [ref=e955] [cursor=pointer]':
+                      - generic [ref=e956]: "1"
+                  - cell "刘家荣 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e957]:
+                    - button "刘家荣 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e958] [cursor=pointer]:
+                      - generic [ref=e959]: "-"
+                  - cell "单继元 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e960]:
+                    - button "单继元 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e961] [cursor=pointer]:
+                      - generic [ref=e962]: "-"
+                  - 'cell "周永鹏 - CNMFG-Cell Passage in Wave: 1级" [ref=e963]':
+                    - 'button "周永鹏 - CNMFG-Cell Passage in Wave: 1级" [ref=e964] [cursor=pointer]':
+                      - generic [ref=e965]: "1"
+                  - 'cell "孙维艳 - CNMFG-Cell Passage in Wave: 5级" [ref=e966]':
+                    - 'button "孙维艳 - CNMFG-Cell Passage in Wave: 5级" [ref=e967] [cursor=pointer]':
+                      - generic [ref=e968]: "5"
+                  - 'cell "孟江泽 - CNMFG-Cell Passage in Wave: 1级" [ref=e969]':
+                    - 'button "孟江泽 - CNMFG-Cell Passage in Wave: 1级" [ref=e970] [cursor=pointer]':
+                      - generic [ref=e971]: "1"
+                  - cell "宋健健 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e972]:
+                    - button "宋健健 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e973] [cursor=pointer]:
+                      - generic [ref=e974]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e975]:
+                    - button "封瑞敏 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e976] [cursor=pointer]:
+                      - generic [ref=e977]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Cell Passage in Wave: 1级" [ref=e978]':
+                    - 'button "庞梦宇 - CNMFG-Cell Passage in Wave: 1级" [ref=e979] [cursor=pointer]':
+                      - generic [ref=e980]: "1"
+                  - cell "张亚妮 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e981]:
+                    - button "张亚妮 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e982] [cursor=pointer]:
+                      - generic [ref=e983]: "-"
+                  - 'cell "张伟红 - CNMFG-Cell Passage in Wave: 1级" [ref=e984]':
+                    - 'button "张伟红 - CNMFG-Cell Passage in Wave: 1级" [ref=e985] [cursor=pointer]':
+                      - generic [ref=e986]: "1"
+                  - cell "张凯 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e987]:
+                    - button "张凯 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e988] [cursor=pointer]:
+                      - generic [ref=e989]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Cell Passage in Wave: 1级" [ref=e990]':
+                    - 'button "张嘉辉 - CNMFG-Cell Passage in Wave: 1级" [ref=e991] [cursor=pointer]':
+                      - generic [ref=e992]: "1"
+                  - 'cell "张宇琪 - CNMFG-Cell Passage in Wave: 4级" [ref=e993]':
+                    - 'button "张宇琪 - CNMFG-Cell Passage in Wave: 4级" [ref=e994] [cursor=pointer]':
+                      - generic [ref=e995]: "4"
+                  - cell "张展展 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e996]:
+                    - button "张展展 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e997] [cursor=pointer]:
+                      - generic [ref=e998]: "-"
+                  - cell "张彬 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e999]:
+                    - button "张彬 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1000] [cursor=pointer]:
+                      - generic [ref=e1001]: "-"
+                  - cell "张志兴 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1002]:
+                    - button "张志兴 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1003] [cursor=pointer]:
+                      - generic [ref=e1004]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1005]:
+                    - button "张紫烁 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1006] [cursor=pointer]:
+                      - generic [ref=e1007]: "-"
+                  - 'cell "张艳 - CNMFG-Cell Passage in Wave: 3级" [ref=e1008]':
+                    - 'button "张艳 - CNMFG-Cell Passage in Wave: 3级" [ref=e1009] [cursor=pointer]':
+                      - generic [ref=e1010]: "3"
+                  - cell "徐帅杭 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1011]:
+                    - button "徐帅杭 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1012] [cursor=pointer]:
+                      - generic [ref=e1013]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1014]:
+                    - button "曹思豪 未获得 CNMFG-Cell Passage in Wave 资质" [ref=e1015] [cursor=pointer]:
+                      - generic [ref=e1016]: "-"
+                - 'row "CNMFG-Centrifuge 资质ID: 206 任春慧 - CNMFG-Centrifuge: 1级 刘卫宝 - CNMFG-Centrifuge: 1级 刘启航 - CNMFG-Centrifuge: 4级 刘天畅 - CNMFG-Centrifuge: 4级 刘家荣 未获得 CNMFG-Centrifuge 资质 单继元 未获得 CNMFG-Centrifuge 资质 周永鹏 - CNMFG-Centrifuge: 3级 孙维艳 - CNMFG-Centrifuge: 4级 孟江泽 - CNMFG-Centrifuge: 3级 宋健健 未获得 CNMFG-Centrifuge 资质 封瑞敏 未获得 CNMFG-Centrifuge 资质 庞梦宇 - CNMFG-Centrifuge: 4级 张亚妮 未获得 CNMFG-Centrifuge 资质 张伟红 - CNMFG-Centrifuge: 4级 张凯 未获得 CNMFG-Centrifuge 资质 张嘉辉 - CNMFG-Centrifuge: 2级 张宇琪 - CNMFG-Centrifuge: 4级 张展展 未获得 CNMFG-Centrifuge 资质 张彬 未获得 CNMFG-Centrifuge 资质 张志兴 未获得 CNMFG-Centrifuge 资质 张紫烁 未获得 CNMFG-Centrifuge 资质 张艳 - CNMFG-Centrifuge: 3级 徐帅杭 未获得 CNMFG-Centrifuge 资质 曹思豪 未获得 CNMFG-Centrifuge 资质" [ref=e1017]':
+                  - 'cell "CNMFG-Centrifuge 资质ID: 206" [ref=e1018]':
+                    - generic [ref=e1019]:
+                      - generic [ref=e1020]: CNMFG-Centrifuge
+                      - generic [ref=e1022]: "资质ID: 206"
+                  - 'cell "任春慧 - CNMFG-Centrifuge: 1级" [ref=e1023]':
+                    - 'button "任春慧 - CNMFG-Centrifuge: 1级" [ref=e1024] [cursor=pointer]':
+                      - generic [ref=e1025]: "1"
+                  - 'cell "刘卫宝 - CNMFG-Centrifuge: 1级" [ref=e1026]':
+                    - 'button "刘卫宝 - CNMFG-Centrifuge: 1级" [ref=e1027] [cursor=pointer]':
+                      - generic [ref=e1028]: "1"
+                  - 'cell "刘启航 - CNMFG-Centrifuge: 4级" [ref=e1029]':
+                    - 'button "刘启航 - CNMFG-Centrifuge: 4级" [ref=e1030] [cursor=pointer]':
+                      - generic [ref=e1031]: "4"
+                  - 'cell "刘天畅 - CNMFG-Centrifuge: 4级" [ref=e1032]':
+                    - 'button "刘天畅 - CNMFG-Centrifuge: 4级" [ref=e1033] [cursor=pointer]':
+                      - generic [ref=e1034]: "4"
+                  - cell "刘家荣 未获得 CNMFG-Centrifuge 资质" [ref=e1035]:
+                    - button "刘家荣 未获得 CNMFG-Centrifuge 资质" [ref=e1036] [cursor=pointer]:
+                      - generic [ref=e1037]: "-"
+                  - cell "单继元 未获得 CNMFG-Centrifuge 资质" [ref=e1038]:
+                    - button "单继元 未获得 CNMFG-Centrifuge 资质" [ref=e1039] [cursor=pointer]:
+                      - generic [ref=e1040]: "-"
+                  - 'cell "周永鹏 - CNMFG-Centrifuge: 3级" [ref=e1041]':
+                    - 'button "周永鹏 - CNMFG-Centrifuge: 3级" [ref=e1042] [cursor=pointer]':
+                      - generic [ref=e1043]: "3"
+                  - 'cell "孙维艳 - CNMFG-Centrifuge: 4级" [ref=e1044]':
+                    - 'button "孙维艳 - CNMFG-Centrifuge: 4级" [ref=e1045] [cursor=pointer]':
+                      - generic [ref=e1046]: "4"
+                  - 'cell "孟江泽 - CNMFG-Centrifuge: 3级" [ref=e1047]':
+                    - 'button "孟江泽 - CNMFG-Centrifuge: 3级" [ref=e1048] [cursor=pointer]':
+                      - generic [ref=e1049]: "3"
+                  - cell "宋健健 未获得 CNMFG-Centrifuge 资质" [ref=e1050]:
+                    - button "宋健健 未获得 CNMFG-Centrifuge 资质" [ref=e1051] [cursor=pointer]:
+                      - generic [ref=e1052]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Centrifuge 资质" [ref=e1053]:
+                    - button "封瑞敏 未获得 CNMFG-Centrifuge 资质" [ref=e1054] [cursor=pointer]:
+                      - generic [ref=e1055]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Centrifuge: 4级" [ref=e1056]':
+                    - 'button "庞梦宇 - CNMFG-Centrifuge: 4级" [ref=e1057] [cursor=pointer]':
+                      - generic [ref=e1058]: "4"
+                  - cell "张亚妮 未获得 CNMFG-Centrifuge 资质" [ref=e1059]:
+                    - button "张亚妮 未获得 CNMFG-Centrifuge 资质" [ref=e1060] [cursor=pointer]:
+                      - generic [ref=e1061]: "-"
+                  - 'cell "张伟红 - CNMFG-Centrifuge: 4级" [ref=e1062]':
+                    - 'button "张伟红 - CNMFG-Centrifuge: 4级" [ref=e1063] [cursor=pointer]':
+                      - generic [ref=e1064]: "4"
+                  - cell "张凯 未获得 CNMFG-Centrifuge 资质" [ref=e1065]:
+                    - button "张凯 未获得 CNMFG-Centrifuge 资质" [ref=e1066] [cursor=pointer]:
+                      - generic [ref=e1067]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Centrifuge: 2级" [ref=e1068]':
+                    - 'button "张嘉辉 - CNMFG-Centrifuge: 2级" [ref=e1069] [cursor=pointer]':
+                      - generic [ref=e1070]: "2"
+                  - 'cell "张宇琪 - CNMFG-Centrifuge: 4级" [ref=e1071]':
+                    - 'button "张宇琪 - CNMFG-Centrifuge: 4级" [ref=e1072] [cursor=pointer]':
+                      - generic [ref=e1073]: "4"
+                  - cell "张展展 未获得 CNMFG-Centrifuge 资质" [ref=e1074]:
+                    - button "张展展 未获得 CNMFG-Centrifuge 资质" [ref=e1075] [cursor=pointer]:
+                      - generic [ref=e1076]: "-"
+                  - cell "张彬 未获得 CNMFG-Centrifuge 资质" [ref=e1077]:
+                    - button "张彬 未获得 CNMFG-Centrifuge 资质" [ref=e1078] [cursor=pointer]:
+                      - generic [ref=e1079]: "-"
+                  - cell "张志兴 未获得 CNMFG-Centrifuge 资质" [ref=e1080]:
+                    - button "张志兴 未获得 CNMFG-Centrifuge 资质" [ref=e1081] [cursor=pointer]:
+                      - generic [ref=e1082]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Centrifuge 资质" [ref=e1083]:
+                    - button "张紫烁 未获得 CNMFG-Centrifuge 资质" [ref=e1084] [cursor=pointer]:
+                      - generic [ref=e1085]: "-"
+                  - 'cell "张艳 - CNMFG-Centrifuge: 3级" [ref=e1086]':
+                    - 'button "张艳 - CNMFG-Centrifuge: 3级" [ref=e1087] [cursor=pointer]':
+                      - generic [ref=e1088]: "3"
+                  - cell "徐帅杭 未获得 CNMFG-Centrifuge 资质" [ref=e1089]:
+                    - button "徐帅杭 未获得 CNMFG-Centrifuge 资质" [ref=e1090] [cursor=pointer]:
+                      - generic [ref=e1091]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Centrifuge 资质" [ref=e1092]:
+                    - button "曹思豪 未获得 CNMFG-Centrifuge 资质" [ref=e1093] [cursor=pointer]:
+                      - generic [ref=e1094]: "-"
+                - row [ref=e1095]:
+                  - 'cell "CNMFG-CultiBag Install（Hyclone） 资质ID: 202" [ref=e1096]':
+                    - generic [ref=e1097]:
+                      - generic [ref=e1098]: CNMFG-CultiBag Install（Hyclone）
+                      - generic [ref=e1100]: "资质ID: 202"
+                  - 'cell "任春慧 - CNMFG-CultiBag Install（Hyclone）: 1级" [ref=e1101]':
+                    - 'button "任春慧 - CNMFG-CultiBag Install（Hyclone）: 1级" [ref=e1102] [cursor=pointer]':
+                      - generic [ref=e1103]: "1"
+                  - 'cell "刘卫宝 - CNMFG-CultiBag Install（Hyclone）: 5级" [ref=e1104]':
+                    - 'button "刘卫宝 - CNMFG-CultiBag Install（Hyclone）: 5级" [ref=e1105] [cursor=pointer]':
+                      - generic [ref=e1106]: "5"
+                  - 'cell "刘启航 - CNMFG-CultiBag Install（Hyclone）: 4级" [ref=e1107]':
+                    - 'button "刘启航 - CNMFG-CultiBag Install（Hyclone）: 4级" [ref=e1108] [cursor=pointer]':
+                      - generic [ref=e1109]: "4"
+                  - 'cell "刘天畅 - CNMFG-CultiBag Install（Hyclone）: 4级" [ref=e1110]':
+                    - 'button "刘天畅 - CNMFG-CultiBag Install（Hyclone）: 4级" [ref=e1111] [cursor=pointer]':
+                      - generic [ref=e1112]: "4"
+                  - cell "刘家荣 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1113]:
+                    - button "刘家荣 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1114] [cursor=pointer]:
+                      - generic [ref=e1115]: "-"
+                  - cell "单继元 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1116]:
+                    - button "单继元 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1117] [cursor=pointer]:
+                      - generic [ref=e1118]: "-"
+                  - cell "周永鹏 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1119]:
+                    - button "周永鹏 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1120] [cursor=pointer]:
+                      - generic [ref=e1121]: "-"
+                  - 'cell "孙维艳 - CNMFG-CultiBag Install（Hyclone）: 2级" [ref=e1122]':
+                    - 'button "孙维艳 - CNMFG-CultiBag Install（Hyclone）: 2级" [ref=e1123] [cursor=pointer]':
+                      - generic [ref=e1124]: "2"
+                  - 'cell "孟江泽 - CNMFG-CultiBag Install（Hyclone）: 4级" [ref=e1125]':
+                    - 'button "孟江泽 - CNMFG-CultiBag Install（Hyclone）: 4级" [ref=e1126] [cursor=pointer]':
+                      - generic [ref=e1127]: "4"
+                  - cell "宋健健 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1128]:
+                    - button "宋健健 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1129] [cursor=pointer]:
+                      - generic [ref=e1130]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1131]:
+                    - button "封瑞敏 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1132] [cursor=pointer]:
+                      - generic [ref=e1133]: "-"
+                  - 'cell "庞梦宇 - CNMFG-CultiBag Install（Hyclone）: 2级" [ref=e1134]':
+                    - 'button "庞梦宇 - CNMFG-CultiBag Install（Hyclone）: 2级" [ref=e1135] [cursor=pointer]':
+                      - generic [ref=e1136]: "2"
+                  - cell "张亚妮 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1137]:
+                    - button "张亚妮 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1138] [cursor=pointer]:
+                      - generic [ref=e1139]: "-"
+                  - 'cell "张伟红 - CNMFG-CultiBag Install（Hyclone）: 2级" [ref=e1140]':
+                    - 'button "张伟红 - CNMFG-CultiBag Install（Hyclone）: 2级" [ref=e1141] [cursor=pointer]':
+                      - generic [ref=e1142]: "2"
+                  - cell "张凯 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1143]:
+                    - button "张凯 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1144] [cursor=pointer]:
+                      - generic [ref=e1145]: "-"
+                  - 'cell "张嘉辉 - CNMFG-CultiBag Install（Hyclone）: 3级" [ref=e1146]':
+                    - 'button "张嘉辉 - CNMFG-CultiBag Install（Hyclone）: 3级" [ref=e1147] [cursor=pointer]':
+                      - generic [ref=e1148]: "3"
+                  - 'cell "张宇琪 - CNMFG-CultiBag Install（Hyclone）: 3级" [ref=e1149]':
+                    - 'button "张宇琪 - CNMFG-CultiBag Install（Hyclone）: 3级" [ref=e1150] [cursor=pointer]':
+                      - generic [ref=e1151]: "3"
+                  - cell "张展展 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1152]:
+                    - button "张展展 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1153] [cursor=pointer]:
+                      - generic [ref=e1154]: "-"
+                  - cell "张彬 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1155]:
+                    - button "张彬 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1156] [cursor=pointer]:
+                      - generic [ref=e1157]: "-"
+                  - cell "张志兴 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1158]:
+                    - button "张志兴 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1159] [cursor=pointer]:
+                      - generic [ref=e1160]: "-"
+                  - cell "张紫烁 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1161]:
+                    - button "张紫烁 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1162] [cursor=pointer]:
+                      - generic [ref=e1163]: "-"
+                  - 'cell "张艳 - CNMFG-CultiBag Install（Hyclone）: 3级" [ref=e1164]':
+                    - 'button "张艳 - CNMFG-CultiBag Install（Hyclone）: 3级" [ref=e1165] [cursor=pointer]':
+                      - generic [ref=e1166]: "3"
+                  - cell "徐帅杭 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1167]:
+                    - button "徐帅杭 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1168] [cursor=pointer]:
+                      - generic [ref=e1169]: "-"
+                  - cell "曹思豪 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1170]:
+                    - button "曹思豪 未获得 CNMFG-CultiBag Install（Hyclone） 资质" [ref=e1171] [cursor=pointer]:
+                      - generic [ref=e1172]: "-"
+                - 'row "CNMFG-Electrode Prep 资质ID: 196 任春慧 - CNMFG-Electrode Prep: 2级 刘卫宝 - CNMFG-Electrode Prep: 3级 刘启航 - CNMFG-Electrode Prep: 4级 刘天畅 - CNMFG-Electrode Prep: 4级 刘家荣 未获得 CNMFG-Electrode Prep 资质 单继元 未获得 CNMFG-Electrode Prep 资质 周永鹏 - CNMFG-Electrode Prep: 4级 孙维艳 - CNMFG-Electrode Prep: 2级 孟江泽 - CNMFG-Electrode Prep: 4级 宋健健 未获得 CNMFG-Electrode Prep 资质 封瑞敏 未获得 CNMFG-Electrode Prep 资质 庞梦宇 - CNMFG-Electrode Prep: 3级 张亚妮 未获得 CNMFG-Electrode Prep 资质 张伟红 - CNMFG-Electrode Prep: 3级 张凯 未获得 CNMFG-Electrode Prep 资质 张嘉辉 - CNMFG-Electrode Prep: 3级 张宇琪 - CNMFG-Electrode Prep: 4级 张展展 未获得 CNMFG-Electrode Prep 资质 张彬 未获得 CNMFG-Electrode Prep 资质 张志兴 未获得 CNMFG-Electrode Prep 资质 张紫烁 未获得 CNMFG-Electrode Prep 资质 张艳 - CNMFG-Electrode Prep: 1级 徐帅杭 未获得 CNMFG-Electrode Prep 资质 曹思豪 未获得 CNMFG-Electrode Prep 资质" [ref=e1173]':
+                  - 'cell "CNMFG-Electrode Prep 资质ID: 196" [ref=e1174]':
+                    - generic [ref=e1175]:
+                      - generic [ref=e1176]: CNMFG-Electrode Prep
+                      - generic [ref=e1178]: "资质ID: 196"
+                  - 'cell "任春慧 - CNMFG-Electrode Prep: 2级" [ref=e1179]':
+                    - 'button "任春慧 - CNMFG-Electrode Prep: 2级" [ref=e1180] [cursor=pointer]':
+                      - generic [ref=e1181]: "2"
+                  - 'cell "刘卫宝 - CNMFG-Electrode Prep: 3级" [ref=e1182]':
+                    - 'button "刘卫宝 - CNMFG-Electrode Prep: 3级" [ref=e1183] [cursor=pointer]':
+                      - generic [ref=e1184]: "3"
+                  - 'cell "刘启航 - CNMFG-Electrode Prep: 4级" [ref=e1185]':
+                    - 'button "刘启航 - CNMFG-Electrode Prep: 4级" [ref=e1186] [cursor=pointer]':
+                      - generic [ref=e1187]: "4"
+                  - 'cell "刘天畅 - CNMFG-Electrode Prep: 4级" [ref=e1188]':
+                    - 'button "刘天畅 - CNMFG-Electrode Prep: 4级" [ref=e1189] [cursor=pointer]':
+                      - generic [ref=e1190]: "4"
+                  - cell "刘家荣 未获得 CNMFG-Electrode Prep 资质" [ref=e1191]:
+                    - button "刘家荣 未获得 CNMFG-Electrode Prep 资质" [ref=e1192] [cursor=pointer]:
+                      - generic [ref=e1193]: "-"
+                  - cell "单继元 未获得 CNMFG-Electrode Prep 资质" [ref=e1194]:
+                    - button "单继元 未获得 CNMFG-Electrode Prep 资质" [ref=e1195] [cursor=pointer]:
+                      - generic [ref=e1196]: "-"
+                  - 'cell "周永鹏 - CNMFG-Electrode Prep: 4级" [ref=e1197]':
+                    - 'button "周永鹏 - CNMFG-Electrode Prep: 4级" [ref=e1198] [cursor=pointer]':
+                      - generic [ref=e1199]: "4"
+                  - 'cell "孙维艳 - CNMFG-Electrode Prep: 2级" [ref=e1200]':
+                    - 'button "孙维艳 - CNMFG-Electrode Prep: 2级" [ref=e1201] [cursor=pointer]':
+                      - generic [ref=e1202]: "2"
+                  - 'cell "孟江泽 - CNMFG-Electrode Prep: 4级" [ref=e1203]':
+                    - 'button "孟江泽 - CNMFG-Electrode Prep: 4级" [ref=e1204] [cursor=pointer]':
+                      - generic [ref=e1205]: "4"
+                  - cell "宋健健 未获得 CNMFG-Electrode Prep 资质" [ref=e1206]:
+                    - button "宋健健 未获得 CNMFG-Electrode Prep 资质" [ref=e1207] [cursor=pointer]:
+                      - generic [ref=e1208]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Electrode Prep 资质" [ref=e1209]:
+                    - button "封瑞敏 未获得 CNMFG-Electrode Prep 资质" [ref=e1210] [cursor=pointer]:
+                      - generic [ref=e1211]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Electrode Prep: 3级" [ref=e1212]':
+                    - 'button "庞梦宇 - CNMFG-Electrode Prep: 3级" [ref=e1213] [cursor=pointer]':
+                      - generic [ref=e1214]: "3"
+                  - cell "张亚妮 未获得 CNMFG-Electrode Prep 资质" [ref=e1215]:
+                    - button "张亚妮 未获得 CNMFG-Electrode Prep 资质" [ref=e1216] [cursor=pointer]:
+                      - generic [ref=e1217]: "-"
+                  - 'cell "张伟红 - CNMFG-Electrode Prep: 3级" [ref=e1218]':
+                    - 'button "张伟红 - CNMFG-Electrode Prep: 3级" [ref=e1219] [cursor=pointer]':
+                      - generic [ref=e1220]: "3"
+                  - cell "张凯 未获得 CNMFG-Electrode Prep 资质" [ref=e1221]:
+                    - button "张凯 未获得 CNMFG-Electrode Prep 资质" [ref=e1222] [cursor=pointer]:
+                      - generic [ref=e1223]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Electrode Prep: 3级" [ref=e1224]':
+                    - 'button "张嘉辉 - CNMFG-Electrode Prep: 3级" [ref=e1225] [cursor=pointer]':
+                      - generic [ref=e1226]: "3"
+                  - 'cell "张宇琪 - CNMFG-Electrode Prep: 4级" [ref=e1227]':
+                    - 'button "张宇琪 - CNMFG-Electrode Prep: 4级" [ref=e1228] [cursor=pointer]':
+                      - generic [ref=e1229]: "4"
+                  - cell "张展展 未获得 CNMFG-Electrode Prep 资质" [ref=e1230]:
+                    - button "张展展 未获得 CNMFG-Electrode Prep 资质" [ref=e1231] [cursor=pointer]:
+                      - generic [ref=e1232]: "-"
+                  - cell "张彬 未获得 CNMFG-Electrode Prep 资质" [ref=e1233]:
+                    - button "张彬 未获得 CNMFG-Electrode Prep 资质" [ref=e1234] [cursor=pointer]:
+                      - generic [ref=e1235]: "-"
+                  - cell "张志兴 未获得 CNMFG-Electrode Prep 资质" [ref=e1236]:
+                    - button "张志兴 未获得 CNMFG-Electrode Prep 资质" [ref=e1237] [cursor=pointer]:
+                      - generic [ref=e1238]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Electrode Prep 资质" [ref=e1239]:
+                    - button "张紫烁 未获得 CNMFG-Electrode Prep 资质" [ref=e1240] [cursor=pointer]:
+                      - generic [ref=e1241]: "-"
+                  - 'cell "张艳 - CNMFG-Electrode Prep: 1级" [ref=e1242]':
+                    - 'button "张艳 - CNMFG-Electrode Prep: 1级" [ref=e1243] [cursor=pointer]':
+                      - generic [ref=e1244]: "1"
+                  - cell "徐帅杭 未获得 CNMFG-Electrode Prep 资质" [ref=e1245]:
+                    - button "徐帅杭 未获得 CNMFG-Electrode Prep 资质" [ref=e1246] [cursor=pointer]:
+                      - generic [ref=e1247]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Electrode Prep 资质" [ref=e1248]:
+                    - button "曹思豪 未获得 CNMFG-Electrode Prep 资质" [ref=e1249] [cursor=pointer]:
+                      - generic [ref=e1250]: "-"
+                - row [ref=e1251]:
+                  - 'cell "CNMFG-Liquid Nitrogen Freezer 资质ID: 198" [ref=e1252]':
+                    - generic [ref=e1253]:
+                      - generic [ref=e1254]: CNMFG-Liquid Nitrogen Freezer
+                      - generic [ref=e1256]: "资质ID: 198"
+                  - cell "任春慧 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1257]:
+                    - button "任春慧 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1258] [cursor=pointer]:
+                      - generic [ref=e1259]: "-"
+                  - 'cell "刘卫宝 - CNMFG-Liquid Nitrogen Freezer: 2级" [ref=e1260]':
+                    - 'button "刘卫宝 - CNMFG-Liquid Nitrogen Freezer: 2级" [ref=e1261] [cursor=pointer]':
+                      - generic [ref=e1262]: "2"
+                  - cell "刘启航 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1263]:
+                    - button "刘启航 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1264] [cursor=pointer]:
+                      - generic [ref=e1265]: "-"
+                  - cell "刘天畅 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1266]:
+                    - button "刘天畅 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1267] [cursor=pointer]:
+                      - generic [ref=e1268]: "-"
+                  - cell "刘家荣 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1269]:
+                    - button "刘家荣 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1270] [cursor=pointer]:
+                      - generic [ref=e1271]: "-"
+                  - cell "单继元 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1272]:
+                    - button "单继元 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1273] [cursor=pointer]:
+                      - generic [ref=e1274]: "-"
+                  - cell "周永鹏 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1275]:
+                    - button "周永鹏 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1276] [cursor=pointer]:
+                      - generic [ref=e1277]: "-"
+                  - cell "孙维艳 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1278]:
+                    - button "孙维艳 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1279] [cursor=pointer]:
+                      - generic [ref=e1280]: "-"
+                  - cell "孟江泽 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1281]:
+                    - button "孟江泽 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1282] [cursor=pointer]:
+                      - generic [ref=e1283]: "-"
+                  - cell "宋健健 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1284]:
+                    - button "宋健健 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1285] [cursor=pointer]:
+                      - generic [ref=e1286]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1287]:
+                    - button "封瑞敏 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1288] [cursor=pointer]:
+                      - generic [ref=e1289]: "-"
+                  - cell "庞梦宇 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1290]:
+                    - button "庞梦宇 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1291] [cursor=pointer]:
+                      - generic [ref=e1292]: "-"
+                  - cell "张亚妮 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1293]:
+                    - button "张亚妮 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1294] [cursor=pointer]:
+                      - generic [ref=e1295]: "-"
+                  - cell "张伟红 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1296]:
+                    - button "张伟红 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1297] [cursor=pointer]:
+                      - generic [ref=e1298]: "-"
+                  - cell "张凯 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1299]:
+                    - button "张凯 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1300] [cursor=pointer]:
+                      - generic [ref=e1301]: "-"
+                  - cell "张嘉辉 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1302]:
+                    - button "张嘉辉 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1303] [cursor=pointer]:
+                      - generic [ref=e1304]: "-"
+                  - cell "张宇琪 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1305]:
+                    - button "张宇琪 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1306] [cursor=pointer]:
+                      - generic [ref=e1307]: "-"
+                  - cell "张展展 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1308]:
+                    - button "张展展 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1309] [cursor=pointer]:
+                      - generic [ref=e1310]: "-"
+                  - cell "张彬 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1311]:
+                    - button "张彬 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1312] [cursor=pointer]:
+                      - generic [ref=e1313]: "-"
+                  - cell "张志兴 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1314]:
+                    - button "张志兴 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1315] [cursor=pointer]:
+                      - generic [ref=e1316]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1317]:
+                    - button "张紫烁 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1318] [cursor=pointer]:
+                      - generic [ref=e1319]: "-"
+                  - 'cell "张艳 - CNMFG-Liquid Nitrogen Freezer: 5级" [ref=e1320]':
+                    - 'button "张艳 - CNMFG-Liquid Nitrogen Freezer: 5级" [ref=e1321] [cursor=pointer]':
+                      - generic [ref=e1322]: "5"
+                  - cell "徐帅杭 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1323]:
+                    - button "徐帅杭 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1324] [cursor=pointer]:
+                      - generic [ref=e1325]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1326]:
+                    - button "曹思豪 未获得 CNMFG-Liquid Nitrogen Freezer 资质" [ref=e1327] [cursor=pointer]:
+                      - generic [ref=e1328]: "-"
+                - row [ref=e1329]:
+                  - 'cell "CNMFG-Material Management 资质ID: 192" [ref=e1330]':
+                    - generic [ref=e1331]:
+                      - generic [ref=e1332]: CNMFG-Material Management
+                      - generic [ref=e1334]: "资质ID: 192"
+                  - 'cell "任春慧 - CNMFG-Material Management: 1级" [ref=e1335]':
+                    - 'button "任春慧 - CNMFG-Material Management: 1级" [ref=e1336] [cursor=pointer]':
+                      - generic [ref=e1337]: "1"
+                  - 'cell "刘卫宝 - CNMFG-Material Management: 1级" [ref=e1338]':
+                    - 'button "刘卫宝 - CNMFG-Material Management: 1级" [ref=e1339] [cursor=pointer]':
+                      - generic [ref=e1340]: "1"
+                  - 'cell "刘启航 - CNMFG-Material Management: 1级" [ref=e1341]':
+                    - 'button "刘启航 - CNMFG-Material Management: 1级" [ref=e1342] [cursor=pointer]':
+                      - generic [ref=e1343]: "1"
+                  - 'cell "刘天畅 - CNMFG-Material Management: 1级" [ref=e1344]':
+                    - 'button "刘天畅 - CNMFG-Material Management: 1级" [ref=e1345] [cursor=pointer]':
+                      - generic [ref=e1346]: "1"
+                  - cell "刘家荣 未获得 CNMFG-Material Management 资质" [ref=e1347]:
+                    - button "刘家荣 未获得 CNMFG-Material Management 资质" [ref=e1348] [cursor=pointer]:
+                      - generic [ref=e1349]: "-"
+                  - cell "单继元 未获得 CNMFG-Material Management 资质" [ref=e1350]:
+                    - button "单继元 未获得 CNMFG-Material Management 资质" [ref=e1351] [cursor=pointer]:
+                      - generic [ref=e1352]: "-"
+                  - 'cell "周永鹏 - CNMFG-Material Management: 3级" [ref=e1353]':
+                    - 'button "周永鹏 - CNMFG-Material Management: 3级" [ref=e1354] [cursor=pointer]':
+                      - generic [ref=e1355]: "3"
+                  - 'cell "孙维艳 - CNMFG-Material Management: 3级" [ref=e1356]':
+                    - 'button "孙维艳 - CNMFG-Material Management: 3级" [ref=e1357] [cursor=pointer]':
+                      - generic [ref=e1358]: "3"
+                  - 'cell "孟江泽 - CNMFG-Material Management: 3级" [ref=e1359]':
+                    - 'button "孟江泽 - CNMFG-Material Management: 3级" [ref=e1360] [cursor=pointer]':
+                      - generic [ref=e1361]: "3"
+                  - cell "宋健健 未获得 CNMFG-Material Management 资质" [ref=e1362]:
+                    - button "宋健健 未获得 CNMFG-Material Management 资质" [ref=e1363] [cursor=pointer]:
+                      - generic [ref=e1364]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Material Management 资质" [ref=e1365]:
+                    - button "封瑞敏 未获得 CNMFG-Material Management 资质" [ref=e1366] [cursor=pointer]:
+                      - generic [ref=e1367]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Material Management: 3级" [ref=e1368]':
+                    - 'button "庞梦宇 - CNMFG-Material Management: 3级" [ref=e1369] [cursor=pointer]':
+                      - generic [ref=e1370]: "3"
+                  - cell "张亚妮 未获得 CNMFG-Material Management 资质" [ref=e1371]:
+                    - button "张亚妮 未获得 CNMFG-Material Management 资质" [ref=e1372] [cursor=pointer]:
+                      - generic [ref=e1373]: "-"
+                  - 'cell "张伟红 - CNMFG-Material Management: 3级" [ref=e1374]':
+                    - 'button "张伟红 - CNMFG-Material Management: 3级" [ref=e1375] [cursor=pointer]':
+                      - generic [ref=e1376]: "3"
+                  - cell "张凯 未获得 CNMFG-Material Management 资质" [ref=e1377]:
+                    - button "张凯 未获得 CNMFG-Material Management 资质" [ref=e1378] [cursor=pointer]:
+                      - generic [ref=e1379]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Material Management: 3级" [ref=e1380]':
+                    - 'button "张嘉辉 - CNMFG-Material Management: 3级" [ref=e1381] [cursor=pointer]':
+                      - generic [ref=e1382]: "3"
+                  - 'cell "张宇琪 - CNMFG-Material Management: 3级" [ref=e1383]':
+                    - 'button "张宇琪 - CNMFG-Material Management: 3级" [ref=e1384] [cursor=pointer]':
+                      - generic [ref=e1385]: "3"
+                  - cell "张展展 未获得 CNMFG-Material Management 资质" [ref=e1386]:
+                    - button "张展展 未获得 CNMFG-Material Management 资质" [ref=e1387] [cursor=pointer]:
+                      - generic [ref=e1388]: "-"
+                  - cell "张彬 未获得 CNMFG-Material Management 资质" [ref=e1389]:
+                    - button "张彬 未获得 CNMFG-Material Management 资质" [ref=e1390] [cursor=pointer]:
+                      - generic [ref=e1391]: "-"
+                  - cell "张志兴 未获得 CNMFG-Material Management 资质" [ref=e1392]:
+                    - button "张志兴 未获得 CNMFG-Material Management 资质" [ref=e1393] [cursor=pointer]:
+                      - generic [ref=e1394]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Material Management 资质" [ref=e1395]:
+                    - button "张紫烁 未获得 CNMFG-Material Management 资质" [ref=e1396] [cursor=pointer]:
+                      - generic [ref=e1397]: "-"
+                  - 'cell "张艳 - CNMFG-Material Management: 3级" [ref=e1398]':
+                    - 'button "张艳 - CNMFG-Material Management: 3级" [ref=e1399] [cursor=pointer]':
+                      - generic [ref=e1400]: "3"
+                  - cell "徐帅杭 未获得 CNMFG-Material Management 资质" [ref=e1401]:
+                    - button "徐帅杭 未获得 CNMFG-Material Management 资质" [ref=e1402] [cursor=pointer]:
+                      - generic [ref=e1403]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Material Management 资质" [ref=e1404]:
+                    - button "曹思豪 未获得 CNMFG-Material Management 资质" [ref=e1405] [cursor=pointer]:
+                      - generic [ref=e1406]: "-"
+                - row [ref=e1407]:
+                  - 'cell "CNMFG-MFG-Bag Installation（ABEC） 资质ID: 204" [ref=e1408]':
+                    - generic [ref=e1409]:
+                      - generic [ref=e1410]: CNMFG-MFG-Bag Installation（ABEC）
+                      - generic [ref=e1412]: "资质ID: 204"
+                  - 'cell "任春慧 - CNMFG-MFG-Bag Installation（ABEC）: 2级" [ref=e1413]':
+                    - 'button "任春慧 - CNMFG-MFG-Bag Installation（ABEC）: 2级" [ref=e1414] [cursor=pointer]':
+                      - generic [ref=e1415]: "2"
+                  - 'cell "刘卫宝 - CNMFG-MFG-Bag Installation（ABEC）: 2级" [ref=e1416]':
+                    - 'button "刘卫宝 - CNMFG-MFG-Bag Installation（ABEC）: 2级" [ref=e1417] [cursor=pointer]':
+                      - generic [ref=e1418]: "2"
+                  - 'cell "刘启航 - CNMFG-MFG-Bag Installation（ABEC）: 4级" [ref=e1419]':
+                    - 'button "刘启航 - CNMFG-MFG-Bag Installation（ABEC）: 4级" [ref=e1420] [cursor=pointer]':
+                      - generic [ref=e1421]: "4"
+                  - 'cell "刘天畅 - CNMFG-MFG-Bag Installation（ABEC）: 4级" [ref=e1422]':
+                    - 'button "刘天畅 - CNMFG-MFG-Bag Installation（ABEC）: 4级" [ref=e1423] [cursor=pointer]':
+                      - generic [ref=e1424]: "4"
+                  - cell "刘家荣 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1425]:
+                    - button "刘家荣 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1426] [cursor=pointer]:
+                      - generic [ref=e1427]: "-"
+                  - cell "单继元 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1428]:
+                    - button "单继元 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1429] [cursor=pointer]:
+                      - generic [ref=e1430]: "-"
+                  - cell "周永鹏 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1431]:
+                    - button "周永鹏 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1432] [cursor=pointer]:
+                      - generic [ref=e1433]: "-"
+                  - 'cell "孙维艳 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1434]':
+                    - 'button "孙维艳 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1435] [cursor=pointer]':
+                      - generic [ref=e1436]: "3"
+                  - 'cell "孟江泽 - CNMFG-MFG-Bag Installation（ABEC）: 4级" [ref=e1437]':
+                    - 'button "孟江泽 - CNMFG-MFG-Bag Installation（ABEC）: 4级" [ref=e1438] [cursor=pointer]':
+                      - generic [ref=e1439]: "4"
+                  - cell "宋健健 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1440]:
+                    - button "宋健健 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1441] [cursor=pointer]:
+                      - generic [ref=e1442]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1443]:
+                    - button "封瑞敏 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1444] [cursor=pointer]:
+                      - generic [ref=e1445]: "-"
+                  - 'cell "庞梦宇 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1446]':
+                    - 'button "庞梦宇 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1447] [cursor=pointer]':
+                      - generic [ref=e1448]: "3"
+                  - cell "张亚妮 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1449]:
+                    - button "张亚妮 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1450] [cursor=pointer]:
+                      - generic [ref=e1451]: "-"
+                  - 'cell "张伟红 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1452]':
+                    - 'button "张伟红 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1453] [cursor=pointer]':
+                      - generic [ref=e1454]: "3"
+                  - cell "张凯 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1455]:
+                    - button "张凯 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1456] [cursor=pointer]:
+                      - generic [ref=e1457]: "-"
+                  - 'cell "张嘉辉 - CNMFG-MFG-Bag Installation（ABEC）: 1级" [ref=e1458]':
+                    - 'button "张嘉辉 - CNMFG-MFG-Bag Installation（ABEC）: 1级" [ref=e1459] [cursor=pointer]':
+                      - generic [ref=e1460]: "1"
+                  - 'cell "张宇琪 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1461]':
+                    - 'button "张宇琪 - CNMFG-MFG-Bag Installation（ABEC）: 3级" [ref=e1462] [cursor=pointer]':
+                      - generic [ref=e1463]: "3"
+                  - cell "张展展 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1464]:
+                    - button "张展展 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1465] [cursor=pointer]:
+                      - generic [ref=e1466]: "-"
+                  - cell "张彬 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1467]:
+                    - button "张彬 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1468] [cursor=pointer]:
+                      - generic [ref=e1469]: "-"
+                  - cell "张志兴 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1470]:
+                    - button "张志兴 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1471] [cursor=pointer]:
+                      - generic [ref=e1472]: "-"
+                  - cell "张紫烁 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1473]:
+                    - button "张紫烁 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1474] [cursor=pointer]:
+                      - generic [ref=e1475]: "-"
+                  - 'cell "张艳 - CNMFG-MFG-Bag Installation（ABEC）: 2级" [ref=e1476]':
+                    - 'button "张艳 - CNMFG-MFG-Bag Installation（ABEC）: 2级" [ref=e1477] [cursor=pointer]':
+                      - generic [ref=e1478]: "2"
+                  - cell "徐帅杭 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1479]:
+                    - button "徐帅杭 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1480] [cursor=pointer]:
+                      - generic [ref=e1481]: "-"
+                  - cell "曹思豪 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1482]:
+                    - button "曹思豪 未获得 CNMFG-MFG-Bag Installation（ABEC） 资质" [ref=e1483] [cursor=pointer]:
+                      - generic [ref=e1484]: "-"
+                - row [ref=e1485]:
+                  - 'cell "CNMFG-MFG-Bioreactors（ABEC） 资质ID: 203" [ref=e1486]':
+                    - generic [ref=e1487]:
+                      - generic [ref=e1488]: CNMFG-MFG-Bioreactors（ABEC）
+                      - generic [ref=e1490]: "资质ID: 203"
+                  - 'cell "任春慧 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1491]':
+                    - 'button "任春慧 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1492] [cursor=pointer]':
+                      - generic [ref=e1493]: "2"
+                  - 'cell "刘卫宝 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1494]':
+                    - 'button "刘卫宝 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1495] [cursor=pointer]':
+                      - generic [ref=e1496]: "2"
+                  - 'cell "刘启航 - CNMFG-MFG-Bioreactors（ABEC）: 4级" [ref=e1497]':
+                    - 'button "刘启航 - CNMFG-MFG-Bioreactors（ABEC）: 4级" [ref=e1498] [cursor=pointer]':
+                      - generic [ref=e1499]: "4"
+                  - 'cell "刘天畅 - CNMFG-MFG-Bioreactors（ABEC）: 4级" [ref=e1500]':
+                    - 'button "刘天畅 - CNMFG-MFG-Bioreactors（ABEC）: 4级" [ref=e1501] [cursor=pointer]':
+                      - generic [ref=e1502]: "4"
+                  - cell "刘家荣 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1503]:
+                    - button "刘家荣 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1504] [cursor=pointer]:
+                      - generic [ref=e1505]: "-"
+                  - cell "单继元 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1506]:
+                    - button "单继元 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1507] [cursor=pointer]:
+                      - generic [ref=e1508]: "-"
+                  - cell "周永鹏 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1509]:
+                    - button "周永鹏 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1510] [cursor=pointer]:
+                      - generic [ref=e1511]: "-"
+                  - 'cell "孙维艳 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1512]':
+                    - 'button "孙维艳 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1513] [cursor=pointer]':
+                      - generic [ref=e1514]: "2"
+                  - 'cell "孟江泽 - CNMFG-MFG-Bioreactors（ABEC）: 4级" [ref=e1515]':
+                    - 'button "孟江泽 - CNMFG-MFG-Bioreactors（ABEC）: 4级" [ref=e1516] [cursor=pointer]':
+                      - generic [ref=e1517]: "4"
+                  - cell "宋健健 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1518]:
+                    - button "宋健健 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1519] [cursor=pointer]:
+                      - generic [ref=e1520]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1521]:
+                    - button "封瑞敏 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1522] [cursor=pointer]:
+                      - generic [ref=e1523]: "-"
+                  - 'cell "庞梦宇 - CNMFG-MFG-Bioreactors（ABEC）: 3级" [ref=e1524]':
+                    - 'button "庞梦宇 - CNMFG-MFG-Bioreactors（ABEC）: 3级" [ref=e1525] [cursor=pointer]':
+                      - generic [ref=e1526]: "3"
+                  - cell "张亚妮 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1527]:
+                    - button "张亚妮 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1528] [cursor=pointer]:
+                      - generic [ref=e1529]: "-"
+                  - 'cell "张伟红 - CNMFG-MFG-Bioreactors（ABEC）: 3级" [ref=e1530]':
+                    - 'button "张伟红 - CNMFG-MFG-Bioreactors（ABEC）: 3级" [ref=e1531] [cursor=pointer]':
+                      - generic [ref=e1532]: "3"
+                  - cell "张凯 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1533]:
+                    - button "张凯 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1534] [cursor=pointer]:
+                      - generic [ref=e1535]: "-"
+                  - 'cell "张嘉辉 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1536]':
+                    - 'button "张嘉辉 - CNMFG-MFG-Bioreactors（ABEC）: 2级" [ref=e1537] [cursor=pointer]':
+                      - generic [ref=e1538]: "2"
+                  - 'cell "张宇琪 - CNMFG-MFG-Bioreactors（ABEC）: 3级" [ref=e1539]':
+                    - 'button "张宇琪 - CNMFG-MFG-Bioreactors（ABEC）: 3级" [ref=e1540] [cursor=pointer]':
+                      - generic [ref=e1541]: "3"
+                  - cell "张展展 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1542]:
+                    - button "张展展 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1543] [cursor=pointer]:
+                      - generic [ref=e1544]: "-"
+                  - cell "张彬 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1545]:
+                    - button "张彬 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1546] [cursor=pointer]:
+                      - generic [ref=e1547]: "-"
+                  - cell "张志兴 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1548]:
+                    - button "张志兴 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1549] [cursor=pointer]:
+                      - generic [ref=e1550]: "-"
+                  - cell "张紫烁 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1551]:
+                    - button "张紫烁 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1552] [cursor=pointer]:
+                      - generic [ref=e1553]: "-"
+                  - 'cell "张艳 - CNMFG-MFG-Bioreactors（ABEC）: 1级" [ref=e1554]':
+                    - 'button "张艳 - CNMFG-MFG-Bioreactors（ABEC）: 1级" [ref=e1555] [cursor=pointer]':
+                      - generic [ref=e1556]: "1"
+                  - cell "徐帅杭 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1557]:
+                    - button "徐帅杭 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1558] [cursor=pointer]:
+                      - generic [ref=e1559]: "-"
+                  - cell "曹思豪 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1560]:
+                    - button "曹思豪 未获得 CNMFG-MFG-Bioreactors（ABEC） 资质" [ref=e1561] [cursor=pointer]:
+                      - generic [ref=e1562]: "-"
+                - row [ref=e1563]:
+                  - 'cell "CNMFG-POD Depth Filter Operation 资质ID: 205" [ref=e1564]':
+                    - generic [ref=e1565]:
+                      - generic [ref=e1566]: CNMFG-POD Depth Filter Operation
+                      - generic [ref=e1568]: "资质ID: 205"
+                  - cell "任春慧 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1569]:
+                    - button "任春慧 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1570] [cursor=pointer]:
+                      - generic [ref=e1571]: "-"
+                  - cell "刘卫宝 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1572]:
+                    - button "刘卫宝 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1573] [cursor=pointer]:
+                      - generic [ref=e1574]: "-"
+                  - cell "刘启航 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1575]:
+                    - button "刘启航 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1576] [cursor=pointer]:
+                      - generic [ref=e1577]: "-"
+                  - 'cell "刘天畅 - CNMFG-POD Depth Filter Operation: 2级" [ref=e1578]':
+                    - 'button "刘天畅 - CNMFG-POD Depth Filter Operation: 2级" [ref=e1579] [cursor=pointer]':
+                      - generic [ref=e1580]: "2"
+                  - cell "刘家荣 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1581]:
+                    - button "刘家荣 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1582] [cursor=pointer]:
+                      - generic [ref=e1583]: "-"
+                  - cell "单继元 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1584]:
+                    - button "单继元 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1585] [cursor=pointer]:
+                      - generic [ref=e1586]: "-"
+                  - 'cell "周永鹏 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1587]':
+                    - 'button "周永鹏 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1588] [cursor=pointer]':
+                      - generic [ref=e1589]: "1"
+                  - 'cell "孙维艳 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1590]':
+                    - 'button "孙维艳 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1591] [cursor=pointer]':
+                      - generic [ref=e1592]: "1"
+                  - 'cell "孟江泽 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1593]':
+                    - 'button "孟江泽 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1594] [cursor=pointer]':
+                      - generic [ref=e1595]: "1"
+                  - cell "宋健健 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1596]:
+                    - button "宋健健 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1597] [cursor=pointer]:
+                      - generic [ref=e1598]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1599]:
+                    - button "封瑞敏 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1600] [cursor=pointer]:
+                      - generic [ref=e1601]: "-"
+                  - 'cell "庞梦宇 - CNMFG-POD Depth Filter Operation: 4级" [ref=e1602]':
+                    - 'button "庞梦宇 - CNMFG-POD Depth Filter Operation: 4级" [ref=e1603] [cursor=pointer]':
+                      - generic [ref=e1604]: "4"
+                  - cell "张亚妮 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1605]:
+                    - button "张亚妮 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1606] [cursor=pointer]:
+                      - generic [ref=e1607]: "-"
+                  - cell "张伟红 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1608]:
+                    - button "张伟红 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1609] [cursor=pointer]:
+                      - generic [ref=e1610]: "-"
+                  - cell "张凯 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1611]:
+                    - button "张凯 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1612] [cursor=pointer]:
+                      - generic [ref=e1613]: "-"
+                  - 'cell "张嘉辉 - CNMFG-POD Depth Filter Operation: 4级" [ref=e1614]':
+                    - 'button "张嘉辉 - CNMFG-POD Depth Filter Operation: 4级" [ref=e1615] [cursor=pointer]':
+                      - generic [ref=e1616]: "4"
+                  - cell "张宇琪 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1617]:
+                    - button "张宇琪 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1618] [cursor=pointer]:
+                      - generic [ref=e1619]: "-"
+                  - cell "张展展 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1620]:
+                    - button "张展展 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1621] [cursor=pointer]:
+                      - generic [ref=e1622]: "-"
+                  - cell "张彬 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1623]:
+                    - button "张彬 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1624] [cursor=pointer]:
+                      - generic [ref=e1625]: "-"
+                  - cell "张志兴 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1626]:
+                    - button "张志兴 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1627] [cursor=pointer]:
+                      - generic [ref=e1628]: "-"
+                  - cell "张紫烁 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1629]:
+                    - button "张紫烁 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1630] [cursor=pointer]:
+                      - generic [ref=e1631]: "-"
+                  - 'cell "张艳 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1632]':
+                    - 'button "张艳 - CNMFG-POD Depth Filter Operation: 1级" [ref=e1633] [cursor=pointer]':
+                      - generic [ref=e1634]: "1"
+                  - cell "徐帅杭 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1635]:
+                    - button "徐帅杭 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1636] [cursor=pointer]:
+                      - generic [ref=e1637]: "-"
+                  - cell "曹思豪 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1638]:
+                    - button "曹思豪 未获得 CNMFG-POD Depth Filter Operation 资质" [ref=e1639] [cursor=pointer]:
+                      - generic [ref=e1640]: "-"
+                - row [ref=e1641]:
+                  - 'cell "CNMFG-Refrige./Freezer/Cold Room 资质ID: 197" [ref=e1642]':
+                    - generic [ref=e1643]:
+                      - generic [ref=e1644]: CNMFG-Refrige./Freezer/Cold Room
+                      - generic [ref=e1646]: "资质ID: 197"
+                  - 'cell "任春慧 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1647]':
+                    - 'button "任春慧 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1648] [cursor=pointer]':
+                      - generic [ref=e1649]: "1"
+                  - 'cell "刘卫宝 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1650]':
+                    - 'button "刘卫宝 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1651] [cursor=pointer]':
+                      - generic [ref=e1652]: "1"
+                  - 'cell "刘启航 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1653]':
+                    - 'button "刘启航 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1654] [cursor=pointer]':
+                      - generic [ref=e1655]: "1"
+                  - 'cell "刘天畅 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1656]':
+                    - 'button "刘天畅 - CNMFG-Refrige./Freezer/Cold Room: 1级" [ref=e1657] [cursor=pointer]':
+                      - generic [ref=e1658]: "1"
+                  - cell "刘家荣 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1659]:
+                    - button "刘家荣 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1660] [cursor=pointer]:
+                      - generic [ref=e1661]: "-"
+                  - cell "单继元 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1662]:
+                    - button "单继元 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1663] [cursor=pointer]:
+                      - generic [ref=e1664]: "-"
+                  - 'cell "周永鹏 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1665]':
+                    - 'button "周永鹏 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1666] [cursor=pointer]':
+                      - generic [ref=e1667]: "3"
+                  - 'cell "孙维艳 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1668]':
+                    - 'button "孙维艳 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1669] [cursor=pointer]':
+                      - generic [ref=e1670]: "3"
+                  - 'cell "孟江泽 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1671]':
+                    - 'button "孟江泽 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1672] [cursor=pointer]':
+                      - generic [ref=e1673]: "3"
+                  - cell "宋健健 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1674]:
+                    - button "宋健健 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1675] [cursor=pointer]:
+                      - generic [ref=e1676]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1677]:
+                    - button "封瑞敏 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1678] [cursor=pointer]:
+                      - generic [ref=e1679]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1680]':
+                    - 'button "庞梦宇 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1681] [cursor=pointer]':
+                      - generic [ref=e1682]: "3"
+                  - cell "张亚妮 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1683]:
+                    - button "张亚妮 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1684] [cursor=pointer]:
+                      - generic [ref=e1685]: "-"
+                  - 'cell "张伟红 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1686]':
+                    - 'button "张伟红 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1687] [cursor=pointer]':
+                      - generic [ref=e1688]: "3"
+                  - cell "张凯 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1689]:
+                    - button "张凯 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1690] [cursor=pointer]:
+                      - generic [ref=e1691]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1692]':
+                    - 'button "张嘉辉 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1693] [cursor=pointer]':
+                      - generic [ref=e1694]: "3"
+                  - 'cell "张宇琪 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1695]':
+                    - 'button "张宇琪 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1696] [cursor=pointer]':
+                      - generic [ref=e1697]: "3"
+                  - cell "张展展 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1698]:
+                    - button "张展展 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1699] [cursor=pointer]:
+                      - generic [ref=e1700]: "-"
+                  - cell "张彬 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1701]:
+                    - button "张彬 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1702] [cursor=pointer]:
+                      - generic [ref=e1703]: "-"
+                  - cell "张志兴 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1704]:
+                    - button "张志兴 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1705] [cursor=pointer]:
+                      - generic [ref=e1706]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1707]:
+                    - button "张紫烁 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1708] [cursor=pointer]:
+                      - generic [ref=e1709]: "-"
+                  - 'cell "张艳 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1710]':
+                    - 'button "张艳 - CNMFG-Refrige./Freezer/Cold Room: 3级" [ref=e1711] [cursor=pointer]':
+                      - generic [ref=e1712]: "3"
+                  - cell "徐帅杭 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1713]:
+                    - button "徐帅杭 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1714] [cursor=pointer]:
+                      - generic [ref=e1715]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1716]:
+                    - button "曹思豪 未获得 CNMFG-Refrige./Freezer/Cold Room 资质" [ref=e1717] [cursor=pointer]:
+                      - generic [ref=e1718]: "-"
+                - 'row "CNMFG-Sample for SSS 资质ID: 207 任春慧 未获得 CNMFG-Sample for SSS 资质 刘卫宝 未获得 CNMFG-Sample for SSS 资质 刘启航 未获得 CNMFG-Sample for SSS 资质 刘天畅 - CNMFG-Sample for SSS: 2级 刘家荣 未获得 CNMFG-Sample for SSS 资质 单继元 未获得 CNMFG-Sample for SSS 资质 周永鹏 - CNMFG-Sample for SSS: 1级 孙维艳 - CNMFG-Sample for SSS: 1级 孟江泽 - CNMFG-Sample for SSS: 1级 宋健健 未获得 CNMFG-Sample for SSS 资质 封瑞敏 未获得 CNMFG-Sample for SSS 资质 庞梦宇 - CNMFG-Sample for SSS: 4级 张亚妮 未获得 CNMFG-Sample for SSS 资质 张伟红 未获得 CNMFG-Sample for SSS 资质 张凯 未获得 CNMFG-Sample for SSS 资质 张嘉辉 - CNMFG-Sample for SSS: 4级 张宇琪 未获得 CNMFG-Sample for SSS 资质 张展展 未获得 CNMFG-Sample for SSS 资质 张彬 未获得 CNMFG-Sample for SSS 资质 张志兴 未获得 CNMFG-Sample for SSS 资质 张紫烁 未获得 CNMFG-Sample for SSS 资质 张艳 - CNMFG-Sample for SSS: 1级 徐帅杭 未获得 CNMFG-Sample for SSS 资质 曹思豪 未获得 CNMFG-Sample for SSS 资质" [ref=e1719]':
+                  - 'cell "CNMFG-Sample for SSS 资质ID: 207" [ref=e1720]':
+                    - generic [ref=e1721]:
+                      - generic [ref=e1722]: CNMFG-Sample for SSS
+                      - generic [ref=e1724]: "资质ID: 207"
+                  - cell "任春慧 未获得 CNMFG-Sample for SSS 资质" [ref=e1725]:
+                    - button "任春慧 未获得 CNMFG-Sample for SSS 资质" [ref=e1726] [cursor=pointer]:
+                      - generic [ref=e1727]: "-"
+                  - cell "刘卫宝 未获得 CNMFG-Sample for SSS 资质" [ref=e1728]:
+                    - button "刘卫宝 未获得 CNMFG-Sample for SSS 资质" [ref=e1729] [cursor=pointer]:
+                      - generic [ref=e1730]: "-"
+                  - cell "刘启航 未获得 CNMFG-Sample for SSS 资质" [ref=e1731]:
+                    - button "刘启航 未获得 CNMFG-Sample for SSS 资质" [ref=e1732] [cursor=pointer]:
+                      - generic [ref=e1733]: "-"
+                  - 'cell "刘天畅 - CNMFG-Sample for SSS: 2级" [ref=e1734]':
+                    - 'button "刘天畅 - CNMFG-Sample for SSS: 2级" [ref=e1735] [cursor=pointer]':
+                      - generic [ref=e1736]: "2"
+                  - cell "刘家荣 未获得 CNMFG-Sample for SSS 资质" [ref=e1737]:
+                    - button "刘家荣 未获得 CNMFG-Sample for SSS 资质" [ref=e1738] [cursor=pointer]:
+                      - generic [ref=e1739]: "-"
+                  - cell "单继元 未获得 CNMFG-Sample for SSS 资质" [ref=e1740]:
+                    - button "单继元 未获得 CNMFG-Sample for SSS 资质" [ref=e1741] [cursor=pointer]:
+                      - generic [ref=e1742]: "-"
+                  - 'cell "周永鹏 - CNMFG-Sample for SSS: 1级" [ref=e1743]':
+                    - 'button "周永鹏 - CNMFG-Sample for SSS: 1级" [ref=e1744] [cursor=pointer]':
+                      - generic [ref=e1745]: "1"
+                  - 'cell "孙维艳 - CNMFG-Sample for SSS: 1级" [ref=e1746]':
+                    - 'button "孙维艳 - CNMFG-Sample for SSS: 1级" [ref=e1747] [cursor=pointer]':
+                      - generic [ref=e1748]: "1"
+                  - 'cell "孟江泽 - CNMFG-Sample for SSS: 1级" [ref=e1749]':
+                    - 'button "孟江泽 - CNMFG-Sample for SSS: 1级" [ref=e1750] [cursor=pointer]':
+                      - generic [ref=e1751]: "1"
+                  - cell "宋健健 未获得 CNMFG-Sample for SSS 资质" [ref=e1752]:
+                    - button "宋健健 未获得 CNMFG-Sample for SSS 资质" [ref=e1753] [cursor=pointer]:
+                      - generic [ref=e1754]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Sample for SSS 资质" [ref=e1755]:
+                    - button "封瑞敏 未获得 CNMFG-Sample for SSS 资质" [ref=e1756] [cursor=pointer]:
+                      - generic [ref=e1757]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Sample for SSS: 4级" [ref=e1758]':
+                    - 'button "庞梦宇 - CNMFG-Sample for SSS: 4级" [ref=e1759] [cursor=pointer]':
+                      - generic [ref=e1760]: "4"
+                  - cell "张亚妮 未获得 CNMFG-Sample for SSS 资质" [ref=e1761]:
+                    - button "张亚妮 未获得 CNMFG-Sample for SSS 资质" [ref=e1762] [cursor=pointer]:
+                      - generic [ref=e1763]: "-"
+                  - cell "张伟红 未获得 CNMFG-Sample for SSS 资质" [ref=e1764]:
+                    - button "张伟红 未获得 CNMFG-Sample for SSS 资质" [ref=e1765] [cursor=pointer]:
+                      - generic [ref=e1766]: "-"
+                  - cell "张凯 未获得 CNMFG-Sample for SSS 资质" [ref=e1767]:
+                    - button "张凯 未获得 CNMFG-Sample for SSS 资质" [ref=e1768] [cursor=pointer]:
+                      - generic [ref=e1769]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Sample for SSS: 4级" [ref=e1770]':
+                    - 'button "张嘉辉 - CNMFG-Sample for SSS: 4级" [ref=e1771] [cursor=pointer]':
+                      - generic [ref=e1772]: "4"
+                  - cell "张宇琪 未获得 CNMFG-Sample for SSS 资质" [ref=e1773]:
+                    - button "张宇琪 未获得 CNMFG-Sample for SSS 资质" [ref=e1774] [cursor=pointer]:
+                      - generic [ref=e1775]: "-"
+                  - cell "张展展 未获得 CNMFG-Sample for SSS 资质" [ref=e1776]:
+                    - button "张展展 未获得 CNMFG-Sample for SSS 资质" [ref=e1777] [cursor=pointer]:
+                      - generic [ref=e1778]: "-"
+                  - cell "张彬 未获得 CNMFG-Sample for SSS 资质" [ref=e1779]:
+                    - button "张彬 未获得 CNMFG-Sample for SSS 资质" [ref=e1780] [cursor=pointer]:
+                      - generic [ref=e1781]: "-"
+                  - cell "张志兴 未获得 CNMFG-Sample for SSS 资质" [ref=e1782]:
+                    - button "张志兴 未获得 CNMFG-Sample for SSS 资质" [ref=e1783] [cursor=pointer]:
+                      - generic [ref=e1784]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Sample for SSS 资质" [ref=e1785]:
+                    - button "张紫烁 未获得 CNMFG-Sample for SSS 资质" [ref=e1786] [cursor=pointer]:
+                      - generic [ref=e1787]: "-"
+                  - 'cell "张艳 - CNMFG-Sample for SSS: 1级" [ref=e1788]':
+                    - 'button "张艳 - CNMFG-Sample for SSS: 1级" [ref=e1789] [cursor=pointer]':
+                      - generic [ref=e1790]: "1"
+                  - cell "徐帅杭 未获得 CNMFG-Sample for SSS 资质" [ref=e1791]:
+                    - button "徐帅杭 未获得 CNMFG-Sample for SSS 资质" [ref=e1792] [cursor=pointer]:
+                      - generic [ref=e1793]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Sample for SSS 资质" [ref=e1794]:
+                    - button "曹思豪 未获得 CNMFG-Sample for SSS 资质" [ref=e1795] [cursor=pointer]:
+                      - generic [ref=e1796]: "-"
+                - 'row "CNMFG-Sample Test（BGA） 资质ID: 200 任春慧 - CNMFG-Sample Test（BGA）: 4级 刘卫宝 - CNMFG-Sample Test（BGA）: 4级 刘启航 - CNMFG-Sample Test（BGA）: 4级 刘天畅 - CNMFG-Sample Test（BGA）: 4级 刘家荣 未获得 CNMFG-Sample Test（BGA） 资质 单继元 未获得 CNMFG-Sample Test（BGA） 资质 周永鹏 - CNMFG-Sample Test（BGA）: 3级 孙维艳 - CNMFG-Sample Test（BGA）: 4级 孟江泽 - CNMFG-Sample Test（BGA）: 4级 宋健健 未获得 CNMFG-Sample Test（BGA） 资质 封瑞敏 未获得 CNMFG-Sample Test（BGA） 资质 庞梦宇 - CNMFG-Sample Test（BGA）: 4级 张亚妮 未获得 CNMFG-Sample Test（BGA） 资质 张伟红 - CNMFG-Sample Test（BGA）: 4级 张凯 未获得 CNMFG-Sample Test（BGA） 资质 张嘉辉 - CNMFG-Sample Test（BGA）: 4级 张宇琪 - CNMFG-Sample Test（BGA）: 4级 张展展 未获得 CNMFG-Sample Test（BGA） 资质 张彬 未获得 CNMFG-Sample Test（BGA） 资质 张志兴 未获得 CNMFG-Sample Test（BGA） 资质 张紫烁 未获得 CNMFG-Sample Test（BGA） 资质 张艳 - CNMFG-Sample Test（BGA）: 4级 徐帅杭 未获得 CNMFG-Sample Test（BGA） 资质 曹思豪 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1797]':
+                  - 'cell "CNMFG-Sample Test（BGA） 资质ID: 200" [ref=e1798]':
+                    - generic [ref=e1799]:
+                      - generic [ref=e1800]: CNMFG-Sample Test（BGA）
+                      - generic [ref=e1802]: "资质ID: 200"
+                  - 'cell "任春慧 - CNMFG-Sample Test（BGA）: 4级" [ref=e1803]':
+                    - 'button "任春慧 - CNMFG-Sample Test（BGA）: 4级" [ref=e1804] [cursor=pointer]':
+                      - generic [ref=e1805]: "4"
+                  - 'cell "刘卫宝 - CNMFG-Sample Test（BGA）: 4级" [ref=e1806]':
+                    - 'button "刘卫宝 - CNMFG-Sample Test（BGA）: 4级" [ref=e1807] [cursor=pointer]':
+                      - generic [ref=e1808]: "4"
+                  - 'cell "刘启航 - CNMFG-Sample Test（BGA）: 4级" [ref=e1809]':
+                    - 'button "刘启航 - CNMFG-Sample Test（BGA）: 4级" [ref=e1810] [cursor=pointer]':
+                      - generic [ref=e1811]: "4"
+                  - 'cell "刘天畅 - CNMFG-Sample Test（BGA）: 4级" [ref=e1812]':
+                    - 'button "刘天畅 - CNMFG-Sample Test（BGA）: 4级" [ref=e1813] [cursor=pointer]':
+                      - generic [ref=e1814]: "4"
+                  - cell "刘家荣 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1815]:
+                    - button "刘家荣 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1816] [cursor=pointer]:
+                      - generic [ref=e1817]: "-"
+                  - cell "单继元 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1818]:
+                    - button "单继元 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1819] [cursor=pointer]:
+                      - generic [ref=e1820]: "-"
+                  - 'cell "周永鹏 - CNMFG-Sample Test（BGA）: 3级" [ref=e1821]':
+                    - 'button "周永鹏 - CNMFG-Sample Test（BGA）: 3级" [ref=e1822] [cursor=pointer]':
+                      - generic [ref=e1823]: "3"
+                  - 'cell "孙维艳 - CNMFG-Sample Test（BGA）: 4级" [ref=e1824]':
+                    - 'button "孙维艳 - CNMFG-Sample Test（BGA）: 4级" [ref=e1825] [cursor=pointer]':
+                      - generic [ref=e1826]: "4"
+                  - 'cell "孟江泽 - CNMFG-Sample Test（BGA）: 4级" [ref=e1827]':
+                    - 'button "孟江泽 - CNMFG-Sample Test（BGA）: 4级" [ref=e1828] [cursor=pointer]':
+                      - generic [ref=e1829]: "4"
+                  - cell "宋健健 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1830]:
+                    - button "宋健健 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1831] [cursor=pointer]:
+                      - generic [ref=e1832]: "-"
+                  - cell "封瑞敏 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1833]:
+                    - button "封瑞敏 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1834] [cursor=pointer]:
+                      - generic [ref=e1835]: "-"
+                  - 'cell "庞梦宇 - CNMFG-Sample Test（BGA）: 4级" [ref=e1836]':
+                    - 'button "庞梦宇 - CNMFG-Sample Test（BGA）: 4级" [ref=e1837] [cursor=pointer]':
+                      - generic [ref=e1838]: "4"
+                  - cell "张亚妮 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1839]:
+                    - button "张亚妮 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1840] [cursor=pointer]:
+                      - generic [ref=e1841]: "-"
+                  - 'cell "张伟红 - CNMFG-Sample Test（BGA）: 4级" [ref=e1842]':
+                    - 'button "张伟红 - CNMFG-Sample Test（BGA）: 4级" [ref=e1843] [cursor=pointer]':
+                      - generic [ref=e1844]: "4"
+                  - cell "张凯 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1845]:
+                    - button "张凯 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1846] [cursor=pointer]:
+                      - generic [ref=e1847]: "-"
+                  - 'cell "张嘉辉 - CNMFG-Sample Test（BGA）: 4级" [ref=e1848]':
+                    - 'button "张嘉辉 - CNMFG-Sample Test（BGA）: 4级" [ref=e1849] [cursor=pointer]':
+                      - generic [ref=e1850]: "4"
+                  - 'cell "张宇琪 - CNMFG-Sample Test（BGA）: 4级" [ref=e1851]':
+                    - 'button "张宇琪 - CNMFG-Sample Test（BGA）: 4级" [ref=e1852] [cursor=pointer]':
+                      - generic [ref=e1853]: "4"
+                  - cell "张展展 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1854]:
+                    - button "张展展 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1855] [cursor=pointer]:
+                      - generic [ref=e1856]: "-"
+                  - cell "张彬 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1857]:
+                    - button "张彬 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1858] [cursor=pointer]:
+                      - generic [ref=e1859]: "-"
+                  - cell "张志兴 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1860]:
+                    - button "张志兴 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1861] [cursor=pointer]:
+                      - generic [ref=e1862]: "-"
+                  - cell "张紫烁 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1863]:
+                    - button "张紫烁 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1864] [cursor=pointer]:
+                      - generic [ref=e1865]: "-"
+                  - 'cell "张艳 - CNMFG-Sample Test（BGA）: 4级" [ref=e1866]':
+                    - 'button "张艳 - CNMFG-Sample Test（BGA）: 4级" [ref=e1867] [cursor=pointer]':
+                      - generic [ref=e1868]: "4"
+                  - cell "徐帅杭 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1869]:
+                    - button "徐帅杭 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1870] [cursor=pointer]:
+                      - generic [ref=e1871]: "-"
+                  - cell "曹思豪 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1872]:
+                    - button "曹思豪 未获得 CNMFG-Sample Test（BGA） 资质" [ref=e1873] [cursor=pointer]:
+                      - generic [ref=e1874]: "-"
+          - list [ref=e1875]:
+            - listitem [ref=e1876]: 第 1-20 条，共 52 项资质
+            - listitem "上一页" [ref=e1877]:
+              - button "left" [disabled] [ref=e1878]:
+                - img "left" [ref=e1879]:
+                  - img [ref=e1880]
+            - listitem "1" [ref=e1882] [cursor=pointer]:
+              - generic [ref=e1883]: "1"
+            - listitem "2" [ref=e1884] [cursor=pointer]:
+              - generic [ref=e1885]: "2"
+            - listitem "3" [ref=e1886] [cursor=pointer]:
+              - generic [ref=e1887]: "3"
+            - listitem "下一页" [ref=e1888] [cursor=pointer]:
+              - button "right" [ref=e1889]:
+                - img "right" [ref=e1890]:
+                  - img [ref=e1891]
+            - listitem [ref=e1893]:
+              - generic "页码" [ref=e1894] [cursor=pointer]:
+                - generic [ref=e1895]:
+                  - combobox "页码" [ref=e1897]
+                  - generic "20 条/页" [ref=e1898]
+                - generic:
+                  - img:
+                    - img
+              - generic [ref=e1899]:
+                - text: 跳至
+                - textbox "页" [ref=e1900]
+                - text: 页

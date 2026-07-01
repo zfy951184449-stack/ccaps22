@@ -7,7 +7,8 @@ import {
   deleteOperation,
   getNextOperationCode,
   getOperationStatistics,
-  getQualifiedPersonnelByOperation
+  getQualifiedPersonnelByOperation,
+  getQualifiedPersonnelDetailsByOperation
 } from '../controllers/operationController';
 import requirePermission from '../middleware/requirePermission';
 import requireScope from '../middleware/requireScope';
@@ -35,6 +36,9 @@ router.get('/next-code', requirePermission('MASTER_OPERATION_READ'), getNextOper
 
 // 获取各操作按位置的合格人数
 router.get('/qualified-personnel', requirePermission('MASTER_OPERATION_READ'), getQualifiedPersonnelByOperation);
+
+// 获取单个操作按位置的合格人员明细
+router.get('/:id/qualified-personnel-details', requirePermission('MASTER_OPERATION_READ'), getQualifiedPersonnelDetailsByOperation);
 
 // CRUD路由
 router.get('/', requirePermission('MASTER_OPERATION_READ'), getAllOperations);

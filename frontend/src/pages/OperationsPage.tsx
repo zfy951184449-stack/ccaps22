@@ -17,9 +17,11 @@ import {
 } from '../components/wxb-ui/PageLayout/PageLayout';
 import { WxbPopconfirm } from '../components/wxb-ui/Popconfirm/Popconfirm';
 import { WxbSearchInput } from '../components/wxb-ui/SearchInput/SearchInput';
+import { WxbSegmented } from '../components/wxb-ui/Segmented/Segmented';
 import { WxbSelect } from '../components/wxb-ui/Select/Select';
+import { WxbSpinner } from '../components/wxb-ui/Spinner/Spinner';
 import { WxbTabs } from '../components/wxb-ui/Tabs/Tabs';
-import { WxbTag } from '../components/wxb-ui/Tag/Tag';
+import { WxbTag, type WxbTagColor } from '../components/wxb-ui/Tag/Tag';
 import { WxbTextarea } from '../components/wxb-ui/Textarea/Textarea';
 import { WxbTooltip } from '../components/wxb-ui/Tooltip/Tooltip';
 import { wxbToast } from '../components/wxb-ui/Toast/Toast';
@@ -58,6 +60,59 @@ interface Team {
     unit_name: string;
 }
 
+interface QualifiedRequirement {
+    qualification_id: number;
+    qualification_name: string;
+    min_level: number;
+    is_mandatory: boolean;
+}
+
+interface QualifiedPersonnelQualification {
+    id?: number | null;
+    qualification_id: number;
+    qualification_name: string;
+    qualification_level: number;
+}
+
+interface QualifiedPersonnel {
+    employee_id: number;
+    employee_code: string;
+    employee_name: string;
+    department_name?: string | null;
+    team_name?: string | null;
+    unit_name?: string | null;
+    position_name?: string | null;
+    qualifications: QualifiedPersonnelQualification[];
+}
+
+interface QualifiedPersonnelPosition {
+    position_number: number;
+    qualified_count: number;
+    requirements: QualifiedRequirement[];
+    personnel: QualifiedPersonnel[];
+}
+
+interface QualifiedPersonnelDetails {
+    operation_id: number;
+    operation_code: string;
+    operation_name: string;
+    required_people: number;
+    positions: QualifiedPersonnelPosition[];
+}
+
+interface QualificationOption {
+    id: number;
+    qualification_name: string;
+}
+
+interface EmployeeQualificationDraft {
+    draftKey: string;
+    id: number | null;
+    qualification_id: number;
+    qualification_name: string;
+    qualification_level: number;
+}
+
 interface OperationFormState {
     operation_name: string;
     standard_time: number | null;
@@ -67,6 +122,8 @@ interface OperationFormState {
 }
 
 type FormErrors = Partial<Record<keyof OperationFormState, string>>;
+
+type QualifiedModalSize = 'standard' | 'wide' | 'large';
 
 const DEFAULT_FORM_STATE: OperationFormState = {
     operation_name: '',
@@ -78,10 +135,32 @@ const DEFAULT_FORM_STATE: OperationFormState = {
 
 const ALL_KEY = 'all';
 const UNASSIGNED_TYPE_KEY = 'unassigned';
+const QUALIFICATION_LEVEL_MIN = 1;
+const QUALIFICATION_LEVEL_MAX = 5;
+const QUALIFIED_MODAL_WIDTH: Record<QualifiedModalSize, number> = {
+    standard: 860,
+    wide: 1060,
+    large: 1240,
+};
+const QUALIFIED_TABLE_SCROLL_Y: Record<QualifiedModalSize, number> = {
+    standard: 360,
+    wide: 460,
+    large: 560,
+};
+const QUALIFIED_MODAL_SIZE_OPTIONS = [
+    { value: 'standard', label: '标准' },
+    { value: 'wide', label: '宽屏' },
+    { value: 'large', label: '大屏' },
+];
 
 const toFiniteNumber = (value: unknown, fallback = 0) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeQualificationLevel = (value: unknown, fallback = QUALIFICATION_LEVEL_MIN) => {
+    const parsed = toFiniteNumber(value, fallback);
+    return Math.min(QUALIFICATION_LEVEL_MAX, Math.max(QUALIFICATION_LEVEL_MIN, Math.round(parsed)));
 };
 
 const normalizeOperation = (operation: Operation): Operation => ({
@@ -90,6 +169,50 @@ const normalizeOperation = (operation: Operation): Operation => ({
     required_people: toFiniteNumber(operation.required_people, 1),
     qualification_count: toFiniteNumber(operation.qualification_count),
 });
+
+const getPositionKey = (positionNumber: number) => positionNumber.toString();
+
+const getRequirementLabel = (requirement: QualifiedRequirement) =>
+    `${requirement.qualification_name} ≥${toFiniteNumber(requirement.min_level, 1)}级${requirement.is_mandatory ? '' : ' · 可选'}`;
+
+const isActivationKey = (event: React.KeyboardEvent) => event.key === 'Enter' || event.key === ' ';
+
+const getQualificationLevelColor = (level: number): WxbTagColor => {
+    const normalizedLevel = normalizeQualificationLevel(level);
+    if (normalizedLevel >= 5) return 'red';
+    if (normalizedLevel === 4) return 'amber';
+    if (normalizedLevel === 3) return 'blue';
+    if (normalizedLevel === 2) return 'green';
+    return 'neutral';
+};
+
+const sortRequirementsByLevel = (requirements: QualifiedRequirement[]) =>
+    [...requirements].sort((left, right) => {
+        const levelDiff = normalizeQualificationLevel(right.min_level) - normalizeQualificationLevel(left.min_level);
+        if (levelDiff !== 0) return levelDiff;
+
+        const mandatoryDiff = Number(right.is_mandatory) - Number(left.is_mandatory);
+        if (mandatoryDiff !== 0) return mandatoryDiff;
+
+        return left.qualification_name.localeCompare(right.qualification_name, 'zh-Hans-CN');
+    });
+
+const sortPersonnelQualifications = <T extends { qualification_name: string; qualification_level: number }>(qualifications: T[]) =>
+    [...qualifications].sort((left, right) => {
+        const levelDiff = normalizeQualificationLevel(right.qualification_level) - normalizeQualificationLevel(left.qualification_level);
+        if (levelDiff !== 0) return levelDiff;
+        return left.qualification_name.localeCompare(right.qualification_name, 'zh-Hans-CN');
+    });
+
+const getPreferredPositionKey = (details: QualifiedPersonnelDetails, preferredKey?: string | null) => {
+    const positions = details.positions || [];
+    if (preferredKey && positions.some((position) => getPositionKey(position.position_number) === preferredKey)) {
+        return preferredKey;
+    }
+
+    const firstPopulatedPosition = positions.find((position) => position.qualified_count > 0);
+    return getPositionKey(firstPopulatedPosition?.position_number ?? positions[0]?.position_number ?? 1);
+};
 
 const validateForm = (formState: OperationFormState): FormErrors => {
     const nextErrors: FormErrors = {};
@@ -187,6 +310,18 @@ const OperationsPage: React.FC = () => {
     const [nextCode, setNextCode] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [qualificationOperation, setQualificationOperation] = useState<Operation | null>(null);
+    const [qualifiedDetailsOperation, setQualifiedDetailsOperation] = useState<Operation | null>(null);
+    const [qualifiedDetails, setQualifiedDetails] = useState<QualifiedPersonnelDetails | null>(null);
+    const [qualifiedDetailsLoading, setQualifiedDetailsLoading] = useState(false);
+    const [qualifiedDetailsError, setQualifiedDetailsError] = useState(false);
+    const [qualifiedDetailsActivePosition, setQualifiedDetailsActivePosition] = useState('1');
+    const [qualificationOptions, setQualificationOptions] = useState<QualificationOption[]>([]);
+    const [qualifiedModalSize, setQualifiedModalSize] = useState<QualifiedModalSize>('standard');
+    const [editingPersonnelId, setEditingPersonnelId] = useState<number | null>(null);
+    const [qualificationDrafts, setQualificationDrafts] = useState<Record<number, EmployeeQualificationDraft[]>>({});
+    const [draftAddQualificationId, setDraftAddQualificationId] = useState<string | null>(null);
+    const [draftAddLevel, setDraftAddLevel] = useState(3);
+    const [savingQualificationEmployeeId, setSavingQualificationEmployeeId] = useState<number | null>(null);
 
     const operationTypeById = useMemo(() => {
         const map = new Map<number, OperationType>();
@@ -347,6 +482,378 @@ const OperationsPage: React.FC = () => {
         setQualificationOperation(null);
     }, []);
 
+    const loadQualifiedPersonnelDetails = useCallback(async (
+        operation: Operation,
+        preferredPositionKey?: string | null,
+    ) => {
+        const [detailsResponse, qualificationsResponse] = await Promise.all([
+            axios.get<QualifiedPersonnelDetails>(`/api/operations/${operation.id}/qualified-personnel-details`),
+            axios.get<QualificationOption[]>('/api/qualifications'),
+        ]);
+        const details = detailsResponse.data;
+        const options = (qualificationsResponse.data || [])
+            .map((qualification) => ({
+                id: Number(qualification.id),
+                qualification_name: qualification.qualification_name,
+            }))
+            .filter((qualification) => Number.isFinite(qualification.id) && qualification.qualification_name)
+            .sort((left, right) => left.qualification_name.localeCompare(right.qualification_name, 'zh-Hans-CN'));
+
+        setQualifiedDetails(details);
+        setQualificationOptions(options);
+        setQualifiedDetailsActivePosition(getPreferredPositionKey(details, preferredPositionKey));
+    }, []);
+
+    const openQualifiedPersonnelDetails = useCallback(async (operation: Operation) => {
+        setQualifiedDetailsOperation(operation);
+        setQualifiedDetails(null);
+        setQualifiedDetailsError(false);
+        setQualifiedDetailsLoading(true);
+        setQualifiedDetailsActivePosition('1');
+        setEditingPersonnelId(null);
+        setQualificationDrafts({});
+        setDraftAddQualificationId(null);
+
+        try {
+            await loadQualifiedPersonnelDetails(operation);
+        } catch {
+            setQualifiedDetailsError(true);
+            wxbToast.error('加载合格人员明细失败');
+        } finally {
+            setQualifiedDetailsLoading(false);
+        }
+    }, [loadQualifiedPersonnelDetails]);
+
+    const closeQualifiedPersonnelDetails = useCallback(() => {
+        setQualifiedDetailsOperation(null);
+        setQualifiedDetails(null);
+        setQualifiedDetailsError(false);
+        setQualifiedDetailsLoading(false);
+        setQualifiedDetailsActivePosition('1');
+        setQualificationOptions([]);
+        setEditingPersonnelId(null);
+        setQualificationDrafts({});
+        setDraftAddQualificationId(null);
+        setSavingQualificationEmployeeId(null);
+    }, []);
+
+    const qualificationSelectOptions = useMemo(
+        () => qualificationOptions.map((qualification) => ({
+            value: qualification.id.toString(),
+            label: qualification.qualification_name,
+        })),
+        [qualificationOptions],
+    );
+
+    const buildPersonnelQualificationDrafts = useCallback((personnel: QualifiedPersonnel) =>
+        sortPersonnelQualifications(personnel.qualifications).map((qualification) => ({
+            draftKey: qualification.id
+                ? `existing-${qualification.id}`
+                : `existing-${personnel.employee_id}-${qualification.qualification_id}`,
+            id: qualification.id ?? null,
+            qualification_id: qualification.qualification_id,
+            qualification_name: qualification.qualification_name,
+            qualification_level: normalizeQualificationLevel(qualification.qualification_level),
+        })), []);
+
+    const beginEditPersonnelQualifications = useCallback((personnel: QualifiedPersonnel) => {
+        if (editingPersonnelId === personnel.employee_id) {
+            setDraftAddQualificationId(null);
+            setEditingPersonnelId(null);
+            return;
+        }
+
+        setQualificationDrafts((drafts) => ({
+            ...drafts,
+            [personnel.employee_id]: buildPersonnelQualificationDrafts(personnel),
+        }));
+        setDraftAddQualificationId(null);
+        setDraftAddLevel(3);
+        setEditingPersonnelId(personnel.employee_id);
+    }, [buildPersonnelQualificationDrafts, editingPersonnelId]);
+
+    const cancelEditPersonnelQualifications = useCallback(() => {
+        setEditingPersonnelId(null);
+        setDraftAddQualificationId(null);
+    }, []);
+
+    const updateQualificationDraft = useCallback((
+        employeeId: number,
+        draftKey: string,
+        patch: Partial<EmployeeQualificationDraft>,
+    ) => {
+        setQualificationDrafts((current) => ({
+            ...current,
+            [employeeId]: (current[employeeId] || []).map((draft) =>
+                draft.draftKey === draftKey ? { ...draft, ...patch } : draft,
+            ),
+        }));
+    }, []);
+
+    const removeQualificationDraft = useCallback((employeeId: number, draftKey: string) => {
+        setQualificationDrafts((current) => ({
+            ...current,
+            [employeeId]: (current[employeeId] || []).filter((draft) => draft.draftKey !== draftKey),
+        }));
+    }, []);
+
+    const addQualificationDraft = useCallback((personnel: QualifiedPersonnel) => {
+        const qualificationId = Number(draftAddQualificationId);
+        const option = qualificationOptions.find((qualification) => qualification.id === qualificationId);
+
+        if (!Number.isFinite(qualificationId) || !option) {
+            wxbToast.warning('请选择要添加的资质');
+            return;
+        }
+
+        const currentDrafts = qualificationDrafts[personnel.employee_id] || [];
+        if (currentDrafts.some((draft) => draft.qualification_id === qualificationId)) {
+            wxbToast.warning('该人员已包含此资质');
+            return;
+        }
+
+        setQualificationDrafts((current) => {
+            const nextDrafts = sortPersonnelQualifications([
+                ...(current[personnel.employee_id] || []),
+                {
+                    draftKey: `new-${personnel.employee_id}-${qualificationId}-${Date.now()}`,
+                    id: null,
+                    qualification_id: qualificationId,
+                    qualification_name: option.qualification_name,
+                    qualification_level: normalizeQualificationLevel(draftAddLevel, 3),
+                },
+            ]);
+
+            return {
+                ...current,
+                [personnel.employee_id]: nextDrafts,
+            };
+        });
+        setDraftAddQualificationId(null);
+        setDraftAddLevel(3);
+    }, [draftAddLevel, draftAddQualificationId, qualificationDrafts, qualificationOptions]);
+
+    const savePersonnelQualifications = useCallback(async (personnel: QualifiedPersonnel) => {
+        const drafts = qualificationDrafts[personnel.employee_id] || [];
+        const seenQualificationIds = new Set<number>();
+
+        for (const draft of drafts) {
+            if (!Number.isFinite(draft.qualification_id)) {
+                wxbToast.warning('请先补全资质');
+                return;
+            }
+
+            if (seenQualificationIds.has(draft.qualification_id)) {
+                wxbToast.warning('同一人员不能重复配置相同资质');
+                return;
+            }
+
+            seenQualificationIds.add(draft.qualification_id);
+        }
+
+        const originalByRecordId = new Map<number, QualifiedPersonnelQualification>();
+        personnel.qualifications.forEach((qualification) => {
+            if (qualification.id !== null && qualification.id !== undefined) {
+                originalByRecordId.set(Number(qualification.id), qualification);
+            }
+        });
+
+        const draftRecordIds = new Set<number>();
+        const requests: Promise<unknown>[] = [];
+
+        drafts.forEach((draft) => {
+            const payload = {
+                employee_id: personnel.employee_id,
+                qualification_id: draft.qualification_id,
+                qualification_level: normalizeQualificationLevel(draft.qualification_level),
+            };
+
+            if (draft.id !== null && draft.id !== undefined) {
+                const recordId = Number(draft.id);
+                draftRecordIds.add(recordId);
+                const original = originalByRecordId.get(recordId);
+                const changed = !original
+                    || original.qualification_id !== payload.qualification_id
+                    || normalizeQualificationLevel(original.qualification_level) !== payload.qualification_level;
+
+                if (changed) {
+                    requests.push(axios.put(`/api/employee-qualifications/${recordId}`, payload));
+                }
+                return;
+            }
+
+            requests.push(axios.post('/api/employee-qualifications', payload));
+        });
+
+        originalByRecordId.forEach((_qualification, recordId) => {
+            if (!draftRecordIds.has(recordId)) {
+                requests.push(axios.delete(`/api/employee-qualifications/${recordId}`));
+            }
+        });
+
+        if (requests.length === 0) {
+            wxbToast.info('资质未发生变化');
+            setEditingPersonnelId(null);
+            return;
+        }
+
+        setSavingQualificationEmployeeId(personnel.employee_id);
+        try {
+            await Promise.all(requests);
+            wxbToast.success('人员资质已更新');
+            setEditingPersonnelId(null);
+            setDraftAddQualificationId(null);
+
+            if (qualifiedDetailsOperation) {
+                await loadQualifiedPersonnelDetails(qualifiedDetailsOperation, qualifiedDetailsActivePosition);
+            }
+            await fetchData();
+        } catch (error: any) {
+            wxbToast.error(error?.response?.data?.error || '保存人员资质失败');
+        } finally {
+            setSavingQualificationEmployeeId(null);
+        }
+    }, [
+        fetchData,
+        loadQualifiedPersonnelDetails,
+        qualificationDrafts,
+        qualifiedDetailsActivePosition,
+        qualifiedDetailsOperation,
+    ]);
+
+    const renderPersonnelQualificationEditor = useCallback((personnel: QualifiedPersonnel) => {
+        const drafts = qualificationDrafts[personnel.employee_id] || [];
+        const selectedQualificationIds = new Set(drafts.map((draft) => draft.qualification_id));
+        const addOptions = qualificationSelectOptions.map((option) => ({
+            ...option,
+            disabled: selectedQualificationIds.has(Number(option.value)),
+        }));
+        const saving = savingQualificationEmployeeId === personnel.employee_id;
+
+        return (
+            <div className="operations-qualification-editor">
+                <div className="operations-qualification-editor-head">
+                    <span className="operations-qualification-editor-title">{personnel.employee_name} 的资质</span>
+                    <span className="operations-muted">{personnel.employee_code}</span>
+                </div>
+
+                <div className="operations-qualification-editor-list">
+                    {drafts.length > 0 ? drafts.map((draft) => {
+                        const options = qualificationSelectOptions.map((option) => ({
+                            ...option,
+                            disabled: selectedQualificationIds.has(Number(option.value))
+                                && Number(option.value) !== draft.qualification_id,
+                        }));
+
+                        return (
+                            <div key={draft.draftKey} className="operations-qualification-editor-row">
+                                <WxbSelect
+                                    value={draft.qualification_id.toString()}
+                                    options={options}
+                                    showSearch
+                                    optionFilterProp="label"
+                                    className="operations-qualification-editor-select"
+                                    onChange={(value) => {
+                                        const qualificationId = Number(value);
+                                        const option = qualificationOptions.find((qualification) => qualification.id === qualificationId);
+                                        updateQualificationDraft(personnel.employee_id, draft.draftKey, {
+                                            qualification_id: qualificationId,
+                                            qualification_name: option?.qualification_name || draft.qualification_name,
+                                        });
+                                    }}
+                                />
+                                <WxbInputNumber
+                                    min={QUALIFICATION_LEVEL_MIN}
+                                    max={QUALIFICATION_LEVEL_MAX}
+                                    precision={0}
+                                    value={draft.qualification_level}
+                                    className="operations-qualification-editor-level"
+                                    onChange={(value) => updateQualificationDraft(personnel.employee_id, draft.draftKey, {
+                                        qualification_level: normalizeQualificationLevel(value, draft.qualification_level),
+                                    })}
+                                />
+                                <WxbTag color={getQualificationLevelColor(draft.qualification_level)}>
+                                    L{normalizeQualificationLevel(draft.qualification_level)}
+                                </WxbTag>
+                                <WxbButton
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeQualificationDraft(personnel.employee_id, draft.draftKey)}
+                                >
+                                    移除
+                                </WxbButton>
+                            </div>
+                        );
+                    }) : (
+                        <span className="operations-muted">暂无资质</span>
+                    )}
+                </div>
+
+                <div className="operations-qualification-editor-add">
+                    <WxbSelect
+                        value={draftAddQualificationId ?? undefined}
+                        placeholder="添加资质"
+                        options={addOptions}
+                        showSearch
+                        optionFilterProp="label"
+                        className="operations-qualification-editor-add-select"
+                        onChange={(value) => setDraftAddQualificationId(String(value))}
+                    />
+                    <WxbInputNumber
+                        min={QUALIFICATION_LEVEL_MIN}
+                        max={QUALIFICATION_LEVEL_MAX}
+                        precision={0}
+                        value={draftAddLevel}
+                        className="operations-qualification-editor-level"
+                        onChange={(value) => setDraftAddLevel(normalizeQualificationLevel(value, 3))}
+                    />
+                    <WxbButton
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => addQualificationDraft(personnel)}
+                    >
+                        添加
+                    </WxbButton>
+                </div>
+
+                <div className="operations-qualification-editor-actions">
+                    <WxbButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={saving}
+                        onClick={cancelEditPersonnelQualifications}
+                    >
+                        取消
+                    </WxbButton>
+                    <WxbButton
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={saving}
+                        onClick={() => savePersonnelQualifications(personnel)}
+                    >
+                        {saving ? '保存中...' : '保存资质'}
+                    </WxbButton>
+                </div>
+            </div>
+        );
+    }, [
+        addQualificationDraft,
+        cancelEditPersonnelQualifications,
+        draftAddLevel,
+        draftAddQualificationId,
+        qualificationDrafts,
+        qualificationOptions,
+        qualificationSelectOptions,
+        removeQualificationDraft,
+        savePersonnelQualifications,
+        savingQualificationEmployeeId,
+        updateQualificationDraft,
+    ]);
+
     const handleSubmit = useCallback(async () => {
         const nextErrors = validateForm(formState);
         setFormErrors(nextErrors);
@@ -393,6 +900,111 @@ const OperationsPage: React.FC = () => {
             wxbToast.error(err.response?.data?.error || '删除操作失败');
         }
     }, [fetchData]);
+
+    const qualifiedDetailsTabs = useMemo(
+        () => (qualifiedDetails?.positions ?? []).map((position) => ({
+            key: getPositionKey(position.position_number),
+            label: `P${position.position_number} (${position.qualified_count})`,
+        })),
+        [qualifiedDetails],
+    );
+
+    const activeQualifiedPosition = useMemo(
+        () => (qualifiedDetails?.positions ?? []).find(
+            (position) => getPositionKey(position.position_number) === qualifiedDetailsActivePosition,
+        ) ?? qualifiedDetails?.positions[0] ?? null,
+        [qualifiedDetails, qualifiedDetailsActivePosition],
+    );
+
+    const qualifiedPersonnelColumns: WxbDataTableProps<QualifiedPersonnel>['columns'] = useMemo(() => [
+        {
+            title: '人员',
+            dataIndex: 'employee_name',
+            width: 180,
+            render: (_value: string, record) => (
+                <span className="operations-person-cell">
+                    <span className="operations-person-name">{record.employee_name}</span>
+                    <span className="operations-person-code">{record.employee_code}</span>
+                </span>
+            ),
+        },
+        {
+            title: '组织',
+            width: 180,
+            render: (_value, record) => {
+                const primaryUnit = record.team_name || record.department_name || record.unit_name || '-';
+                const secondaryUnit = record.team_name && record.department_name
+                    ? record.department_name
+                    : record.unit_name && record.unit_name !== primaryUnit
+                        ? record.unit_name
+                        : null;
+
+                return (
+                    <span className="operations-person-cell">
+                        <span className="operations-person-name">{primaryUnit}</span>
+                        {secondaryUnit && <span className="operations-person-code">{secondaryUnit}</span>}
+                    </span>
+                );
+            },
+        },
+        {
+            title: '岗位',
+            dataIndex: 'position_name',
+            width: 120,
+            render: (value: string | null) => value || '-',
+        },
+        {
+            title: '匹配资质',
+            render: (_value, record) => {
+                const requirements = sortRequirementsByLevel(activeQualifiedPosition?.requirements ?? []);
+                const matchedQualifications = requirements
+                    .map((requirement) => {
+                        const employeeQualification = record.qualifications.find(
+                            (qualification) => qualification.qualification_id === requirement.qualification_id,
+                        );
+
+                        if (!employeeQualification) return null;
+
+                        return {
+                            ...requirement,
+                            qualification_level: employeeQualification.qualification_level,
+                        };
+                    })
+                    .filter((item): item is QualifiedRequirement & { qualification_level: number } => item !== null);
+
+                if (matchedQualifications.length === 0) {
+                    return <span className="operations-muted">无必需资质</span>;
+                }
+
+                return (
+                    <span className="operations-qualified-tags">
+                        {matchedQualifications.map((qualification) => (
+                            <WxbTag
+                                key={qualification.qualification_id}
+                                color={getQualificationLevelColor(qualification.qualification_level)}
+                            >
+                                {qualification.qualification_name} L{qualification.qualification_level}
+                            </WxbTag>
+                        ))}
+                    </span>
+                );
+            },
+        },
+        {
+            title: '操作',
+            width: 100,
+            render: (_value, record) => (
+                <WxbButton
+                    type="button"
+                    variant={editingPersonnelId === record.employee_id ? 'secondary' : 'ghost'}
+                    size="sm"
+                    onClick={() => beginEditPersonnelQualifications(record)}
+                >
+                    {editingPersonnelId === record.employee_id ? '收起' : '调整资质'}
+                </WxbButton>
+            ),
+        },
+    ], [activeQualifiedPosition, beginEditPersonnelQualifications, editingPersonnelId]);
 
     const columns: WxbDataTableProps<Operation>['columns'] = useMemo(() => [
         {
@@ -497,9 +1109,20 @@ const OperationsPage: React.FC = () => {
                 }
 
                 return (
-                    <span className="operations-position-list">
+                    <span
+                        className="operations-position-list operations-position-list--interactive"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`查看 ${record.operation_name} 的合格人员明细`}
+                        onDoubleClick={() => openQualifiedPersonnelDetails(record)}
+                        onKeyDown={(event) => {
+                            if (!isActivationKey(event)) return;
+                            event.preventDefault();
+                            openQualifiedPersonnelDetails(record);
+                        }}
+                    >
                         {counts.map((count, index) => (
-                            <WxbTooltip key={`${record.id}-${index}`} title={`位置 ${index + 1}: ${count} 人合格`}>
+                            <WxbTooltip key={`${record.id}-${index}`} title={`位置 ${index + 1}: ${count} 人合格，双击查看名单`}>
                                 <span>
                                     <WxbBadge
                                         status={count > 0 ? 'success' : 'error'}
@@ -588,7 +1211,7 @@ const OperationsPage: React.FC = () => {
                 );
             },
         },
-    ], [handleDelete, openEditModal, openQualificationModal, operationTypeById, operationTypes, qualifiedPersonnelMap]);
+    ], [handleDelete, openEditModal, openQualificationModal, openQualifiedPersonnelDetails, operationTypeById, operationTypes, qualifiedPersonnelMap]);
 
     return (
         <WxbPageShell size="full" gap="lg" className="operations-page">
@@ -603,16 +1226,24 @@ const OperationsPage: React.FC = () => {
                     </>
                 )}
                 actions={(
-                    <>
-                        <WxbButton type="button" variant="secondary" onClick={fetchData} disabled={loading}>
-                            <OperationIcon name="refresh" />
-                            {loading ? '刷新中...' : '刷新'}
-                        </WxbButton>
+                    <span className="operations-header-action-group">
+                        <WxbTooltip title={loading ? '刷新中' : '刷新数据'}>
+                            <WxbButton
+                                type="button"
+                                variant="secondary"
+                                className="operations-header-refresh"
+                                onClick={fetchData}
+                                disabled={loading}
+                                aria-label={loading ? '刷新中' : '刷新数据'}
+                            >
+                                <OperationIcon name="refresh" />
+                            </WxbButton>
+                        </WxbTooltip>
                         <WxbButton type="button" variant="primary" onClick={openCreateModal}>
                             <OperationIcon name="plus" />
                             新增操作
                         </WxbButton>
-                    </>
+                    </span>
                 )}
             />
 
@@ -758,6 +1389,127 @@ const OperationsPage: React.FC = () => {
                         onChange={(event) => updateFormField('description', event.target.value)}
                     />
                 </form>
+            </WxbModal>
+
+            <WxbModal
+                title={qualifiedDetailsOperation ? `合格人员 - ${qualifiedDetailsOperation.operation_name}` : '合格人员'}
+                open={qualifiedDetailsOperation !== null}
+                onCancel={closeQualifiedPersonnelDetails}
+                width={QUALIFIED_MODAL_WIDTH[qualifiedModalSize]}
+                className={`operations-qualified-modal operations-qualified-modal--${qualifiedModalSize}`}
+                destroyOnClose
+                footer={(
+                    <div className="operations-qualified-footer">
+                        <WxbButton type="button" variant="secondary" onClick={closeQualifiedPersonnelDetails}>
+                            关闭
+                        </WxbButton>
+                    </div>
+                )}
+            >
+                {qualifiedDetailsLoading ? (
+                    <div className="operations-qualified-loading">
+                        <WxbSpinner tip="正在加载合格人员" />
+                    </div>
+                ) : qualifiedDetailsError ? (
+                    <WxbEmpty
+                        description="合格人员明细加载失败"
+                        action={(
+                            <WxbButton
+                                type="button"
+                                variant="secondary"
+                                onClick={() => qualifiedDetailsOperation && openQualifiedPersonnelDetails(qualifiedDetailsOperation)}
+                            >
+                                重新加载
+                            </WxbButton>
+                        )}
+                    />
+                ) : qualifiedDetails ? (
+                    <div className="operations-qualified-detail">
+                        <div className="operations-qualified-summary">
+                            <span className="operations-qualified-summary-main">
+                                <WxbTag color="blue">{qualifiedDetails.operation_code}</WxbTag>
+                                <WxbBadge
+                                    status="info"
+                                    variant="outline"
+                                    code="位置"
+                                    label={`${qualifiedDetails.required_people}`}
+                                />
+                                <span className="operations-muted">{qualifiedDetails.operation_name}</span>
+                            </span>
+                            <WxbSegmented
+                                size="sm"
+                                value={qualifiedModalSize}
+                                options={QUALIFIED_MODAL_SIZE_OPTIONS}
+                                onChange={(value) => setQualifiedModalSize(value as QualifiedModalSize)}
+                                className="operations-qualified-size"
+                            />
+                        </div>
+
+                        <WxbTabs
+                            activeKey={qualifiedDetailsActivePosition}
+                            onChange={setQualifiedDetailsActivePosition}
+                            items={qualifiedDetailsTabs}
+                            className="operations-qualified-tabs"
+                        />
+
+                        {activeQualifiedPosition && (
+                            <div className="operations-qualified-panel">
+                                <div className="operations-qualified-position-card">
+                                    <div className="operations-qualified-position-meta">
+                                        <WxbBadge
+                                            status={activeQualifiedPosition.qualified_count > 0 ? 'success' : 'error'}
+                                            variant="outline"
+                                            code={`P${activeQualifiedPosition.position_number}`}
+                                            label={`${activeQualifiedPosition.qualified_count} 人`}
+                                        />
+                                    </div>
+                                    <div className="operations-qualified-requirement-block">
+                                        <span className="operations-qualified-requirement-title">资质需求</span>
+                                        <span className="operations-qualified-requirement-list">
+                                            {activeQualifiedPosition.requirements.length > 0 ? (
+                                                sortRequirementsByLevel(activeQualifiedPosition.requirements).map((requirement) => (
+                                                    <WxbTooltip
+                                                        key={`${requirement.qualification_id}-${requirement.min_level}-${String(requirement.is_mandatory)}`}
+                                                        title={getRequirementLabel(requirement)}
+                                                    >
+                                                        <WxbTag
+                                                            color={getQualificationLevelColor(requirement.min_level)}
+                                                            className="operations-qualified-requirement-tag"
+                                                        >
+                                                            {getRequirementLabel(requirement)}
+                                                        </WxbTag>
+                                                    </WxbTooltip>
+                                                ))
+                                            ) : (
+                                                <span className="operations-muted">暂无资质要求</span>
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <WxbDataTable<QualifiedPersonnel>
+                                    key={`qualified-personnel-${qualifiedDetails.operation_id}-${qualifiedDetailsActivePosition}-${editingPersonnelId ?? 'closed'}`}
+                                    columns={qualifiedPersonnelColumns}
+                                    dataSource={activeQualifiedPosition.personnel}
+                                    rowKey="employee_id"
+                                    density="compact"
+                                    pagination={false}
+                                    emptyState={{ description: '暂无合格人员' }}
+                                    scroll={{ x: 860, y: QUALIFIED_TABLE_SCROLL_Y[qualifiedModalSize] }}
+                                    expandable={{
+                                        expandedRowKeys: editingPersonnelId ? [editingPersonnelId] : [],
+                                        expandedRowRender: (record) =>
+                                            editingPersonnelId === record.employee_id
+                                                ? renderPersonnelQualificationEditor(record)
+                                                : null,
+                                        rowExpandable: () => true,
+                                        showExpandColumn: false,
+                                    }}
+                                />
+                            </div>
+                        )}
+                    </div>
+                ) : null}
             </WxbModal>
 
             <OperationQualificationModal
