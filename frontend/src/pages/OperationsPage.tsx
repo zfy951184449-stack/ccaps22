@@ -948,12 +948,6 @@ const OperationsPage: React.FC = () => {
             },
         },
         {
-            title: '岗位',
-            dataIndex: 'position_name',
-            width: 120,
-            render: (value: string | null) => value || '-',
-        },
-        {
             title: '匹配资质',
             render: (_value, record) => {
                 const requirements = sortRequirementsByLevel(activeQualifiedPosition?.requirements ?? []);

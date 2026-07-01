@@ -255,8 +255,6 @@
 .operations-qualified-tags {
     gap: var(--wx-space-6);
     flex-wrap: wrap;
-    max-height: 92px;
-    overflow-y: auto;
     align-content: flex-start;
     align-items: flex-start;
 }
